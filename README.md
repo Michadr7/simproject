@@ -352,3 +352,103 @@ camera view) in the browser console.
 Validation: all test files pass, including new `world.mjs` and `grid.mjs`. The game
 was also run in headless Chrome (software WebGL) to check the zones, grid, dither fade,
 chopping, felling and map visually.
+
+## 0.17.0 skeletal characters and a new creator
+
+The hand-built character is replaced by skeletal characters from Quaternius's
+[Ultimate Modular Men and Women](https://quaternius.com/packs/ultimatemodularcharacters.html)
+packs (CC0, no attribution required; credited here anyway). The player, pedestrians, the market
+clerk, the café manager and the café customer all use them.
+
+**Creator.** Pick a body (male or female), a whole outfit in one click, then mix the head, top,
+legs and shoes individually, plus skin tone and hair colour. Male outfits: Hoodie, Casual, Suit,
+Worker, Farmer, Beach, Punk, Explorer. Female: Casual, Formal, Suit, Worker, Punk, Explorer. Skin
+and hair colours only change the pack's skin and natural-hair materials, so a punk mohawk or a
+hard hat keeps its own colours. Clothes cannot be recoloured. Version 1 saves (the old character)
+still load and keep their name, skin and hair, with the default look.
+
+**Models are embedded.** `dist/character-male.js` and `dist/character-female.js` hold one compact
+glTF each as base64, decoded once at startup with the vendored `GLTFLoader` (r160). No file server
+is needed. Each is a single shared skeleton plus every outfit part (about 5–6.5k triangles per
+character, about 1.95 m tall). To rebuild them from the original FBX packs:
+`npm install --no-save three@0.160.0`, then
+`node scripts/build-characters.mjs <male folder> <female folder>` (the unzipped
+"Separate Skeletal Meshes and Animations" folders). The converter keeps each mesh's own transform,
+corrects the pack's colours (they come out far too dark otherwise), welds vertices, skins the
+shoes to the lower legs (the pack's foot control bones pull them off the shins), and keeps only
+the Idle, Idle_Neutral, Walk, Run, Interact and Wave clips.
+
+**Animation.** The pack has no eat, drink, chop or sit clips, so those are done in code on top of
+the idle clip: `character.reach('R'|'L', point, weight)` is a two-bone arm solver that moves a hand
+to a point in the character's own space (the mouth is `character.mouth`); `setSeated(true)` bends
+the thighs forward; `hold(object, {upright, axis})` puts an item in the hand (upright items stay
+level, tools run along the forearm). `setMotion(speed)` picks Idle, Walk or Run and scales its
+speed. The mixer skips bones whose animated value has not changed, so the character restores its
+animated pose before each frame's solver pass. Eating and chopping are rewritten on this
+(`consumption.js`, `updateChop` in `game.js`).
+
+**Known limits.** Other multiplayer players are still blue capsules. Shoes are rigid (no ankle
+flex). Walking and running speeds are tuned by eye (`WALK_SPEED`, `RUN_SPEED` in `character.js`).
+`?debug` now also exposes `scene`, `camera`, `avatar` and `pedestrians` on `window.__city`.
+
+Release: `package-release.mjs` now copies every `dist/vendor/*.js`. `waist.mjs` is removed (it
+tested the old body); `character.mjs` and `consumption.mjs` are rewritten for the new rig.
+
+## 0.18.0 hotbar, hold-to-chop, logs, regrowth and the lumberjack skill
+
+**Hotbar.** A bar at the bottom of the screen lists every tool and consumable you own (one slot per
+item, in bag order, up to six). Press its number or click it: food and drink are used, a tool is
+equipped (the axe appears in your hand and is carried at the ready; press the number again to put it
+away). Clicking a tool in the bag equips it too. The Q quick wheel still works for food and drink.
+The slot order follows the bag; manual arranging is not built yet.
+
+**Chopping.** The axe must be owned *and equipped* (`progress.equipped`). Press E near a pine to swing;
+**hold E to keep chopping**: after each swing you turn to the nearest tree in reach, and after a tree
+falls you can walk to the next one with E still held. The tree you are about to chop gets a ring on the
+ground (replacing the grid cursor). The plot grid is now hidden by default: **G** toggles it in the
+farm and woods.
+
+**Logs.** A felled pine falls away from you and leaves logs on the ground (`progress.logs`, up to 80).
+Press E beside one to pick it up; they appear once the trunk has landed and rot away after two game
+days. Logs sell at the Corner Market counter for $1.00 each (new button in the store).
+
+**Regrowth.** A felled pine leaves a stump (`felledAt` on its plot, in game minutes), becomes a small
+sapling after 3 game days and a choppable pine again after 7 (about 5.6 hours of play at the current
+clock speed; `SAPLING_AFTER` and `MATURE_AFTER` in `grid.js`). A tree will not regrow while you stand
+within 1.4 units of it. Trees felled in 0.16 and 0.17 saves start their clock when 0.18 first loads.
+
+**Lumberjack skill.** `progress.skills.lumberjack.xp` (see `skills.js`): 2 XP per swing, 12 per fall,
+40 XP to level 2 and 20 more for each level after that (cap 20). Perks: faster swings every level
+(0.8 s down to 0.5 s), one more log per tree at levels 3 and 8, and trees fall in two hits from level 6.
+The HUD shows the level once you have XP. The skills table is general, so farming and building can add
+their own.
+
+Not yet: real log or tree models (the Quaternius nature kit), a lumber-yard job with contracts, axe
+tiers, manual hotbar ordering, and the grid appearing automatically while a build or farm tool is held.
+
+Tests: new `skills.mjs`; `grid.mjs`, `world.mjs` and `inventory.mjs` extended; `startup.mjs` runs against
+the packaged release, so run `npm run release` before `npm test`.
+
+## 0.18.1 playtest fixes
+
+- **Legs.** The pack's Run clip throws a thigh out sideways for part of every stride (it shows in the raw FBX too);
+  its legs are meant to be driven by IK from two foot control bones. The converter now keeps the foot bones'
+  position tracks and `character.js` solves each leg to its foot bone (`solveLeg`) while walking or running, knees
+  forward. The shoes stay skinned to the shins. Rebuilt `character-male.js` and `character-female.js`.
+- **Pace.** Pedestrians walk at about 1.4 units per second (was 0.9) with a matching walk cycle, so they no longer
+  look like slow motion.
+- **Names.** Pedestrians are now Alex, Sophie, Robert, Julia, Carlos and Megan to match their bodies.
+- **Noah.** E at the market counter opens a short menu: *View items for sale* or *View jobs*. The store's service bar
+  (groceries, sell logs, ask about work) is pinned to the bottom of the store window instead of below the items.
+- **Doors.** Walking into the doorway of an open shop (or your own studio) now enters it; E still works. A closed
+  shop shows its hours. There is a short cooldown after leaving so you are not pulled straight back in.
+- **Task panel.** **T** (or J) shows or hides it; the panel shows a T key badge.
+- **Axe.** Carried hanging at your side. The swing now starts and ends at that pose and goes up past the shoulder to
+  overhead (it used to cut through the torso and throw the arm straight behind you), then down through the trunk.
+- **Bag.** An equipped tool is labelled *Equipped*; the hint no longer says to press E with the axe in the bag.
+- Option buttons in the creator and the hotbar can no longer be text-selected.
+
+Stack limits (per bag slot): food, drink and wood logs 10; tools and equipment 1. The bag starts with 8 slots; a
+jacket adds 2 and backpacks 10 or 20.
+
+`?debug` also exposes `pos`, `shop`, `inside`, `place(x, z)` and `doorCooldown`.

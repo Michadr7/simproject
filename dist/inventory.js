@@ -37,7 +37,7 @@ export function useItem(progress,index){
   if(inventory.slots.length>inventoryCapacity(inventory))return {error:'Use or remove items before equipping a smaller bag.'};
   return {state:{...progress,inventory},message:item.name+' equipped.'};
  }
- if(!isConsumable(item))return {error:item.type==='tool'?`${item.name}: ${item.description}. Press E near a pine to use it.`:`${item.name}: ${item.description}.`};
+ if(!isConsumable(item))return {error:item.type==='tool'?`${item.name}: ${item.description}. Put it on your hotbar, then press E near a pine.`:`${item.name}: ${item.description}.`};
  const life=normalizeLife(progress.life);
  const restores={food:item.foodRestore,thirst:item.thirstRestore,energy:item.energyRestore};
  if(!Object.entries(restores).some(([key,value])=>value>0&&life[key]<100))return {error:'These stats are already full.'};
@@ -61,3 +61,25 @@ export function quickItems(progress){
 }
 export const countItem=(progress,id)=>(progress.inventory?.slots||[]).reduce((n,slot)=>n+(slot.id===id?slot.quantity:0),0);
 export const hasItem=(progress,id)=>countItem(progress,id)>0;
+// The hotbar lists every tool and consumable you own (one slot each, bag order), up to six.
+export function hotbarItems(progress){
+ const seen=new Set();
+ return (progress.inventory?.slots||[]).flatMap((slot,index)=>{
+  const item=itemById(slot.id);if(!item||(item.type!=='tool'&&!isConsumable(item))||seen.has(item.id))return [];
+  seen.add(item.id);return [{item,index,quantity:countItem(progress,item.id)}];
+ }).slice(0,6);
+}
+// Equips a tool, or puts it away if it is already equipped.
+export function equipTool(progress,id){
+ const item=itemById(id);
+ if(!item||item.type!=='tool')return {error:'That cannot be equipped.'};
+ if(!hasItem(progress,id))return {error:`You do not have a ${item.name.toLowerCase()}.`};
+ const equipped=progress.equipped===id?null:id;
+ return {state:{...progress,equipped},equipped,message:equipped?`${item.name} equipped.`:`${item.name} put away.`};
+}
+export function sellLogs(progress){
+ const count=countItem(progress,'wood-log');
+ if(!count)return {error:'You have no wood logs to sell.'};
+ const earned=count*itemById('wood-log').price;
+ return {state:{...progress,cash:progress.cash+earned,inventory:{...progress.inventory,slots:progress.inventory.slots.filter(slot=>slot.id!=='wood-log')}},count,earned,message:`Sold ${count} wood log${count===1?'':'s'} for $${(earned/100).toFixed(2)}.`};
+}

@@ -228,7 +228,7 @@ export function createWorld(scene,{label}={}){
  const tilt=new THREE.Quaternion(),yaw=new THREE.Quaternion(),axis=new THREE.Vector3();
  layout.cuttable.forEach((t,i)=>{
   const tone=pineTones[i%3];pineLow.setColorAt(i,tone);pineTop.setColorAt(i,tone);
-  const state={...t,index:i,standing:true,collider:colliders.circle(t.x,t.z,.21*t.scale+.04,t.key),anim:null};
+  const state={...t,index:i,standing:true,stage:'mature',collider:colliders.circle(t.x,t.z,.21*t.scale+.04,t.key),anim:null};
   trees.set(t.key,state);poseTree(state);stumps.setMatrixAt(i,hidden);
  });
  // Writes one pine's transforms. fall = 0..1 tips it over; shake wobbles it.
@@ -275,17 +275,43 @@ export function createWorld(scene,{label}={}){
   gridGeometry.setDrawRange(0,k*2);gridGeometry.attributes.position.needsUpdate=true;gridGeometry.attributes.color.needsUpdate=true;
  }
 
+ // Target ring and ground logs.
+ const ring=new THREE.Mesh(new THREE.RingGeometry(.62,.76,40),new THREE.MeshBasicMaterial({color:'#fff6c8',transparent:true,opacity:.9,depthWrite:false,side:THREE.DoubleSide}));
+ ring.rotation.x=-Math.PI/2;ring.visible=false;ring.renderOrder=4;ring.name='tree-target';group.add(ring);
+ const MAX_LOG_INSTANCES=96;
+ const logMesh=new THREE.InstancedMesh(new THREE.CylinderGeometry(.12,.12,1.15,8).rotateZ(Math.PI/2),new THREE.MeshStandardMaterial({color:'#8a6a45',roughness:1}),MAX_LOG_INSTANCES);
+ logMesh.count=0;logMesh.castShadow=logMesh.receiveShadow=true;logMesh.frustumCulled=false;logMesh.name='ground-logs';group.add(logMesh);
+ let clock=0;
  return {
   group,layout,trees,fade,
   blocked:(x,z)=>colliders.blocked(x,z),
   // Standing cuttable trees within range of a point.
   cuttableNear(x,z,range=2.2){const out=[];for(const t of trees.values())if(t.standing&&Math.abs(t.x-x)<=range&&Math.abs(t.z-z)<=range&&Math.hypot(t.x-x,t.z-z)<=range)out.push(t);return out},
-  // Instantly reflect a saved felled tree (no animation).
-  setFelled(key){const t=trees.get(key);if(!t||!t.standing)return false;t.standing=false;t.collider.active=false;t.anim=null;hideTree(t);touch();return true},
+  // Instantly reflect a saved felled tree (no animation): a stump.
+  setFelled(key){const t=trees.get(key);if(!t||!t.standing)return false;t.standing=false;t.stage='stump';t.collider.active=false;t.anim=null;hideTree(t);touch();return true},
+  // A felled tree growing back: 'stump' (nothing but the stump), 'sapling' (a small pine, still not choppable).
+  setStage(key,stage){
+   const t=trees.get(key);if(!t||t.standing||t.anim||t.stage===stage)return false;
+   t.stage=stage;
+   if(stage==='sapling'){for(const m of [pineTrunks,pineLow,pineTop])m.setMatrixAt(t.index,hidden);stumps.setMatrixAt(t.index,hidden);poseTree(t,{shrink:.3});stumps.setMatrixAt(t.index,m4.compose(v.set(t.x,0,t.z),yaw.setFromAxisAngle(yAxis,t.rot),s.set(t.scale*.8,.5,t.scale*.8)))}
+   else hideTree(t);
+   touch();return true;
+  },
+  // A fully regrown tree: standing, solid and choppable again.
+  setRegrown(key){const t=trees.get(key);if(!t||t.standing)return false;t.standing=true;t.stage='mature';t.collider.active=true;t.anim=null;stumps.setMatrixAt(t.index,hidden);poseTree(t);touch();return true},
   // Visual feedback only; rules live in grid.js.
   hitTree(key,from){const t=trees.get(key);if(!t?.standing)return;const d=Math.hypot(t.x-from.x,t.z-from.z)||1;t.anim={type:'shake',time:0,dirX:(t.x-from.x)/d,dirZ:(t.z-from.z)/d}},
-  fellTree(key,from){const t=trees.get(key);if(!t?.standing)return;const d=Math.hypot(t.x-from.x,t.z-from.z)||1;
-   t.standing=false;t.collider.active=false;t.anim={type:'fall',time:0,dirX:(t.x-from.x)/d,dirZ:(t.z-from.z)/d}},
+  // onDone runs once the trunk has finished falling (that is when the logs appear).
+  fellTree(key,from,onDone){const t=trees.get(key);if(!t?.standing)return;const d=Math.hypot(t.x-from.x,t.z-from.z)||1;
+   t.standing=false;t.stage='stump';t.collider.active=false;t.anim={type:'fall',time:0,dirX:(t.x-from.x)/d,dirZ:(t.z-from.z)/d,onDone}},
+  // A ring on the ground under the tree the player is about to chop (null hides it).
+  setTarget(tree){if(!tree){ring.visible=false;return}ring.visible=true;ring.position.set(tree.x,-.03,tree.z)},
+  // Logs lying on the ground: [{x,z,rot}], drawn as instances.
+  setLogs(list){
+   const n=Math.min(list.length,MAX_LOG_INSTANCES);
+   for(let i=0;i<n;i++)logMesh.setMatrixAt(i,m4.compose(v.set(list[i].x,.12,list[i].z),q.setFromAxisAngle(yAxis,list[i].rot),s.set(1,1,1)));
+   logMesh.count=n;logMesh.instanceMatrix.needsUpdate=true;
+  },
   // Grid overlay: show only in farm/forest. Returns the targeted cell (or null).
   updateGrid(position,heading,show){
    if(!show){gridLines.visible=cursor.visible=false;gridCell=null;return null}
@@ -298,13 +324,14 @@ export function createWorld(scene,{label}={}){
   },
   update(dt,camera,fadeTarget){
    fade.update(camera,fadeTarget);
+   clock+=dt;if(ring.visible)ring.scale.setScalar(1+.07*Math.sin(clock*6));
    let changed=false;
    for(const t of trees.values()){
     if(!t.anim)continue;changed=true;const a=t.anim;a.time+=dt;
     if(a.type==='shake'){const k=Math.max(0,1-a.time/.4);poseTree(t,{shake:Math.sin(a.time*38)*.07*k,dirX:a.dirX,dirZ:a.dirZ});if(k===0)t.anim=null}
     else{const fall=Math.min(1,a.time/1.1),eased=fall*fall;
      poseTree(t,{fall:eased,dirX:a.dirX,dirZ:a.dirZ,shrink:a.time<1.25?1:Math.max(.001,1-(a.time-1.25)/.35)});
-     if(a.time>=1.6){t.anim=null;hideTree(t)}}
+     if(a.time>=1.6){t.anim=null;hideTree(t);a.onDone?.()}}
    }
    if(changed)touch();
   }

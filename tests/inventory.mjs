@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import {ITEMS,itemById,isConsumable,isBuyable} from '../dist/items.js';
-import {addItem,useItem,unequipItem,inventoryCapacity,normalizeInventory,quickItems,countItem,hasItem} from '../dist/inventory.js';
+import {addItem,useItem,unequipItem,inventoryCapacity,normalizeInventory,quickItems,countItem,hasItem,hotbarItems,equipTool,sellLogs} from '../dist/inventory.js';
 import {freshProgress,normalizeProgress,transactJob} from '../dist/jobs.js';
 assert.equal(ITEMS.filter(i=>i.type==='food').length,10);assert.equal(ITEMS.filter(i=>i.type==='drink').length,5);assert.equal(ITEMS.filter(i=>i.type==='equipment').length,3);
 assert.equal(ITEMS.filter(i=>i.type==='tool').length,1);assert.equal(ITEMS.filter(i=>i.type==='material').length,1);
@@ -29,4 +29,16 @@ assert.deepEqual(normalizeInventory({slots:[{id:'bad',quantity:2}],equipment:{ba
  for(const i of [0,1]){const r=useItem(t,i);assert(r.error);assert.equal(r.state,undefined)}
  assert.deepEqual(quickItems(t).map(q=>q.item.id),['apple']);assert.equal(addItem(t,'axe').state.inventory.slots.filter(s=>s.id==='axe').length,2,'axes do not stack');
  assert.equal(countItem(t,'wood-log'),1);assert(hasItem(t,'axe'));assert(!hasItem(freshProgress(),'axe'));}
+// Hotbar: tools and consumables, one slot each in bag order (max 6); equipment and materials stay out.
+{let t=addItem(freshProgress(),'apple').state;t=addItem(t,'apple').state;t=addItem(t,'small-backpack').state;t=addItem(t,'axe').state;t=addItem(t,'wood-log').state;t=addItem(t,'water').state;
+ assert.deepEqual(hotbarItems(t).map(h=>[h.item.id,h.quantity]),[['apple',2],['axe',1],['water',1]]);
+ t={...t,inventory:{...t.inventory,slots:[...t.inventory.slots,...['banana','yogurt','soup','salad','granola-bar'].map(id=>({id,quantity:1}))]}};assert.equal(hotbarItems(t).length,6,'capped at six');
+ // Equipping toggles, needs the tool, and refuses anything else.
+ let e=equipTool(t,'axe');assert.equal(e.state.equipped,'axe');assert.match(e.message,/equipped/);e=equipTool(e.state,'axe');assert.equal(e.state.equipped,null);assert.match(e.message,/put away/);
+ assert.match(equipTool(freshProgress(),'axe').error,/do not have/);assert.match(equipTool(t,'apple').error,/cannot be equipped/);assert.match(equipTool(t,'nope').error,/cannot be equipped/);
+ // Selling logs.
+ let logs=freshProgress();for(let i=0;i<12;i++)logs=addItem(logs,'wood-log').state;logs={...logs,cash:50};
+ const sold=sellLogs(logs);assert.equal(sold.count,12);assert.equal(sold.earned,1200);assert.equal(sold.state.cash,1250);assert.equal(countItem(sold.state,'wood-log'),0);assert.match(sold.message,/12 wood logs.*\$12\.00/);
+ assert.match(sellLogs(sold.state).error,/no wood logs/);assert.match(sellLogs(addItem(freshProgress(),'wood-log').state).message,/1 wood log for \$1\.00/);
+ assert.equal(itemById('wood-log').price,100);}
 console.log('20 item definitions (incl. axe and wood log), restoration, stacking, equipment swaps, capacity safeguards, purchases and save preservation passed.');

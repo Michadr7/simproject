@@ -18,7 +18,7 @@ if(exists&&!force){
 await mkdir(`${dest}/vendor`,{recursive:true});
 const files=(await readdir('dist',{withFileTypes:true})).filter(f=>f.isFile()&&(f.name.endsWith('.js')||f.name==='style.css')).map(f=>f.name);
 for(const name of files)await copyFile(`dist/${name}`,`${dest}/${name}`);
-await copyFile('dist/vendor/three.module.js',`${dest}/vendor/three.module.js`);
+for(const name of (await readdir('dist/vendor')).filter(f=>f.endsWith('.js')))await copyFile(`dist/vendor/${name}`,`${dest}/vendor/${name}`);
 
 let html=await readFile('dist/index.html','utf8');
 const loader=`<script>\nconst fail=(message)=>{const el=document.getElementById('error');el.hidden=false;el.textContent='The game could not start: '+message+' — Please reload this page. Your saved progress has not been cleared.';};\nwindow.addEventListener('error',e=>fail(e.message||'A game file did not load'));\nwindow.addEventListener('unhandledrejection',e=>fail(e.reason?.message||'A game file did not load'));\nimport('./releases/${version}/game.js').catch(e=>fail(e.message));\n</script>`;

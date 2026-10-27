@@ -1,9 +1,9 @@
-import {ITEMS,isBuyable} from './items.js';
-import {inventoryCapacity} from './inventory.js';
+import {ITEMS,isBuyable,itemById} from './items.js';
+import {inventoryCapacity,countItem} from './inventory.js';
 import {money} from './jobs.js';
 
 const FILTERS=['all','food','drink','equipment','tool'];
-export function createStoreUI({document:doc,getState,canOpen,onOpen,onClose,onBuy,onGroceries,onWork}){
+export function createStoreUI({document:doc,getState,canOpen,onOpen,onClose,onBuy,onGroceries,onWork,onSell}){
  const $=id=>doc.getElementById(id);let opened=false,category='all',previousFocus=null;
  $('storeOverlay').hidden=true;
  function refresh(){
@@ -11,6 +11,7 @@ export function createStoreUI({document:doc,getState,canOpen,onOpen,onClose,onBu
   $('storeBalance').textContent=money(p.cash);
   $('storeCapacity').textContent=`Bag ${p.inventory.slots.length} / ${inventoryCapacity(p.inventory)} slots`;
   $('storeGroceries').disabled=p.cash<400||p.life.groceries>=20;
+  const logs=countItem(p,'wood-log');$('storeSell').textContent=logs?`Sell ${logs} wood log${logs===1?'':'s'} · ${money(logs*itemById('wood-log').price)}`:'Sell wood logs';$('storeSell').disabled=!logs;
   $('storeItems').replaceChildren();
   for(const item of ITEMS.filter(item=>isBuyable(item)&&(category==='all'||item.type===category))){
    const card=doc.createElement('article');card.className='store-item';
@@ -30,7 +31,7 @@ export function createStoreUI({document:doc,getState,canOpen,onOpen,onClose,onBu
  }
  function close(){if(!opened)return;opened=false;$('storeOverlay').hidden=true;onClose();previousFocus?.focus?.()}
  for(const name of FILTERS)$('storeFilter-'+name).onclick=()=>{category=name;refresh()};
- $('storeClose').onclick=close;$('storeGroceries').onclick=()=>transaction(onGroceries());
+ $('storeClose').onclick=close;$('storeGroceries').onclick=()=>transaction(onGroceries());$('storeSell').onclick=()=>transaction(onSell());
  $('storeWork').onclick=()=>{close();onWork()};
  return {open,close,get isOpen(){return opened}};
 }

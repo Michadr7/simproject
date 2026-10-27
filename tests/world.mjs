@@ -39,9 +39,25 @@ for(let i=0;i<20;i++)world.update(.1,new THREE.PerspectiveCamera(),new THREE.Vec
 trunks.getMatrixAt(world.trees.get(pine.key).index,m);assert.equal(m.elements[0],0,'pine hidden after the fall');
 stumps.getMatrixAt(world.trees.get(pine.key).index,m);assert(m.elements[0]>.5,'stump left behind');
 const other=a.cuttable[1];assert(world.setFelled(other.key));assert(!world.setFelled(other.key),'idempotent');assert(!world.blocked(other.x,other.z));
+// Fall callback, stump, sapling, regrowth.
+{const t3=a.cuttable[3],cam=new THREE.PerspectiveCamera(),look=new THREE.Vector3();let landed=0;
+ world.fellTree(t3.key,{x:t3.x-1,z:t3.z},()=>landed++);for(let i=0;i<10;i++)world.update(.1,cam,look);assert.equal(landed,0,'still falling at 1 s');
+ for(let i=0;i<10;i++)world.update(.1,cam,look);assert.equal(landed,1,'callback once the trunk has landed');for(let i=0;i<10;i++)world.update(.1,cam,look);assert.equal(landed,1);
+ const trunk=scene.getObjectByName('pine-trunks'),stump=scene.getObjectByName('pine-stumps'),at=world.trees.get(t3.key).index,mat=new THREE.Matrix4();
+ stump.getMatrixAt(at,mat);assert(mat.elements[0]>.5,'stump after the fall');
+ assert(world.setStage(t3.key,'sapling'));trunk.getMatrixAt(at,mat);assert(mat.elements[0]>.1&&mat.elements[0]<.5,'a small pine: '+mat.elements[0]);assert(!world.blocked(t3.x+.3,t3.z),'a sapling does not block');assert(!world.cuttableNear(t3.x,t3.z).some(t=>t.key===t3.key),'and cannot be chopped');
+ assert(!world.setStage(t3.key,'sapling'),'idempotent');assert(world.setStage(t3.key,'stump'));trunk.getMatrixAt(at,mat);assert.equal(mat.elements[0],0);
+ assert(world.setRegrown(t3.key));trunk.getMatrixAt(at,mat);assert(mat.elements[0]>.8,'full size again');assert(world.blocked(t3.x+.3,t3.z),'solid again');assert(world.cuttableNear(t3.x,t3.z).some(t=>t.key===t3.key),'choppable again');
+ stump.getMatrixAt(at,mat);assert.equal(mat.elements[0],0,'stump gone');assert(!world.setRegrown(t3.key),'already standing');
+ world.fellTree(t3.key,{x:t3.x-1,z:t3.z});for(let i=0;i<25;i++)world.update(.1,cam,look);assert(world.setStage(t3.key,'sapling'),'can fell it again after regrowth');}
+// Target ring and ground logs.
+{const ring=scene.getObjectByName('tree-target');assert(!ring.visible);world.setTarget(a.cuttable[5]);assert(ring.visible&&ring.position.x===a.cuttable[5].x&&ring.position.z===a.cuttable[5].z);world.setTarget(null);assert(!ring.visible);
+ const logs=scene.getObjectByName('ground-logs');assert.equal(logs.count,0);world.setLogs([{x:100,z:5,rot:0},{x:101,z:6,rot:1.2}]);assert.equal(logs.count,2);
+ const m=new THREE.Matrix4();logs.getMatrixAt(1,m);assert.deepEqual([m.elements[12],m.elements[14]],[101,6]);world.setLogs([]);assert.equal(logs.count,0);
+ world.setLogs(Array.from({length:500},(_,i)=>({x:100,z:5,rot:0})));assert(logs.count<=96,'instance cap');world.setLogs([]);}
 // Grid overlay: hidden in the city, visible with a target cell in the zones.
 assert.equal(world.updateGrid({x:0,z:0},0,false),null);assert(!scene.getObjectByName('plot-grid').visible);
 const target=world.updateGrid({x:100.2,z:20.2},0,true);assert.deepEqual([target.ix,target.iz,target.zone,target.key],[100,21,'forest','100,21']);
 assert(scene.getObjectByName('plot-grid').visible&&scene.getObjectByName('plot-grid').geometry.drawRange.count>100);
 assert.equal(world.updateGrid({x:-61.2,z:0},Math.PI/2,true),null,'no target cell across the city seam');
-console.log(`World zones, bounds, grid maths, deterministic ${a.cuttable.length} pines + ${a.decor.length} decor trees, fenced fields with gates, collisions, felling, stumps and grid overlay passed.`);
+console.log(`World zones, bounds, grid maths, tree stages and fall callback, target ring, ground logs, deterministic ${a.cuttable.length} pines + ${a.decor.length} decor trees, fenced fields with gates, collisions, felling, stumps and grid overlay passed.`);

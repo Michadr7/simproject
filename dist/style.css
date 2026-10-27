@@ -68,3 +68,23 @@ body.creating header,body.creating .location,body.creating #objective,body.creat
 #minimap.large{right:50%;bottom:50%;transform:translate(50%,50%);z-index:60;border-radius:14px;box-shadow:0 20px 70px #000a}
 body.creating #minimap{display:none}
 @media(max-width:600px){#minimap{right:12px;bottom:96px;transform:scale(.8);transform-origin:bottom right}#minimap.large{transform:translate(50%,50%) scale(.5)}}
+
+/* 0.18 hotbar, skill line and tree target */
+#hotbar{position:fixed;left:50%;bottom:44px;transform:translateX(-50%);display:flex;gap:8px;z-index:6}
+#hotbar[hidden]{display:none}
+body.creating #hotbar{display:none}
+.hotbar-slot{position:relative;width:56px;height:56px;padding:0;border-radius:10px;border:1px solid #ffffff30;background:#183332e6;color:#fff;font-size:26px;line-height:1;cursor:pointer;box-shadow:0 6px 18px #0004}
+.hotbar-slot:hover{background:#244846}
+.hotbar-slot[aria-pressed=true]{border-color:#d4e7b3;box-shadow:0 0 0 2px #d4e7b3,0 6px 18px #0004;background:#2c5a4e}
+.hotbar-slot .hotbar-key{position:absolute;left:5px;top:3px;font-size:10px;letter-spacing:.5px;color:#cae0ad}
+.hotbar-slot .hotbar-count{position:absolute;right:5px;bottom:3px;font-size:10px;color:#e9efe3}
+#skillStatus{display:block;color:#cae0ad;font-size:10px;line-height:1.8}
+#skillStatus:empty{display:none}
+@media(max-width:600px){#hotbar{bottom:96px;transform:translateX(-50%) scale(.85)}}
+
+/* 0.18.1 polish */
+.style-option,.swatch,.hotbar-slot,.store-services button{user-select:none;-webkit-user-select:none}
+.objective-top{display:flex;align-items:center;gap:8px}
+.objective-key{margin-left:auto;font:600 10px/1 Arial,sans-serif;letter-spacing:.5px;padding:4px 6px;border-radius:4px;border:1px solid #ffffff40;background:#ffffff14;color:#cae0ad}
+.objective-key+#objectiveToggle{margin-left:0}
+.store-services{position:sticky;bottom:-30px;margin:0 -30px -30px;padding:16px 30px 24px;background:#152b24f5;z-index:2}

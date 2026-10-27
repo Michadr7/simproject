@@ -14,7 +14,7 @@ export function createInventoryUI({document:doc,getState,canOpen,onOpen,onClose,
    if(item){
     const icon=doc.createElement('span');icon.className='item-icon';icon.textContent=item.icon;
     const name=doc.createElement('span');name.textContent=item.name;
-    const count=doc.createElement('small');count.textContent=item.type==='equipment'?`Equip · +${item.slotBonus} slots`:item.type==='tool'?'Tool':item.type==='material'?`×${slot.quantity}`:`×${slot.quantity} · Use`;
+    const count=doc.createElement('small');count.textContent=item.type==='equipment'?`Equip · +${item.slotBonus} slots`:item.type==='tool'?(getState().progress.equipped===item.id?'Equipped':'Tool'):item.type==='material'?`×${slot.quantity}`:`×${slot.quantity} · Use`;
     button.append(icon,name,count);button.title=item.description?item.description:item.type==='equipment'?`Equip ${item.name}`:`Food +${item.foodRestore} · Thirst +${item.thirstRestore} · Energy +${item.energyRestore}`;
     button.onclick=()=>act(onUse(i));
    }else{button.textContent='Empty';button.disabled=true}

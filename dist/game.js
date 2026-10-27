@@ -1,14 +1,15 @@
 import {createStoreUI} from './store.js';
 import {createWorld,zoneAt,isWalkable} from './world.js';
-import {chopTree,felledTrees,plotAt,TREE_HITS,CHOP_RANGE} from './grid.js';
+import {chopTree,felledTrees,plotAt,collectLog,expireLogs,regrowTrees,felledStages,CHOP_RANGE} from './grid.js';
+import {levelOf,swingTime,hitsNeeded,perkText} from './skills.js';
 import {createMinimap} from './minimap.js';
 import {createHeldItem,disposeHeldItem} from './item-models.js';
 import {createConsumptionAnimation} from './consumption.js';
 import {itemById} from './items.js';
 import {createInventoryUI} from './inventory-ui.js';
-import {addItem,useItem,unequipItem,hasItem} from './inventory.js';
+import {addItem,useItem,unequipItem,hasItem,hotbarItems,equipTool,sellLogs} from './inventory.js';
 import {createPhone} from './phone.js';
-import {acceptContract,completeContract,tickContract,gigTarget,atGigPoint,refreshGigBoard} from './contracts.js';
+import {acceptContract,completeContract,tickContract,gigTarget,atGigPoint,refreshGigBoard,gameMinutes} from './contracts.js';
 import {GameState,initializeState,setMePosition,tickLife,setStatDrainMultiplier} from './state.js';
 import {loadProfile,saveProfile} from './profile.js';
 import {MultiplayerClient} from './multiplayer.js';
@@ -28,8 +29,10 @@ import {createApartment,EXIT,BED,ENTRY} from './apartment.js';
 import {createIndoorCamera} from './indoor-camera.js';
 import {polishWorld} from './visuals.js';
 import {createMovementInput} from './input.js';
-import {createCharacter} from './character.js';
-import {palettes,styles,defaults,loadAppearance,saveAppearance} from './appearance.js';
+import {createCharacter,loadCharacterAssets} from './character.js';
+import {palettes,defaults,loadAppearance,saveAppearance,normalizeAppearance,BODIES,OUTFITS,PART_KEYS} from './appearance.js';
+// Decode the embedded character models once, before any character (player, clerks, pedestrians) is built.
+await loadCharacterAssets();
 const $=id=>document.getElementById(id);
 const scene=new THREE.Scene();scene.background=new THREE.Color('#b9cbd0');scene.fog=new THREE.Fog('#b9cbd0',65,155);
 let renderer;try{renderer=new THREE.WebGLRenderer({canvas:$('world'),antialias:true,powerPreference:'low-power'});}catch(e){$('error').hidden=false;$('error').textContent='This prototype needs WebGL. Please try a browser with hardware acceleration enabled.';throw e;}
@@ -80,14 +83,18 @@ const world=createWorld(scene,{label});
 sun.target.position.set(0,0,0);scene.add(sun.target);
 initializeState(loadProfile());
 for(const key of felledTrees(GameState.progress))world.setFelled(key);
+world.setLogs(GameState.progress.logs);
 const me=GameState.me;
 // consuming: an item is being raised and used (blocks input). armRecovery: the empty hand lowering afterwards (cosmetic only).
 let phone=null,inventoryUI=null,storeUI=null,consuming=null,armRecovery=null,chopping=null,sleepElapsed=null;
+// Hotbar, equipped tool, hold-E chopping, plot grid toggle and tree regrowth bookkeeping.
+let doorCooldown=1,hotbarSignature='',eHeld=false,carried=null,carryWeight=0,gridOn=false,regrowClock=99;
+const pendingLogs=new Set(),lastStages=new Map();
 let inside=false,shop=null;const apartment=createApartment();
 const shops={market:createShop('market'),cafe:createShop('cafe')};for(const [kind,room] of Object.entries(shops)){room.scene.position.set(SHOPS[kind].x,.165,-13.5);scene.add(room.scene);scene.updateMatrixWorld(true);room.camera=createIndoorCamera(camera,[...room.occluders,...shopShells[kind]]);}const worldPlayer={position:new THREE.Vector3()};
 const indoorCamera=createIndoorCamera(camera,apartment.occluders);
 const savedCharacter=loadAppearance({getItem:key=>localStorage.getItem(key)});
-const avatar=createCharacter(savedCharacter||defaults),player=avatar.group,legs=avatar.legs,arms=avatar.arms;player.name='player';scene.add(player);
+const avatar=createCharacter(savedCharacter||defaults),player=avatar.group;player.name='player';scene.add(player);
 // Rendering consumes the simulation state; gameplay never reads mesh transforms.
 function syncPlayerMesh(){
  player.position.set(me.position.x,me.position.y,me.position.z);
@@ -105,7 +112,7 @@ function blocked(x,z){if(shop)return shops[shop].blocked(x,z);if(inside)return a
 function clearWorldPanel(){if(worldPanel?.actor){const pa=getMeWorldPosition(new THREE.Vector3()),pb=worldPanel.actor.getWorldPosition(new THREE.Vector3());yaw=Math.atan2(pa.x-pb.x,pa.z-pb.z)+.45;pitch=.32;zoom=zoomTarget=5.8;}worldPanel=null;look.resetMotion()}
 function pause(show){if(sleepElapsed!==null)return;if(show){phone?.close();inventoryUI?.close();storeUI?.close();}if(show){$('dialog').hidden=true;clearWorldPanel();}$('controls').hidden=!show;modal=show;keys.clear();if(show)look.release()}
 $('start').onclick=()=>{if(currentAppearance.name){$('welcome').hidden=true;active=true}else openCreator()};$('help').onclick=()=>pause(true);$('resume').onclick=()=>{pause(false);look.capture()};$('closeDialog').onclick=()=>{$('dialog').hidden=true;clearWorldPanel();modal=false;keys.clear();look.capture()};
-function persist(){if(!inside&&!shop)GameState.progress.position={x:me.position.x,z:me.position.z};const ok=saveProfile({playerId:me.id,name:me.name,progress:GameState.progress});$('progressStatus').textContent=ok?'Saved on this browser':'Saving unavailable · session only';return ok}
+function persist(){refreshHotbar();refreshSkillHud();if(!inside&&!shop)GameState.progress.position={x:me.position.x,z:me.position.z};const ok=saveProfile({playerId:me.id,name:me.name,progress:GameState.progress});$('progressStatus').textContent=ok?'Saved on this browser':'Saving unavailable · session only';return ok}
 function toast(text){$('jobToast').textContent=text;$('jobToast').hidden=false;clearTimeout(toast.timer);toast.timer=setTimeout(()=>$('jobToast').hidden=true,4500)}
 function showDialog(kicker,title,text,tag,action,label){
  if(sleepElapsed!==null||consuming)return;
@@ -123,7 +130,7 @@ function finishJob(action){
 function enterHome(){
  if(!GameState.progress.housing.rented)return;persist();inside=true;apartment.scene.add(player);setMePosition(ENTRY.x,.02,ENTRY.z);yaw=0;pitch=.4;camera.position.set(ENTRY.x,3,ENTRY.z+5.5);$('dialog').hidden=true;clearWorldPanel();modal=false;keys.clear();
 }
-function leaveHome(){look.resetMotion();inside=false;scene.add(player);setMePosition(STUDIO.x,.165,STUDIO.z);yaw=0;camera.position.set(STUDIO.x,3,STUDIO.z+5);persist();keys.clear()}
+function leaveHome(){doorCooldown=2;look.resetMotion();inside=false;scene.add(player);setMePosition(STUDIO.x,.165,STUDIO.z);yaw=0;camera.position.set(STUDIO.x,3,STUDIO.z+5);persist();keys.clear()}
 function changeHousing(action){
  if(action==='rest'){startSleep();return}
  const result=housingTransaction(GameState.progress,action,{atEntrance:!inside&&!shop&&nearby(me.position,STUDIO),atBed:inside&&!shop&&Math.hypot(me.position.x-BED.x,me.position.z-BED.z)<1.4});
@@ -135,7 +142,7 @@ function showBills(){const h=GameState.progress.housing,due=totalDue(h);showDial
 $('billsButton').onclick=()=>{if(active&&!creatorOpen)showBills()};
 function extraAction(label,action){$('extraAction').hidden=false;$('extraAction').textContent=label;$('extraAction').onclick=action}
 function enterShop(kind){if(!shopOpen(kind,GameState.progress.routine)){toast(kind==='market'?'Market hours: 07:00–22:00':'Café hours: 08:00–18:00');return}persist();shop=kind;shops[kind].scene.add(player);setMePosition(SHOP_ENTRY.x,.02,SHOP_ENTRY.z);yaw=0;pitch=.4;camera.position.set(SHOPS[kind].x,3,-5.5);$('dialog').hidden=true;clearWorldPanel();modal=false;keys.clear()}
-function leaveShop(){look.resetMotion();busy=null;const room=shops[shop];for(const mesh of [...room.occluders,...shopShells[shop]]){mesh.material.opacity=1;mesh.material.depthWrite=true}const door=SHOPS[shop];shop=null;scene.add(player);setMePosition(door.x,.165,door.z);camera.position.set(door.x,3,door.z+6);persist();keys.clear()}
+function leaveShop(){doorCooldown=2;look.resetMotion();busy=null;const room=shops[shop];for(const mesh of [...room.occluders,...shopShells[shop]]){mesh.material.opacity=1;mesh.material.depthWrite=true}const door=SHOPS[shop];shop=null;scene.add(player);setMePosition(door.x,.165,door.z);camera.position.set(door.x,3,door.z+6);persist();keys.clear()}
 function useLife(action){const place=shop||(inside?'home':null);const atCounter=shop&&Math.hypot(me.position.x-COUNTER.x,me.position.z-COUNTER.z)<1.6;const atKitchen=inside&&Math.hypot(me.position.x-3,me.position.z+3.5)<1.5;if(shop&&!shopOpen(shop,GameState.progress.routine)){toast('The shop has closed. Please return tomorrow.');return}if(!atCounter&&!atKitchen){toast('Move closer to the counter.');return}const r=lifeTransaction(GameState.progress,action,place);if(r.error){toast(r.error);return}GameState.progress=r.state;if(action==='cook'&&GameState.progress.housing.rented)GameState.progress.housing.utilityUsage+=15;persist();$('dialog').hidden=true;clearWorldPanel();modal=false;keys.clear();toast(r.message)}
 
 function nearestPerson(){return pedestrians.people.find(p=>Math.hypot(me.position.x-p.group.position.x,me.position.z-p.group.position.z)<1.5)}
@@ -163,13 +170,19 @@ function marketWork(){
  const actor=shops.market.clerk.group,route=routeFor(GameState.progress);
  speak(actor,'Noah',GameState.progress.phase==='carrying'?'You’ve already collected an order for '+route.name+'. Bring that one over first.':'Could you take this grocery order to '+route.name+'? They’ll pay you '+money(route.pay)+'.',GameState.progress.phase==='carrying'?[]:[{label:'Sure, I’ll take it.',run:()=>finishJob('pickup')}]);
 }
+// Noah at the counter: browse the store, or ask about delivery work (both used to be buried in the store window).
+function marketMenu(){
+ speak(shops.market.clerk.group,'Noah','Welcome to the Corner Market. What can I do for you?',[
+  {label:'View items for sale',run:()=>{$('dialog').hidden=true;clearWorldPanel();modal=false;keys.clear();openStore()}},
+  {label:'View jobs',run:marketWork}]);
+}
 function openStore(){if(!atMarketCounter()){toast('The market is closed. Return between 07:00 and 22:00.');return}storeUI.open()}
 function showCafe(){const c=GameState.progress.cafe,o=ORDERS[c.customer];if(c.stage==='off'||c.stage==='clockout'){managerMenu();return}if(['order','serve'].includes(c.stage)&&customerWalking){toast('Your customer is taking a seat.');return}if(c.stage==='clean'&&shops.cafe.customer.group.visible){toast('Wait for your customer to leave the table.');return}
  if(c.stage==='order'){speak(shops.cafe.customer.group,o.name,'Could I have one '+o.drink.toLowerCase()+', please?',[{label:'Of course. Coming right up.',run:()=>commitCafe('order')}]);return}
  if(c.stage==='brew'){station({x:-1.25,y:1.5,z:-3.2},'Coffee machine','Ticket: '+o.drink,[{label:'Make espresso',run:()=>beginCafe('brew','Espresso')},{label:'Make latte',run:()=>beginCafe('brew','Latte')}]);return}beginCafe(c.stage);
 }
 function candidates(){const all=[],add=(id,point,anchor,label,run,range=1.5)=>all.push({id,point,anchor,label,run,range});
- if(shop){add('exit',SHOP_EXIT,()=>worldPoint({x:0,y:1.35,z:4.9}),'Go outside',leaveShop,1.5);add('clerk',COUNTER,()=>entityPoint(shops[shop].clerk.group),shop==='market'?'Browse Corner Market':'Talk to Elena',shop==='market'?openStore:managerMenu,1.6);
+ if(shop){add('exit',SHOP_EXIT,()=>worldPoint({x:0,y:1.35,z:4.9}),'Go outside',leaveShop,1.5);add('clerk',COUNTER,()=>entityPoint(shops[shop].clerk.group),shop==='market'?'Talk to Noah':'Talk to Elena',shop==='market'?marketMenu:managerMenu,1.6);
  if(shop==='cafe'&&!['off','clockout'].includes(GameState.progress.cafe.stage)){const task=cafeTask(GameState.progress);add('cafe-task',task,()=>GameState.progress.cafe.stage==='order'||GameState.progress.cafe.stage==='serve'?entityPoint(shops.cafe.customer.group):worldPoint({...task,y:1.2}),task.title,showCafe,1.35)}return all}
  if(inside){add('exit',EXIT,()=>worldPoint({x:0,y:1.4,z:5.3}),'Go outside',leaveHome);add('cook',{x:3,z:-3.5},()=>worldPoint({x:3,y:1.3,z:-4.5}),'Prepare a meal',()=>station({x:3,y:1.4,z:-4.5},'Kitchen',GameState.progress.life.groceries+' grocery packs in your bag.',[{label:'Cook a meal',run:()=>useLife('cook')}]));add('bed',BED,()=>worldPoint({...BED,y:.8}),'Sleep',()=>station({...BED,y:1},'Take a rest?','Restore your energy fully. The clock will stay where it is.',[{label:'Rest and recover',run:()=>changeHousing('rest')}]),1.4);return all}
  const gig=GameState.progress.activeJob;
@@ -182,15 +195,20 @@ function candidates(){const all=[],add=(id,point,anchor,label,run,range=1.5)=>al
  add('home',{x:STUDIO.x,z:-8.1},()=>new THREE.Vector3(1,1.5,-8.15),GameState.progress.housing.rented?'Enter your studio':'View studio listing',()=>{if(GameState.progress.housing.rented)enterHome();else showWorld(()=>new THREE.Vector3(1,1.6,-8.15),'Studio 2B · To let','Furnished studio. $90 move-in includes a $30 deposit and the first week’s $60 rent. Utilities start at $7 per week.',[{label:'Rent studio · $90',run:()=>changeHousing('rent')}])},2.8);
  if(GameState.progress.phase==='carrying'&&GameState.progress.completed%3!==1){const r=routeFor(GameState.progress);add('delivery',r,()=>new THREE.Vector3(r.x,1.3,r.z),'Leave delivery · '+money(r.pay),()=>station(r,'Delivery collection box','Order for '+r.name+'. Payment: '+money(r.pay)+'.',[{label:'Place order & collect payment',run:()=>finishJob('deliver')}]),1.4)}
  for(const person of pedestrians.people)add('person-'+person.name,person.group.position,()=>entityPoint(person.group),'Talk to '+person.name,()=>speak(person.group,person.name,'Hey! How’s your day going?',[{label:'Any advice for someone new?',run:()=>speak(person.group,person.name,person.line)},{label:'Nice to meet you.',run:()=>speak(person.group,person.name,'You too. See you around the neighborhood!')}]),1.5);
- if(!inside&&!shop)for(const tree of world.cuttableNear(me.position.x,me.position.z,CHOP_RANGE)){
-  const hits=plotAt(GameState.progress,tree.key).hits,axe=hasItem(GameState.progress,'axe');
-  add('tree-'+tree.key,tree,()=>new THREE.Vector3(tree.x,2.2,tree.z),axe?(hits?`Chop pine · ${hits} / ${TREE_HITS}`:'Chop pine'):'Pine · needs an axe',()=>startChop(tree),CHOP_RANGE);
+ if(!inside&&!shop){
+  const progress=GameState.progress,axe=hasItem(progress,'axe'),equipped=progress.equipped==='axe',need=hitsNeeded(levelOf(progress.skills.lumberjack.xp).level);
+  for(const tree of world.cuttableNear(me.position.x,me.position.z,CHOP_RANGE)){
+   const hits=plotAt(progress,tree.key).hits;
+   add('tree-'+tree.key,tree,()=>new THREE.Vector3(tree.x,2.2,tree.z),equipped?(hits?`Chop pine · ${hits} / ${need}`:'Chop pine · hold E to keep going'):axe?'Pine · equip your axe (hotbar)':'Pine · needs an axe',()=>startChop(tree),CHOP_RANGE);
+  }
+  for(const log of progress.logs)if(!pendingLogs.has(log.id)&&Math.hypot(log.x-me.position.x,log.z-me.position.z)<2.4)add('log-'+log.id,{x:log.x,z:log.z},()=>new THREE.Vector3(log.x,.5,log.z),'Pick up wood log',()=>pickUpLog(log.id),1.8);
  }
  for(const car of vehicles)add(car.id,car,()=>new THREE.Vector3(car.x,1.3,car.z),'Inspect '+car.name,()=>showWorld(()=>new THREE.Vector3(car.x,1.4,car.z),car.name,'Parked · not owned. Driving will be available in a future update.'),1.6);return all;
 }
 function interact(){if(!active||modal||busy||consuming||chopping)return;const hit=chooseInteraction(candidates(),me.position,me.rotation.y);if(hit)hit.run()}
 function updateWorldUI(){
  camera.updateMatrixWorld(true);const hit=chooseInteraction(candidates(),me.position,me.rotation.y);selectedInteraction=hit;
+ { const target=chopping?chopping.tree:hit?.id?.startsWith('tree-')?hit.point:null;world.setTarget(active&&!modal?target:null); }
  const p=hit?screenAnchor(hit.anchor(),camera,innerWidth,innerHeight,THREE.Vector3):null;$('prompt').hidden=!active||modal||!!busy||!!chopping||!p;
  if(p){$('prompt').style.left=p.x+'px';$('prompt').style.top=p.y+'px';$('prompt').querySelector('span').textContent=hit.label}
  if(worldPanel&&!$('dialog').hidden){const anchor=screenAnchor(worldPanel.anchor(),camera,innerWidth,innerHeight,THREE.Vector3);if(anchor){const width=Math.min(320,innerWidth-24),height=$('dialog').offsetHeight||260;$('dialog').style.left=Math.max(12,Math.min(innerWidth-width-12,anchor.x+26))+'px';$('dialog').style.top=Math.max(12,Math.min(innerHeight-height-12,anchor.y-height*.55))+'px';}else{$('dialog').style.left='12px';$('dialog').style.top='100px'}}
@@ -206,8 +224,8 @@ const drinkCup=new THREE.Mesh(new THREE.CylinderGeometry(.07,.055,.17,10),mat('#
 let customerKey='',customerRoute=[],customerWalking=false,customerLeaving=false;
 function updateCafeVisuals(dt){const room=shops.cafe,c=GameState.progress.cafe,key=c.day+':'+c.customer+':'+(['clean','clockout','off'].includes(c.stage)?'leaving':'seated');if(key!==customerKey){customerKey=key;if(['order','brew','serve'].includes(c.stage)){room.customer.group.visible=true;room.customer.group.position.set(0,.02,3);customerRoute=[[-2.3,3],[-2.3,-1.55],[-3.8,-1.55]];customerLeaving=false}else if(room.customer.group.visible){customerRoute=[[-2.3,-1.55],[-2.3,3],[0,4]];customerLeaving=true}}
  customerWalking=customerRoute.length>0;if(customerWalking){const g=room.customer.group,[x,z]=customerRoute[0],dx=x-g.position.x,dz=z-g.position.z,d=Math.hypot(dx,dz);g.position.y=.02;if(d<dt*1.7){g.position.set(x,.02,z);customerRoute.shift();if(!customerRoute.length){if(customerLeaving)g.visible=false;else{g.position.y=-.35;g.rotation.y=0}}}else{g.position.x+=dx/d*dt*1.7;g.position.z+=dz/d*dt*1.7;g.rotation.y=Math.atan2(dx,dz)}}
- room.customer.legs.forEach((m,i)=>m.rotation.x=customerWalking?Math.sin(performance.now()*.006+i*Math.PI)*.4:room.customer.group.visible?-1.2:0);room.usedCup.visible=c.stage==='clean';
- if(busy){busy.elapsed+=dt;arms.forEach((m,i)=>m.rotation.x=-.8+Math.sin(busy.elapsed*10+i)*.2);if(busy.elapsed>=busy.duration){const task=busy;busy=null;commitCafe(task.action,task.drink)}}
+ {const cu=room.customer;cu.setMotion(customerWalking?1.7:0);cu.setSeated(!customerWalking&&cu.group.visible);if(cu.group.visible)cu.update(dt)}room.usedCup.visible=c.stage==='clean';
+ if(busy){busy.elapsed+=dt;{const wobble=Math.sin(busy.elapsed*10)*.04;avatar.reach('R',new THREE.Vector3(-.2,1.1+wobble,.42),1);avatar.reach('L',new THREE.Vector3(.2,1.1-wobble,.42),1)}if(busy.elapsed>=busy.duration){const task=busy;busy=null;avatar.clearReach();commitCafe(task.action,task.drink)}}
 }
 window.addEventListener('pagehide',persist);document.addEventListener('visibilitychange',()=>{if(document.hidden&&active)persist()});
 let saveElapsed=0,markerTime=0;
@@ -239,9 +257,11 @@ function updateWork(dt){
 window.addEventListener('keydown',e=>{
  if(sleepElapsed!==null){if(['Tab','Space'].includes(e.code))e.preventDefault();return}
  if(creatorOpen||e.target.matches('input,select,textarea,[contenteditable=true]'))return;
- if(e.code==='KeyJ'&&active&&!e.ctrlKey&&!e.metaKey&&!e.altKey){e.preventDefault();if(!e.repeat)toggleObjective();return}
+ if((e.code==='KeyT'||e.code==='KeyJ')&&active&&!e.ctrlKey&&!e.metaKey&&!e.altKey){e.preventDefault();if(!e.repeat)toggleObjective();return}
  if(e.code==='KeyM'&&active&&!e.ctrlKey&&!e.metaKey&&!e.altKey){e.preventDefault();if(!e.repeat)minimap.toggle();return}
  if(consuming){if(e.code==='Escape'){pause(!modal);if(!modal)look.capture()}return}
+ if(e.code==='KeyG'&&active&&!modal&&!creatorOpen&&!e.ctrlKey&&!e.metaKey&&!e.altKey){e.preventDefault();if(!e.repeat){gridOn=!gridOn;toast(gridOn?'Plot grid shown in the farm and woods.':'Plot grid hidden.')}return}
+ if(/^Digit[1-6]$/.test(e.code)&&active&&!modal&&!creatorOpen&&!e.ctrlKey&&!e.metaKey&&!e.altKey){if(!e.repeat)hotbarUse(Number(e.code.slice(-1))-1);return}
  if((e.code==='Tab'||e.code==='KeyP')&&!e.ctrlKey&&!e.metaKey&&!e.altKey&&active){
    e.preventDefault();if(!e.repeat){inventoryUI?.close();storeUI?.close();phone.toggle()}return;
  }
@@ -253,8 +273,9 @@ window.addEventListener('keydown',e=>{
   return;
  }
  if((e.code==='KeyI'||e.code==='KeyQ')&&!e.ctrlKey&&!e.metaKey&&!e.altKey&&active){e.preventDefault();if(!e.repeat)inventoryUI.open(e.code==='KeyI'?'grid':'wheel');return}
-if(['ArrowUp','ArrowDown','ArrowLeft','ArrowRight','Space'].includes(e.code))e.preventDefault();if(e.code==='Escape'&&active){if(!$('dialog').hidden){$('dialog').hidden=true;clearWorldPanel();modal=false;keys.clear();look.capture()}else {pause(!modal);if(!modal)look.capture()}}if(e.code==='KeyE'&&!e.repeat)interact();if(e.code==='KeyR'&&active&&!modal)reset()});
-window.addEventListener('blur',()=>{if(active&&!modal&&!creatorOpen)pause(true)});
+if(['ArrowUp','ArrowDown','ArrowLeft','ArrowRight','Space'].includes(e.code))e.preventDefault();if(e.code==='Escape'&&active){if(!$('dialog').hidden){$('dialog').hidden=true;clearWorldPanel();modal=false;keys.clear();look.capture()}else {pause(!modal);if(!modal)look.capture()}}if(e.code==='KeyE'&&!e.repeat){eHeld=!modal;interact()}if(e.code==='KeyR'&&active&&!modal)reset()});
+window.addEventListener('blur',()=>{eHeld=false;if(active&&!modal&&!creatorOpen)pause(true)});
+window.addEventListener('keyup',e=>{if(e.code==='KeyE')eHeld=false});
 const canvas=$('world');const look=createLookControls(canvas,document,()=>active&&!modal&&!creatorOpen&&!document.hidden,(dx,dy)=>{yaw-=dx*.003;pitch=THREE.MathUtils.clamp(pitch+dy*.002,.08,1.05)},()=>{keys.clear();if(active&&!modal&&!creatorOpen)pause(true)},info=>{$('mouseMode').textContent=info.mode==='captured'?'Mouse look: captured':info.mode==='free'?'Mouse look: free · move to screen edges to keep turning':'Click the game to look around';if(info.reason)$('mouseMode').title=info.reason});
 $('retryCapture').onclick=()=>{pause(false);look.retry()};
 $('lookLeft').onclick=()=>{yaw+=Math.PI/8};$('lookRight').onclick=()=>{yaw-=Math.PI/8};
@@ -269,16 +290,34 @@ previewScene.add(new THREE.HemisphereLight('#edf5e9','#334f40',2.7));const previ
 const previewAvatar=createCharacter(draft);previewScene.add(previewAvatar.group);
 const plinth=new THREE.Mesh(new THREE.CylinderGeometry(1,1.1,.12,32),new THREE.MeshStandardMaterial({color:'#527363',roughness:1}));plinth.position.y=-.06;previewScene.add(plinth);
 const previewCamera=new THREE.PerspectiveCamera(34,1,.1,30);previewCamera.position.set(0,1.35,4.9);previewCamera.lookAt(0,1.02,0);
-const optionLabels={skin:'Skin tone',hair:'Hair color',shirt:'Top color',trousers:'Trousers'};
+const optionLabels={body:'Body',outfit:'Outfit',head:'Head & hair',top:'Top',legs:'Legs',feet:'Shoes',skin:'Skin tone',hair:'Hair color'};
 function updateDraft(){draft.name=$('characterName').value;previewAvatar.apply(draft);$('previewName').textContent=draft.name.trim()||'Your character';
- document.querySelectorAll('[data-appearance]').forEach(b=>b.setAttribute('aria-pressed',String(draft[b.dataset.appearance]===b.dataset.value)));
+ document.querySelectorAll('[data-appearance]').forEach(b=>{const k=b.dataset.appearance;b.setAttribute('aria-pressed',String(k==='outfit'?PART_KEYS.every(part=>draft[part]===b.dataset.value):draft[k]===b.dataset.value))});
 }
-for(const key of ['skin','style','hair','shirt','trousers']){
- const field=document.createElement('fieldset'),legend=document.createElement('legend');legend.textContent=key==='style'?'Hairstyle':optionLabels[key];field.append(legend);const row=document.createElement('div');row.className='options';
- const values=key==='style'?styles.map(v=>[v,v]):palettes[key];
- for(const [label,value]of values){const b=document.createElement('button');b.type='button';b.dataset.appearance=key;b.dataset.value=value;b.className=key==='style'?'style-option':'swatch';b.setAttribute('aria-label',label);b.title=label;if(key==='style')b.textContent=label;else b.style.setProperty('--color',value);b.onclick=()=>{draft[key]=value;updateDraft()};row.append(b)}field.append(row);$('appearanceOptions').append(field);
+// Body type picks which outfit parts are on offer, so the rows are rebuilt when it changes.
+function renderOptions(){
+ $('appearanceOptions').replaceChildren();
+ const outfits=OUTFITS[draft.body].map(([id,label])=>[label,id]);
+ const rows=[['body',BODIES.map(([id,label])=>[label,id])],['outfit',outfits],...PART_KEYS.map(key=>[key,outfits]),['skin',palettes.skin],['hair',palettes.hair]];
+ for(const [key,values] of rows){
+  const field=document.createElement('fieldset'),legend=document.createElement('legend');legend.textContent=optionLabels[key];field.append(legend);const row=document.createElement('div');row.className='options';
+  const swatches=key==='skin'||key==='hair';
+  for(const [label,value] of values){
+   const b=document.createElement('button');b.type='button';b.dataset.appearance=key;b.dataset.value=value;b.className=swatches?'swatch':'style-option';b.setAttribute('aria-label',label);b.title=label;
+   if(swatches)b.style.setProperty('--color',value);else b.textContent=label;
+   b.onclick=()=>{
+    if(key==='body'&&value!==draft.body){draft=normalizeAppearance({...draft,body:value,head:'',top:'',legs:'',feet:''});renderOptions()}
+    else if(key==='outfit')for(const part of PART_KEYS)draft[part]=value; // a whole outfit in one click, then mix parts below
+    else draft[key]=value;
+    updateDraft();
+   };
+   row.append(b);
+  }
+  field.append(row);$('appearanceOptions').append(field);
+ }
 }
-function openCreator(){if(consuming)return;phone?.close();inventoryUI?.close();storeUI?.close();clearWorldPanel();$('dialog').hidden=true;draft={...currentAppearance};$('characterName').value=draft.name;creatorOpen=true;modal=true;look.release();keys.clear();$('welcome').hidden=true;$('controls').hidden=true;$('creator').hidden=false;document.body.classList.add('creating');updateDraft();$('characterName').focus()}
+renderOptions();
+function openCreator(){if(consuming)return;phone?.close();inventoryUI?.close();storeUI?.close();clearWorldPanel();$('dialog').hidden=true;draft={...currentAppearance};$('characterName').value=draft.name;creatorOpen=true;modal=true;look.release();keys.clear();$('welcome').hidden=true;$('controls').hidden=true;$('creator').hidden=false;document.body.classList.add('creating');renderOptions();updateDraft();$('characterName').focus()}
 let currentAppearance={...(savedCharacter||defaults)};
 if(savedCharacter){$('start').innerHTML='Continue to the neighborhood <span>↗</span>';$('customizeSaved').hidden=false}
 $('customizeSaved').onclick=openCreator;$('editCharacter').onclick=openCreator;
@@ -312,48 +351,122 @@ function atMarketCounter(){return shop==='market'&&Math.hypot(me.position.x-COUN
 function beginConsumption(index){
  if(consuming||busy)return {error:'Finish your current action first.'};
  const item=itemById(GameState.progress.inventory.slots[index]?.id);
+ if(item?.type==='tool'){inventoryUI.close();return toggleEquip(item.id)}
  const check=useItem(GameState.progress,index);
  if(check.error)return check;
  if(item.type==='equipment')return commitInventory(check);
  // Validate now, but keep ownership/stats unchanged until the animation finishes.
  inventoryUI.close();keys.clear();look.resetMotion();
  armRecovery=null; // A new use starts from wherever a still-lowering arm is.
- consuming={id:item.id,index,animation:createConsumptionAnimation(arms[1],item)};
+ consuming={id:item.id,index,animation:createConsumptionAnimation(avatar,item)};
  $('consumeStatus').hidden=false;$('consumeStatus').textContent=(item.type==='drink'?'Drinking ':'Eating ')+item.name+'…';
  return {message:'Using '+item.name};
 }
-// Lumberjacking: E near a pine swings the axe once; rules (axe, range, hits, bag space) live in grid.js.
-const CHOP_TIME=.75,WIND_UP=.38,IMPACT=.46;
-function startChop(tree){
- if(chopping||consuming||busy)return;
+// Lumberjacking. E near a pine swings the equipped axe once and holding E keeps swinging (at the nearest tree in
+// reach); the rules (axe, range, hits, logs, XP) live in grid.js and skills.js. The right hand follows a path in the
+// character's own space: rest, overhead wind-up, then down through the trunk.
+// Swing path (the character's own space): carry pose, up past the shoulder to overhead, down through the trunk, back to carry.
+const CARRY=new THREE.Vector3(-.38,1.1,.1),CHOP_MID=new THREE.Vector3(-.3,1.6,.28),CHOP_UP=new THREE.Vector3(-.22,1.95,.02),CHOP_DOWN=new THREE.Vector3(-.1,1.12,.55),chopPoint=new THREE.Vector3();
+function startChop(tree,{quiet=false}={}){
+ if(chopping||consuming||busy)return false;
  const check=chopTree(GameState.progress,tree.key,me.position);
- if(check.error){toast(check.error);return}
+ if(check.error){if(!quiet)toast(check.error);return false}
  me.rotation.y=Math.atan2(tree.x-me.position.x,tree.z-me.position.z);
- armRecovery=null;keys.clear();
- const axe=createHeldItem(itemById('axe'));axe.position.set(0,-.31,.03);arms[1].userData.forearm.add(axe);
- chopping={tree,elapsed:0,struck:false,axe};
+ armRecovery=null;keys.clear();updateEquipped(0);carryWeight=1;
+ const total=swingTime(levelOf(GameState.progress.skills.lumberjack.xp).level);
+ chopping={tree,elapsed:0,struck:false,total,windUp:total*.5,impact:total*.625};
+ return true;
 }
 function updateChop(dt){
  if(!chopping||modal||document.hidden)return;
- const c=chopping,arm=arms[1],forearm=arm.userData.forearm;c.elapsed=Math.min(CHOP_TIME,c.elapsed+dt);
+ const c=chopping;c.elapsed=Math.min(c.total,c.elapsed+dt);
  const ease=t=>{t=Math.max(0,Math.min(1,t));return t*t*(3-2*t)};
- // Wind up overhead, whip down through the trunk, then settle back to rest.
- let shoulder,elbow;
- if(c.elapsed<WIND_UP){const t=ease(c.elapsed/WIND_UP);shoulder=-2.7*t;elbow=-1.1*t}
- else if(c.elapsed<IMPACT){const t=ease((c.elapsed-WIND_UP)/(IMPACT-WIND_UP));shoulder=-2.7+1.55*t;elbow=-1.1+.95*t}
- else{const t=ease((c.elapsed-IMPACT)/(CHOP_TIME-IMPACT));shoulder=-1.15*(1-t);elbow=-.15*(1-t)}
- arm.rotation.set(shoulder,0,0);forearm.rotation.set(elbow,0,0);
- if(!c.struck&&c.elapsed>=IMPACT){
-  c.struck=true;
-  const result=chopTree(GameState.progress,c.tree.key,me.position);
-  if(result.error)toast(result.error);
-  else{
-   GameState.progress=result.state;persist();
-   if(result.felled){world.fellTree(c.tree.key,me.position);minimap.invalidate();toast(result.message)}
-   else world.hitTree(c.tree.key,me.position);
-  }
+ if(c.elapsed<c.windUp){const t=ease(c.elapsed/c.windUp);if(t<.5)chopPoint.lerpVectors(CARRY,CHOP_MID,t*2);else chopPoint.lerpVectors(CHOP_MID,CHOP_UP,(t-.5)*2)}
+ else if(c.elapsed<c.impact){chopPoint.lerpVectors(CHOP_UP,CHOP_DOWN,ease((c.elapsed-c.windUp)/(c.impact-c.windUp)))}
+ else{chopPoint.lerpVectors(CHOP_DOWN,CARRY,ease((c.elapsed-c.impact)/(c.total-c.impact)))}
+ avatar.reach('R',chopPoint,1);
+ if(!c.struck&&c.elapsed>=c.impact){c.struck=true;strikeTree(c)}
+ if(c.elapsed>=c.total){avatar.reach('R',CARRY,1);carryWeight=1;chopping=null;keys.clear();if(eHeld&&!modal)chopNext()}
+}
+function strikeTree(c){
+ const result=chopTree(GameState.progress,c.tree.key,me.position);
+ if(result.error){toast(result.error);return}
+ GameState.progress=result.state;persist();
+ if(result.felled){
+  // The trunk falls first; its logs appear on the ground (and can be picked up) once it has landed.
+  const ids=result.logs.map(l=>l.id);ids.forEach(id=>pendingLogs.add(id));
+  world.fellTree(c.tree.key,me.position,()=>{ids.forEach(id=>pendingLogs.delete(id));world.setLogs(GameState.progress.logs)});
+  minimap.invalidate();
+  toast(result.leveledUp?`${result.message} Lumberjack level ${result.level}! ${perkText(result.level)}`:result.message);
+ }else{
+  world.hitTree(c.tree.key,me.position);
+  if(result.leveledUp)toast(`Lumberjack level ${result.level}! ${perkText(result.level)}`);
  }
- if(c.elapsed>=CHOP_TIME){disposeHeldItem(c.axe);arm.rotation.set(0,0,0);forearm.rotation.set(0,0,0);chopping=null;keys.clear()}
+}
+function chopNext(){
+ const next=world.cuttableNear(me.position.x,me.position.z,CHOP_RANGE).sort((a,b)=>Math.hypot(a.x-me.position.x,a.z-me.position.z)-Math.hypot(b.x-me.position.x,b.z-me.position.z))[0];
+ if(next)startChop(next,{quiet:true});
+}
+function pickUpLog(id){
+ const result=collectLog(GameState.progress,id);
+ if(result.error){toast(result.error);return}
+ GameState.progress=result.state;persist();world.setLogs(GameState.progress.logs);toast(result.message);
+}
+// Equipped tool: shown in the hand and carried at the ready (the arm blends back in after chopping or eating).
+function toggleEquip(id,{silent=false}={}){
+ if(chopping||consuming||busy)return {error:'Finish your current action first.'};
+ const result=equipTool(GameState.progress,id);
+ if(result.error)return result;
+ GameState.progress=result.state;persist();if(!silent)toast(result.message);
+ return result;
+}
+function updateEquipped(dt){
+ const want=GameState.progress.equipped;
+ if(!want){if(carried){if(carried.parent===avatar.hand)avatar.release();disposeHeldItem(carried);carried=null}return}
+ if(consuming||busy)return; // they own the hand until they finish
+ if(!carried||carried.userData.itemId!==want){
+  if(carried){if(carried.parent===avatar.hand)avatar.release();disposeHeldItem(carried)}
+  carried=createHeldItem(itemById(want));avatar.hold(carried,{axis:'z'});
+ }else if(carried.parent!==avatar.hand)avatar.hold(carried,{axis:'z'});
+ const idle=!chopping&&!armRecovery;
+ if(idle){carryWeight=Math.min(1,carryWeight+dt*4);avatar.reach('R',CARRY,carryWeight)}else if(!chopping)carryWeight=0;
+}
+// Hotbar: every tool and consumable you own, in bag order. Number keys (or a click) equip a tool or use food and drink.
+function refreshHotbar(){
+ const p=GameState.progress,items=hotbarItems(p),signature=items.map(h=>h.item.id+':'+h.quantity).join()+'|'+p.equipped;
+ if(signature===hotbarSignature)return;
+ hotbarSignature=signature;
+ const bar=$('hotbar');bar.replaceChildren();bar.hidden=!items.length;
+ items.forEach((entry,i)=>{
+  const button=document.createElement('button');button.type='button';button.className='hotbar-slot';button.title=entry.item.name;
+  button.setAttribute('aria-label',`${entry.item.name}, slot ${i+1}`);button.setAttribute('aria-pressed',String(p.equipped===entry.item.id));
+  const key=document.createElement('span');key.className='hotbar-key';key.textContent=String(i+1);
+  const icon=document.createElement('span');icon.textContent=entry.item.icon;button.append(key,icon);
+  if(entry.item.type!=='tool'){const count=document.createElement('span');count.className='hotbar-count';count.textContent='×'+entry.quantity;button.append(count)}
+  button.onclick=e=>{e.preventDefault();hotbarUse(i)};
+  bar.append(button);
+ });
+}
+function hotbarUse(i){
+ if(!active||modal||creatorOpen)return;
+ const entry=hotbarItems(GameState.progress)[i];if(!entry)return;
+ const result=entry.item.type==='tool'?toggleEquip(entry.item.id):beginConsumption(entry.index);
+ if(result?.error)toast(result.error);
+}
+function refreshSkillHud(){
+ const xp=GameState.progress.skills.lumberjack.xp,{level,into,next}=levelOf(xp);
+ $('skillStatus').textContent=xp?`Lumberjack Lv ${level} · ${level>=20?'max level':`${into} / ${next} XP`}`:'';
+}
+// Felled trees grow back slowly (see grid.js); logs left lying eventually rot away.
+function tickRegrowth(){
+ const now=gameMinutes(GameState.progress);
+ let progress=expireLogs(GameState.progress,now);
+ const grown=regrowTrees(progress,now,key=>{const t=world.trees.get(key);return !t||Math.hypot(t.x-me.position.x,t.z-me.position.z)<1.4});
+ progress=grown.state;
+ if(progress!==GameState.progress){const logsChanged=progress.logs!==GameState.progress.logs;GameState.progress=progress;persist();if(logsChanged)world.setLogs(progress.logs)}
+ for(const key of grown.restored){world.setRegrown(key);lastStages.delete(key)}
+ if(grown.restored.length)minimap.invalidate();
+ for(const [key,stage] of felledStages(GameState.progress,now))if(lastStages.get(key)!==stage){lastStages.set(key,stage);world.setStage(key,stage)}
 }
 // Zones: grid overlay, tree sightline fade, sun/shadows following the player, minimap.
 const fadeTarget=new THREE.Vector3();
@@ -363,7 +476,7 @@ const minimap=createMinimap(document,{canvas:$('minimap'),
  trees:()=>world.trees.values()});
 function updateZones(dt){
  const outdoors=!inside&&!shop,zone=zoneAt(me.position.x).id;
- world.targetCell=world.updateGrid(me.position,me.rotation.y,outdoors&&active&&!modal&&zone!=='city');
+ world.targetCell=world.updateGrid(me.position,me.rotation.y,gridOn&&outdoors&&active&&!modal&&zone!=='city');
  world.fade.uniforms.uFadeEnabled.value=outdoors?1:0;
  fadeTarget.set(me.position.x,me.position.y+1.5,me.position.z);
  world.update(dt,camera,fadeTarget);
@@ -397,6 +510,7 @@ storeUI=createStoreUI({document,getState:()=>GameState,
  onOpen:()=>{clearWorldPanel();modal=true;keys.clear();look.release()},
  onClose:()=>{modal=false;keys.clear();look.resetMotion()},
  onBuy:id=>atMarketCounter()?commitInventory(addItem(GameState.progress,id,{purchase:true})):{error:'Visit the open market counter to shop.'},
+ onSell:()=>atMarketCounter()?commitInventory(sellLogs(GameState.progress)):{error:'Visit the open market counter to sell.'},
  onGroceries:()=>atMarketCounter()?commitInventory(lifeTransaction(GameState.progress,'groceries','market')):{error:'Visit the open market counter to shop.'},
  onWork:marketWork
 });
@@ -424,12 +538,25 @@ gigRing.rotation.x=-Math.PI/2;gigRing.position.y=.2;gigMarker.add(gigRing);
 const gigDiamond=new THREE.Mesh(new THREE.OctahedronGeometry(.22),gigMaterial);
 gigDiamond.position.y=2.1;gigMarker.add(gigDiamond);scene.add(gigMarker);
 let objectiveCollapsed=false;
+// Walking into a doorway enters the building (no button): shops when they are open, and your own studio.
+function updateDoors(dt){
+ doorCooldown=Math.max(0,doorCooldown-dt);
+ // Pressing a movement key counts even when the wall stops you, so walking straight into the doorway works.
+ const pushing=['KeyW','KeyA','KeyS','KeyD','ArrowUp','ArrowDown','ArrowLeft','ArrowRight'].some(k=>keys.has(k));
+ if(!pushing||doorCooldown>0||inside||shop||!active||modal||busy||consuming||chopping)return;
+ if(Math.cos(me.rotation.y)>-.4||me.position.z>-7.3||me.position.z<-8.4)return; // only while heading north into the front wall
+ for(const [kind,door] of Object.entries(SHOPS)){
+  if(Math.abs(me.position.x-door.x)>=1.1)continue;
+  doorCooldown=shopOpen(kind,GameState.progress.routine)?2:3;enterShop(kind);return;
+ }
+ if(Math.abs(me.position.x-STUDIO.x)<1&&GameState.progress.housing.rented){doorCooldown=2;enterHome()}
+}
 function toggleObjective(){
  objectiveCollapsed=!objectiveCollapsed;
  $('objective').classList.toggle('collapsed',objectiveCollapsed);
  $('objectiveDetails').hidden=objectiveCollapsed;
  $('objectiveToggle').setAttribute('aria-expanded',String(!objectiveCollapsed));
- $('objectiveToggle').setAttribute('aria-label',objectiveCollapsed?'Expand objective (J)':'Minimize objective (J)');
+ $('objectiveToggle').setAttribute('aria-label',objectiveCollapsed?'Show task panel (T)':'Hide task panel (T)');
 }
 $('objectiveToggle').onclick=toggleObjective;
 function updateGig(dt){
@@ -518,15 +645,13 @@ function updateMultiplayer(now,moving,dt){
  for(const mesh of Object.values(remoteMeshes))updateRemotePlayer(mesh,dt);
 }
 
-let prev=performance.now(),frames=0,elapsed=0;function frame(now){requestAnimationFrame(frame);const actionDt=Math.max(0,Math.min((now-prev)/1000,.25)),dt=Math.min(actionDt,.04);prev=now;if(creatorOpen){drawCreator();return}frames++;elapsed+=dt;if(elapsed> .75){$('fps').textContent=Math.round(frames/elapsed)+' FPS';frames=0;elapsed=0}
+let prev=performance.now(),frames=0,elapsed=0;function frame(now){requestAnimationFrame(frame);const actionDt=Math.max(0,Math.min((now-prev)/1000,.25)),dt=Math.min(actionDt,.04);prev=now;if(creatorOpen){previewAvatar.update(dt);drawCreator();return}frames++;elapsed+=dt;if(elapsed> .75){$('fps').textContent=Math.round(frames/elapsed)+' FPS';frames=0;elapsed=0}
 const frameX=me.position.x,frameZ=me.position.z;
 let moving=false;if(active&&!modal&&!busy&&!consuming&&!chopping){let f=Number(keys.has('KeyW')||keys.has('ArrowUp'))-Number(keys.has('KeyS')||keys.has('ArrowDown')),s=Number(keys.has('KeyD')||keys.has('ArrowRight'))-Number(keys.has('KeyA')||keys.has('ArrowLeft'));let len=Math.hypot(f,s);if(len){f/=len;s/=len;const speed=keys.has('ShiftLeft')||keys.has('ShiftRight')?8.2:4.5,dx=(-Math.sin(yaw)*f+Math.cos(yaw)*s)*speed*dt,dz=(-Math.cos(yaw)*f-Math.sin(yaw)*s)*speed*dt;if(!blocked(me.position.x+dx,me.position.z))me.position.x+=dx;if(!blocked(me.position.x,me.position.z+dz))me.position.z+=dz;const angle=Math.atan2(dx,dz);me.rotation.y+=Math.atan2(Math.sin(angle-me.rotation.y),Math.cos(angle-me.rotation.y))*(1-Math.exp(-dt*24));phase+=dt*speed*2.0;moving=true}}
 const movedDistance=Math.hypot(me.position.x-frameX,me.position.z-frameZ);moving=moving&&movedDistance>.000001;
 const running=moving&&(keys.has('ShiftLeft')||keys.has('ShiftRight'));
 const poseBlend=1-Math.exp(-dt*18);
-const torso=player.getObjectByName('torso');torso.rotation.y=THREE.MathUtils.lerp(torso.rotation.y,moving?Math.sin(phase)*.035:0,poseBlend);
-legs.forEach((m,i)=>m.rotation.x=THREE.MathUtils.lerp(m.rotation.x,moving?Math.sin(phase+i*Math.PI)*.55:0,poseBlend));
-arms.forEach((m,i)=>{if((consuming||armRecovery||chopping)&&i===1)return;m.rotation.x=THREE.MathUtils.lerp(m.rotation.x,moving?-Math.sin(phase+i*Math.PI)*.45:0,poseBlend)});
+avatar.setMotion(moving?(running?8.2:4.5):0);
 // Match foot height to the road, pavement, or grass rather than hovering.
 const px=me.position.x,pz=me.position.z;
 const sidewalk=(px>=-38&&px<=54&&((pz>=-8.5&&pz<=-3.5)||(pz>=15.5&&pz<=20.5)))||(px>=-21.5&&px<=-16.5&&pz>=-74&&pz<=24);
@@ -537,15 +662,15 @@ if(active&&!modal&&!document.hidden){GameState.progress=expireCafe(advanceTime(G
 const load=GameState.progress.activeJob?.id==='heavy-delivery'&&oldStage==='task'?2:1;
 tickLife(actionDt,moving,running,load);
 GameState.progress=tickContract(GameState.progress,{position:me.position,room:currentRoom(),dt:actionDt,moving,paused:!!consuming,running,distance:movedDistance});
-if(oldStage!==GameState.progress.activeJob?.stage)persist();if(!inside&&!shop)pedestrians.update(dt,me.position);if(inside||shop){saveElapsed+=dt;if(saveElapsed>=4){saveElapsed=0;persist()}}}
+if(oldStage!==GameState.progress.activeJob?.stage)persist();if(!inside&&!shop)pedestrians.update(dt,me.position);regrowClock+=actionDt;if(regrowClock>=5){regrowClock=0;tickRegrowth()}if(inside||shop){saveElapsed+=dt;if(saveElapsed>=4){saveElapsed=0;persist()}}}
 look.tick(dt);
 if(worldPanel?.actor&&!$('dialog').hidden){const actor=worldPanel.actor,pa=getMeWorldPosition(new THREE.Vector3()),pb=actor.getWorldPosition(new THREE.Vector3()),mid=pa.clone().add(pb).multiplyScalar(.5);const angle=Math.atan2(pa.x-pb.x,pa.z-pb.z);actor.rotation.y=angle;me.rotation.y=angle+Math.PI;worldPlayer.position.copy(mid);if(shop)shops[shop].camera(worldPlayer,angle+.45,.32,5.8,dt);else updateCamera(worldPlayer,angle+.45,.32,5.8,dt)}else if(shop){getMeWorldPosition(worldPlayer.position);shops[shop].camera(worldPlayer,yaw,pitch,zoom,dt);}else if(inside)indoorCamera(me,yaw,pitch,zoom,dt);else updateCamera(me,yaw,pitch,zoom,dt);
 const daylight=Math.max(.12,Math.sin((GameState.progress.routine.minutes-360)/1440*Math.PI*2));sun.intensity=.2+daylight*2.9;scene.background.setRGB(.08+daylight*.65,.12+daylight*.67,.2+daylight*.62);scene.fog.color.copy(scene.background);
-if(active&&!modal&&!document.hidden)updateCafeVisuals(dt);updateConsumption(actionDt);updateChop(actionDt);updateZones(dt);updateSleep(actionDt);updateWork(dt);updateGig(dt);updateWorldUI();updateMultiplayer(now,moving,dt);syncPlayerMesh();renderer.render(inside?apartment.scene:scene,camera)}requestAnimationFrame(frame);
+if(active&&!modal&&!document.hidden)updateCafeVisuals(dt);updateConsumption(actionDt);updateDoors(dt);updateChop(actionDt);updateEquipped(modal?0:dt);avatar.update(modal?0:dt);if(shop)shops[shop].clerk.update(modal?0:dt);updateZones(dt);updateSleep(actionDt);updateWork(dt);updateGig(dt);updateWorldUI();updateMultiplayer(now,moving,dt);syncPlayerMesh();renderer.render(inside?apartment.scene:scene,camera)}requestAnimationFrame(frame);
 
 // Development hook: open the game with ?debug to inspect state from the console (window.__city).
-if(typeof location!=='undefined'&&new URLSearchParams(location.search).has('debug'))window.__city={GameState,world,
+if(typeof location!=='undefined'&&new URLSearchParams(location.search).has('debug'))window.__city={GameState,world,scene,camera,avatar,pedestrians,
  teleport(x,z){if(inside||shop)return false;setMePosition(x,me.position.y,z);return true},
  view(newYaw,newPitch,newZoom){yaw=newYaw??yaw;pitch=newPitch??pitch;zoom=zoomTarget=newZoom??zoom},
- give(id){return commitInventory(addItem(GameState.progress,id))},
+ give(id){return commitInventory(addItem(GameState.progress,id))},equip:id=>toggleEquip(id,{silent:true}),hotbarUse,eHold(on){eHeld=on},place(x,z){setMePosition(x,me.position.y,z)},get shop(){return shop},get pos(){return {x:+me.position.x.toFixed(2),z:+me.position.z.toFixed(2),ry:+me.rotation.y.toFixed(2)}},get doorCooldown(){return +doorCooldown.toFixed(2)},get inside(){return inside},get hidden(){return $('objectiveDetails').hidden},tickRegrowth,
  use(index){return beginConsumption(index)},chop:startChop,get acting(){return !!(chopping||consuming||armRecovery)},fps:()=>$("fps").textContent};
