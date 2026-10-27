@@ -1,0 +1,11 @@
+import {mkdir,copyFile,readdir,readFile,writeFile} from 'node:fs/promises';
+const version='0.15.0',dest=`dist/releases/${version}`;
+await mkdir(`${dest}/vendor`,{recursive:true});
+for(const name of await readdir('dist'))if(name.endsWith('.js')||name==='style.css')await copyFile(`dist/${name}`,`${dest}/${name}`);
+await copyFile('dist/vendor/three.module.js',`${dest}/vendor/three.module.js`);
+let html=await readFile('dist/index.html','utf8');html=html.replace(/0\.14\.0/g,version).replace(/href="(?:releases\/[^/]+\/)?style.css[^" ]*"/,`href="releases/${version}/style.css"`);
+html=html.replace(/<script type="module" src="[^"]+"><\/script>/,`<script>\nconst fail=(message)=>{const el=document.getElementById('error');el.hidden=false;el.textContent='The game could not start: '+message+' — Please reload this page. Your saved progress has not been cleared.';};\nwindow.addEventListener('error',e=>fail(e.message||'A game file did not load'));\nwindow.addEventListener('unhandledrejection',e=>fail(e.reason?.message||'A game file did not load'));\nimport('./releases/${version}/game.js').catch(e=>fail(e.message));\n</script>`);
+html=html.replace(/releases\/[^/]+\/game\.js/g,`releases/${version}/game.js`);
+await writeFile('dist/index.html',html);
+await writeFile('dist/_headers','/\n  Cache-Control: no-cache\n/index.html\n  Cache-Control: no-cache\n/releases/*\n  Cache-Control: public, max-age=31536000, immutable\n');
+console.log('Packaged consistent release '+version);

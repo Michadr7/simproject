@@ -1,0 +1,15 @@
+import assert from 'node:assert/strict';
+import {loadProfile,saveProfile} from '../dist/profile.js';
+import {GameState,initializeState} from '../dist/state.js';
+const entries=new Map([['citylife.progress.v1',JSON.stringify({version:1,progress:{cash:1234,completed:2,position:{x:3,z:5},life:{food:75,energy:60,groceries:3}}})]]);
+globalThis.localStorage={getItem:k=>entries.get(k),setItem:(k,v)=>entries.set(k,v)};
+const profile=loadProfile();assert(profile.playerId);assert.equal(profile.progress.cash,1234);assert.equal(profile.progress.life.groceries,3);
+assert.equal(loadProfile().playerId,profile.playerId);initializeState(profile);
+GameState.progress={...GameState.progress,cash:4567};
+assert(saveProfile({playerId:GameState.me.id,name:'Test',progress:GameState.progress}));
+assert.equal(JSON.parse(entries.get('citylife.profile.v1')).progress.cash,4567);
+assert.equal(loadProfile().playerId,profile.playerId);
+localStorage.setItem=()=>{throw new Error('Storage unavailable')};
+assert.equal(saveProfile({...profile,progress:GameState.progress}),false);
+assert.equal(loadProfile().progress.cash,4567);
+console.log('Profile legacy migration, stable ID, replaced progress, and session-only storage passed.');

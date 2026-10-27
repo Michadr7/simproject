@@ -1,0 +1,12 @@
+import assert from 'node:assert/strict';
+import * as T from '../dist/vendor/three.module.js';
+import {constrainCamera,blocksView} from '../dist/camera.js';
+const v=(x,y,z)=>new T.Vector3(x,y,z);
+const wall=new T.Box3(v(-2,-2,3),v(2,4,4)).expandByScalar(.3);
+const result=constrainCamera(v(0,1,0),v(0,1,8),[wall]);
+assert(result.z<2.7 && result.z>2.5,'wall pulls camera forward with clearance');
+assert.equal(constrainCamera(v(0,1,0),v(8,1,0),[wall]).x,8,'open direction stays at selected zoom');
+assert(blocksView(v(0,4,7),v(0,1,0),new T.Sphere(v(0,3,4),1.5)),'foreground foliage detected');
+assert(!blocksView(v(0,4,7),v(0,1,0),new T.Sphere(v(8,3,4),1.5)),'unrelated tree remains opaque');
+assert(blocksView(v(0,4,7),v(0,1,0),new T.Sphere(v(0,4,7),1.5)),'camera inside canopy detected');
+console.log('Camera clearance and foliage checks passed.');

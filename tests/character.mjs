@@ -1,0 +1,20 @@
+import assert from 'node:assert/strict';
+import {defaults,styles,normalizeAppearance,saveAppearance,loadAppearance,SAVE_KEY} from '../dist/appearance.js';
+import {createCharacter} from '../dist/character.js';
+let raw=null;const storage={getItem:()=>raw,setItem:(key,value)=>{assert.equal(key,SAVE_KEY);raw=value}};
+const chosen={...defaults,name:'Alex',style:'Bob',skin:'#79513c',shirt:'#66869b'};
+assert(saveAppearance(storage,chosen));assert.deepEqual(loadAppearance(storage),chosen);
+raw='{';assert.equal(loadAppearance(storage),null);
+raw=JSON.stringify({version:99,appearance:chosen});assert.equal(loadAppearance(storage),null);
+assert.equal(loadAppearance({getItem(){throw Error('blocked')}}),null);
+assert.equal(saveAppearance({setItem(){throw Error('quota')}},chosen),false);
+assert.equal(normalizeAppearance({skin:'invalid',name:' \u0000Alex '}).skin,defaults.skin);
+assert.equal(normalizeAppearance({name:' \u0000Alex '}).name,'Alex');
+const a=createCharacter(chosen),b=createCharacter(defaults);
+a.apply({...chosen,shirt:'#ab6d51'});
+const torso=a.group.getObjectByName('torso');
+const other=b.group.getObjectByName('torso');
+assert.equal(torso.material.color.getHexString(),'ab6d51');assert.equal(other.material.color.getHexString(),'c5bd9f');
+for(const style of styles){a.apply({...chosen,style});assert(a.group.children[0].children.length>0)}
+assert.equal(a.legs.length,2);assert.equal(a.arms.length,2);
+console.log('Character save/load, invalid saves, blocked storage, styles and independent preview materials passed.');
