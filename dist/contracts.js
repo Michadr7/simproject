@@ -46,14 +46,17 @@ export function acceptContract(progress,id){
 }
 export function gigTarget(job){return job.stage==='return'?job.returnLocation:job.stage==='task'?(job.taskLocation||job.location):job.location}
 export const atGigPoint=(position,room,point)=>room===point.room&&Math.hypot(position.x-point.x,position.z-point.z)<=1.35;
-export function tickContract(progress,{position,room='street',dt=0,moving=false,running=false,distance=0}){
+// moving: the player actually moved this frame (resets timed work). paused: an action such as eating
+// holds timed work where it is without resetting it.
+export function tickContract(progress,{position,room='street',dt=0,moving=false,paused=false,running=false,distance=0}){
  const previous=progress.activeJob;if(!previous)return progress;
  let job=normalizeActiveJob(previous);dt=Math.max(0,Math.min(dt,.25));
  if(job.stage==='travel'&&atGigPoint(position,room,job.location))job.stage='task';
  if(job.stage==='task'){
   if(job.mode==='timed'){
    const working=atGigPoint(position,room,job.location)&&!moving;
-   job.workSeconds=working?Math.min(job.duration,job.workSeconds+dt):0;
+   if(!working)job.workSeconds=0;
+   else if(!paused)job.workSeconds=Math.min(job.duration,job.workSeconds+dt);
    if(job.workSeconds>=job.duration)job.stage='return';
   }else{
    if(job.mode==='courier'&&running&&room==='street')job.runMetres=Math.min(job.runDistance,job.runMetres+bounded(distance,1));

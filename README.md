@@ -285,3 +285,70 @@ cleanup, delayed effects, blocked duplicate use/movement, pause/resume, J behavi
 direct counter-store entry, buying/saving, filters, owned-item bag contents and
 existing gameplay/multiplayer flows. Visual WebGL review remains manual. Run the
 same local commands; the hosted version is unchanged.
+
+## 0.15.1 bug fixes: gig pause, elbow joint, release pipeline
+
+Eating or drinking during a timed gig now pauses its timer instead of resetting it.
+Only actually moving (or leaving the gig spot) resets timed work. `tickContract`
+takes a new `paused` flag; `game.js` passes it while an item is being used.
+
+Character arms are now two joints: `arms[i]` is the upper arm (shoulder pivot, still
+used for the walking swing) and `forearms[i]` / `arms[i].userData.forearm` is the
+forearm (elbow pivot), with a small elbow sphere to close the joint. The rest pose
+looks the same as before. The use animation solves a two-bone reach to the mouth
+over 0.8 s with no scaling, keeps the item upright (drinks tip toward the lips), uses
+the item at 1.0 s, then lowers the empty hand over 0.45 s. Movement and other menus
+unlock as soon as the item is used; the lowering finishes while you walk.
+
+Releases: `npm run release` builds `dist/releases/<version>/` using `version` from
+`package.json` and points `dist/index.html` at it. It refuses to overwrite an existing
+release folder (they are cached as immutable); bump the version first, or run
+`npm run release -- 0.15.2`. `npm test` runs every test file.
+
+Validation: all 21 test files pass, including new checks for paused gig work, rigid
+upper arm/forearm lengths, mouth reach for all 15 consumables, gradual lowering and
+cleanup. Visual WebGL review of the new arm pose is still manual.
+
+## 0.16.0 world zones, plot grid and lumberjacking
+
+The world now has three zones. **Westside** (the city) keeps its exact original
+footprint (x −61…58), so every existing coordinate, job and save still works.
+**Oak Farms** lies west (x −168…−61) and **Alder Woods** east (x 58…168), both
+z −56…56. Oak Street continues into each as a dirt road, plus a north–south lane.
+Each zone has its own ground texture; the farm has 8 fenced fields with 3-cell gates
+facing the road; signs mark both city exits. The HUD location shows the current zone.
+
+`world.js` holds the pure layout (zones, walkable bounds, roads, fields, grid maths)
+and `createWorld()`, which builds the zone scenery. Trees are generated from
+`WORLD_SEED`, so every load makes the same forest: ~330 cuttable pines on grid-cell
+centres (never touching) and ~1,090 broadleaf decor trees. All trees are instanced
+(a handful of draw calls) and use a spatial hash for collisions. Trees between the
+camera and the player dissolve with a dither pattern. The sun and its shadow area now
+follow the player across the larger world.
+
+**Grid/plots.** 1 world unit = 1 plot; cell `(ix,iz)` covers `[ix,ix+1)×[iz,iz+1)` and
+is keyed `"ix,iz"`. Only whole cells in the farm or forest are plots.
+`GameState.progress.plots` is sparse: a missing key is the generated default
+(`{type:'farm',crop:null,tilled:false}` or `{type:'forest',tree:'pine'|null,hits:0}`),
+so fresh saves stay small. `grid.js` has the rules (`defaultPlot`, `normalizePlots`,
+`plotAt`, `setPlot`, `chopTree`); `state.js` adds `getPlot(key)` / `setPlot(key, plot)`.
+In the farm and forest a faint grid fades in around the player, with a highlighted
+target cell in front of them (`world.targetCell`) for future planting/building.
+
+**Lumberjacking.** The Corner Market sells an Axe ($20, new Tools filter). Press E near
+a pine: one swing per press, three hits fell it. The tree tips away from you, leaves a
+stump, stops blocking, the plot is saved, and a Wood log (stacks to 10, not sold in
+shops) goes in your bag. Without an axe the prompt says so; with a full bag the final
+hit is refused so no log is lost. Tools and materials are not consumable and stay off
+the quick wheel. Felled trees do not regrow yet; chopping costs no energy yet.
+
+**Map.** A new zone-coloured world map sits bottom right (grey city, yellow-brown farm,
+green forest, with roads, buildings, fields, pines, player arrow, view direction and job
+markers). Press **M** to enlarge it.
+
+Development: open the game with `?debug` to get `window.__city` (teleport, give items,
+camera view) in the browser console.
+
+Validation: all test files pass, including new `world.mjs` and `grid.mjs`. The game
+was also run in headless Chrome (software WebGL) to check the zones, grid, dither fade,
+chopping, felling and map visually.

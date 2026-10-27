@@ -1,5 +1,6 @@
 import {tickLife as calculateLife,normalizeDrainMultiplier} from './life.js';
 import {freshProgress, normalizeProgress} from './jobs.js';
+import {plotAt,setPlot as withPlot} from './grid.js';
 
 // Plain simulation data; Three.js meshes only display this state.
 // freshProgress includes cooldowns: { [gigTypeId]: absoluteGameMinute },
@@ -13,6 +14,10 @@ export function initializeState(profile) {
   GameState.progress = normalizeProgress(profile.progress);
   Object.assign(GameState.me, {id: profile.playerId, name: profile.name});
 }
+// Grid plots (sparse, keyed "ix,iz"; see grid.js for the shapes). Missing keys are default plots.
+// e.g. getPlot('120,-14') -> {type:'forest',tree:'pine',hits:0}
+export const getPlot=key=>plotAt(GameState.progress,key);
+export function setPlot(key,plot){GameState.progress=withPlot(GameState.progress,key,plot);return getPlot(key)}
 export function setMePosition(x, y, z) {
   Object.assign(GameState.me.position, {x, y, z});
 }

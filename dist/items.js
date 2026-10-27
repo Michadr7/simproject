@@ -1,6 +1,9 @@
 // Restoration values are points; prices are cents. Equipment bonuses never stack by type.
 const food=(id,name,icon,foodRestore,thirstRestore,energyRestore,price)=>({id,name,type:'food',icon,foodRestore,thirstRestore,energyRestore,price,stackLimit:10});
 const drink=(id,name,icon,foodRestore,thirstRestore,energyRestore,price)=>({id,name,type:'drink',icon,foodRestore,thirstRestore,energyRestore,price,stackLimit:10});
+// Tools are used from the world (E), never consumed. Materials are gathered, not sold in shops.
+const tool=(id,name,icon,description,price)=>({id,name,type:'tool',icon,description,foodRestore:0,thirstRestore:0,energyRestore:0,price,stackLimit:1});
+const material=(id,name,icon,description,price)=>({id,name,type:'material',icon,description,foodRestore:0,thirstRestore:0,energyRestore:0,price,stackLimit:10,buyable:false});
 const equipment=(id,name,icon,equipSlot,slotBonus,price)=>({id,name,type:'equipment',icon,equipSlot,slotBonus,foodRestore:0,thirstRestore:0,energyRestore:0,price,stackLimit:1});
 export const ITEMS=Object.freeze([
  food('apple','Apple','🍎',15,5,2,100),
@@ -20,6 +23,10 @@ export const ITEMS=Object.freeze([
  drink('orange-juice','Orange juice','🧃',10,35,8,250),
  equipment('basic-jacket','Basic jacket','🧥','jacket',2,1500),
  equipment('small-backpack','Small backpack','🎒','backpack',10,2500),
- equipment('large-backpack','Large backpack','🎒','backpack',20,4500)
+ equipment('large-backpack','Large backpack','🎒','backpack',20,4500),
+ tool('axe','Axe','🪓','Chops pine trees in Alder Woods · 3 hits',2000),
+ material('wood-log','Wood log','🪵','Timber from Alder Woods',300)
 ].map(Object.freeze));
 export const itemById=id=>ITEMS.find(item=>item.id===id);
+export const isConsumable=item=>item?.type==='food'||item?.type==='drink';
+export const isBuyable=item=>item?.buyable!==false;

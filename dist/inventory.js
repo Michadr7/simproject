@@ -1,4 +1,4 @@
-import {ITEMS,itemById} from './items.js';
+import {ITEMS,itemById,isConsumable} from './items.js';
 import {normalizeLife} from './life.js';
 export const BASE_SLOTS=8;
 export const freshInventory=()=>({slots:[],equipment:{jacket:null,backpack:null}});
@@ -37,6 +37,7 @@ export function useItem(progress,index){
   if(inventory.slots.length>inventoryCapacity(inventory))return {error:'Use or remove items before equipping a smaller bag.'};
   return {state:{...progress,inventory},message:item.name+' equipped.'};
  }
+ if(!isConsumable(item))return {error:item.type==='tool'?`${item.name}: ${item.description}. Press E near a pine to use it.`:`${item.name}: ${item.description}.`};
  const life=normalizeLife(progress.life);
  const restores={food:item.foodRestore,thirst:item.thirstRestore,energy:item.energyRestore};
  if(!Object.entries(restores).some(([key,value])=>value>0&&life[key]<100))return {error:'These stats are already full.'};
@@ -54,7 +55,9 @@ export function unequipItem(progress,type){
 export function quickItems(progress){
  // One button per consumable type, even when there are multiple stacks.
  const seen=new Set();return (progress.inventory?.slots||[]).flatMap((slot,index)=>{
-  const item=itemById(slot.id);if(!item||item.type==='equipment'||seen.has(item.id))return [];
+  const item=itemById(slot.id);if(!isConsumable(item)||seen.has(item.id))return [];
   seen.add(item.id);return [{item,index,quantity:progress.inventory.slots.filter(s=>s.id===item.id).reduce((n,s)=>n+s.quantity,0)}];
  });
 }
+export const countItem=(progress,id)=>(progress.inventory?.slots||[]).reduce((n,slot)=>n+(slot.id===id?slot.quantity:0),0);
+export const hasItem=(progress,id)=>countItem(progress,id)>0;

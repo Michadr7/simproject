@@ -1,8 +1,12 @@
 import {createStoreUI} from './store.js';
+import {createWorld,zoneAt,isWalkable} from './world.js';
+import {chopTree,felledTrees,plotAt,TREE_HITS,CHOP_RANGE} from './grid.js';
+import {createMinimap} from './minimap.js';
+import {createHeldItem,disposeHeldItem} from './item-models.js';
 import {createConsumptionAnimation} from './consumption.js';
 import {itemById} from './items.js';
 import {createInventoryUI} from './inventory-ui.js';
-import {addItem,useItem,unequipItem} from './inventory.js';
+import {addItem,useItem,unequipItem,hasItem} from './inventory.js';
 import {createPhone} from './phone.js';
 import {acceptContract,completeContract,tickContract,gigTarget,atGigPoint,refreshGigBoard} from './contracts.js';
 import {GameState,initializeState,setMePosition,tickLife,setStatDrainMultiplier} from './state.js';
@@ -44,14 +48,14 @@ function label(text,x,y,z,width=5,rot=0,bg='#243e3b',fg='#f1ebd9',height=width/4
  sign.position.set(x,y,z);sign.rotation.y=rot;scene.add(sign);
 }
 
-box(180,.25,180,0,-.2,0,'#8a9a7c');box(110,.12,19,0,-.03,6,'#535d60');box(16,.13,120,-30,-.02,0,'#535d60');box(92,.25,5,8,.06,-6,'#b7b6a8');box(92,.25,5,8,.06,18,'#b7b6a8');box(5,.26,98,-19,.06,-25,'#b7b6a8');
+box(110,.12,19,0,-.03,6,'#535d60');box(16,.13,120,-30,-.02,0,'#535d60');box(92,.25,5,8,.06,-6,'#b7b6a8');box(92,.25,5,8,.06,18,'#b7b6a8');box(5,.26,98,-19,.06,-25,'#b7b6a8');
 for(let x=-48;x<55;x+=8){if(x<-40||x>-20)box(3,.02,.14,x,.05,6,'#d9d5bb')}for(let z=-47;z<55;z+=8)if(z<-8||z>20)box(.14,.02,3,-30,.06,z,'#d9d5bb');for(let i=0;i<7;i++){box(.85,.025,7,-18+i*1.55,.06,6,'#dfdfd1');box(8,.025,.9,-30,.06,-7+i*1.6,'#dfdfd1')}
 function building(x,z,w,d,h,c,name){const before=scene.children.length;const kind=name==='CORNER MARKET'?'market':name==='ALDER COFFEE'?'cafe':null;if(kind){const shell=box(w,h-3.5,d,x,3.5+(h-3.5)/2,z,c);shopShells[kind].push(shell);colliders.push({x,z,hx:w/2,hz:d/2});for(const side of [-1,1])shopShells[kind].push(box(1.5,3.5,10,x+side*6.75,1.75,-13.5,c));}else box(w,h,d,x,h/2,z,c,true);box(w+.35,.35,d+.35,x,h+.1,z,'#d6d2c4');box(w+.4,.22,d+.4,x,3.6,z,'#d6d2c4');const front=z+d/2+.025;for(let xx=x-w/2+1.4;xx<x+w/2-.7;xx+=2.5)for(let yy=5;yy<h-1;yy+=2.8){box(1.1,1.65,.08,xx,yy,front,'#435d68');box(1.32,.12,.22,xx,yy-.85,front+.08,'#d1c6b1')}if(name){if(name==='OAK STREET APARTMENTS')label(name,x,3.96,front+.24,7,0,'#243e3b','#f1ebd9',.42);else if(kind)label(name,x,3.96,front+.24,7,0,'#243e3b','#f1ebd9',.42);else label(name,x,3,front+.12,Math.min(w-1,7));if(!kind)for(let xx=x-w/2+1.5;xx<x+w/2;xx+=3)box(1.8,1.9,.1,xx,1.25,front,'#3d555a')}if(kind){shopShells[kind]=[...new Set([...shopShells[kind],...scene.children.slice(before)])];cameraSolids.push(shopShells[kind][0]);}}
 building(1,-15,17,13,17,'#b08b74','OAK STREET APARTMENTS');building(19,-13.5,15,10,9,'#c2bc9b','CORNER MARKET');building(36,-16,15,15,13,'#82948d','ALDER COFFEE');building(-13,-18,8,19,12,'#9b9f98','LAUNDRY');
 // Entrance is a distinct replaceable asset; interaction data is separate from scenery.
 const entrance={x:1,z:-8.25,radius:3.3};box(2.2,2.7,.18,1,1.35,-8.36,'#213a3c');box(.08,2.3,.05,1,1.3,-8.23,'#aebeb5');box(.12,.25,.08,1.6,1.3,-8.18,'#e3cf93');box(3.6,.18,1.8,1,3.05,-7.8,'#374e46');label('18',1,2.83,-8.16,.45,0,'#213a3c','#e3cf93',.16);
 building(-4,31,20,19,11,'#c4b298');building(19,33,17,23,15,'#929e9a');building(39,31,17,19,10,'#b5a38d');building(-48,-19,18,21,19,'#899c9b');building(-49,26,18,20,12,'#af9d8c');
-for(let x=-65;x<80;x+=17)building(x,-61,13,17,12+((x+65)%4)*3,'#a3ada3');
+for(let x=-48;x<=54;x+=17)building(x,-61,13,17,12+((x+65)%4)*3,'#a3ada3');
 const trees=[],lampMeshes=[];
 function tree(x,z){
   const trunk=box(.3,3.8,.3,x,1.9,z,'#726452',true);
@@ -70,9 +74,15 @@ const vehicles=createVehicles(scene,colliders);const pedestrians=createPedestria
 for(let x of[9,27]){box(2,.18,.7,x,.65,17.5,'#876e50');box(2,.55,.13,x,1,17.85,'#876e50');box(.12,.7,.55,x-.8,.3,17.5,'#394a42');box(.12,.7,.55,x+.8,.3,17.5,'#394a42')}box(.8,1.2,.8,11,.6,-4.5,'#435c4f',true);
 polishWorld(scene,box,label,trees);for(const [x,title] of [[19,'MARKET 07–22'],[36,'CAFE 08–18']])label(title,x,2.95,-8.08,2.1,0,'#24483f','#f1ebd9',.25);
 for(const x of [3.8,-10.2]){box(.85,.8,.55,x,.55,-7,'#637f70',true);label('DELIVERIES',x,1.06,-6.7,.8,0,'#29473b','#e9e3c7',.16)}
+// Farm and forest zones, plot grid and cuttable trees (world.js). Built after polishWorld so its
+// texture pass only touches city meshes.
+const world=createWorld(scene,{label});
+sun.target.position.set(0,0,0);scene.add(sun.target);
 initializeState(loadProfile());
+for(const key of felledTrees(GameState.progress))world.setFelled(key);
 const me=GameState.me;
-let phone=null,inventoryUI=null,storeUI=null,consuming=null,sleepElapsed=null;
+// consuming: an item is being raised and used (blocks input). armRecovery: the empty hand lowering afterwards (cosmetic only).
+let phone=null,inventoryUI=null,storeUI=null,consuming=null,armRecovery=null,chopping=null,sleepElapsed=null;
 let inside=false,shop=null;const apartment=createApartment();
 const shops={market:createShop('market'),cafe:createShop('cafe')};for(const [kind,room] of Object.entries(shops)){room.scene.position.set(SHOPS[kind].x,.165,-13.5);scene.add(room.scene);scene.updateMatrixWorld(true);room.camera=createIndoorCamera(camera,[...room.occluders,...shopShells[kind]]);}const worldPlayer={position:new THREE.Vector3()};
 const indoorCamera=createIndoorCamera(camera,apartment.occluders);
@@ -88,10 +98,10 @@ function getMeWorldPosition(target){
  return player.parent.localToWorld(target);
 }
 
-setMePosition(-5,.2,15);let yaw=0,pitch=.38,zoom=7,zoomTarget=7,active=false,modal=false,discovered=false,phase=0,busy=null,worldPanel=null,selectedInteraction=null;const keys=createMovementInput(window,document,()=>active&&!modal&&!creatorOpen&&!busy&&!consuming);const updateCamera=createCameraController(camera,cameraSolids,trees,lampMeshes);
+setMePosition(-5,.2,15);let yaw=0,pitch=.38,zoom=7,zoomTarget=7,active=false,modal=false,discovered=false,phase=0,busy=null,worldPanel=null,selectedInteraction=null;const keys=createMovementInput(window,document,()=>active&&!modal&&!creatorOpen&&!busy&&!consuming&&!chopping);const updateCamera=createCameraController(camera,cameraSolids,trees,lampMeshes);
 function reset(){if(active)look.resetMotion();if(shop){setMePosition(SHOP_ENTRY.x,.02,SHOP_ENTRY.z);return}if(inside){setMePosition(ENTRY.x,.02,ENTRY.z);return}setMePosition(-5,.2,15);yaw=0;pitch=.38;camera.position.set(-5,4,22)}reset();
 if(GameState.progress.position&&!blocked(GameState.progress.position.x,GameState.progress.position.z)){me.position.x=GameState.progress.position.x;me.position.z=GameState.progress.position.z;camera.position.set(me.position.x,4,me.position.z+7)}
-function blocked(x,z){if(shop)return shops[shop].blocked(x,z);if(inside)return apartment.blocked(x,z);if(x<-61||x>58||z<-48||z>48)return true;return colliders.some(b=>Math.abs(x-b.x)<b.hx+.33&&Math.abs(z-b.z)<b.hz+.33)}
+function blocked(x,z){if(shop)return shops[shop].blocked(x,z);if(inside)return apartment.blocked(x,z);if(!isWalkable(x,z)||world.blocked(x,z))return true;return colliders.some(b=>Math.abs(x-b.x)<b.hx+.33&&Math.abs(z-b.z)<b.hz+.33)}
 function clearWorldPanel(){if(worldPanel?.actor){const pa=getMeWorldPosition(new THREE.Vector3()),pb=worldPanel.actor.getWorldPosition(new THREE.Vector3());yaw=Math.atan2(pa.x-pb.x,pa.z-pb.z)+.45;pitch=.32;zoom=zoomTarget=5.8;}worldPanel=null;look.resetMotion()}
 function pause(show){if(sleepElapsed!==null)return;if(show){phone?.close();inventoryUI?.close();storeUI?.close();}if(show){$('dialog').hidden=true;clearWorldPanel();}$('controls').hidden=!show;modal=show;keys.clear();if(show)look.release()}
 $('start').onclick=()=>{if(currentAppearance.name){$('welcome').hidden=true;active=true}else openCreator()};$('help').onclick=()=>pause(true);$('resume').onclick=()=>{pause(false);look.capture()};$('closeDialog').onclick=()=>{$('dialog').hidden=true;clearWorldPanel();modal=false;keys.clear();look.capture()};
@@ -172,12 +182,16 @@ function candidates(){const all=[],add=(id,point,anchor,label,run,range=1.5)=>al
  add('home',{x:STUDIO.x,z:-8.1},()=>new THREE.Vector3(1,1.5,-8.15),GameState.progress.housing.rented?'Enter your studio':'View studio listing',()=>{if(GameState.progress.housing.rented)enterHome();else showWorld(()=>new THREE.Vector3(1,1.6,-8.15),'Studio 2B · To let','Furnished studio. $90 move-in includes a $30 deposit and the first week’s $60 rent. Utilities start at $7 per week.',[{label:'Rent studio · $90',run:()=>changeHousing('rent')}])},2.8);
  if(GameState.progress.phase==='carrying'&&GameState.progress.completed%3!==1){const r=routeFor(GameState.progress);add('delivery',r,()=>new THREE.Vector3(r.x,1.3,r.z),'Leave delivery · '+money(r.pay),()=>station(r,'Delivery collection box','Order for '+r.name+'. Payment: '+money(r.pay)+'.',[{label:'Place order & collect payment',run:()=>finishJob('deliver')}]),1.4)}
  for(const person of pedestrians.people)add('person-'+person.name,person.group.position,()=>entityPoint(person.group),'Talk to '+person.name,()=>speak(person.group,person.name,'Hey! How’s your day going?',[{label:'Any advice for someone new?',run:()=>speak(person.group,person.name,person.line)},{label:'Nice to meet you.',run:()=>speak(person.group,person.name,'You too. See you around the neighborhood!')}]),1.5);
+ if(!inside&&!shop)for(const tree of world.cuttableNear(me.position.x,me.position.z,CHOP_RANGE)){
+  const hits=plotAt(GameState.progress,tree.key).hits,axe=hasItem(GameState.progress,'axe');
+  add('tree-'+tree.key,tree,()=>new THREE.Vector3(tree.x,2.2,tree.z),axe?(hits?`Chop pine · ${hits} / ${TREE_HITS}`:'Chop pine'):'Pine · needs an axe',()=>startChop(tree),CHOP_RANGE);
+ }
  for(const car of vehicles)add(car.id,car,()=>new THREE.Vector3(car.x,1.3,car.z),'Inspect '+car.name,()=>showWorld(()=>new THREE.Vector3(car.x,1.4,car.z),car.name,'Parked · not owned. Driving will be available in a future update.'),1.6);return all;
 }
-function interact(){if(!active||modal||busy||consuming)return;const hit=chooseInteraction(candidates(),me.position,me.rotation.y);if(hit)hit.run()}
+function interact(){if(!active||modal||busy||consuming||chopping)return;const hit=chooseInteraction(candidates(),me.position,me.rotation.y);if(hit)hit.run()}
 function updateWorldUI(){
  camera.updateMatrixWorld(true);const hit=chooseInteraction(candidates(),me.position,me.rotation.y);selectedInteraction=hit;
- const p=hit?screenAnchor(hit.anchor(),camera,innerWidth,innerHeight,THREE.Vector3):null;$('prompt').hidden=!active||modal||!!busy||!p;
+ const p=hit?screenAnchor(hit.anchor(),camera,innerWidth,innerHeight,THREE.Vector3):null;$('prompt').hidden=!active||modal||!!busy||!!chopping||!p;
  if(p){$('prompt').style.left=p.x+'px';$('prompt').style.top=p.y+'px';$('prompt').querySelector('span').textContent=hit.label}
  if(worldPanel&&!$('dialog').hidden){const anchor=screenAnchor(worldPanel.anchor(),camera,innerWidth,innerHeight,THREE.Vector3);if(anchor){const width=Math.min(320,innerWidth-24),height=$('dialog').offsetHeight||260;$('dialog').style.left=Math.max(12,Math.min(innerWidth-width-12,anchor.x+26))+'px';$('dialog').style.top=Math.max(12,Math.min(innerHeight-height-12,anchor.y-height*.55))+'px';}else{$('dialog').style.left='12px';$('dialog').style.top='100px'}}
  $('workProgress').hidden=!busy;if(busy){const task=cafeTask(GameState.progress),p=screenAnchor(worldPoint({...task,y:1.4}),camera,innerWidth,innerHeight,THREE.Vector3);if(p){$('workProgress').style.left=p.x+'px';$('workProgress').style.top=p.y+'px';$('workProgress').textContent=({brew:'Preparing coffee',serve:'Serving',clean:'Cleaning table'}[busy.action])+' · '+Math.round(busy.elapsed/busy.duration*100)+'%'}}
@@ -204,7 +218,7 @@ function updateWork(dt){
  $('clockStatus').textContent=weekday(GameState.progress.housing.day)+' · '+clockText(GameState.progress.routine)+' · Week '+weekNumber(GameState.progress.housing.day);$('earningsStatus').textContent='Earned today '+money(GameState.progress.routine.earned);
  $('needsStatus').textContent='Food '+Math.round(GameState.progress.life.food)+'% · Thirst '+Math.round(GameState.progress.life.thirst)+'% · Energy '+Math.round(GameState.progress.life.energy)+'%';
  $('needsStatus').dataset.depleted=String(GameState.progress.life.food===0||GameState.progress.life.thirst===0);
- $('locationName').textContent=shop?SHOPS[shop].name.toUpperCase():inside?'STUDIO 2B':'WESTSIDE';
+ $('locationName').textContent=shop?SHOPS[shop].name.toUpperCase():inside?'STUDIO 2B':zoneAt(me.position.x).label;$('locationSubtitle').textContent=shop||inside?'Oak & Alder':zoneAt(me.position.x).subtitle;
  if(shop){const task=cafeTask(GameState.progress),isCafe=shop==='cafe',c=GameState.progress.cafe;const exit=Math.hypot(me.position.x-SHOP_EXIT.x,me.position.z-SHOP_EXIT.z)<1.5,counter=Math.hypot(me.position.x-COUNTER.x,me.position.z-COUNTER.z)<1.6,atTask=isCafe&&Math.hypot(me.position.x-task.x,me.position.z-task.z)<1.35;
  $('cash').textContent=money(GameState.progress.cash);$('objective').querySelector('.eyebrow').textContent=isCafe&&c.stage!=='off'?'ON SHIFT · ALDER COFFEE':'NEIGHBORHOOD';$('objective').querySelector('h2').textContent=isCafe?task.title:SHOPS[shop].name;$('objective').querySelector('p').textContent=isCafe?(c.stage==='off'?'Speak to Elena at the counter about café work. $24 per shift. Start 08:00–16:00.':'Orders served: '+c.served+'/2 · '+(c.stage==='brew'||c.stage==='serve'?'Ticket: '+ORDERS[c.customer].drink+'. ':'')+'Follow the floor marker. Clock out to collect wages.'):'Visit the cashier for groceries. Open 07:00–22:00.';$('distance').textContent=busy?'Working… '+Math.round(busy.elapsed/busy.duration*100)+'%':'E to interact · front door to leave';$('direction').style.transform='none';$('prompt').hidden=!active||modal||!!busy||(!exit&&!counter&&!atTask);$('prompt').querySelector('span').textContent=atTask?task.title:exit?'Go outside':isCafe?'Order lunch':'Buy groceries';marker.visible=false;workMarker.visible=isCafe;workMarker.position.set(task.x,.04,task.z);parcel.visible=carrying;return}
 
@@ -226,6 +240,7 @@ window.addEventListener('keydown',e=>{
  if(sleepElapsed!==null){if(['Tab','Space'].includes(e.code))e.preventDefault();return}
  if(creatorOpen||e.target.matches('input,select,textarea,[contenteditable=true]'))return;
  if(e.code==='KeyJ'&&active&&!e.ctrlKey&&!e.metaKey&&!e.altKey){e.preventDefault();if(!e.repeat)toggleObjective();return}
+ if(e.code==='KeyM'&&active&&!e.ctrlKey&&!e.metaKey&&!e.altKey){e.preventDefault();if(!e.repeat)minimap.toggle();return}
  if(consuming){if(e.code==='Escape'){pause(!modal);if(!modal)look.capture()}return}
  if((e.code==='Tab'||e.code==='KeyP')&&!e.ctrlKey&&!e.metaKey&&!e.altKey&&active){
    e.preventDefault();if(!e.repeat){inventoryUI?.close();storeUI?.close();phone.toggle()}return;
@@ -302,14 +317,69 @@ function beginConsumption(index){
  if(item.type==='equipment')return commitInventory(check);
  // Validate now, but keep ownership/stats unchanged until the animation finishes.
  inventoryUI.close();keys.clear();look.resetMotion();
+ armRecovery=null; // A new use starts from wherever a still-lowering arm is.
  consuming={id:item.id,index,animation:createConsumptionAnimation(arms[1],item)};
  $('consumeStatus').hidden=false;$('consumeStatus').textContent=(item.type==='drink'?'Drinking ':'Eating ')+item.name+'…';
  return {message:'Using '+item.name};
 }
+// Lumberjacking: E near a pine swings the axe once; rules (axe, range, hits, bag space) live in grid.js.
+const CHOP_TIME=.75,WIND_UP=.38,IMPACT=.46;
+function startChop(tree){
+ if(chopping||consuming||busy)return;
+ const check=chopTree(GameState.progress,tree.key,me.position);
+ if(check.error){toast(check.error);return}
+ me.rotation.y=Math.atan2(tree.x-me.position.x,tree.z-me.position.z);
+ armRecovery=null;keys.clear();
+ const axe=createHeldItem(itemById('axe'));axe.position.set(0,-.31,.03);arms[1].userData.forearm.add(axe);
+ chopping={tree,elapsed:0,struck:false,axe};
+}
+function updateChop(dt){
+ if(!chopping||modal||document.hidden)return;
+ const c=chopping,arm=arms[1],forearm=arm.userData.forearm;c.elapsed=Math.min(CHOP_TIME,c.elapsed+dt);
+ const ease=t=>{t=Math.max(0,Math.min(1,t));return t*t*(3-2*t)};
+ // Wind up overhead, whip down through the trunk, then settle back to rest.
+ let shoulder,elbow;
+ if(c.elapsed<WIND_UP){const t=ease(c.elapsed/WIND_UP);shoulder=-2.7*t;elbow=-1.1*t}
+ else if(c.elapsed<IMPACT){const t=ease((c.elapsed-WIND_UP)/(IMPACT-WIND_UP));shoulder=-2.7+1.55*t;elbow=-1.1+.95*t}
+ else{const t=ease((c.elapsed-IMPACT)/(CHOP_TIME-IMPACT));shoulder=-1.15*(1-t);elbow=-.15*(1-t)}
+ arm.rotation.set(shoulder,0,0);forearm.rotation.set(elbow,0,0);
+ if(!c.struck&&c.elapsed>=IMPACT){
+  c.struck=true;
+  const result=chopTree(GameState.progress,c.tree.key,me.position);
+  if(result.error)toast(result.error);
+  else{
+   GameState.progress=result.state;persist();
+   if(result.felled){world.fellTree(c.tree.key,me.position);minimap.invalidate();toast(result.message)}
+   else world.hitTree(c.tree.key,me.position);
+  }
+ }
+ if(c.elapsed>=CHOP_TIME){disposeHeldItem(c.axe);arm.rotation.set(0,0,0);forearm.rotation.set(0,0,0);chopping=null;keys.clear()}
+}
+// Zones: grid overlay, tree sightline fade, sun/shadows following the player, minimap.
+const fadeTarget=new THREE.Vector3();
+const minimap=createMinimap(document,{canvas:$('minimap'),
+ cityRoads:[{x0:-55,x1:55,z0:-3.5,z1:15.5},{x0:-38,x1:-22,z0:-60,z1:60}],
+ buildings:colliders.filter(b=>b.hx>2.5||b.hz>2.5),
+ trees:()=>world.trees.values()});
+function updateZones(dt){
+ const outdoors=!inside&&!shop,zone=zoneAt(me.position.x).id;
+ world.targetCell=world.updateGrid(me.position,me.rotation.y,outdoors&&active&&!modal&&zone!=='city');
+ world.fade.uniforms.uFadeEnabled.value=outdoors?1:0;
+ fadeTarget.set(me.position.x,me.position.y+1.5,me.position.z);
+ world.update(dt,camera,fadeTarget);
+ if(outdoors){sun.position.set(me.position.x-24,30,me.position.z+22);sun.target.position.set(me.position.x,0,me.position.z);sun.target.updateMatrixWorld()}
+ const markers=[];
+ if(outdoors){const job=GameState.progress.activeJob;if(job&&gigMarker.visible)markers.push({x:gigMarker.position.x,z:gigMarker.position.z,color:'#f2ca79'});if(marker.visible)markers.push({x:marker.position.x,z:marker.position.z,color:'#d4e7b3'})}
+ const p=outdoors?me.position:shop?SHOPS[shop]:STUDIO;
+ minimap.update(dt,{player:{x:p.x,z:p.z},heading:outdoors?me.rotation.y:0,yaw,markers});
+}
 function updateConsumption(dt){
- if(!consuming||modal||document.hidden)return;
- if(!consuming.animation.update(dt))return;
- const action=consuming;consuming=null;$('consumeStatus').hidden=true;
+ if(document.hidden)return;
+ // The lowering phase is cosmetic, so it keeps playing while menus are open and the player can walk.
+ if(armRecovery&&armRecovery.update(dt)==='done')armRecovery=null;
+ if(!consuming||modal)return;
+ if(consuming.animation.update(dt)!=='used')return;
+ const action=consuming;consuming=null;armRecovery=action.animation;$('consumeStatus').hidden=true;
  // Resolve against current state so clock, survival and job updates are preserved.
  const index=GameState.progress.inventory.slots[action.index]?.id===action.id?action.index:GameState.progress.inventory.slots.findIndex(slot=>slot.id===action.id);
  const result=commitInventory(useItem(GameState.progress,index));
@@ -450,13 +520,13 @@ function updateMultiplayer(now,moving,dt){
 
 let prev=performance.now(),frames=0,elapsed=0;function frame(now){requestAnimationFrame(frame);const actionDt=Math.max(0,Math.min((now-prev)/1000,.25)),dt=Math.min(actionDt,.04);prev=now;if(creatorOpen){drawCreator();return}frames++;elapsed+=dt;if(elapsed> .75){$('fps').textContent=Math.round(frames/elapsed)+' FPS';frames=0;elapsed=0}
 const frameX=me.position.x,frameZ=me.position.z;
-let moving=false;if(active&&!modal&&!busy&&!consuming){let f=Number(keys.has('KeyW')||keys.has('ArrowUp'))-Number(keys.has('KeyS')||keys.has('ArrowDown')),s=Number(keys.has('KeyD')||keys.has('ArrowRight'))-Number(keys.has('KeyA')||keys.has('ArrowLeft'));let len=Math.hypot(f,s);if(len){f/=len;s/=len;const speed=keys.has('ShiftLeft')||keys.has('ShiftRight')?8.2:4.5,dx=(-Math.sin(yaw)*f+Math.cos(yaw)*s)*speed*dt,dz=(-Math.cos(yaw)*f-Math.sin(yaw)*s)*speed*dt;if(!blocked(me.position.x+dx,me.position.z))me.position.x+=dx;if(!blocked(me.position.x,me.position.z+dz))me.position.z+=dz;const angle=Math.atan2(dx,dz);me.rotation.y+=Math.atan2(Math.sin(angle-me.rotation.y),Math.cos(angle-me.rotation.y))*(1-Math.exp(-dt*24));phase+=dt*speed*2.0;moving=true}}
+let moving=false;if(active&&!modal&&!busy&&!consuming&&!chopping){let f=Number(keys.has('KeyW')||keys.has('ArrowUp'))-Number(keys.has('KeyS')||keys.has('ArrowDown')),s=Number(keys.has('KeyD')||keys.has('ArrowRight'))-Number(keys.has('KeyA')||keys.has('ArrowLeft'));let len=Math.hypot(f,s);if(len){f/=len;s/=len;const speed=keys.has('ShiftLeft')||keys.has('ShiftRight')?8.2:4.5,dx=(-Math.sin(yaw)*f+Math.cos(yaw)*s)*speed*dt,dz=(-Math.cos(yaw)*f-Math.sin(yaw)*s)*speed*dt;if(!blocked(me.position.x+dx,me.position.z))me.position.x+=dx;if(!blocked(me.position.x,me.position.z+dz))me.position.z+=dz;const angle=Math.atan2(dx,dz);me.rotation.y+=Math.atan2(Math.sin(angle-me.rotation.y),Math.cos(angle-me.rotation.y))*(1-Math.exp(-dt*24));phase+=dt*speed*2.0;moving=true}}
 const movedDistance=Math.hypot(me.position.x-frameX,me.position.z-frameZ);moving=moving&&movedDistance>.000001;
 const running=moving&&(keys.has('ShiftLeft')||keys.has('ShiftRight'));
 const poseBlend=1-Math.exp(-dt*18);
 const torso=player.getObjectByName('torso');torso.rotation.y=THREE.MathUtils.lerp(torso.rotation.y,moving?Math.sin(phase)*.035:0,poseBlend);
 legs.forEach((m,i)=>m.rotation.x=THREE.MathUtils.lerp(m.rotation.x,moving?Math.sin(phase+i*Math.PI)*.55:0,poseBlend));
-arms.forEach((m,i)=>{if(consuming&&i===1)return;m.rotation.x=THREE.MathUtils.lerp(m.rotation.x,moving?-Math.sin(phase+i*Math.PI)*.45:0,poseBlend)});
+arms.forEach((m,i)=>{if((consuming||armRecovery||chopping)&&i===1)return;m.rotation.x=THREE.MathUtils.lerp(m.rotation.x,moving?-Math.sin(phase+i*Math.PI)*.45:0,poseBlend)});
 // Match foot height to the road, pavement, or grass rather than hovering.
 const px=me.position.x,pz=me.position.z;
 const sidewalk=(px>=-38&&px<=54&&((pz>=-8.5&&pz<=-3.5)||(pz>=15.5&&pz<=20.5)))||(px>=-21.5&&px<=-16.5&&pz>=-74&&pz<=24);
@@ -466,9 +536,16 @@ zoom=THREE.MathUtils.lerp(zoom,zoomTarget,1-Math.exp(-dt*10));
 if(active&&!modal&&!document.hidden){GameState.progress=expireCafe(advanceTime(GameState.progress,actionDt*.5));const oldStage=GameState.progress.activeJob?.stage;
 const load=GameState.progress.activeJob?.id==='heavy-delivery'&&oldStage==='task'?2:1;
 tickLife(actionDt,moving,running,load);
-GameState.progress=tickContract(GameState.progress,{position:me.position,room:currentRoom(),dt:actionDt,moving:moving||!!consuming,running,distance:movedDistance});
+GameState.progress=tickContract(GameState.progress,{position:me.position,room:currentRoom(),dt:actionDt,moving,paused:!!consuming,running,distance:movedDistance});
 if(oldStage!==GameState.progress.activeJob?.stage)persist();if(!inside&&!shop)pedestrians.update(dt,me.position);if(inside||shop){saveElapsed+=dt;if(saveElapsed>=4){saveElapsed=0;persist()}}}
 look.tick(dt);
 if(worldPanel?.actor&&!$('dialog').hidden){const actor=worldPanel.actor,pa=getMeWorldPosition(new THREE.Vector3()),pb=actor.getWorldPosition(new THREE.Vector3()),mid=pa.clone().add(pb).multiplyScalar(.5);const angle=Math.atan2(pa.x-pb.x,pa.z-pb.z);actor.rotation.y=angle;me.rotation.y=angle+Math.PI;worldPlayer.position.copy(mid);if(shop)shops[shop].camera(worldPlayer,angle+.45,.32,5.8,dt);else updateCamera(worldPlayer,angle+.45,.32,5.8,dt)}else if(shop){getMeWorldPosition(worldPlayer.position);shops[shop].camera(worldPlayer,yaw,pitch,zoom,dt);}else if(inside)indoorCamera(me,yaw,pitch,zoom,dt);else updateCamera(me,yaw,pitch,zoom,dt);
 const daylight=Math.max(.12,Math.sin((GameState.progress.routine.minutes-360)/1440*Math.PI*2));sun.intensity=.2+daylight*2.9;scene.background.setRGB(.08+daylight*.65,.12+daylight*.67,.2+daylight*.62);scene.fog.color.copy(scene.background);
-if(active&&!modal&&!document.hidden)updateCafeVisuals(dt);updateConsumption(actionDt);updateSleep(actionDt);updateWork(dt);updateGig(dt);updateWorldUI();updateMultiplayer(now,moving,dt);syncPlayerMesh();renderer.render(inside?apartment.scene:scene,camera)}requestAnimationFrame(frame);
+if(active&&!modal&&!document.hidden)updateCafeVisuals(dt);updateConsumption(actionDt);updateChop(actionDt);updateZones(dt);updateSleep(actionDt);updateWork(dt);updateGig(dt);updateWorldUI();updateMultiplayer(now,moving,dt);syncPlayerMesh();renderer.render(inside?apartment.scene:scene,camera)}requestAnimationFrame(frame);
+
+// Development hook: open the game with ?debug to inspect state from the console (window.__city).
+if(typeof location!=='undefined'&&new URLSearchParams(location.search).has('debug'))window.__city={GameState,world,
+ teleport(x,z){if(inside||shop)return false;setMePosition(x,me.position.y,z);return true},
+ view(newYaw,newPitch,newZoom){yaw=newYaw??yaw;pitch=newPitch??pitch;zoom=zoomTarget=newZoom??zoom},
+ give(id){return commitInventory(addItem(GameState.progress,id))},
+ use(index){return beginConsumption(index)},chop:startChop,get acting(){return !!(chopping||consuming||armRecovery)},fps:()=>$("fps").textContent};

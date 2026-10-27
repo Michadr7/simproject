@@ -45,4 +45,10 @@ const second=availableContracts(board)[0];const depleted=acceptContract({...boar
 const reloaded=normalizeProgress(board);assert.deepEqual(reloaded.gigBoard,board.gigBoard);
 const acrossMidnight=acceptContract({...freshProgress(),routine:{...freshProgress().routine,minutes:1430}},'bench-check').state;
 const later=advanceTime({...acrossMidnight,activeJob:null},119);assert(acceptContract(later,'bench-check').error);assert(!acceptContract(advanceTime(later,1),'bench-check').error);
-console.log('Six gig flows, timed resets, courier distance, board persistence, save migration and midnight-safe cooldowns passed.');
+// Eating/drinking pauses timed work without losing it; only real movement resets it.
+{let s=acceptContract(freshProgress(),'bench-check').state;const at=CONTRACTS.find(c=>c.id==='bench-check').location;
+ s=tick(s,at);for(let i=0;i<30;i++)s=tick(s,at);const before=s.activeJob.workSeconds;assert(before>2.9);
+ for(let i=0;i<10;i++)s=tick(s,at,{paused:true});assert.equal(s.activeJob.workSeconds,before,'paused work is preserved');
+ s=tick(s,at);assert(s.activeJob.workSeconds>before,'work resumes after eating');
+ s=tick(s,at,{paused:true,moving:true});assert.equal(s.activeJob.workSeconds,0,'movement still resets');}
+console.log('Six gig flows, eating pauses timed work, timed resets, courier distance, board persistence, save migration and midnight-safe cooldowns passed.');

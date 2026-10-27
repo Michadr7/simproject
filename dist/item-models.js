@@ -6,7 +6,14 @@ export function createHeldItem(item){
  function mesh(geometry,color,x=0,y=0,z=0){
   const m=new THREE.Mesh(geometry,new THREE.MeshStandardMaterial({color,roughness:.7}));m.position.set(x,y,z);root.add(m);return m;
  }
- if(item.type==='drink'){
+ if(item.id==='axe'){
+  // Handle runs forward out of the fist; the head sits at the far end.
+  const handle=mesh(new THREE.CylinderGeometry(.022,.026,.7,6),'#8a6a45',0,0,.28);handle.rotation.x=Math.PI/2;
+  mesh(new THREE.BoxGeometry(.035,.16,.13),'#9aa3a6',0,-.06,.58);
+  mesh(new THREE.BoxGeometry(.04,.05,.05),'#4b4f50',0,.03,.58);
+ }else if(item.id==='wood-log'){
+  const log=mesh(new THREE.CylinderGeometry(.08,.08,.36,8),'#7c5b3a');log.rotation.z=Math.PI/2;
+ }else if(item.type==='drink'){
   const color=item.id==='water'?'#89bcd0':item.id==='coffee'?'#dfd2ac':item.id==='energy-drink'?'#8db452':'#d88750';
   mesh(new THREE.CylinderGeometry(.045,.045,.16,8),color);
   mesh(new THREE.CylinderGeometry(.047,.047,.012,8),'#dadfd5',0,.086);
