@@ -114,3 +114,24 @@ body.creating #hotbar{display:none}
 
 /* 0.19.1 door transition */
 #doorFade{position:fixed;inset:0;background:#0d1d19;opacity:0;pointer-events:none;z-index:70}
+
+/* 0.19.5 HUD: the info box lives in the phone's Bank screen; needs are bars at the bottom right; the map moves up */
+#phoneScreen-bank #wallet{position:static;display:block;width:100%;box-sizing:border-box;margin-top:14px;padding:14px 16px;text-align:left;background:#ffffff08;border:1px solid #ffffff15;border-radius:14px;min-width:0}
+#phoneScreen-bank #wallet>span,#phoneScreen-bank #cash,#phoneScreen-bank #needsStatus,#phoneScreen-bank #skillStatus,#phoneScreen-bank #progressStatus{display:none}
+#phoneScreen-bank #wallet small{font-size:11px;line-height:1.9}
+#phoneScreen-bank #billsButton{margin:8px 0}
+#vitals{position:fixed;right:34px;bottom:52px;width:188px;display:grid;gap:8px;padding:12px 14px;border-radius:12px;background:#183332cc;border:1px solid #ffffff22;box-shadow:0 8px 24px #0004;z-index:5;pointer-events:none}
+body.creating #vitals{display:none}
+.vital{display:grid;grid-template-columns:20px 1fr 26px;align-items:center;gap:8px;--bar:#e8a55a}
+.vital[data-need=thirst]{--bar:#6fb7e8}.vital[data-need=energy]{--bar:#d8e06a}
+.vital-icon{font-size:14px;line-height:1;text-align:center}
+.vital-bar{display:block;height:8px;border-radius:99px;background:#ffffff1f;overflow:hidden}
+.vital-fill{display:block;height:100%;width:100%;margin:0;border-radius:99px;background:var(--bar);transition:width .35s ease,background .2s}
+.vital b{font:600 11px/1 Arial,sans-serif;color:#e9efe3;text-align:right}
+.vital[data-level=low]{--bar:#e0883c}
+.vital[data-level=critical]{--bar:#e05a4a}.vital[data-level=critical] .vital-icon{animation:vital-pulse 1s ease-in-out infinite}
+@keyframes vital-pulse{50%{transform:scale(1.25)}}
+@media(prefers-reduced-motion:reduce){.vital[data-level=critical] .vital-icon{animation:none}.vital-fill{transition:none}}
+#minimap{top:96px;bottom:auto}
+#minimap.large{top:auto}
+@media(max-width:600px){#vitals{right:12px;bottom:96px;width:150px}#minimap{top:76px;bottom:auto;transform-origin:top right}#minimap.large{top:auto}}

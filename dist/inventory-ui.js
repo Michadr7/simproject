@@ -1,6 +1,6 @@
 import {itemById} from './items.js';
 import {inventoryCapacity,quickItems} from './inventory.js';
-export function createInventoryUI({document:doc,getState,canOpen,onOpen,onClose,onUse,onUnequip}){
+export function createInventoryUI({document:doc,getState,canOpen,onOpen,onClose,onUse,onUnequip,onBeforeOpen}){
  const $=id=>doc.getElementById(id);let mode=null,page=0,previousFocus=null;
  $('inventoryOverlay').hidden=true;
  function act(result){$('inventoryMessage').textContent=result?.error||result?.message||'';refresh()}
@@ -42,6 +42,6 @@ export function createInventoryUI({document:doc,getState,canOpen,onOpen,onClose,
  function close(){if(!mode)return;mode=null;$('inventoryOverlay').hidden=true;onClose();previousFocus?.focus?.()}
  for(const type of ['jacket','backpack'])$('equipment-'+type).onclick=()=>act(onUnequip(type));
  $('radialNext').onclick=()=>{const pages=Math.max(1,Math.ceil(quickItems(getState().progress).length/6));page=(page+1)%pages;refresh()};
- $('inventoryClose').onclick=close;$('bagButton').onclick=()=>open('grid');
+ $('inventoryClose').onclick=close;$('bagButton').onclick=()=>{onBeforeOpen?.();open('grid')}; // the Bag is a phone app: put the phone away first
  return {open,close,get isOpen(){return !!mode},useQuick(number){if(mode!=='wheel')return;const entry=quickItems(getState().progress)[page*6+number];if(entry)act(onUse(entry.index))}};
 }

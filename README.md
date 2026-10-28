@@ -554,3 +554,16 @@ Measured first (angular speed of the forearm and wrist in a headless run), then 
   (`CHOP_TIMING`, an ease exponent of 1.7). Tests check stride correlation, steadiness and the carried axe; `tests/chop.mjs` is
   updated for the elbow direction.
 - `DESIGN.md` now also covers fuel and gas stations, the farm slice, hired workers, parking / driving / traffic, and the asset foundation.
+
+## 0.19.5 a cleaner HUD
+
+- **The right-hand info box is gone.** Its contents live on the phone's Bank screen (deliveries, housing and bills, the clock, earnings;
+  cash is the balance card) with every element id unchanged. **Home & bills** is a button there; the **Bag** is now a phone app (the
+  I key still opens it). Skills and needs stay on the Player screen.
+- **Needs are bars at the bottom right**: food, thirst and energy as 0-100 bars with an icon and a number; orange at 30 or below,
+  red with a pulsing icon at 15 or below (respects reduced motion). There is no health stat in the game yet.
+- **The minimap moved up** into the freed top-right corner (the M enlarged map is unchanged).
+- **Fix:** putting the axe away left the right arm posed in the carry pose. The arm now lowers back into the animation. Startup test
+  covers the bars, the warning levels and the lowered arm.
+- Fix: the bar fill was inheriting a global `i{margin:0 12px}` and starting inset; it has its own class now.
+- `DESIGN.md` holds the architecture plan for the six issues from the v0.19.3 review (the next work, before the asset pipeline).

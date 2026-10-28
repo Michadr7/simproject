@@ -1,3 +1,4 @@
+import {addItem,hotbarItems} from '../dist/inventory.js';
 import * as THREE from '../dist/vendor/three.module.js';
 // Exercise the real game startup and UI with a synthetic DOM and GPU-only renderer stub.
 import {mkdtemp,readFile,writeFile,cp,mkdir,rm} from 'node:fs/promises';
@@ -90,6 +91,19 @@ for(const saved of [false,true]){
  for(let i=0;i<3;i++)phoneFrame();assert.equal(phoneState.me.position.z,phoneZ,'held key does not stick after closing phone');
  key('KeyP');ids.get('phoneApp-gigs').click();assert(accept.disabled,'active job blocks accepting again');assert(ids.get('phoneContracts').children[0].hidden,'cooling-down gig is hidden');key('Escape');assert(ids.get('phoneOverlay').hidden);
  if(saved){Object.assign(phoneState.me.position,{x:0,y:.02,z:4.4});for(let i=0;i<300;i++)phoneFrame()}
+ // The HUD is bars, not a box: needs show as bars that warn when low, and putting the axe away lowers the carrying arm again.
+ if(saved){
+  phoneState.progress.life.food=9;phoneState.progress.life.thirst=28;phoneState.progress.life.energy=80;for(let i=0;i<10;i++)phoneFrame();
+  assert.equal(ids.get('vitalFoodFill').style.width,'9%');assert.equal(ids.get('vitalFood').dataset.level,'critical');assert.equal(ids.get('vitalThirst').dataset.level,'low');assert.equal(ids.get('vitalEnergy').dataset.level,'ok');assert.equal(ids.get('vitalEnergyValue').textContent,'80');
+  phoneState.progress.life.food=100;phoneState.progress.life.thirst=100;phoneState.progress.life.energy=100;for(let i=0;i<10;i++)phoneFrame();
+  const forearm=globalThis.__renderScene.getObjectByName('player').getObjectByName('LowerArmR'),rest=forearm.quaternion.clone();
+  const bagBefore=phoneState.progress.inventory;
+  phoneState.progress={...phoneState.progress,inventory:addItem(phoneState.progress,'axe').state.inventory};
+  const axeSlot=hotbarItems(phoneState.progress).findIndex(h=>h.item.id==='axe')+1;
+  key('Digit'+axeSlot);for(let i=0;i<80;i++)phoneFrame();assert.equal(phoneState.progress.equipped,'axe');assert(forearm.quaternion.angleTo(rest)>.5,'the right arm is raised to carry the axe');
+  key('Digit'+axeSlot);for(let i=0;i<160;i++)phoneFrame();assert.equal(phoneState.progress.equipped,null);assert(forearm.quaternion.angleTo(rest)<.08,'the right arm is back down once the axe is put away');
+  phoneState.progress={...phoneState.progress,inventory:bagBefore}; // leave the bag as the rest of the test expects
+ }
  phoneFrame();const gigMarker=globalThis.__renderScene.getObjectByName('gig-marker');assert(gigMarker.visible);
  assert.equal(gigMarker.position.x,CONTRACTS[0].location.x);
  const beforePay=phoneState.progress.cash;

@@ -12,6 +12,23 @@ Living document. "Model" lines say which Claude model to use for each task: **Ha
 - **Every enterable building has a real interior behind a door**, and buildings can have levels. Shop doors have no E;
   the studio keeps E.
 
+## Foundation fixes before Alder Center (architecture plan, no code yet)
+A review of v0.19.3 raised six issues. I checked each against the code. Five are real; the sixth (hard-coded map data) is partly
+fixed already: shop door position, size, sign and hours moved to `map-definition.js` in 0.19.3, but the doorway geometry and the
+interior placements are still literals. Plan, in this order (three packages):
+
+| # | Issue | Real? | Files | Fix | Model |
+|---|---|---|---|---|---|
+| 5 | Obsolete `waist.mjs` | Yes in a repo that never deleted it (a zip cannot delete files) | `tests/waist.mjs` | Overwrite it with a real test of the skeletal waist (spine bones, lean, twist, seated hips) so the zip repairs it with no manual delete | Haiku 5.5 |
+| 3 | Controls menu unpauses during a door fade | Yes: `updateDoors` is not gated by `modal`, and `enterShop` sets `modal=false` | `game.js` | The fade timer freezes while `modal`; `startDoorFade` refuses while `modal`; `enterShop` stops touching `modal` (only `pause()` owns it) | Sonnet 5.5 |
+| 1 | Eating and chopping overlap | Yes: `startChop` refuses during eating, but `beginConsumption` does not refuse during chopping; the guards are copied and lopsided | new `actions.js`, `game.js`, `tests/actions.mjs` | One action lock (`chop`, `consume`, `work`, `sleep`, `door`) with `canStart / acquire / release / reset`; every start site asks it, every end site releases it, scene changes `reset()` it | Sonnet 5.5 |
+| 2 | Gig arrow overwritten | Yes: `updateGig` then `updateBeacon` both write `#direction`, the beacon wins, and the market-door beacon also shows during a gig | new `objective.js`, `game.js`, `tests/objective.mjs` | One resolver `resolveObjective(state, place)` returns the single current target (priority: active gig, delivery, market door or counter, none) with its coordinate space; arrow, beacon, distance text and minimap marker all read it; nothing else writes `#direction` | Sonnet 5.5 |
+| 4 | Two timesteps | Yes: movement uses `min(dt, 0.04)`, the clock and needs use `min(dt, 0.25)`; the FPS readout also divides by the capped time, so it over-reports below 25 FPS | new `timestep.js`, `game.js`, `tests/timestep.mjs` | Fixed-step simulation (1/60 s, at most 15 steps per frame) for movement, collisions, pedestrians, doors, action timers and the clock; animation and rendering use the real frame time (capped at 0.1 s); paused menus skip simulation; at 10, 30, 60 and 144 FPS a 5-second walk covers the same distance and the same game minutes pass | Sonnet 5.5 (Opus 5.5 for a second review of the frame loop if you want one) |
+| 6 | Hard-coded doorway and interior data | Partly | `map-definition.js`, `game.js`, `shops.js`, `tests/map.mjs` | Per shop add `doorway` (half-width, approach zone, threshold, closed-touch line, back wall, blocker) and `interior` (origin, entry, counter, exit trigger, exit door); the studio's door gets the same treatment; beacon spots derive from them; `validateMap` checks them (threshold between the door plane and the back wall, entry inside the room and clear of the exit trigger, counter inside the room, door at least as wide as the player) and `tests/map.mjs` proves nothing moved | Sonnet 5.5 |
+
+Packages: A = #5, #3, #1 (the action lock and the menu freeze share a state model); B = #2, #4; C = #6. Each ships with tests that fail on
+the old behaviour. Then Step 0 (the asset pipeline), then Alder Center.
+
 ## Map (concept 03 — Town & Outskirts)
 Build now vs reserve for later, as in the concept sheet. Staged geography (no elevation):
 

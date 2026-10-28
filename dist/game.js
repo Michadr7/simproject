@@ -150,7 +150,7 @@ function changeHousing(action){
  else toast('Bills paid.');
 }
 function showBills(){const h=GameState.progress.housing,due=totalDue(h);showDialog('HOME / WEEK '+weekNumber(h.day),'Your weekly bills.',h.rented?'Unpaid rent: '+money(h.rentDue)+'. Unpaid utilities: '+money(h.utilitiesDue)+'. Next bill: '+weekday(h.nextBillDay)+' (Week '+weekNumber(h.nextBillDay)+'), in '+dueIn(h)+' days. Weekly rent is $60; estimated utilities are '+money(estimatedUtilities(h))+' ($7 base for the older studio, plus $0.15 per home-cooked meal). No offline charges.':'Visit 18 Oak Street. Move-in is $90: a $30 deposit and $60 for your first week. Utilities start at $7 per week.','Total due '+money(due)+' · cash after payment '+money(GameState.progress.cash-due),due?()=>changeHousing('pay'):null,due?'Pay bills · '+money(due):'')}
-$('billsButton').onclick=()=>{if(active&&!creatorOpen)showBills()};
+$('billsButton').onclick=()=>{if(active&&!creatorOpen){phone?.close();showBills()}}; // Home & bills lives on the phone's Bank screen
 function extraAction(label,action){$('extraAction').hidden=false;$('extraAction').textContent=label;$('extraAction').onclick=action}
 function enterShop(kind,entry=SHOP_ENTRY){if(!shopOpen(kind,GameState.progress.routine)){toast(`${SHOPS[kind].name} hours: ${hoursText(kind)}`);return}persist();shop=kind;shops[kind].scene.add(player);setMePosition(entry.x,.02,entry.z);yaw=0;pitch=.4;camera.position.set(SHOPS[kind].x,3,-5.5);$('dialog').hidden=true;clearWorldPanel();modal=false;keys.clear()}
 function leaveShop(exitX=0){doorCooldown=2;look.resetMotion();busy=null;const room=shops[shop];for(const mesh of [...room.occluders,...shopShells[shop]]){mesh.material.opacity=1;mesh.material.depthWrite=true}const door=SHOPS[shop];shop=null;scene.add(player);setMePosition(door.x+Math.max(-.8,Math.min(.8,exitX)),.165,-7.6);camera.position.set(door.x,3,door.z+6);persist();keys.clear()}
@@ -246,6 +246,7 @@ function updateWork(dt){
  $('clockStatus').textContent=weekday(GameState.progress.housing.day)+' · '+clockText(GameState.progress.routine)+' · Week '+weekNumber(GameState.progress.housing.day);$('earningsStatus').textContent='Earned today '+money(GameState.progress.routine.earned);
  $('needsStatus').textContent='Food '+Math.round(GameState.progress.life.food)+'% · Thirst '+Math.round(GameState.progress.life.thirst)+'% · Energy '+Math.round(GameState.progress.life.energy)+'%';
  $('needsStatus').dataset.depleted=String(GameState.progress.life.food===0||GameState.progress.life.thirst===0);
+ renderVitals(GameState.progress.life);
  $('locationName').textContent=shop?SHOPS[shop].name.toUpperCase():inside?'STUDIO 2B':zoneAt(me.position.x).label;$('locationSubtitle').textContent=shop||inside?'Oak & Alder':zoneAt(me.position.x).subtitle;
  if(shop){const task=cafeTask(GameState.progress),isCafe=shop==='cafe',c=GameState.progress.cafe;const exit=Math.hypot(me.position.x-SHOP_EXIT.x,me.position.z-SHOP_EXIT.z)<1.5,counter=Math.hypot(me.position.x-COUNTER.x,me.position.z-COUNTER.z)<1.6,atTask=isCafe&&Math.hypot(me.position.x-task.x,me.position.z-task.z)<1.35;
  $('cash').textContent=money(GameState.progress.cash);$('objective').querySelector('.eyebrow').textContent=isCafe&&c.stage!=='off'?'ON SHIFT · ALDER COFFEE':'NEIGHBORHOOD';$('objective').querySelector('h2').textContent=isCafe?task.title:SHOPS[shop].name;$('objective').querySelector('p').textContent=isCafe?(c.stage==='off'?'Speak to Elena at the counter about café work. $24 per shift. Start 8 AM–4 PM.':'Orders served: '+c.served+'/2 · '+(c.stage==='brew'||c.stage==='serve'?'Ticket: '+ORDERS[c.customer].drink+'. ':'')+'Follow the floor marker. Clock out to collect wages.'):'Visit the cashier for groceries. Open 7 AM–10 PM.';$('distance').textContent=busy?'Working… '+Math.round(busy.elapsed/busy.duration*100)+'%':'Talk at the counter (E or click) · walk out the front door to leave';$('direction').style.transform='none';$('prompt').hidden=!active||modal||!!busy||(!exit&&!counter&&!atTask);$('prompt').querySelector('span').textContent=atTask?task.title:exit?'Go outside':isCafe?'Order lunch':'Buy groceries';marker.visible=false;workMarker.visible=isCafe;workMarker.position.set(task.x,.04,task.z);parcel.visible=carrying;return}
@@ -430,7 +431,10 @@ function toggleEquip(id,{silent=false}={}){
 }
 function updateEquipped(dt){
  const want=GameState.progress.equipped;
- if(!want){if(carried){if(carried.parent===avatar.hand)avatar.release();disposeHeldItem(carried);carried=null}avatar.alignHeld(null);return}
+ if(!want){if(carried){if(carried.parent===avatar.hand)avatar.release();disposeHeldItem(carried);carried=null}avatar.alignHeld(null);
+  // The carrying arm lowers back into the animation instead of staying posed once the axe is away.
+  if(carryWeight>0){carryWeight=Math.max(0,carryWeight-dt*5);avatar.reach('R',CARRY,carryWeight,CARRY_POLE)}
+  return}
  if(consuming||busy)return; // they own the hand until they finish
  if(!carried||carried.userData.itemId!==want){
   if(carried){if(carried.parent===avatar.hand)avatar.release();disposeHeldItem(carried)}
@@ -507,7 +511,7 @@ function updateConsumption(dt){
  const result=commitInventory(useItem(GameState.progress,index));
  keys.clear();toast(result.error||result.message);
 }
-inventoryUI=createInventoryUI({document,getState:()=>GameState,
+inventoryUI=createInventoryUI({document,getState:()=>GameState,onBeforeOpen:()=>phone?.close(),
  canOpen:()=>active&&!modal&&!creatorOpen&&!busy&&!consuming,
  onOpen:()=>{clearWorldPanel();modal=true;keys.clear();look.release()},
  onClose:()=>{modal=false;keys.clear();look.resetMotion()},
@@ -608,6 +612,15 @@ function updateBeacon(dt){
  if(spot){marker.position.set(spot.x,spot.y,spot.z);markerTime+=dt;diamond.position.y=2.5+spot.lift+Math.sin(markerTime*2)*.09;diamond.rotation.y+=dt*.7}
  const aim=spot?(spot.local||spot):dest;
  if(!inside&&!(shop&&!spot?.local))$('direction').style.transform=`rotate(${Math.atan2(aim.x-me.position.x,-(aim.z-me.position.z))+yaw}rad)`;
+}
+// The needs bars (bottom right): food, thirst and energy as 0-100 bars that turn orange when low and red, with a pulsing icon, when critical.
+function renderVitals(life){
+ for(const [key,id] of [['food','vitalFood'],['thirst','vitalThirst'],['energy','vitalEnergy']]){
+  const value=Math.max(0,Math.min(100,Math.round(life[key]))),row=$(id);
+  row.dataset.level=value<=15?'critical':value<=30?'low':'ok';
+  if(row.dataset.value===String(value))continue;
+  row.dataset.value=String(value);$(id+'Fill').style.width=value+'%';$(id+'Value').textContent=String(value);
+ }
 }
 function updateGig(dt){
  const job=GameState.progress.activeJob;$('gigChecklist').hidden=!job;
