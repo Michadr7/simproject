@@ -47,7 +47,7 @@ pale.apply({...outfit('male','Suit'),skin:'#d9ae8d'});assert(roleColors(pale,'sk
 const vest=createCharacter(outfit('male','Worker')).meshes.flatMap(m=>[].concat(m.material)).find(x=>x.name==='Worker_Vest');assert(vest&&vest.color.r>vest.color.b*2,'orange hi-vis vest, not darkened');
 // ── Motion ────────────────────────────────────────────────────────────────────
 const m=createCharacter(outfit('male','Casual_Hoodie'));
-assert.equal(m.motion,'Idle_Neutral');m.setMotion(1);assert.equal(m.motion,'Walk');m.setMotion(4.5);assert.equal(m.motion,'Run');m.setMotion(0);assert.equal(m.motion,'Idle_Neutral');
+assert.equal(m.motion,'Idle_Neutral');m.setMotion(1);assert.equal(m.motion,'Walk');m.setMotion(4.5);assert.equal(m.motion,'Run');m.setMotion(8.2);assert.equal(m.motion,'Sprint','Shift-running uses the pack run');m.setMotion(4.5);m.setMotion(0);assert.equal(m.motion,'Idle_Neutral');
 const pose=()=>m.bone('UpperLegR').quaternion.toArray();
 m.setMotion(4.5);const frames=new Set();for(let i=0;i<20;i++){m.update(.05);frames.add(pose().map(v=>v.toFixed(2)).join())}assert(frames.size>5,'legs actually cycle');
 // No thigh swings out sideways at any point of the walk or run (the pack's baked leg rotations did in the Run clip).
@@ -56,6 +56,19 @@ for(const body of ['male','female'])for(const speed of [1.4,4.5,8.2]){
  for(let i=0;i<40;i++){g.update(.03);g.group.updateMatrixWorld(true);for(const side of ['R','L']){const hip=new T.Vector3(),knee=new T.Vector3(),foot=new T.Vector3();g.bone('UpperLeg'+side).getWorldPosition(hip);g.bone('LowerLeg'+side).getWorldPosition(knee);g.bone('Foot'+side).getWorldPosition(foot);
   widest=Math.max(widest,Math.abs(knee.x-hip.x));lowest=Math.min(lowest,foot.y)}}
  assert(widest<.3,`${body} at ${speed}: thigh swings ${widest.toFixed(2)} m sideways`);assert(lowest>-.15,'feet stay at or above the ground');
+}
+// Hands: open and relaxed while walking and jogging (the idle finger pose); fists only in a sprint.
+for(const body of ['male','female']){
+ const curl=speed=>{const h=createCharacter(outfit(body,OUTFITS[body][0][0]));h.setMotion(speed);h.update(.5);const idle=createCharacter(outfit(body,OUTFITS[body][0][0]));idle.update(.5);
+  return ['Index2R','Middle2L','Ring3R','Thumb2L'].reduce((worst,name)=>Math.max(worst,h.bone(name).quaternion.angleTo(idle.bone(name).quaternion)),0)};
+ assert(curl(1.4)<.05,`${body}: relaxed hands walking`);assert(curl(4.5)<.05,`${body}: relaxed hands jogging`);assert(curl(8.2)>.5,`${body}: fists while sprinting (${curl(8.2).toFixed(2)} rad)`);
+}
+// Walkers with swingArms swing hanging arms opposite the forward foot (the Walk clip leaves the hands bent in front of the hips).
+for(const body of ['male','female']){
+ const w=createCharacter(outfit(body,OUTFITS[body][0][0]));w.swingArms=true;w.setMotion(2.2);w.update(.5);let opposite=0,hanging=0,frames=40;
+ for(let i=0;i<frames;i++){w.update(.03);w.group.updateMatrixWorld(true);const pos=n=>{const v=new T.Vector3();w.bone(n).getWorldPosition(v);return w.group.worldToLocal(v)};
+  const wr=pos('WristR'),wl=pos('WristL'),sr=pos('UpperArmR');if(wr.z*wl.z<0)opposite++;if(sr.y-wr.y>.3&&sr.y-wl.y>.3)hanging++}
+ assert(opposite>frames*.7,`${body}: hands swing in opposite directions (${opposite}/${frames})`);assert(hanging>frames*.9,`${body}: arms hang below the shoulders (${hanging}/${frames})`);
 }
 m.update(0);const held=pose();m.update(0);assert.deepEqual(pose(),held,'paused (dt 0) holds the pose');
 // ── Reach and held items ──────────────────────────────────────────────────────

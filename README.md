@@ -452,3 +452,68 @@ Stack limits (per bag slot): food, drink and wood logs 10; tools and equipment 1
 jacket adds 2 and backpacks 10 or 20.
 
 `?debug` also exposes `pos`, `shop`, `inside`, `place(x, z)` and `doorCooldown`.
+
+## 0.18.2 quick wins
+
+- **Radial progress.** Timed gigs and café steps show a ring that fills around the spot (seconds left in the middle,
+  the task name below) instead of a percentage pill. One ring at a time; `updateRing()` in `game.js`.
+- **Left click.** Once the mouse is captured, left click does what E does and holding it keeps chopping. The click that
+  captures the mouse only captures (guarded by `look.locked()`). Right click is not used yet.
+- **Task panel.** The leftover round chevron is gone: the **T** badge is the button (T and J still work).
+- **Skills in the phone.** The Player app has a Skills section: Lumberjack level, XP meter, current perks, the next
+  level's perk, and lifetime counters (trees felled, logs collected, deliveries). Counters are `progress.stats`
+  (`skills.js` has `freshStats` / `normalizeStats`; `grid.js` increments them).
+- Tests: left click (captured and uncaptured), stats, perk text.
+
+Design rule noted for later: every building you can enter from the street has an interior behind a real door, and
+buildings can have levels. Shops will get doors that open as you approach (no E), the studio keeps E.
+
+## 0.19.0 doors and the NPC walk pass
+
+- **Shop doors, no E.** `doors.js` has a reusable sliding glass door (`createSlidingDoor`). The Corner Market and
+  Alder Coffee fronts get one each: it slides open as you walk up (only while the shop is open), and walking through
+  enters. An OPEN / CLOSED sign beside the door follows the shop hours; a closed shop keeps its door shut and tells you
+  its hours when you walk into it. Inside, a matching door slides open as you reach the front and walking out leaves.
+  E prompts for shop doors and shop exits are gone. Your studio keeps E (`add('home', ...)` and its exit).
+  `updateDoors` in `game.js` holds the rules; a 1–3 second cooldown after using a door stops loops.
+- **Pedestrians.** They walk at about 2.1–2.3 units/s (was 1.4). The Walk clip's native ground speed measures 1.47 units/s,
+  so at that pace the cycle plays about 1.5x and the feet do not skate. Characters with `swingArms` set (pedestrians) swing
+  hanging arms opposite the forward foot (`applyArmSwing` in `character.js`) instead of the clip's bent hands.
+- Tests: walking through shop doors, a closed shop, left click at Noah's counter, and the arm swing.
+
+Next planned step: a data-driven `map-definition.js` (zones, roads, reserved plots) with the current world re-expressed in
+it before any new district is added.
+
+## 0.19.1 doorway, 12-hour clock, axe carry and swing
+
+- **Doorway.** The bar you saw was a 30 cm sill in the shop interiors' front wall that ran across the doorway; it now stops
+  either side of it. The building's collision box also covered the doorway, so the game had to teleport you in. Each shop
+  now has a 2.6 m doorway of open ground, a blocker that shuts it while the door is closed (never trapping you if you are
+  standing in it), and a short back wall so you can step up to the threshold but not walk on into the building. Reaching the
+  threshold with the door open fades to the other side (0.16 s out, 0.22 s in) and you arrive on the interior floor by the
+  door; walking out the interior door fades back to the street just outside it. Door entry no longer depends on the cooldown.
+- **12-hour clock.** `formatClock` in `routine.js` gives "9:00 AM", used by the HUD and the phone. Shop hours, the door signs,
+  Elena's and Noah's lines and the toasts are written as "7 AM–10 PM" and "8 AM–6 PM".
+- **Axe carry.** `character.alignHeld(direction)` points a held tool along a direction in the character's space instead of the
+  forearm. The carried axe now rides head-up beside the right shoulder (`CARRY_DIR` in `chop-path.js`) and follows the forearm
+  again while swinging.
+- **Swing.** `chop-path.js` is the swing as a pure function of progress: a smooth path from the carry pose up past the shoulder
+  (in front of the body, never behind it) to overhead, an accelerating blow with a short hold at impact, and a recovery.
+  The left hand grips the handle (`setTwoHanded`) and the spine leans back to wind up and forward into the blow (`setLean`).
+  Swing speed still comes from the lumberjack level.
+- Tests: `chop.mjs` (path continuity, speed, carry alignment, grip, lean), 12-hour clock, closed shop, doorway.
+- `?debug` also exposes `doors()`.
+
+## 0.19.2 polish: beacon, shoulder carry, hands
+
+- **Objective beacon.** The ring and diamond are now managed in one place (`updateBeacon` in `game.js`): on the street they mark
+  the market's doorway (the delivery drop-off while you carry an order), inside the market they mark Noah's counter, and they
+  disappear when you are already there (2.4 m from the door, 1.8 m from the counter). The old "E · Market · work & shop" and
+  "Enter <shop>" prompts, left over from the E doors, are gone; E near the drop-off now only appears while you carry an order.
+- **Axe over the shoulder.** `CARRY`, `CARRY_DIR` and `GRIP` in `chop-path.js`: the hand sits by the shoulder holding the handle
+  12 cm from its butt, and the head rides up and behind the shoulder. `hold(object, {grip})` places the palm that far along the
+  tool. The swing starts and ends at this pose.
+- **Hands.** The converter now gives Walk and Run the idle finger pose (open, relaxed hands) and adds a **Sprint** clip, the
+  pack's own run with fists and pumping arms. Walking and jogging (up to 6.2 units/s) use the relaxed clips with the swinging
+  hanging arms; Shift-running (faster than that) uses Sprint unchanged. `swingArms` is on by default for every character.
+- Tests: hand pose by speed, Sprint, the carry direction. `?debug` also exposes `beacon`.

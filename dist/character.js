@@ -59,7 +59,7 @@ function createFallback(appearance){
  body.position.y=.9;head.position.y=1.7;body.castShadow=head.castShadow=true;group.add(body,head);
  const hand=new T.Group();hand.position.set(-.35,.9,.1);group.add(hand);
  const noop=()=>{};
- return {group,hand,mouth:new T.Vector3(0,1.6,.2),fallback:true,apply:noop,update:noop,setMotion:noop,setSeated:noop,reach:noop,clearReach:noop,setHeldTilt:noop,
+ return {group,hand,mouth:new T.Vector3(0,1.6,.2),fallback:true,apply:noop,update:noop,setMotion:noop,setSeated:noop,reach:noop,clearReach:noop,setHeldTilt:noop,alignHeld:noop,setTwoHanded:noop,setLean:noop,
   hold(object){hand.add(object)},release(){for(const child of [...hand.children])hand.remove(child)},bone:()=>null,get motion(){return 'Idle'}};
 }
 
@@ -69,6 +69,8 @@ export function createCharacter(input){
  const group=new T.Group(),kinds={};let seated=false,motion='Idle',speedNow=0;
  const reaches={R:{target:new T.Vector3(),weight:0},L:{target:new T.Vector3(),weight:0}};
  let held=null,tilt=0,rig=null;const memo=new Map();
+ // Held-item orientation override (a carry pose), a second hand on the handle, and a forward/back lean of the spine.
+ let alignDir=null,alignAmount=0,twoHandWeight=0,leanAngle=0;const twoHandL={target:new T.Vector3(),weight:0},wantAlign=new T.Quaternion();
 
  // ── Rig and parts ─────────────────────────────────────────────────────────
  function build(){
@@ -136,12 +138,13 @@ export function createCharacter(input){
   speedNow=speed;
   if(speed<.15)play('Idle_Neutral',1);
   else if(speed<2.4)play('Walk',T.MathUtils.clamp(speed/WALK_SPEED,.6,1.7));
-  else play('Run',T.MathUtils.clamp(speed/RUN_SPEED,.7,2.2));
+  else if(speed<6.2)play('Run',T.MathUtils.clamp(speed/RUN_SPEED,.7,2.2)); // a relaxed jog: open hands and swinging arms
+  else play('Sprint',T.MathUtils.clamp(speed/RUN_SPEED,.7,2.2)); // the pack's own run: fists and pumping arms
  }
 
  // ── Arm reach (two-bone IK in world space) and seated pose ────────────────────
- function solveArm(side){
-  const state=reaches[side],arm=rig[side];if(state.weight<.001)return;
+ function solveArm(side,state=reaches[side]){
+  const arm=rig[side];if(state.weight<.001)return;
   arm.upper.getWorldPosition(vS);arm.lower.getWorldPosition(vE);arm.wrist.getWorldPosition(vW);
   vG.copy(state.target);group.localToWorld(vG);
   const l1=vS.distanceTo(vE),l2=vE.distanceTo(vW),d=T.MathUtils.clamp(vS.distanceTo(vG),Math.abs(l1-l2)+1e-4,l1+l2-1e-4);
@@ -169,6 +172,38 @@ export function createCharacter(input){
   lower.getWorldPosition(vE);vW.copy(endLocal);lower.localToWorld(vW);vG.copy(vS).addScaledVector(vDir,d);
   turnBone(lower,qa.setFromUnitVectors(v1.subVectors(vW,vE).normalize(),v2.subVectors(vG,vE).normalize()).clone(),1,memo);
  }
+ // Arms swing opposite the forward foot. The Walk clip leaves the hands bent in front of the hips, so characters with
+ // swingArms set (pedestrians) swing hanging arms instead.
+ function applyArmSwing(){
+  rig.foot.R.getWorldPosition(v1);group.worldToLocal(v1);const zR=v1.z;rig.foot.L.getWorldPosition(v1);group.worldToLocal(v1);const zL=v1.z;
+  const lead=T.MathUtils.clamp((zL-zR)/.35,-1,1),amount=motion==='Run'?.6:.45; // lead > 0: left foot ahead, so the right arm swings forward
+  group.getWorldQuaternion(qGroup);
+  for(const side of ['R','L']){
+   if(reaches[side].weight>.001||(side==='R'&&held))continue;
+   const arm=rig[side],phi=(side==='R'?lead:-lead)*amount;
+   arm.upper.getWorldPosition(vS);arm.lower.getWorldPosition(vE);
+   vDir.set(arm.out*.1,-Math.cos(phi),Math.sin(phi)).normalize().applyQuaternion(qGroup);
+   turnBone(arm.upper,qa.setFromUnitVectors(v1.subVectors(vE,vS).normalize(),vDir).clone(),1,memo);
+   arm.lower.getWorldPosition(vE);arm.wrist.getWorldPosition(vW);
+   const bend=(motion==='Run'?.32:.15)+.35*Math.max(0,phi);
+   vDir.set(arm.out*.05,-Math.cos(phi+bend),Math.sin(phi+bend)).normalize().applyQuaternion(qGroup);
+   turnBone(arm.lower,qa.setFromUnitVectors(v1.subVectors(vW,vE).normalize(),vDir).clone(),1,memo);
+  }
+ }
+ // Lean the spine about the character's side-to-side axis (positive = forward), spread over three bones.
+ function applyLean(){
+  group.getWorldQuaternion(qGroup);v1.copy(X).applyQuaternion(qGroup);
+  for(const [name,share] of [['Abdomen',.3],['Torso',.4],['Chest',.3]]){const bone=kinds.byName.get(name);if(bone)turnBone(bone,new T.Quaternion().setFromAxisAngle(v1,leanAngle*share),1,memo)}
+ }
+ // The left hand takes hold of the tool's handle, a little way along from the right.
+ function gripWithLeft(){
+  held.object.updateMatrixWorld(true);v1.set(0,held.axis==='y'?1:0,held.axis==='y'?0:1).applyQuaternion(held.object.getWorldQuaternion(qb));
+  rig.R.wrist.getWorldPosition(vW);rig.L.upper.getWorldPosition(vS);
+  // Grip the handle at the point nearest the left shoulder (between 10 and 50 cm along from the right hand), so it is within reach.
+  const along=T.MathUtils.clamp(v2.subVectors(vS,vW).dot(v1),.1,.5);
+  twoHandL.target.copy(vW).addScaledVector(v1,along);group.worldToLocal(twoHandL.target);
+  twoHandL.weight=twoHandWeight;solveArm('L',twoHandL);
+ }
  function applySeated(){
   group.getWorldQuaternion(qGroup);
   v1.copy(X).applyQuaternion(qGroup);
@@ -181,33 +216,42 @@ export function createCharacter(input){
   for(const [bone,q] of memo)bone.quaternion.copy(q);
   memo.clear();
   kinds.mixer.update(dt);
-  const reaching=reaches.R.weight>.001||reaches.L.weight>.001,striding=!seated&&(motion==='Walk'||motion==='Run');
-  if(!reaching&&!seated&&!held&&!striding)return;
+  alignAmount+=((alignDir?1:0)-alignAmount)*Math.min(1,dt*10);
+  const reaching=reaches.R.weight>.001||reaches.L.weight>.001,striding=!seated&&(motion==='Walk'||motion==='Run'||motion==='Sprint'),leaning=Math.abs(leanAngle)>.001;
+  if(!reaching&&!seated&&!held&&!striding&&!leaning)return;
   group.updateMatrixWorld(true);
-  if(seated)applySeated();else if(striding){solveLeg('R');solveLeg('L')}
-  solveArm('R');solveArm('L');
+  if(seated)applySeated();else if(striding){solveLeg('R');solveLeg('L');if(api.swingArms&&motion!=='Sprint')applyArmSwing()}
+  if(leaning)applyLean();
+  solveArm('R');if(twoHandWeight<.001)solveArm('L');
   if(held)placeHeld();
+  if(held&&twoHandWeight>.001)gripWithLeft();
  }
  // Puts the held item in the palm: upright items stay level, tools follow the forearm.
  const basis=new T.Matrix4(),vX=new T.Vector3(),vY=new T.Vector3(),vZ=new T.Vector3(),want=new T.Quaternion();
+ function basisFor(direction,out){
+  vX.copy(X).applyQuaternion(qGroup);vX.addScaledVector(direction,-vX.dot(direction)).normalize();
+  if(held.axis==='z'){vZ.copy(direction);vY.crossVectors(vZ,vX)}else{vY.copy(direction);vZ.crossVectors(vX,vY)}
+  basis.makeBasis(vX,vY,vZ);return out.setFromRotationMatrix(basis);
+ }
  function placeHeld(){
   const arm=rig.R;arm.lower.getWorldPosition(vE);arm.wrist.getWorldPosition(vW);
   vDir.subVectors(vW,vE).normalize();group.getWorldQuaternion(qGroup);
   if(held.upright)want.copy(qGroup).multiply(qc.setFromAxisAngle(X,-tilt));
   else{
-   // Item x runs across the character, the chosen long axis runs along the forearm.
-   vX.copy(X).applyQuaternion(qGroup);vX.addScaledVector(vDir,-vX.dot(vDir)).normalize();
-   if(held.axis==='z'){vZ.copy(vDir);vY.crossVectors(vZ,vX)}else{vY.copy(vDir);vZ.crossVectors(vX,vY)}
-   basis.makeBasis(vX,vY,vZ);want.setFromRotationMatrix(basis);
+   // Item x runs across the character, the chosen long axis runs along the forearm (or along alignDir for a carry pose).
+   basisFor(vDir,want);
+   if(alignAmount>.001&&alignDir){v2.copy(alignDir).applyQuaternion(qGroup).normalize();basisFor(v2,wantAlign);want.slerp(wantAlign,alignAmount)}
   }
   api.hand.updateMatrixWorld(true);api.hand.getWorldQuaternion(qb);
   held.object.quaternion.copy(qb).invert().multiply(want);
-  vS.copy(vW).addScaledVector(vDir,.045);held.object.position.copy(api.hand.worldToLocal(vS));
+  vS.copy(vW).addScaledVector(vDir,.045);
+  if(held.grip&&!held.upright){v1.set(0,held.axis==='y'?1:0,held.axis==='y'?0:1).applyQuaternion(want);vS.addScaledVector(v1,-held.grip)}
+  held.object.position.copy(api.hand.worldToLocal(vS));
  }
 
  
  const api={
-  group,hand:null,mouth:new T.Vector3(),fallback:false,
+  group,hand:null,mouth:new T.Vector3(),fallback:false,swingArms:true,
   get appearance(){return appearance},get motion(){return motion},get seated(){return seated},get speed(){return speedNow},
   get meshes(){return kinds.meshes},get mixer(){return kinds.mixer},
   bone:name=>kinds.byName.get(name)||null,
@@ -218,9 +262,14 @@ export function createCharacter(input){
   reach(side,target,weight){const s=reaches[side];if(target)s.target.copy(target);s.weight=weight},
   clearReach(){reaches.R.weight=reaches.L.weight=0},
   // upright: stays level (cups, fruit). Otherwise the item's `axis` ('y' or 'z') runs along the forearm.
-  hold(object,{upright=false,axis='y'}={}){this.release();api.hand.add(object);held={object,upright,axis}},
+  // grip: how far along the tool's long axis (from its origin) the palm holds it.
+  hold(object,{upright=false,axis='y',grip=0}={}){this.release();api.hand.add(object);held={object,upright,axis,grip}},
   release(){if(held){held.object.removeFromParent();held=null}tilt=0},
-  setHeldTilt(angle){tilt=angle}
+  setHeldTilt(angle){tilt=angle},
+  // Carry pose for a held tool: point its long axis along `direction` (character space), or null to follow the forearm.
+  alignHeld(direction){alignDir=direction?direction.clone().normalize():null},
+  setTwoHanded(weight){twoHandWeight=Math.max(0,Math.min(1,weight))},
+  setLean(angle){leanAngle=angle}
  };
  build();
  return api;

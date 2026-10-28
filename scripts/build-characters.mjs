@@ -25,7 +25,10 @@ globalThis.FileReader=class{
 };
 
 const PARTS=['Head','Body','Legs','Feet'];
-const CLIPS=['Idle','Idle_Neutral','Walk','Run','Interact','Wave'];
+// [name, source clip, relaxed hands]. Walk and Run keep the hands in the relaxed idle pose (the pack's clips make fists);
+// Sprint is the pack's Run unchanged, fists and pumping arms included, for Shift-running.
+const CLIPS=[['Idle','Idle'],['Idle_Neutral','Idle_Neutral'],['Walk','Walk',true],['Run','Run',true],['Sprint','Run',false],['Interact','Interact'],['Wave','Wave']];
+const FINGERS=/^(Thumb|Index|Middle|Ring|Pinky)\d[LR]\./;
 const SETS={
  male:{outfits:['Casual_Hoodie','Casual_2','Suit','Worker','Farmer','Beach','Punk','Adventurer']},
  female:{outfits:['Casual','Formal','Suit','Worker','Punk','Adventurer']}
@@ -123,10 +126,10 @@ async function build(kind,dir){
  // Animation clips from the shared animation file.
  const source=load(path.join(root,'Animations.fbx'));
  const clips=[];
- for(const wanted of CLIPS){
+ for(const [name,wanted,relaxHands] of CLIPS){
   const clip=source.animations.find(c=>c.name.split('|').pop()===wanted);
   if(!clip)throw new Error('Missing clip '+wanted);
-  const tracks=clip.tracks.filter(track=>{
+  let tracks=clip.tracks.filter(track=>{
    // Foot control bones drive the legs by IK at runtime: keep where they move, drop their rotations and the pole targets.
    if(/^(PTL|PTR)\./.test(track.name)||/^(FootL|FootR)\.(quaternion|scale)$/.test(track.name))return false;
    if(track.name.endsWith('.quaternion'))return true;
@@ -135,7 +138,12 @@ async function build(kind,dir){
    for(let i=stride;i<v.length&&!moves;i++)if(Math.abs(v[i]-v[i%stride])>1e-3)moves=true;
    return moves;
   });
-  clips.push(new THREE.AnimationClip(wanted,clip.duration,tracks));
+  if(relaxHands){
+   const idle=clips.find(c=>c.name==='Idle_Neutral');
+   const held=idle.tracks.filter(t=>FINGERS.test(t.name)).map(t=>new THREE.QuaternionKeyframeTrack(t.name,[0,clip.duration],[...t.values.slice(0,4),...t.values.slice(0,4)]));
+   tracks=[...tracks.filter(t=>!FINGERS.test(t.name)),...held];
+  }
+  clips.push(new THREE.AnimationClip(name,clip.duration,tracks));
  }
  output.updateMatrixWorld(true);
  const census=o=>{const c={};o.traverse(x=>{const k=x.isSkinnedMesh?'skinned':x.isBone?'bone':x.isMesh?'mesh':x.type;c[k]=(c[k]||0)+1});return JSON.stringify(c)};

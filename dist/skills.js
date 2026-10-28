@@ -25,3 +25,11 @@ export const logsPerTree=level=>2+(level>=3?1:0)+(level>=8?1:0);
 export function perkText(level){
  return level===3||level===8?'One more log per tree.':level===6?'Trees fall in two hits.':'Faster swings.';
 }
+
+// Lifetime counters shown in the phone's Skills section.
+export const freshStats=()=>({treesFelled:0,logsCollected:0});
+export function normalizeStats(value){
+ const n=x=>Number.isSafeInteger(x)&&x>=0&&x<=1e9?x:0;
+ return {treesFelled:n(value?.treesFelled),logsCollected:n(value?.logsCollected)};
+}
+export const perksText=level=>`Swing ${swingTime(level).toFixed(2)} s · ${hitsNeeded(level)} hits per tree · ${logsPerTree(level)} logs per tree`;

@@ -6,7 +6,7 @@
 // Felling a pine leaves logs on the ground (progress.logs) that the player picks up.
 import {gridZoneAt,parseCellKey,cuttableTreeAt,cellCenter,isWalkable} from './world.js';
 import {addItem,hasItem} from './inventory.js';
-import {addXp,levelOf,hitsNeeded,logsPerTree,XP} from './skills.js';
+import {addXp,levelOf,hitsNeeded,logsPerTree,XP,freshStats} from './skills.js';
 
 export const TREE_HITS=3; // hits for a level 1 lumberjack (skills.js has the perks)
 export const CHOP_RANGE=2.2;
@@ -71,7 +71,8 @@ export function collectLog(progress,id){
  if(!(progress.logs||[]).some(l=>l.id===id))return {error:'That log is gone.'};
  const added=addItem(progress,'wood-log');
  if(added.error)return {error:'Your bag is full.'};
- return {state:{...added.state,logs:progress.logs.filter(l=>l.id!==id)},message:'Picked up a wood log.'};
+ const stats={...(added.state.stats||freshStats()),logsCollected:(added.state.stats?.logsCollected||0)+1};
+ return {state:{...added.state,stats,logs:progress.logs.filter(l=>l.id!==id)},message:'Picked up a wood log.'};
 }
 
 // ── Chopping ──────────────────────────────────────────────────────────────────
@@ -98,7 +99,8 @@ export function chopTree(progress,key,position){
   made.push({id:id++,x:center.x+dx*along-dz*side,z:center.z+dz*along+dx*side,rot:Math.atan2(dx,dz)+Math.PI/2+side*.4,t:now});
  }
  const felled=setPlot(progress,key,{type:'forest',tree:null,hits:0,felledAt:now});
- const gained=addXp({...felled,logs:[...(felled.logs||[]),...made].slice(-MAX_LOGS),nextLogId:id},'lumberjack',XP.fell);
+ const stats={...(felled.stats||freshStats()),treesFelled:(felled.stats?.treesFelled||0)+1};
+ const gained=addXp({...felled,stats,logs:[...(felled.logs||[]),...made].slice(-MAX_LOGS),nextLogId:id},'lumberjack',XP.fell);
  return {state:gained.state,hits,need,felled:true,logs:made,leveledUp:gained.leveledUp,level:gained.level,message:`Timber! ${count} logs on the ground.`};
 }
 

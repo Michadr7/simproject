@@ -1,3 +1,4 @@
+import {levelOf,perkText,perksText} from './skills.js';
 import {ITEMS} from './items.js';
 import {CONTRACTS,availableContracts} from './contracts.js';
 import {money} from './jobs.js';
@@ -35,6 +36,10 @@ export function createPhone({document:doc,getState,canOpen,onOpen,onClose,onAcce
     $('phoneGreeting').textContent=state.me.name?`Hello, ${state.me.name}.`:'Your life, in reach.';
     $('phoneBalance').textContent=money(progress.cash);
     $('phonePlayerName').textContent=state.me.name||'New neighbor';
+    {const xp=progress.skills.lumberjack.xp,{level,into,next}=levelOf(xp);
+     $('phoneLumberLevel').textContent=level>=20?'Lv 20 · max':'Lv '+level;$('phoneLumberMeter').max=next||1;$('phoneLumberMeter').value=next?into:1;
+     $('phoneLumberPerks').textContent=perksText(level);$('phoneLumberNext').textContent=level>=20?'Every perk unlocked.':`${into} / ${next} XP to level ${level+1}: ${perkText(level+1)}`;
+     $('phoneTrees').textContent=String(progress.stats.treesFelled);$('phoneLogs').textContent=String(progress.stats.logsCollected);$('phoneDeliveries').textContent=String(progress.completed)}
     $('phoneEnergy').textContent=Math.round(progress.life.energy)+' / 100';
     $('phoneFood').textContent=Math.round(progress.life.food)+' / 100';
     $('phoneEnergyMeter').value=progress.life.energy;$('phoneFoodMeter').value=progress.life.food;

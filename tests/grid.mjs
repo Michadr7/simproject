@@ -33,7 +33,7 @@ const hit2=chopTree(s,pine.key,near);s=hit2.state;assert.equal(plotAt(s,pine.key
 let raw;const storage={getItem:()=>raw,setItem:(k,v)=>raw=v};saveProgress(storage,s);s=loadProgress(storage);assert.equal(plotAt(s,pine.key).hits,2);assert.equal(s.equipped,'axe');assert.equal(s.skills.lumberjack.xp,4);
 const fell=chopTree(s,pine.key,near);assert(fell.felled);assert.match(fell.message,/2 logs/);
 assert.deepEqual(plotAt(fell.state,pine.key),{type:'forest',tree:null,hits:0,felledAt:540});
-assert.equal(fell.state.skills.lumberjack.xp,16);assert.equal(countItem(fell.state,'wood-log'),0,'logs lie on the ground, not in the bag');
+assert.equal(fell.state.skills.lumberjack.xp,16);assert.deepEqual(fell.state.stats,{treesFelled:1,logsCollected:0});assert.equal(countItem(fell.state,'wood-log'),0,'logs lie on the ground, not in the bag');
 assert.equal(fell.logs.length,2);assert.deepEqual(fell.state.logs,fell.logs);assert.deepEqual(fell.logs.map(l=>l.id),[1,2]);assert.equal(fell.state.nextLogId,3);
 for(const log of fell.logs){assert(Math.hypot(log.x-pine.x,log.z-pine.z)<2.5,'near the stump');assert(log.x>pine.x,'fell away from the player (who stood to the west)')}
 assert.match(chopTree(fell.state,pine.key,near).error,/no tree/,'cannot chop a stump');assert.deepEqual(felledTrees(fell.state),[pine.key]);
@@ -44,7 +44,7 @@ assert.equal(chopTree({...withAxe(),skills:{lumberjack:{xp:levelXp(6)}}},second,
 // A tree left at 2 hits from before the perk needs only one more swing at level 6.
 assert(chopTree({...swift,plots:{[pine.key]:{type:'forest',tree:'pine',hits:2}}},pine.key,near).felled);
 // ── Logs ──────────────────────────────────────────────────────────────────────
-let c=collectLog(fell.state,1);assert.equal(countItem(c.state,'wood-log'),1);assert.deepEqual(c.state.logs.map(l=>l.id),[2]);assert.match(c.message,/log/);
+let c=collectLog(fell.state,1);assert.equal(countItem(c.state,'wood-log'),1);assert.deepEqual(c.state.stats,{treesFelled:1,logsCollected:1});assert.deepEqual(c.state.logs.map(l=>l.id),[2]);assert.match(c.message,/log/);
 assert.match(collectLog(c.state,1).error,/gone/);
 let full=fell.state;while(full.inventory.slots.length<inventoryCapacity(full.inventory))full=addItem(full,'axe').state;
 const refused=collectLog(full,1);assert.match(refused.error,/bag is full/);assert.equal(refused.state,undefined);
@@ -65,7 +65,7 @@ const blocked=regrowTrees(grown,felledAt+MATURE_AFTER,key=>key===pine.key);asser
 r=regrowTrees(grown,felledAt+MATURE_AFTER);assert.deepEqual(r.restored,[pine.key]);assert.equal(r.state.plots[pine.key],undefined,'back to the default pine');assert.deepEqual(plotAt(r.state,pine.key),{type:'forest',tree:'pine',hits:0});
 assert.equal(regrowTrees(fresh,5).state,fresh,'nothing to do leaves the state alone');
 // ── Saves ─────────────────────────────────────────────────────────────────────
-saveProgress(storage,fell.state);const back=loadProgress(storage);assert.deepEqual(back.logs,fell.state.logs);assert.equal(back.nextLogId,3);assert.equal(back.skills.lumberjack.xp,16);assert.equal(back.equipped,'axe');assert.deepEqual(felledTrees(back),[pine.key]);
+saveProgress(storage,fell.state);const back=loadProgress(storage);assert.deepEqual(back.logs,fell.state.logs);assert.equal(back.nextLogId,3);assert.equal(back.skills.lumberjack.xp,16);assert.deepEqual(back.stats,{treesFelled:1,logsCollected:0});assert.equal(back.equipped,'axe');assert.deepEqual(felledTrees(back),[pine.key]);
 assert.equal(normalizeProgress({equipped:'axe'}).equipped,null,'cannot equip a tool you do not own');assert.equal(normalizeProgress({equipped:'apple',inventory:withAxe().inventory}).equipped,null);
 assert.deepEqual(normalizeProgress({position:{x:120,z:-30}}).position,{x:120,z:-30});assert.deepEqual(normalizeProgress({position:{x:-150,z:40}}).position,{x:-150,z:40});assert.equal(normalizeProgress({position:{x:500,z:0}}).position,null);
 initializeState({progress:freshProgress()});assert.deepEqual(getPlot(pine.key),{type:'forest',tree:'pine',hits:0});setStatePlot(farmKey,{type:'farm',crop:null,tilled:true});assert.equal(GameState.progress.plots[farmKey].tilled,true);

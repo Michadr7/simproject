@@ -1,6 +1,7 @@
 import * as T from './vendor/three.module.js';
 import {createCharacter} from './character.js';
 import {outfit} from './appearance.js';
+import {createSlidingDoor} from './doors.js';
 export const SHOPS={market:{name:'Corner Market',x:19,z:-6.3},cafe:{name:'Alder Coffee',x:36,z:-6.3}};
 export const SHOP_ENTRY={x:0,z:3.1},SHOP_EXIT={x:0,z:4},COUNTER={x:0,z:-2};
 export function createShop(kind){const cafe=kind==='cafe',scene=new T.Group();scene.name=kind+'-interior';const occluders=[],blocks=[];
@@ -8,7 +9,8 @@ export function createShop(kind){const cafe=kind==='cafe',scene=new T.Group();sc
  box(12,.2,10,0,-.1,0,cafe?'#ad9271':'#c5c5b2');for(let x=-6;x<=6;x+=1)box(.015,.004,10,x,.002,0,'#a59d88');
  for(const z of [-5])box(12,3.4,.16,0,1.7,z,cafe?'#d6c7ac':'#d3dccb',true);for(const x of [-6,6])box(.16,3.4,10,x,1.7,0,'#b1bfad',true);
  // A real window opening: opaque walls stop at sill and lintel.
- box(12,.3,.16,0,.15,5,'#b1bfad');box(12,.45,.16,0,3.175,5,'#b1bfad');
+ for(const x of [-3.65,3.65])box(4.7,.3,.16,x,.15,5,'#b1bfad'); // sill either side of the doorway, not across it
+ box(12,.45,.16,0,3.175,5,'#b1bfad');
  const glass=[];for(const x of [-3.55,3.55]){const pane=box(4.6,2.65,.025,x,1.625,5,'#c1e0df');pane.name='storefront-glass';pane.material.transparent=true;pane.material.opacity=.16;pane.material.depthWrite=false;pane.material.roughness=.12;occluders.splice(occluders.indexOf(pane),1);glass.push(pane);for(const dx of [-2.3,0,2.3])box(.065,2.7,.1,x+dx,1.65,5,'#44675c')}
  const door=box(1.7,2.7,.025,0,1.65,5,'#b8d8d5');door.name='glass-door';door.material.transparent=true;door.material.opacity=.12;door.material.depthWrite=false;occluders.splice(occluders.indexOf(door),1);glass.push(door);for(const x of [-.9,.9])box(.08,2.9,.13,x,1.6,5,'#44675c');box(.07,.35,.09,.62,1.35,5.06,'#d9c899');
  box(4,1,1,0,.5,-3.5,cafe?'#735b45':'#6e8b72',true);box(4.2,.1,1.15,0,1.05,-3.5,'#ded2b8');box(.45,.35,.35,1.2,1.28,-3.5,'#344b49');
@@ -19,5 +21,6 @@ export function createShop(kind){const cafe=kind==='cafe',scene=new T.Group();sc
  const customer=cafe?createCharacter(outfit('female','Casual',{skin:'#d9ae8d',hair:'#bca06a'})):null;
  const usedCup=box(.13,.18,.13,-3.8,.97,-.7,'#eee5d1');usedCup.visible=false;
  if(customer){customer.group.name='cafe-customer';customer.group.visible=false;scene.add(customer.group)}
- return {scene,occluders,glass,customer,usedCup,clerk,blocked(x,z){return Math.abs(x)>5.55||Math.abs(z)>4.55||blocks.some(b=>Math.abs(x-b.x)<b.hx+.32&&Math.abs(z-b.z)<b.hz+.32)}};
+ const exitDoor=createSlidingDoor({width:2.2,height:2.7});exitDoor.group.position.set(0,0,4.96);scene.add(exitDoor.group);
+ return {scene,occluders,glass,customer,usedCup,clerk,exitDoor,blocked(x,z){return Math.abs(x)>5.55||Math.abs(z)>4.55||blocks.some(b=>Math.abs(x-b.x)<b.hx+.32&&Math.abs(z-b.z)<b.hz+.32)}};
 }

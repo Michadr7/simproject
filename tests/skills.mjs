@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import {levelOf,xpForNext,addXp,normalizeSkills,freshSkills,hitsNeeded,logsPerTree,swingTime,perkText,MAX_LEVEL,XP} from '../dist/skills.js';
+import {levelOf,xpForNext,addXp,normalizeSkills,freshSkills,hitsNeeded,logsPerTree,swingTime,perkText,perksText,freshStats,normalizeStats,MAX_LEVEL,XP} from '../dist/skills.js';
 // Levels: 40 XP to level 2, then 60, 80, ...
 assert.deepEqual(levelOf(0),{level:1,into:0,next:40});assert.equal(levelOf(39).level,1);assert.deepEqual(levelOf(40),{level:2,into:0,next:60});
 assert.equal(levelOf(99).level,2);assert.equal(levelOf(100).level,3);
@@ -17,4 +17,6 @@ const b=addXp({skills:{lumberjack:{xp:39}}},'lumberjack',XP.hit);assert(b.levele
 // Saves.
 assert.deepEqual(normalizeSkills(undefined),freshSkills());assert.deepEqual(normalizeSkills({lumberjack:{xp:-5}}),freshSkills());assert.deepEqual(normalizeSkills({lumberjack:{xp:1.5}}),freshSkills());
 assert.deepEqual(normalizeSkills({lumberjack:{xp:120}}),{lumberjack:{xp:120}});assert.deepEqual(normalizeSkills({lumberjack:{xp:'9'}}),freshSkills());
+assert.deepEqual(normalizeStats(undefined),freshStats());assert.deepEqual(normalizeStats({treesFelled:7,logsCollected:19}),{treesFelled:7,logsCollected:19});assert.deepEqual(normalizeStats({treesFelled:-1,logsCollected:'x'}),freshStats());
+assert.equal(perksText(1),'Swing 0.80 s · 3 hits per tree · 2 logs per tree');assert.equal(perksText(6),'Swing 0.65 s · 2 hits per tree · 3 logs per tree');
 console.log('Lumberjack levels, perks (swing speed, hits per tree, logs per tree), XP gains, level-ups, cap and save validation passed.');
