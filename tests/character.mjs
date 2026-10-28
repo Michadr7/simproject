@@ -63,12 +63,22 @@ for(const body of ['male','female']){
   return ['Index2R','Middle2L','Ring3R','Thumb2L'].reduce((worst,name)=>Math.max(worst,h.bone(name).quaternion.angleTo(idle.bone(name).quaternion)),0)};
  assert(curl(1.4)<.05,`${body}: relaxed hands walking`);assert(curl(4.5)<.05,`${body}: relaxed hands jogging`);assert(curl(8.2)>.5,`${body}: fists while sprinting (${curl(8.2).toFixed(2)} rad)`);
 }
-// Walkers with swingArms swing hanging arms opposite the forward foot (the Walk clip leaves the hands bent in front of the hips).
-for(const body of ['male','female']){
- const w=createCharacter(outfit(body,OUTFITS[body][0][0]));w.swingArms=true;w.setMotion(2.2);w.update(.5);let opposite=0,hanging=0,frames=40;
- for(let i=0;i<frames;i++){w.update(.03);w.group.updateMatrixWorld(true);const pos=n=>{const v=new T.Vector3();w.bone(n).getWorldPosition(v);return w.group.worldToLocal(v)};
-  const wr=pos('WristR'),wl=pos('WristL'),sr=pos('UpperArmR');if(wr.z*wl.z<0)opposite++;if(sr.y-wr.y>.3&&sr.y-wl.y>.3)hanging++}
- assert(opposite>frames*.7,`${body}: hands swing in opposite directions (${opposite}/${frames})`);assert(hanging>frames*.9,`${body}: arms hang below the shoulders (${hanging}/${frames})`);
+// Walkers swing hanging arms against the stride: each wrist moves opposite the foot on its own side, smoothly, and the hands stay low.
+for(const body of ['male','female'])for(const speed of [1.4,2.2,4.5]){
+ const w=createCharacter(outfit(body,OUTFITS[body][0][0]));w.setMotion(speed);w.update(.5);const xs=[],ys=[],wrist=[],prevQ={R:null,L:null};let hanging=0,fastest=0;const frames=90;
+ for(let i=0;i<frames;i++){w.update(.016);w.group.updateMatrixWorld(true);const pos=n=>{const v=new T.Vector3();w.bone(n).getWorldPosition(v);return w.group.worldToLocal(v)};
+  xs.push(pos('FootL').z-pos('FootR').z);ys.push(pos('WristR').z-pos('WristL').z);if(pos('UpperArmR').y-pos('WristR').y>.3&&pos('UpperArmR').y-pos('WristL').y>.3)hanging++;
+  for(const side of ['R','L']){const q=w.bone('Wrist'+side).getWorldQuaternion(new T.Quaternion());if(prevQ[side])fastest=Math.max(fastest,q.angleTo(prevQ[side])/.016);prevQ[side]=q}}
+ const mean=a=>a.reduce((x,y)=>x+y,0)/a.length,mx=mean(xs),my=mean(ys),cov=xs.reduce((s,x,i)=>s+(x-mx)*(ys[i]-my),0),corr=cov/Math.sqrt(xs.reduce((s,x)=>s+(x-mx)**2,0)*ys.reduce((s,y)=>s+(y-my)**2,0));
+ assert(corr>.6,`${body} at ${speed}: the right wrist leads when the left foot leads (correlation ${corr.toFixed(2)})`);assert(hanging>frames*.9,`${body} at ${speed}: arms hang below the shoulders (${hanging}/${frames})`);
+ assert(fastest<14,`${body} at ${speed}: the wrists turn smoothly (peak ${fastest.toFixed(1)} rad/s)`);
+}
+// An axe carried while walking or jogging does not make the arm or the axe spin.
+for(const body of ['male','female'])for(const speed of [0,2.2,4.5]){
+ const w=createCharacter(outfit(body,OUTFITS[body][0][0])),item=new T.Group();w.hold(item,{axis:'z',grip:.18});w.alignHeld(new T.Vector3(.4,.7,-.5));w.reach('R',new T.Vector3(-.28,1.28,.05),1,new T.Vector3(-.15,-.35,1));w.setMotion(speed);for(let i=0;i<20;i++)w.update(.016);
+ let prev=null,fastest=0,fastestItem=0,prevItem=null;
+ for(let i=0;i<120;i++){w.update(.016);w.group.updateMatrixWorld(true);const q=w.bone('LowerArmR').getWorldQuaternion(new T.Quaternion()),qi=item.getWorldQuaternion(new T.Quaternion());if(prev)fastest=Math.max(fastest,q.angleTo(prev)/.016);if(prevItem)fastestItem=Math.max(fastestItem,qi.angleTo(prevItem)/.016);prev=q;prevItem=qi}
+ assert(fastest<16,`${body} at ${speed}: carrying arm turns smoothly (peak ${fastest.toFixed(1)} rad/s)`);assert(fastestItem<2,`${body} at ${speed}: the carried tool holds steady (${fastestItem.toFixed(1)} rad/s)`);
 }
 m.update(0);const held=pose();m.update(0);assert.deepEqual(pose(),held,'paused (dt 0) holds the pose');
 // ── Reach and held items ──────────────────────────────────────────────────────

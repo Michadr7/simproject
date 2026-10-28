@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import * as T from '../dist/vendor/three.module.js';
-import {CARRY,CARRY_DIR,CHOP_TIMING,chopPose} from '../dist/chop-path.js';
+import {CARRY,CARRY_DIR,CARRY_POLE,CHOP_TIMING,chopPose} from '../dist/chop-path.js';
 import {createCharacter,loadCharacterAssets} from '../dist/character.js';
 import {createHeldItem} from '../dist/item-models.js';
 import {itemById} from '../dist/items.js';
@@ -27,7 +27,7 @@ const axe=()=>createHeldItem(itemById('axe')),longAxis=(c,item)=>{item.updateMat
 for(const body of ['male','female']){
  const c=createCharacter(outfit(body,OUTFITS[body][0][0])),item=axe();c.group.position.set(2,0,3);c.group.rotation.y=.8;c.hold(item,{axis:'z'});
  // Carried head-up: the long axis points along CARRY_DIR (in the character's space) once the alignment has settled.
- c.alignHeld(CARRY_DIR);c.reach('R',CARRY,1);for(let i=0;i<10;i++)c.update(.1);
+ c.alignHeld(CARRY_DIR);c.reach('R',CARRY,1,CARRY_POLE);for(let i=0;i<10;i++)c.update(.1);
  const carryDir=longAxis(c,item).applyQuaternion(c.group.getWorldQuaternion(new T.Quaternion()).invert());
  assert(carryDir.angleTo(CARRY_DIR)<.12,`${body}: carried along CARRY_DIR (${carryDir.angleTo(CARRY_DIR).toFixed(2)} rad)`);assert(carryDir.y>.6&&carryDir.z<-.4,'head up and behind the shoulder');
  // Released, it follows the forearm again.
@@ -35,8 +35,8 @@ for(const body of ['male','female']){
  assert(longAxis(c,item).angleTo(wrist.sub(elbow).normalize())<.15,'follows the forearm when not aligned');
  // Mid-swing: the left hand is on the handle, and leaning moves the head forward.
  const head=()=>{c.group.updateMatrixWorld(true);const v=new T.Vector3();c.bone('Head').getWorldPosition(v);return c.group.worldToLocal(v)};
- c.reach('R',chopPose(.55).point,1);c.setTwoHanded(1);c.setLean(0);for(let i=0;i<4;i++)c.update(.05);const upright=head();
- const pose=chopPose(.55);c.reach('R',pose.point,1);c.setLean(pose.lean);for(let i=0;i<4;i++)c.update(.05);
+ c.reach('R',chopPose(.55).point,1,CARRY_POLE);c.setTwoHanded(1);c.setLean(0);for(let i=0;i<4;i++)c.update(.05);const upright=head();
+ const pose=chopPose(.55);c.reach('R',pose.point,1,CARRY_POLE);c.setLean(pose.lean);for(let i=0;i<4;i++)c.update(.05);
  assert(head().z-upright.z>.08,`${body}: leaning moves the head forward (${(head().z-upright.z).toFixed(2)} m)`);
  c.group.updateMatrixWorld(true);const left=new T.Vector3(),right=new T.Vector3();c.bone('WristL').getWorldPosition(left);c.bone('WristR').getWorldPosition(right);
  const along=longAxis(c,item),toLeft=left.clone().sub(right),offLine=toLeft.clone().sub(along.clone().multiplyScalar(toLeft.dot(along))).length();

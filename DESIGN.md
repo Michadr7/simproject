@@ -62,6 +62,36 @@ at level 3, a fourth at level 8. Logs sell for $1.00.
   chainsaw behaviour and UI; **Haiku 5.5** for price and number tweaks afterwards.
 - Lumberjack as a job (contracts at the lumber yard: "deliver 10 logs") reuses the gig system. **Model: Sonnet 5.5.**
 
+## Fuel, gas stations, farm, hired workers, vehicles (planned)
+- **Fuel.** One fuel resource at first. Each tool or vehicle has a tank size and a burn rate (the chainsaw burns it per second of
+  cutting). Low-fuel warning, a **jerry can** item, and a paid tow as a last resort so nobody is stranded. Two stations: one by
+  the woods road for loggers, one on the freight road near Eastbank Works for trucks. A station is a small template interior plus
+  outdoor pumps used with E. Model: **Sonnet 5.5** for the station and pumps; **Opus 5.5** to design fuel in the save format.
+- **Farm slice.** Farmhouse (facade only at first), barn (storage and equipment, template interior), and the existing eight
+  fields as plots. Loop: till, plant, grow over game days, harvest, sell; a Farming skill on the same skills table. The farmer sells
+  seeds and rents you a field for a daily fee (a stepping stone to plot ownership). Fields are about 230 cells, so add area
+  tools (a 3x3 hoe, later a tractor with fuel) and draw crops as instances. Model: **Sonnet 5.5**; **Opus 5.5** for rent and ownership.
+- **Hired NPC workers (late game).** Treat each as a contract: a wage per day, an output per day, a site and a reliability, settled as
+  game time passes, with a visible worker only when you are nearby. Wages become recurring bills. Needs NPC homes, plot ownership
+  and storage first. Model: **Opus 5.5**.
+- **Parking, driving, traffic, in this order.** (1) Parking lots as map data (spaces with position and heading) filled with parked
+  cars: **Sonnet 5.5**, with Alder Center and Eastbank. (2) Driving: a new mode with its own controls, camera, entering and
+  leaving, collisions, fuel and a saved position; recheck the 60-90 second travel targets. **Opus 5.5** for the architecture, Sonnet to
+  build. (3) Traffic: ambient cars on the road graph, capped at about 10 visible, never running you over at first: **Sonnet 5.5**.
+
+## Asset foundation (Step 0, before adding more art)
+- **Contract:** 1 unit = 1 m, the character is 1.95 m, +Z forward, Y up, pivot at the base centre, sizes snapping to the 1-unit grid,
+  a polygon budget per category, one flat-shaded look.
+- **Manifest:** `ASSETS.md` plus a data file of id, category, size, pivot, tags, source, licence. Maps and items reference ids
+  (`vehicle.pickup`), never file names.
+- **Converter and loader:** the character converter generalised to static models (weld, flat shading, byte-packed, embedded),
+  instancing for repeated props, and a preview page that shows any asset beside the character for scale.
+- **Storage:** release folders copy the 3 MB of character data every version; keep assets in a shared, unversioned location
+  (test that file:// loading allows it first).
+- Collect in this order: town buildings, street props and parked cars (Alder Center); warehouse, workshop, trucks, crates, fuel
+  pumps (Eastbank); farmhouse, barn, silo, fences, crop stages, tractor (farm); axe tiers, chainsaw, jerry can, oak, giant tree,
+  stump, sapling, logs (tools); sounds later. Check each pack's licence. Model: **Sonnet 5.5**.
+
 ## Other near-term items
 | Item | Model |
 |---|---|

@@ -40,8 +40,37 @@ export function loadCharacterAssets(){
 }
 
 const Y=new T.Vector3(0,1,0),X=new T.Vector3(1,0,0);
-const v1=new T.Vector3(),v2=new T.Vector3(),vS=new T.Vector3(),vE=new T.Vector3(),vW=new T.Vector3(),vG=new T.Vector3(),vDir=new T.Vector3(),vPole=new T.Vector3(),vE2=new T.Vector3();
+const v1=new T.Vector3(),v2=new T.Vector3(),v3=new T.Vector3(),vS=new T.Vector3(),vE=new T.Vector3(),vW=new T.Vector3(),vG=new T.Vector3(),vDir=new T.Vector3(),vPole=new T.Vector3(),vE2=new T.Vector3();
 const qa=new T.Quaternion(),qb=new T.Quaternion(),qc=new T.Quaternion(),qGroup=new T.Quaternion();
+const vHinge=new T.Vector3();
+// Turns `from` toward `to` about a fixed `axis` (an elbow's hinge), as a signed angle in the plane perpendicular to it, then closes any
+// small remaining gap with the shortest rotation. Unlike the shortest rotation alone it never changes method or roll as the angle nears
+// 180 degrees, so a folded elbow stays steady frame to frame.
+function hingeRotation(from,to,axis,out){
+ if(axis.lengthSq()<1e-10)return out.setFromUnitVectors(from,to);
+ const n=vHinge.copy(axis).normalize(),f=from.clone().addScaledVector(n,-from.dot(n)).normalize(),t=to.clone().addScaledVector(n,-to.dot(n)).normalize();
+ const angle=Math.atan2(n.dot(new T.Vector3().crossVectors(f,t)),f.dot(t));
+ out.setFromAxisAngle(n,angle);
+ return qb.setFromUnitVectors(from.clone().applyQuaternion(out),to).multiply(out).clone();
+}
+// Takes `from` to `to` by way of `bridge`: first to the bridge, then on to the target. A raised arm sweeps up through the front, so
+// bridging via "forward" keeps the path continuous even when the arm goes from hanging straight down to straight up, where the
+// shortest rotation alone has no steady axis. (Works while neither vector is directly opposite the bridge.)
+function bridgedRotation(from,to,bridge,out){
+ const first=qb.setFromUnitVectors(from,bridge).clone(),second=new T.Quaternion().setFromUnitVectors(bridge,to);
+ return out.copy(second).multiply(first);
+}
+// The shortest rotation taking unit vector `from` to `to`. When they are nearly opposite the shortest rotation has no single axis
+// and flips from frame to frame; then the rotation is about `hint` (a steady axis, e.g. the elbow's hinge) instead.
+function rotationBetween(from,to,hint,out){
+ const dot=from.dot(to);
+ if(dot>-.9||!hint||hint.lengthSq()<1e-8)return out.setFromUnitVectors(from,to);
+ vHinge.copy(hint).addScaledVector(from,-hint.dot(from)).normalize();
+ const angle=Math.acos(Math.max(-1,dot));out.setFromAxisAngle(vHinge,angle);
+ // Pick the sense of rotation that ends up nearest the target.
+ const there=from.clone().applyQuaternion(out);if(there.dot(to)<from.clone().applyQuaternion(qa.setFromAxisAngle(vHinge,-angle)).dot(to))out.setFromAxisAngle(vHinge,-angle);
+ return out;
+}
 
 // Rotates a bone in world space by `delta`, blending from its current local rotation by `weight`.
 // The animated rotation is remembered in `memo` so it can be put back before the next frame: the mixer
@@ -67,8 +96,11 @@ export function createCharacter(input){
  let appearance=normalizeAppearance(input);
  if(!assets)return createFallback(appearance);
  const group=new T.Group(),kinds={};let seated=false,motion='Idle',speedNow=0;
- const reaches={R:{target:new T.Vector3(),weight:0},L:{target:new T.Vector3(),weight:0}};
+ const reaches={R:{target:new T.Vector3(),weight:0,pole:new T.Vector3(),hasPole:false},L:{target:new T.Vector3(),weight:0,pole:new T.Vector3(),hasPole:false}};
  let held=null,tilt=0,rig=null;const memo=new Map();
+ // The relaxed idle rotations of the arm bones: every arm override starts from these, never from the animation's pose, so the
+ // solver cannot flip about the forearm when the clip's arm happens to be nearly opposite the target.
+ const idleLocal=new Map(),swingLag={R:0,L:0};
  // Held-item orientation override (a carry pose), a second hand on the handle, and a forward/back lean of the spine.
  let alignDir=null,alignAmount=0,twoHandWeight=0,leanAngle=0;const twoHandL={target:new T.Vector3(),weight:0},wantAlign=new T.Quaternion();
 
@@ -89,6 +121,7 @@ export function createCharacter(input){
   const bindEnd={};for(const side of ['R','L']){const lower=byName.get('LowerLeg'+side),foot=byName.get('Foot'+side);if(lower&&foot){foot.getWorldPosition(v1);bindEnd[side]=lower.worldToLocal(v1.clone())}}
   kinds.current=null;motion='';play('Idle_Neutral',1);
   kinds.mixer.update(0); // show the idle pose at once instead of the T-pose until the first update
+  idleLocal.clear();for(const name of ['UpperArmR','LowerArmR','WristR','UpperArmL','LowerArmL','WristL']){const bone=byName.get(name);if(bone)idleLocal.set(bone,bone.quaternion.clone())}
   const side=name=>({upper:byName.get('UpperArm'+name),lower:byName.get('LowerArm'+name),wrist:byName.get('Wrist'+name)});
   rig={R:side('R'),L:side('L'),legs:{R:[byName.get('UpperLegR'),byName.get('LowerLegR')],L:[byName.get('UpperLegL'),byName.get('LowerLegL')]},foot:{R:byName.get('FootR'),L:byName.get('FootL')},bindEnd,head:byName.get('Head'),headEnd:byName.get('Head_end')};
   // Which way is "outwards" for each arm (the pole direction of the elbow), measured from the rest pose.
@@ -143,20 +176,31 @@ export function createCharacter(input){
  }
 
  // ── Arm reach (two-bone IK in world space) and seated pose ────────────────────
+ function startFromIdle(arm){
+  for(const bone of [arm.upper,arm.lower,arm.wrist]){const q=idleLocal.get(bone);if(!q)continue;if(!memo.has(bone))memo.set(bone,bone.quaternion.clone());bone.quaternion.copy(q)}
+  arm.upper.updateMatrixWorld(true);
+ }
  function solveArm(side,state=reaches[side]){
   const arm=rig[side];if(state.weight<.001)return;
+  startFromIdle(arm);
   arm.upper.getWorldPosition(vS);arm.lower.getWorldPosition(vE);arm.wrist.getWorldPosition(vW);
   vG.copy(state.target);group.localToWorld(vG);
   const l1=vS.distanceTo(vE),l2=vE.distanceTo(vW),d=T.MathUtils.clamp(vS.distanceTo(vG),Math.abs(l1-l2)+1e-4,l1+l2-1e-4);
   vDir.subVectors(vG,vS).normalize();
   const along=(l1*l1-l2*l2+d*d)/(2*d),height=Math.sqrt(Math.max(0,l1*l1-along*along));
   group.getWorldQuaternion(qGroup);
-  vPole.set(arm.out*.55,-1,-.25).applyQuaternion(qGroup);vPole.addScaledVector(vDir,-vPole.dot(vDir)).normalize();
+  // Which way the elbow points: down and out by default, or the reach's own direction (character space) when the target lies
+  // along that default and the elbow would otherwise flip between two solutions.
+  if(state.hasPole)vPole.copy(state.pole);else vPole.set(arm.out*.55,-1,-.25);
+  vPole.applyQuaternion(qGroup);vPole.addScaledVector(vDir,-vPole.dot(vDir)).normalize();
   vE2.copy(vS).addScaledVector(vDir,along).addScaledVector(vPole,height);
-  turnBone(arm.upper,qa.setFromUnitVectors(v1.subVectors(vE,vS).normalize(),v2.subVectors(vE2,vS).normalize()).clone(),state.weight,memo);
+  // The elbow's hinge: perpendicular to the plane that holds the shoulder, the target and the elbow direction (steady even when the arm
+  // folds right up or stretches fully straight, where shoulder, elbow and target line up).
+  const hinge=new T.Vector3().crossVectors(vPole,vDir); // the plane of the shoulder, elbow and target; defined even when the arm is fully straight
+  turnBone(arm.upper,bridgedRotation(v1.subVectors(vE,vS).normalize(),v2.subVectors(vE2,vS).normalize(),v3.set(0,0,1).applyQuaternion(qGroup),new T.Quaternion()),state.weight,memo);
   arm.lower.getWorldPosition(vE);arm.wrist.getWorldPosition(vW);
   vG.copy(vS).addScaledVector(vDir,d);
-  turnBone(arm.lower,qa.setFromUnitVectors(v1.subVectors(vW,vE).normalize(),v2.subVectors(vG,vE).normalize()).clone(),state.weight,memo);
+  turnBone(arm.lower,hingeRotation(v1.subVectors(vW,vE).normalize(),v2.subVectors(vG,vE).normalize(),hinge,new T.Quaternion()),state.weight,memo);
  }
 // Two-bone leg solve toward the animated foot control bone, knees forward. Replaces the pack's baked leg rotations,
  // which swing a thigh out sideways in parts of the Run cycle.
@@ -174,21 +218,31 @@ export function createCharacter(input){
  }
  // Arms swing opposite the forward foot. The Walk clip leaves the hands bent in front of the hips, so characters with
  // swingArms set (pedestrians) swing hanging arms instead.
- function applyArmSwing(){
+ // The shoulders counter-rotate against the hips as you stride (the right shoulder comes forward with the left foot).
+ function applyTwist(lead){
+  const amount=lead*(motion==='Run'?.13:.09);group.getWorldQuaternion(qGroup);v1.set(0,1,0).applyQuaternion(qGroup);
+  for(const [name,share] of [['Torso',.5],['Chest',.5]]){const bone=kinds.byName.get(name);if(bone)turnBone(bone,new T.Quaternion().setFromAxisAngle(v1,amount*share),1,memo)}
+ }
+ function applyArmSwing(dt){
   rig.foot.R.getWorldPosition(v1);group.worldToLocal(v1);const zR=v1.z;rig.foot.L.getWorldPosition(v1);group.worldToLocal(v1);const zL=v1.z;
-  const lead=T.MathUtils.clamp((zL-zR)/.35,-1,1),amount=motion==='Run'?.6:.45; // lead > 0: left foot ahead, so the right arm swings forward
+  // lead runs -1..1 over the real stride (the feet travel about +-0.9 m walking, +-1.05 jogging), so the swing never flattens.
+  const jog=motion==='Run',lead=T.MathUtils.clamp((zL-zR)/(jog?1.05:.9),-1,1),amount=jog?.55:.42; // lead > 0: left foot ahead, so the right arm swings forward
   group.getWorldQuaternion(qGroup);
   for(const side of ['R','L']){
    if(reaches[side].weight>.001||(side==='R'&&held))continue;
    const arm=rig[side],phi=(side==='R'?lead:-lead)*amount;
+   // The forearm lags the upper arm a little, and bends more as the arm comes forward; the arm drifts in across the body as it swings forward.
+   swingLag[side]+=(phi-swingLag[side])*Math.min(1,dt*14);const lag=swingLag[side];
+   startFromIdle(arm);
    arm.upper.getWorldPosition(vS);arm.lower.getWorldPosition(vE);
-   vDir.set(arm.out*.1,-Math.cos(phi),Math.sin(phi)).normalize().applyQuaternion(qGroup);
+   vDir.set(arm.out*(.1-.18*phi),-Math.cos(phi),Math.sin(phi)).normalize().applyQuaternion(qGroup);
    turnBone(arm.upper,qa.setFromUnitVectors(v1.subVectors(vE,vS).normalize(),vDir).clone(),1,memo);
    arm.lower.getWorldPosition(vE);arm.wrist.getWorldPosition(vW);
-   const bend=(motion==='Run'?.32:.15)+.35*Math.max(0,phi);
-   vDir.set(arm.out*.05,-Math.cos(phi+bend),Math.sin(phi+bend)).normalize().applyQuaternion(qGroup);
+   const bend=(jog?.3:.14)+.5*Math.max(0,lag),angle=lag*.8+bend;
+   vDir.set(arm.out*(.05-.12*lag),-Math.cos(angle),Math.sin(angle)).normalize().applyQuaternion(qGroup);
    turnBone(arm.lower,qa.setFromUnitVectors(v1.subVectors(vW,vE).normalize(),vDir).clone(),1,memo);
   }
+  return lead;
  }
  // Lean the spine about the character's side-to-side axis (positive = forward), spread over three bones.
  function applyLean(){
@@ -217,11 +271,13 @@ export function createCharacter(input){
   memo.clear();
   kinds.mixer.update(dt);
   alignAmount+=((alignDir?1:0)-alignAmount)*Math.min(1,dt*10);
+  let pendingSwing=false;
   const reaching=reaches.R.weight>.001||reaches.L.weight>.001,striding=!seated&&(motion==='Walk'||motion==='Run'||motion==='Sprint'),leaning=Math.abs(leanAngle)>.001;
   if(!reaching&&!seated&&!held&&!striding&&!leaning)return;
   group.updateMatrixWorld(true);
-  if(seated)applySeated();else if(striding){solveLeg('R');solveLeg('L');if(api.swingArms&&motion!=='Sprint')applyArmSwing()}
+  if(seated)applySeated();else if(striding){solveLeg('R');solveLeg('L');if(api.swingArms&&motion!=='Sprint')pendingSwing=true}
   if(leaning)applyLean();
+  if(pendingSwing){pendingSwing=false;rig.foot.R.getWorldPosition(v1);group.worldToLocal(v1);const zR=v1.z;rig.foot.L.getWorldPosition(v1);group.worldToLocal(v1);applyTwist(T.MathUtils.clamp((v1.z-zR)/(motion==='Run'?1.05:.9),-1,1));applyArmSwing(dt)}
   solveArm('R');if(twoHandWeight<.001)solveArm('L');
   if(held)placeHeld();
   if(held&&twoHandWeight>.001)gripWithLeft();
@@ -259,7 +315,8 @@ export function createCharacter(input){
   update,setMotion,
   setSeated(value){seated=!!value},
   // Move one hand toward a point given in the character's own space (metres, +Z forward); weight 0..1.
-  reach(side,target,weight){const s=reaches[side];if(target)s.target.copy(target);s.weight=weight},
+  // pole: optional elbow direction in character space (omit for down-and-out).
+  reach(side,target,weight,pole){const s=reaches[side];if(target)s.target.copy(target);s.weight=weight;if(pole){s.pole.copy(pole);s.hasPole=true}else s.hasPole=false},
   clearReach(){reaches.R.weight=reaches.L.weight=0},
   // upright: stays level (cups, fruit). Otherwise the item's `axis` ('y' or 'z') runs along the forearm.
   // grip: how far along the tool's long axis (from its origin) the palm holds it.

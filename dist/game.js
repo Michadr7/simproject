@@ -22,7 +22,7 @@ import {normalizeLife,lifeTransaction} from './life.js';
 import {SHOPS,SHOP_ENTRY,SHOP_EXIT,COUNTER,createShop} from './shops.js';
 import {createSlidingDoor} from './doors.js';
 import {MAP,roadRects} from './map-definition.js';
-import {CARRY,CARRY_DIR,GRIP,CHOP_TIMING,chopPose} from './chop-path.js';
+import {CARRY,CARRY_DIR,CARRY_POLE,GRIP,CHOP_TIMING,chopPose} from './chop-path.js';
 import {createPedestrians,createVehicles} from './neighborhood.js';
 import * as THREE from './vendor/three.module.js';
 import { createCameraController } from './camera.js';
@@ -392,9 +392,9 @@ function updateChop(dt){
  if(!chopping||modal||document.hidden)return;
  const c=chopping;c.elapsed=Math.min(c.total,c.elapsed+dt);
  const pose=chopPose(c.elapsed/c.total);
- avatar.reach('R',pose.point,1);avatar.setLean(pose.lean);avatar.setTwoHanded(pose.twoHand);
+ avatar.reach('R',pose.point,1,CARRY_POLE);avatar.setLean(pose.lean);avatar.setTwoHanded(pose.twoHand);
  if(!c.struck&&c.elapsed>=c.impact){c.struck=true;strikeTree(c)}
- if(c.elapsed>=c.total){avatar.reach('R',CARRY,1);avatar.setLean(0);avatar.setTwoHanded(0);carryWeight=1;chopping=null;keys.clear();if(eHeld&&!modal)chopNext()}
+ if(c.elapsed>=c.total){avatar.reach('R',CARRY,1,CARRY_POLE);avatar.setLean(0);avatar.setTwoHanded(0);carryWeight=1;chopping=null;keys.clear();if(eHeld&&!modal)chopNext()}
 }
 function strikeTree(c){
  const result=chopTree(GameState.progress,c.tree.key,me.position);
@@ -438,7 +438,7 @@ function updateEquipped(dt){
  }else if(carried.parent!==avatar.hand)avatar.hold(carried,{axis:'z',grip:GRIP});
  const idle=!chopping&&!armRecovery;
  avatar.alignHeld(chopping?null:CARRY_DIR); // carried head-up; follows the forearm while swinging
- if(idle){carryWeight=Math.min(1,carryWeight+dt*4);avatar.reach('R',CARRY,carryWeight)}else if(!chopping)carryWeight=0;
+ if(idle){carryWeight=Math.min(1,carryWeight+dt*4);avatar.reach('R',CARRY,carryWeight,CARRY_POLE)}else if(!chopping)carryWeight=0;
 }
 // Hotbar: every tool and consumable you own, in bag order. Number keys (or a click) equip a tool or use food and drink.
 function refreshHotbar(){

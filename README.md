@@ -536,3 +536,21 @@ it before any new district is added.
   need those generalised first. `server.js` still has its own spawn point.
 - **Axe carry.** The grip is 18 cm along the handle, with the hand bent at the chest and the shaft crossing the shoulder.
 - **`DESIGN.md`** holds the staged map plan, the tools and lumberjack progression plan, and which Claude model to use for each task.
+
+## 0.19.4 arm and wrist fixes
+
+Reported: the wrist spun super fast with the axe and while walking, and walking arms looked robotic, swinging straight ahead and back.
+Measured first (angular speed of the forearm and wrist in a headless run), then fixed three causes:
+- **The arm solver started from the animation's pose.** When that pose was nearly opposite the target, the rotation had no steady
+  axis and the forearm flipped about 180 degrees per frame (191 rad/s). Every arm override now starts from the relaxed idle pose
+  (`idleLocal`), the forearm turns about the elbow's own hinge (`hingeRotation`, defined even when the arm is folded or fully
+  straight), and big upper-arm rotations are routed via "forward" (`bridgedRotation`).
+- **The elbow flipped between two solutions** when the carried hand sat along the default elbow direction. `reach(side, target,
+  weight, pole)` now takes an optional elbow direction; the axe uses `CARRY_POLE` (forward and slightly down).
+- **The walking swing saturated.** It was scaled for a 0.35 m stride while the feet travel about +-0.9 m, so it flattened into
+  straight-ahead-and-back. It now follows the real stride, drifts across the body as it comes forward, lags at the forearm and bends
+  more on the forward swing, and the shoulders counter-twist against the hips (`applyTwist`).
+- Results (rad/s): jog with the axe 191 -> 12, walk with the axe 36 -> 7, jog arms 20 -> 9. The strike is slightly longer and softer
+  (`CHOP_TIMING`, an ease exponent of 1.7). Tests check stride correlation, steadiness and the carried axe; `tests/chop.mjs` is
+  updated for the elbow direction.
+- `DESIGN.md` now also covers fuel and gas stations, the farm slice, hired workers, parking / driving / traffic, and the asset foundation.
