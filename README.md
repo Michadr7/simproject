@@ -517,3 +517,22 @@ it before any new district is added.
   pack's own run with fists and pumping arms. Walking and jogging (up to 6.2 units/s) use the relaxed clips with the swinging
   hanging arms; Shift-running (faster than that) uses Sprint unchanged. `swingArms` is on by default for every character.
 - Tests: hand pose by speed, Sprint, the carry direction. `?debug` also exposes `beacon`.
+
+## 0.19.3 the map as data, and the shoulder carry
+
+- **`map-definition.js`.** The world is now data: zones (walkable bounds, plot grid on or off, minimap colours), a road graph
+  (named nodes and axis-aligned edges with a width and a surface, from which the road rectangles are derived), fenced
+  fields, every building footprint (including the backdrop row), the shops (door position, door size, sign text, opening
+  hours), the studio entrance, the spawn point, minimap view, reserved plots (none yet) and the procedural scenery
+  parameters (tree belts, forest clearing, farm shade trees). `validateMap(map)` returns a list of problems: overlapping zones,
+  roads that are not axis-aligned or touch no zone, fields off the plot grid or on a road, overlapping buildings, shop doors
+  off the building's front wall, bad hours, and reserved plots that are not whole cells or sit on roads, fields or buildings.
+  `world.js`, `shops.js`, `routine.js` (hours), `housing.js`, `jobs.js`, `minimap.js` and `game.js` read it; nothing else
+  hard-codes those numbers.
+- **Nothing visible changed.** `tests/map.mjs` checks the data against the numbers it replaced (zone bounds, roads, fields,
+  fence sections, all 333 pines and 1,087 decor trees by position hash, shops, hours, spawn) and that the validator catches
+  29 kinds of broken map.
+- **Limits.** The minimap strips and `zoneAt(x)` fallback assume zones laid out west to east; a 2D district layout will
+  need those generalised first. `server.js` still has its own spawn point.
+- **Axe carry.** The grip is 18 cm along the handle, with the hand bent at the chest and the shaft crossing the shoulder.
+- **`DESIGN.md`** holds the staged map plan, the tools and lumberjack progression plan, and which Claude model to use for each task.

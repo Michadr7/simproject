@@ -3,9 +3,9 @@ import * as T from './vendor/three.module.js';
 // The axe swing as a pure function of progress 0..1, in the character's own space (metres, +Z forward, -X the right side).
 // Carry pose -> wind up past the shoulder (in front of the body, never behind it) -> accelerate down through the trunk ->
 // short hold at impact -> recover to the carry pose. Everything is continuous, so there are no snaps between phases.
-export const CARRY=new T.Vector3(-.3,1.38,.02); // the right hand, up by the shoulder
-export const CARRY_DIR=new T.Vector3(.1,.72,-.68).normalize(); // over the shoulder: the head rides up and behind it
-export const GRIP=.12; // the hand holds the handle 12 cm from its butt end
+export const CARRY=new T.Vector3(-.28,1.28,.05); // the right hand, bent at the chest
+export const CARRY_DIR=new T.Vector3(.4,.7,-.5).normalize(); // over the shoulder: the shaft crosses it and the head rides behind
+export const GRIP=.18; // the hand holds the handle 18 cm from its butt end
 export const CHOP_TIMING={windUp:.46,impact:.58,hold:.64};
 const UP=new T.Vector3(-.22,1.95,.02),DOWN=new T.Vector3(-.1,1.12,.55);
 const WIND_CONTROL=new T.Vector3(-.4,1.62,.25),STRIKE_CONTROL=new T.Vector3(-.3,1.75,.5),RECOVER_CONTROL=new T.Vector3(-.45,1,.4);

@@ -1,3 +1,4 @@
+import {MAP} from './map-definition.js';
 import {freshInventory,normalizeInventory,hasItem} from './inventory.js';
 import {itemById} from './items.js';
 import {freshSkills,normalizeSkills,freshStats,normalizeStats} from './skills.js';
@@ -8,7 +9,7 @@ import {normalizeLife,normalizeDrainMultiplier} from './life.js';
 import {freshHousing,normalizeHousing} from './housing.js';
 import {normalizePlots,normalizeLogs,nextLogIdFor} from './grid.js';
 import {isWalkable} from './world.js';
-export const MARKET={name:'Corner Market',x:19,z:-6.3};
+export const MARKET={name:MAP.shops.market.name,x:MAP.shops.market.x,z:MAP.shops.market.z};
 export const ROUTES=[
  {name:'18 Oak Street',description:'A grocery order for a resident at the apartments.',x:3.8,z:-7,pay:1200},
  {name:'Alder Coffee',description:'A fresh produce order for the coffee shop.',x:36,z:-6.3,pay:1400},

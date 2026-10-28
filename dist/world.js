@@ -1,27 +1,23 @@
 import * as THREE from './vendor/three.module.js';
+import {MAP,zoneById,zoneAtPoint,roadRects} from './map-definition.js';
 
 // ─── Layout (pure data, safe to import from rules and tests) ──────────────────
 // The city keeps its original footprint. Oak Farms lies west of it, Alder Woods east.
 // +x is east and -z is north (the default camera looks north up Oak Street).
 
-// Changing the seed moves every generated tree, which orphans saved forest plots.
-export const WORLD_SEED=7301;
-export const ZONES=Object.freeze({
- city:Object.freeze({id:'city',name:'Westside',label:'WESTSIDE',subtitle:'Oak & Alder',color:'#8d9294'}),
- farm:Object.freeze({id:'farm',name:'Oak Farms',label:'OAK FARMS',subtitle:'Fields & plots',color:'#c9ae63'}),
- forest:Object.freeze({id:'forest',name:'Alder Woods',label:'ALDER WOODS',subtitle:'Timber & trails',color:'#3f6a3c'})
-});
-// Zone seams sit on the old city edge, so every existing city coordinate stays in the city.
-export const CITY_WEST=-61,CITY_EAST=58;
-export const WALKABLE=Object.freeze([
- Object.freeze({zone:'city',x0:CITY_WEST,x1:CITY_EAST,z0:-48,z1:48}),
- Object.freeze({zone:'farm',x0:-168,x1:CITY_WEST,z0:-56,z1:56}),
- Object.freeze({zone:'forest',x0:CITY_EAST,x1:168,z0:-56,z1:56})
-]);
+// Everything here is derived from map-definition.js (zones, roads, fields, scenery parameters).
+export const WORLD_SEED=MAP.seed;
+export const ZONES=Object.freeze(Object.fromEntries(MAP.zones.map(z=>[z.id,Object.freeze({id:z.id,name:z.name,label:z.label,subtitle:z.subtitle,color:z.color})])));
+const cityZone=zoneById('city');
+export const CITY_WEST=cityZone.bounds.x0,CITY_EAST=cityZone.bounds.x1;
+export const WALKABLE=Object.freeze(MAP.zones.map(z=>Object.freeze({zone:z.id,grid:z.grid,...z.bounds})));
 // Visual extent of the ground (beyond the walkable area, scenery fades into fog).
-export const GROUND=Object.freeze({x0:-190,x1:190,z0:-90,z1:90});
+export const GROUND=MAP.ground;
 
-export function zoneAt(x){return x<CITY_WEST?ZONES.farm:x>CITY_EAST?ZONES.forest:ZONES.city}
+export function zoneAt(x,z){
+ if(z!==undefined){const zone=zoneAtPoint(x,z);if(zone)return ZONES[zone.id]}
+ return x<CITY_WEST?ZONES.farm:x>CITY_EAST?ZONES.forest:ZONES.city;
+}
 export function isWalkable(x,z){return WALKABLE.some(r=>x>=r.x0&&x<=r.x1&&z>=r.z0&&z<=r.z1)}
 
 // ─── Grid: 1 world unit = 1 plot. Cell (ix,iz) covers [ix,ix+1) × [iz,iz+1). ──
@@ -34,23 +30,17 @@ export function parseCellKey(key){
 }
 // Only whole cells inside the farm or forest walkable areas belong to the grid.
 export function gridZoneAt(ix,iz){
- const r=WALKABLE.find(r=>r.zone!=='city'&&ix>=r.x0&&ix+1<=r.x1&&iz>=r.z0&&iz+1<=r.z1);
+ const r=WALKABLE.find(r=>r.grid&&ix>=r.x0&&ix+1<=r.x1&&iz>=r.z0&&iz+1<=r.z1);
  return r?r.zone:null;
 }
 
-// Dirt roads continue Oak Street into both zones, plus one north–south lane in each.
-export const DIRT_ROADS=Object.freeze([
- {zone:'farm',x0:-168,x1:-55,z0:2.5,z1:9.5},
- {zone:'farm',x0:-112,x1:-108,z0:-56,z1:56},
- {zone:'forest',x0:55,x1:168,z0:2.5,z1:9.5},
- {zone:'forest',x0:111,x1:116,z0:-56,z1:56}
-].map(Object.freeze));
+// Dirt roads: the dirt edges of the map's road graph, each tagged with the zone it mostly lies in.
+export const DIRT_ROADS=Object.freeze(roadRects('dirt').map(r=>Object.freeze({zone:zoneAtPoint((r.x0+r.x1)/2,(r.z0+r.z1)/2).id,x0:r.x0,x1:r.x1,z0:r.z0,z1:r.z1})));
 const distanceToRect=(x,z,r)=>Math.hypot(Math.max(r.x0-x,0,x-r.x1),Math.max(r.z0-z,0,z-r.z1));
 export const nearDirtRoad=(x,z,margin=0)=>DIRT_ROADS.some(r=>distanceToRect(x,z,r)<=margin);
 
-// Fenced farm plots, in whole cells, each with a 3-cell gate facing the main farm road.
-export const FIELDS=Object.freeze([[-156,-138],[-132,-114],[-104,-86],[-82,-66]].flatMap(([x0,x1])=>
- [[-15,-2],[12,25]].map(([z0,z1],i)=>Object.freeze({id:`field-${x0}-${z0}`,x0,x1,z0,z1,gateSide:i===0?'south-of-road':'north-of-road'}))));
+// Fenced farm plots (from the map), in whole cells, each with a 3-cell gate facing the main farm road.
+export const FIELDS=Object.freeze(MAP.fields.map(f=>Object.freeze({...f})));
 export const fieldAt=(ix,iz)=>FIELDS.find(f=>ix>=f.x0&&ix<f.x1&&iz>=f.z0&&iz<f.z1)||null;
 export function fenceSegments(){
  const segments=[];
@@ -73,13 +63,13 @@ let cachedLayout=null;
 export function worldLayout(){
  if(cachedLayout)return cachedLayout;
  const cuttable=[],decor=[];
- const forest=WALKABLE[2],farm=WALKABLE[1];
+ const forest=WALKABLE.find(r=>r.zone==='forest'),farm=WALKABLE.find(r=>r.zone==='farm'),scenery=MAP.scenery;
  // Alder Woods interior: 4×4-cell blocks, at most one cuttable pine per block (no touching trunks).
  for(let bx=Math.ceil((forest.x0+2)/4);bx*4+4<=forest.x1-1;bx++)for(let bz=Math.ceil((forest.z0+1)/4);bz*4+4<=forest.z1-1;bz++){
   const r=random(blockSeed(bx,bz,WORLD_SEED));
   const density=.62+.22*Math.sin(bx*.71)*Math.cos(bz*.93);
   const ix=bx*4+1+Math.floor(r()*2),iz=bz*4+1+Math.floor(r()*2),c=cellCenter(ix,iz);
-  const clearing=c.x<66||nearDirtRoad(c.x,c.z,2.2);
+  const clearing=c.x<scenery.forestClearingX||nearDirtRoad(c.x,c.z,2.2);
   if(!clearing&&r()<density){cuttable.push(Object.freeze({key:cellKey(ix,iz),ix,iz,x:c.x,z:c.z,kind:'pine',scale:.85+r()*.35,rot:r()*Math.PI*2}));continue}
   // Blocks without a pine sometimes get a broadleaf decor tree between cell centres.
   const x=bx*4+.5+r()*3,z=bz*4+.5+r()*3;
@@ -90,11 +80,10 @@ export function worldLayout(){
   const r=random(blockSeed(Math.round(x*10),Math.round(z*10),salt));if(r()>chance)continue;
   const tx=x+r()*spacing*.8,tz=z+r()*spacing*.8;if(isWalkable(tx,tz)||nearDirtRoad(tx,tz,1.5))continue;
   decor.push({x:tx,z:tz,scale:.9+r()*.5,rot:r()*Math.PI*2,tone:Math.floor(r()*4)})}};
- belt(forest.x0,186,forest.z1+1.5,80,3.2,.85,11);belt(forest.x0,186,-80,forest.z0-1.5,3.2,.85,12);belt(forest.x1+1.5,186,-56,57,3.2,.9,13);
- belt(-186,farm.x1,farm.z1+2.5,74,4.2,.75,21);belt(-186,farm.x1,-74,farm.z0-2.5,4.2,.75,22);belt(-186,farm.x0-2,-56,57,4,.8,23);
+ for(const spec of scenery.belts)belt(...spec);
  // A few shade trees between the farm fields.
- for(let i=0;i<34;i++){const r=random(blockSeed(i,7,WORLD_SEED+1)),x=farm.x0+4+r()*(farm.x1-farm.x0-10),z=farm.z0+3+r()*(farm.z1-farm.z0-6),c=cellOf(x,z);
-  if(nearDirtRoad(x,z,2.5)||FIELDS.some(f=>x>f.x0-2&&x<f.x1+2&&z>f.z0-2&&z<f.z1+2)||x>CITY_WEST-5)continue;
+ for(let i=0;i<scenery.farmShade.count;i++){const r=random(blockSeed(i,7,WORLD_SEED+1)),x=farm.x0+4+r()*(farm.x1-farm.x0-10),z=farm.z0+3+r()*(farm.z1-farm.z0-6),c=cellOf(x,z);
+  if(nearDirtRoad(x,z,2.5)||FIELDS.some(f=>x>f.x0-2&&x<f.x1+2&&z>f.z0-2&&z<f.z1+2)||x>CITY_WEST-scenery.farmShade.clearOfCity)continue;
   decor.push({x:c.ix+.5,z:c.iz+.5,scale:.9+r()*.4,rot:r()*Math.PI*2,tone:Math.floor(r()*4)})}
  cachedLayout=Object.freeze({cuttable:Object.freeze(cuttable),decor:Object.freeze(decor.map(Object.freeze)),
   cuttableByKey:new Map(cuttable.map(t=>[t.key,t]))});

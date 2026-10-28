@@ -17,10 +17,11 @@ import {createRemotePlayer,updateRemotePlayer,disposeRemotePlayer} from './remot
 import {chooseInteraction,screenAnchor} from './interactions.js';
 import {createLookControls} from './look-controls.js';
 import {normalizeCafe,cafeTask,cafeTransaction,expireCafe,ORDERS,MANAGER} from './cafe-job.js';
-import {advanceTime,clockText,shopOpen} from './routine.js';
+import {advanceTime,clockText,shopOpen,hoursText} from './routine.js';
 import {normalizeLife,lifeTransaction} from './life.js';
 import {SHOPS,SHOP_ENTRY,SHOP_EXIT,COUNTER,createShop} from './shops.js';
 import {createSlidingDoor} from './doors.js';
+import {MAP,roadRects} from './map-definition.js';
 import {CARRY,CARRY_DIR,GRIP,CHOP_TIMING,chopPose} from './chop-path.js';
 import {createPedestrians,createVehicles} from './neighborhood.js';
 import * as THREE from './vendor/three.module.js';
@@ -55,13 +56,12 @@ function label(text,x,y,z,width=5,rot=0,bg='#243e3b',fg='#f1ebd9',height=width/4
 
 box(110,.12,19,0,-.03,6,'#535d60');box(16,.13,120,-30,-.02,0,'#535d60');box(92,.25,5,8,.06,-6,'#b7b6a8');box(92,.25,5,8,.06,18,'#b7b6a8');box(5,.26,98,-19,.06,-25,'#b7b6a8');
 for(let x=-48;x<55;x+=8){if(x<-40||x>-20)box(3,.02,.14,x,.05,6,'#d9d5bb')}for(let z=-47;z<55;z+=8)if(z<-8||z>20)box(.14,.02,3,-30,.06,z,'#d9d5bb');for(let i=0;i<7;i++){box(.85,.025,7,-18+i*1.55,.06,6,'#dfdfd1');box(8,.025,.9,-30,.06,-7+i*1.6,'#dfdfd1')}
-function building(x,z,w,d,h,c,name){const before=scene.children.length;const kind=name==='CORNER MARKET'?'market':name==='ALDER COFFEE'?'cafe':null;if(kind){const shell=box(w,h-3.5,d,x,3.5+(h-3.5)/2,z,c);shopShells[kind].push(shell);{const gap=1.3;colliders.push({x:x-(w/2+gap)/2,z,hx:(w/2-gap)/2,hz:d/2},{x:x+(w/2+gap)/2,z,hx:(w/2-gap)/2,hz:d/2})} // the doorway is open ground
+function building(x,z,w,d,h,c,name,kind=null){const before=scene.children.length;if(kind){const shell=box(w,h-3.5,d,x,3.5+(h-3.5)/2,z,c);shopShells[kind].push(shell);{const gap=1.3;colliders.push({x:x-(w/2+gap)/2,z,hx:(w/2-gap)/2,hz:d/2},{x:x+(w/2+gap)/2,z,hx:(w/2-gap)/2,hz:d/2})} // the doorway is open ground
  for(const side of [-1,1])shopShells[kind].push(box(1.5,3.5,10,x+side*6.75,1.75,-13.5,c));}else box(w,h,d,x,h/2,z,c,true);box(w+.35,.35,d+.35,x,h+.1,z,'#d6d2c4');box(w+.4,.22,d+.4,x,3.6,z,'#d6d2c4');const front=z+d/2+.025;for(let xx=x-w/2+1.4;xx<x+w/2-.7;xx+=2.5)for(let yy=5;yy<h-1;yy+=2.8){box(1.1,1.65,.08,xx,yy,front,'#435d68');box(1.32,.12,.22,xx,yy-.85,front+.08,'#d1c6b1')}if(name){if(name==='OAK STREET APARTMENTS')label(name,x,3.96,front+.24,7,0,'#243e3b','#f1ebd9',.42);else if(kind)label(name,x,3.96,front+.24,7,0,'#243e3b','#f1ebd9',.42);else label(name,x,3,front+.12,Math.min(w-1,7));if(!kind)for(let xx=x-w/2+1.5;xx<x+w/2;xx+=3)box(1.8,1.9,.1,xx,1.25,front,'#3d555a')}if(kind){shopShells[kind]=[...new Set([...shopShells[kind],...scene.children.slice(before)])];cameraSolids.push(shopShells[kind][0]);}}
-building(1,-15,17,13,17,'#b08b74','OAK STREET APARTMENTS');building(19,-13.5,15,10,9,'#c2bc9b','CORNER MARKET');building(36,-16,15,15,13,'#82948d','ALDER COFFEE');building(-13,-18,8,19,12,'#9b9f98','LAUNDRY');
+// Every building comes from the map (map-definition.js), including the backdrop row beyond the city edge.
+for(const b of MAP.buildings)building(b.x,b.z,b.w,b.d,b.h,b.color,b.name,b.shop);
 // Entrance is a distinct replaceable asset; interaction data is separate from scenery.
-const entrance={x:1,z:-8.25,radius:3.3};box(2.2,2.7,.18,1,1.35,-8.36,'#213a3c');box(.08,2.3,.05,1,1.3,-8.23,'#aebeb5');box(.12,.25,.08,1.6,1.3,-8.18,'#e3cf93');box(3.6,.18,1.8,1,3.05,-7.8,'#374e46');label('18',1,2.83,-8.16,.45,0,'#213a3c','#e3cf93',.16);
-building(-4,31,20,19,11,'#c4b298');building(19,33,17,23,15,'#929e9a');building(39,31,17,19,10,'#b5a38d');building(-48,-19,18,21,19,'#899c9b');building(-49,26,18,20,12,'#af9d8c');
-for(let x=-48;x<=54;x+=17)building(x,-61,13,17,12+((x+65)%4)*3,'#a3ada3');
+const entrance={x:MAP.studio.x,z:MAP.studio.doorZ,radius:3.3};box(2.2,2.7,.18,1,1.35,-8.36,'#213a3c');box(.08,2.3,.05,1,1.3,-8.23,'#aebeb5');box(.12,.25,.08,1.6,1.3,-8.18,'#e3cf93');box(3.6,.18,1.8,1,3.05,-7.8,'#374e46');label('18',1,2.83,-8.16,.45,0,'#213a3c','#e3cf93',.16);
 const trees=[],lampMeshes=[];
 function tree(x,z){
   const trunk=box(.3,3.8,.3,x,1.9,z,'#726452',true);
@@ -78,7 +78,7 @@ for(const [x,z]of[[-9,-4.5],[10,-4.5],[28,-4.5],[47,-4.5],[-14,19],[7,19],[32,19
 function lamp(x,z){const post=box(.12,5,.12,x,2.5,z,'#354342');post.material=post.material.clone();post.material.transparent=true;lampMeshes.push(post);box(1,.15,.55,x+.35,5,z,'#394644');box(.75,.04,.4,x+.35,4.9,z,'#f2e4b7')}[-10,15,42].forEach(x=>{lamp(x,-4.6);lamp(x,17)});
 const vehicles=createVehicles(scene,colliders);const pedestrians=createPedestrians(scene);
 for(let x of[9,27]){box(2,.18,.7,x,.65,17.5,'#876e50');box(2,.55,.13,x,1,17.85,'#876e50');box(.12,.7,.55,x-.8,.3,17.5,'#394a42');box(.12,.7,.55,x+.8,.3,17.5,'#394a42')}box(.8,1.2,.8,11,.6,-4.5,'#435c4f',true);
-polishWorld(scene,box,label,trees);for(const [x,title] of [[19,'MARKET 7AM–10PM'],[36,'CAFE 8AM–6PM']])label(title,x,2.95,-8.08,2.1,0,'#24483f','#f1ebd9',.25);
+polishWorld(scene,box,label,trees);for(const [x,title] of Object.values(MAP.shops).map(shop=>[shop.x,shop.sign]))label(title,x,2.95,-8.08,2.1,0,'#24483f','#f1ebd9',.25);
 for(const x of [3.8,-10.2]){box(.85,.8,.55,x,.55,-7,'#637f70',true);label('DELIVERIES',x,1.06,-6.7,.8,0,'#29473b','#e9e3c7',.16)}
 // Farm and forest zones, plot grid and cuttable trees (world.js). Built after polishWorld so its
 // texture pass only touches city meshes.
@@ -97,8 +97,8 @@ let inside=false,shop=null;const apartment=createApartment();
 const shops={market:createShop('market'),cafe:createShop('cafe')};for(const [kind,room] of Object.entries(shops)){room.scene.position.set(SHOPS[kind].x,.165,-13.5);scene.add(room.scene);scene.updateMatrixWorld(true);room.camera=createIndoorCamera(camera,[...room.occluders,...shopShells[kind]]);}const worldPlayer={position:new THREE.Vector3()};
 // Shop fronts: sliding doors that open as you walk up (only while the shop is open) and an OPEN / CLOSED sign.
 const shopDoors=Object.entries(SHOPS).map(([kind,shopInfo])=>{
- const door=createSlidingDoor({width:2.3,height:2.5});door.group.position.set(shopInfo.x,0,-8.46);scene.add(door.group);
- const open=label('OPEN',shopInfo.x+1.95,1.55,-8.44,.95,0,'#2d6a4f','#f4f9ef',.32),closed=label('CLOSED',shopInfo.x+1.95,1.55,-8.44,.95,0,'#8a2b2b','#fbeaea',.32);
+ const spec=MAP.shops[kind],door=createSlidingDoor(spec.door);door.group.position.set(shopInfo.x,0,spec.doorZ);scene.add(door.group);
+ const open=label('OPEN',shopInfo.x+1.95,1.55,spec.doorZ+.02,.95,0,'#2d6a4f','#f4f9ef',.32),closed=label('CLOSED',shopInfo.x+1.95,1.55,spec.doorZ+.02,.95,0,'#8a2b2b','#fbeaea',.32);
  const blocker={x:shopInfo.x,z:-8.5,hx:1.3,hz:.25};colliders.push(blocker); // shuts the doorway while the door is closed
  colliders.push({x:shopInfo.x,z:-9.3,hx:1.3,hz:.2}); // the back of the doorway: you can step up to the threshold but never walk on into the building
  return {kind,x:shopInfo.x,door,open,closed,blocker};
@@ -116,8 +116,8 @@ function getMeWorldPosition(target){
  return player.parent.localToWorld(target);
 }
 
-setMePosition(-5,.2,15);let yaw=0,pitch=.38,zoom=7,zoomTarget=7,active=false,modal=false,discovered=false,phase=0,busy=null,worldPanel=null,selectedInteraction=null;const keys=createMovementInput(window,document,()=>active&&!modal&&!creatorOpen&&!busy&&!consuming&&!chopping&&!doorFade);const updateCamera=createCameraController(camera,cameraSolids,trees,lampMeshes);
-function reset(){if(active)look.resetMotion();if(shop){setMePosition(SHOP_ENTRY.x,.02,SHOP_ENTRY.z);return}if(inside){setMePosition(ENTRY.x,.02,ENTRY.z);return}setMePosition(-5,.2,15);yaw=0;pitch=.38;camera.position.set(-5,4,22)}reset();
+setMePosition(MAP.spawn.x,MAP.spawn.y,MAP.spawn.z);let yaw=0,pitch=.38,zoom=7,zoomTarget=7,active=false,modal=false,discovered=false,phase=0,busy=null,worldPanel=null,selectedInteraction=null;const keys=createMovementInput(window,document,()=>active&&!modal&&!creatorOpen&&!busy&&!consuming&&!chopping&&!doorFade);const updateCamera=createCameraController(camera,cameraSolids,trees,lampMeshes);
+function reset(){if(active)look.resetMotion();if(shop){setMePosition(SHOP_ENTRY.x,.02,SHOP_ENTRY.z);return}if(inside){setMePosition(ENTRY.x,.02,ENTRY.z);return}setMePosition(MAP.spawn.x,MAP.spawn.y,MAP.spawn.z);yaw=0;pitch=.38;camera.position.set(-5,4,22)}reset();
 if(GameState.progress.position&&!blocked(GameState.progress.position.x,GameState.progress.position.z)){me.position.x=GameState.progress.position.x;me.position.z=GameState.progress.position.z;camera.position.set(me.position.x,4,me.position.z+7)}
 function blocked(x,z){if(shop)return shops[shop].blocked(x,z);if(inside)return apartment.blocked(x,z);if(!isWalkable(x,z)||world.blocked(x,z))return true;return colliders.some(b=>Math.abs(x-b.x)<b.hx+.33&&Math.abs(z-b.z)<b.hz+.33)}
 function clearWorldPanel(){if(worldPanel?.actor){const pa=getMeWorldPosition(new THREE.Vector3()),pb=worldPanel.actor.getWorldPosition(new THREE.Vector3());yaw=Math.atan2(pa.x-pb.x,pa.z-pb.z)+.45;pitch=.32;zoom=zoomTarget=5.8;}worldPanel=null;look.resetMotion()}
@@ -152,7 +152,7 @@ function changeHousing(action){
 function showBills(){const h=GameState.progress.housing,due=totalDue(h);showDialog('HOME / WEEK '+weekNumber(h.day),'Your weekly bills.',h.rented?'Unpaid rent: '+money(h.rentDue)+'. Unpaid utilities: '+money(h.utilitiesDue)+'. Next bill: '+weekday(h.nextBillDay)+' (Week '+weekNumber(h.nextBillDay)+'), in '+dueIn(h)+' days. Weekly rent is $60; estimated utilities are '+money(estimatedUtilities(h))+' ($7 base for the older studio, plus $0.15 per home-cooked meal). No offline charges.':'Visit 18 Oak Street. Move-in is $90: a $30 deposit and $60 for your first week. Utilities start at $7 per week.','Total due '+money(due)+' · cash after payment '+money(GameState.progress.cash-due),due?()=>changeHousing('pay'):null,due?'Pay bills · '+money(due):'')}
 $('billsButton').onclick=()=>{if(active&&!creatorOpen)showBills()};
 function extraAction(label,action){$('extraAction').hidden=false;$('extraAction').textContent=label;$('extraAction').onclick=action}
-function enterShop(kind,entry=SHOP_ENTRY){if(!shopOpen(kind,GameState.progress.routine)){toast(kind==='market'?'Market hours: 7 AM–10 PM':'Café hours: 8 AM–6 PM');return}persist();shop=kind;shops[kind].scene.add(player);setMePosition(entry.x,.02,entry.z);yaw=0;pitch=.4;camera.position.set(SHOPS[kind].x,3,-5.5);$('dialog').hidden=true;clearWorldPanel();modal=false;keys.clear()}
+function enterShop(kind,entry=SHOP_ENTRY){if(!shopOpen(kind,GameState.progress.routine)){toast(`${SHOPS[kind].name} hours: ${hoursText(kind)}`);return}persist();shop=kind;shops[kind].scene.add(player);setMePosition(entry.x,.02,entry.z);yaw=0;pitch=.4;camera.position.set(SHOPS[kind].x,3,-5.5);$('dialog').hidden=true;clearWorldPanel();modal=false;keys.clear()}
 function leaveShop(exitX=0){doorCooldown=2;look.resetMotion();busy=null;const room=shops[shop];for(const mesh of [...room.occluders,...shopShells[shop]]){mesh.material.opacity=1;mesh.material.depthWrite=true}const door=SHOPS[shop];shop=null;scene.add(player);setMePosition(door.x+Math.max(-.8,Math.min(.8,exitX)),.165,-7.6);camera.position.set(door.x,3,door.z+6);persist();keys.clear()}
 function useLife(action){const place=shop||(inside?'home':null);const atCounter=shop&&Math.hypot(me.position.x-COUNTER.x,me.position.z-COUNTER.z)<1.6;const atKitchen=inside&&Math.hypot(me.position.x-3,me.position.z+3.5)<1.5;if(shop&&!shopOpen(shop,GameState.progress.routine)){toast('The shop has closed. Please return tomorrow.');return}if(!atCounter&&!atKitchen){toast('Move closer to the counter.');return}const r=lifeTransaction(GameState.progress,action,place);if(r.error){toast(r.error);return}GameState.progress=r.state;if(action==='cook'&&GameState.progress.housing.rented)GameState.progress.housing.utilityUsage+=15;persist();$('dialog').hidden=true;clearWorldPanel();modal=false;keys.clear();toast(r.message)}
 
@@ -480,8 +480,8 @@ function tickRegrowth(){
 // Zones: grid overlay, tree sightline fade, sun/shadows following the player, minimap.
 const fadeTarget=new THREE.Vector3();
 const minimap=createMinimap(document,{canvas:$('minimap'),
- cityRoads:[{x0:-55,x1:55,z0:-3.5,z1:15.5},{x0:-38,x1:-22,z0:-60,z1:60}],
- buildings:colliders.filter(b=>b.hx>2.5||b.hz>2.5),
+ cityRoads:roadRects('asphalt'),
+ buildings:MAP.buildings.map(b=>({x:b.x,z:b.z,hx:b.w/2,hz:b.d/2})),
  trees:()=>world.trees.values()});
 function updateZones(dt){
  const outdoors=!inside&&!shop,zone=zoneAt(me.position.x).id;
@@ -569,7 +569,7 @@ function updateDoors(dt){
   if(passable&&blocked)colliders.splice(colliders.indexOf(front.blocker),1);else if(!passable&&!blocked)colliders.push(front.blocker);
   if(!ready||!near||Math.abs(dx)>=.9)continue;
   if(open&&front.door.amount>.85&&me.position.z<-8.4){doorCooldown=1;startDoorFade(()=>enterShop(front.kind,{x:Math.max(-.8,Math.min(.8,dx)),z:3.9}));return}
-  if(!open&&me.position.z<-7.6){doorCooldown=3;toast(`${SHOPS[front.kind].name} is closed. Hours ${front.kind==='market'?'7 AM–10 PM':'8 AM–6 PM'}.`)}
+  if(!open&&me.position.z<-7.6){doorCooldown=3;toast(`${SHOPS[front.kind].name} is closed. Hours ${hoursText(front.kind)}.`)}
  }
  if(shop){
   const room=shops[shop],near=Math.abs(me.position.x)<2.4&&me.position.z>2.7;

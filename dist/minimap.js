@@ -1,9 +1,10 @@
-import {ZONES,WALKABLE,DIRT_ROADS,FIELDS,CITY_WEST,CITY_EAST} from './world.js';
+import {ZONES,WALKABLE,DIRT_ROADS,FIELDS} from './world.js';
+import {MAP} from './map-definition.js';
 
 // Whole-world strip map: farm (west) · city · forest (east), north (-z) up.
 // The static layer is drawn once (and again when a tree is felled); the
 // player and markers are drawn on top at ~12 fps.
-const VIEW={x0:-176,x1:176,z0:-62,z1:62};
+const VIEW=MAP.minimap.view;
 const SIZES={small:{w:264,h:94},large:{w:720,h:256}};
 
 export function createMinimap(doc,{canvas,cityRoads=[],buildings=[],trees=()=>[]}){
@@ -24,10 +25,10 @@ export function createMinimap(doc,{canvas,cityRoads=[],buildings=[],trees=()=>[]
   ctx.setTransform(1,0,0,1,0,0);
   ctx.fillStyle='#1d2b26';ctx.fillRect(0,0,layer.width,layer.height);
   // Zone ground colours: brown/yellow farm, grey city, green forest.
-  rect(ctx,{x0:VIEW.x0,x1:CITY_WEST,z0:VIEW.z0,z1:VIEW.z1},'#8d7a45');
-  rect(ctx,{x0:CITY_WEST,x1:CITY_EAST,z0:VIEW.z0,z1:VIEW.z1},'#5d6265');
-  rect(ctx,{x0:CITY_EAST,x1:VIEW.x1,z0:VIEW.z0,z1:VIEW.z1},'#2f4f2e');
-  for(const w of WALKABLE)rect(ctx,w,w.zone==='farm'?ZONES.farm.color:w.zone==='forest'?ZONES.forest.color:ZONES.city.color);
+  // The zones run west to east: each zone's strip of the view takes its own surround colour, the walkable part its zone colour.
+  const strips=[...MAP.zones].sort((a,b)=>a.bounds.x0-b.bounds.x0);
+  strips.forEach((zone,i)=>rect(ctx,{x0:i?zone.bounds.x0:VIEW.x0,x1:i===strips.length-1?VIEW.x1:zone.bounds.x1,z0:VIEW.z0,z1:VIEW.z1},zone.minimap.surround));
+  for(const w of WALKABLE)rect(ctx,w,ZONES[w.zone].color);
   for(const f of FIELDS){rect(ctx,f,'#a99348');ctx.strokeStyle='#6b5530';ctx.lineWidth=Math.max(1,k*.5);ctx.strokeRect(px(f.x0),pz(f.z0),(f.x1-f.x0)*k,(f.z1-f.z0)*k)}
   for(const r of DIRT_ROADS)rect(ctx,r,'#9c8462');
   for(const r of cityRoads)rect(ctx,r,'#45494b');
@@ -37,7 +38,7 @@ export function createMinimap(doc,{canvas,cityRoads=[],buildings=[],trees=()=>[]
   for(const t of trees())if(t.standing)ctx.fillRect(px(t.x)-r/2,pz(t.z)-r/2,r,r);
   // Zone names.
   ctx.fillStyle='#ffffffcc';ctx.font=`${Math.round((size==='large'?13:8)*dpr)}px Arial`;ctx.textAlign='center';
-  ctx.fillText(ZONES.farm.label,px(-114),pz(-50));ctx.fillText(ZONES.city.label,px(-1),pz(-52));ctx.fillText(ZONES.forest.label,px(113),pz(-50));
+  for(const zone of MAP.zones)ctx.fillText(ZONES[zone.id].label,px(zone.minimap.label.x),pz(zone.minimap.label.z));
   dirty=false;
  }
  function update(dt,{player,heading,yaw,markers=[]}){

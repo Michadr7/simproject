@@ -1,5 +1,6 @@
+import {MAP} from './map-definition.js';
 // Amounts are integer cents. One billing function serves both sleep and midnight.
-export const STUDIO={deposit:3000,rent:6000,utilities:700,name:'Studio 2B',x:1,z:-6.3};
+export const STUDIO={deposit:3000,rent:6000,utilities:700,name:'Studio 2B',x:MAP.studio.x,z:MAP.studio.z};
 export const WEEKDAYS=['Monday','Tuesday','Wednesday','Thursday','Friday','Saturday','Sunday'];
 export const weekday=day=>WEEKDAYS[(Math.max(1,Math.floor(day))-1)%7];
 export const weekNumber=day=>Math.floor((Math.max(1,Math.floor(day))-1)/7)+1;

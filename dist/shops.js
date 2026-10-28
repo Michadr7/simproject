@@ -1,8 +1,10 @@
 import * as T from './vendor/three.module.js';
 import {createCharacter} from './character.js';
 import {outfit} from './appearance.js';
+import {MAP} from './map-definition.js';
 import {createSlidingDoor} from './doors.js';
-export const SHOPS={market:{name:'Corner Market',x:19,z:-6.3},cafe:{name:'Alder Coffee',x:36,z:-6.3}};
+// Where each shop's door is and where you stand outside it (see map-definition.js).
+export const SHOPS=Object.fromEntries(Object.entries(MAP.shops).map(([kind,shop])=>[kind,{name:shop.name,x:shop.x,z:shop.z}]));
 export const SHOP_ENTRY={x:0,z:3.1},SHOP_EXIT={x:0,z:4},COUNTER={x:0,z:-2};
 export function createShop(kind){const cafe=kind==='cafe',scene=new T.Group();scene.name=kind+'-interior';const occluders=[],blocks=[];
  function box(w,h,d,x,y,z,c,solid=false){const m=new T.Mesh(new T.BoxGeometry(w,h,d),new T.MeshStandardMaterial({color:c,roughness:.85}));m.position.set(x,y,z);scene.add(m);if(y>0)occluders.push(m);if(solid)blocks.push({x,z,hx:w/2,hz:d/2});return m}
