@@ -22,6 +22,9 @@ import {normalizeLife,lifeTransaction} from './life.js';
 import {SHOPS,SHOP_ENTRY,SHOP_EXIT,COUNTER,createShop} from './shops.js';
 import {createSlidingDoor} from './doors.js';
 import {MAP,roadRects} from './map-definition.js';
+import {activeAction,canStart,refusal} from './actions.js';
+import {resolveObjective} from './objective.js';
+import {substeps,MAX_FRAME} from './timestep.js';
 import {CARRY,CARRY_DIR,CARRY_POLE,GRIP,CHOP_TIMING,chopPose} from './chop-path.js';
 import {createPedestrians,createVehicles} from './neighborhood.js';
 import * as THREE from './vendor/three.module.js';
@@ -56,12 +59,12 @@ function label(text,x,y,z,width=5,rot=0,bg='#243e3b',fg='#f1ebd9',height=width/4
 
 box(110,.12,19,0,-.03,6,'#535d60');box(16,.13,120,-30,-.02,0,'#535d60');box(92,.25,5,8,.06,-6,'#b7b6a8');box(92,.25,5,8,.06,18,'#b7b6a8');box(5,.26,98,-19,.06,-25,'#b7b6a8');
 for(let x=-48;x<55;x+=8){if(x<-40||x>-20)box(3,.02,.14,x,.05,6,'#d9d5bb')}for(let z=-47;z<55;z+=8)if(z<-8||z>20)box(.14,.02,3,-30,.06,z,'#d9d5bb');for(let i=0;i<7;i++){box(.85,.025,7,-18+i*1.55,.06,6,'#dfdfd1');box(8,.025,.9,-30,.06,-7+i*1.6,'#dfdfd1')}
-function building(x,z,w,d,h,c,name,kind=null){const before=scene.children.length;if(kind){const shell=box(w,h-3.5,d,x,3.5+(h-3.5)/2,z,c);shopShells[kind].push(shell);{const gap=1.3;colliders.push({x:x-(w/2+gap)/2,z,hx:(w/2-gap)/2,hz:d/2},{x:x+(w/2+gap)/2,z,hx:(w/2-gap)/2,hz:d/2})} // the doorway is open ground
- for(const side of [-1,1])shopShells[kind].push(box(1.5,3.5,10,x+side*6.75,1.75,-13.5,c));}else box(w,h,d,x,h/2,z,c,true);box(w+.35,.35,d+.35,x,h+.1,z,'#d6d2c4');box(w+.4,.22,d+.4,x,3.6,z,'#d6d2c4');const front=z+d/2+.025;for(let xx=x-w/2+1.4;xx<x+w/2-.7;xx+=2.5)for(let yy=5;yy<h-1;yy+=2.8){box(1.1,1.65,.08,xx,yy,front,'#435d68');box(1.32,.12,.22,xx,yy-.85,front+.08,'#d1c6b1')}if(name){if(name==='OAK STREET APARTMENTS')label(name,x,3.96,front+.24,7,0,'#243e3b','#f1ebd9',.42);else if(kind)label(name,x,3.96,front+.24,7,0,'#243e3b','#f1ebd9',.42);else label(name,x,3,front+.12,Math.min(w-1,7));if(!kind)for(let xx=x-w/2+1.5;xx<x+w/2;xx+=3)box(1.8,1.9,.1,xx,1.25,front,'#3d555a')}if(kind){shopShells[kind]=[...new Set([...shopShells[kind],...scene.children.slice(before)])];cameraSolids.push(shopShells[kind][0]);}}
+function building(x,z,w,d,h,c,name,kind=null){const before=scene.children.length;if(kind){const shell=box(w,h-3.5,d,x,3.5+(h-3.5)/2,z,c);shopShells[kind].push(shell);{const gap=MAP.shops[kind].doorway.halfWidth;colliders.push({x:x-(w/2+gap)/2,z,hx:(w/2-gap)/2,hz:d/2},{x:x+(w/2+gap)/2,z,hx:(w/2-gap)/2,hz:d/2})} // the doorway is open ground
+ for(const side of [-1,1])shopShells[kind].push(box(1.5,3.5,10,x+side*6.75,1.75,MAP.shops[kind].interior.origin.z,c));}else box(w,h,d,x,h/2,z,c,true);box(w+.35,.35,d+.35,x,h+.1,z,'#d6d2c4');box(w+.4,.22,d+.4,x,3.6,z,'#d6d2c4');const front=z+d/2+.025;for(let xx=x-w/2+1.4;xx<x+w/2-.7;xx+=2.5)for(let yy=5;yy<h-1;yy+=2.8){box(1.1,1.65,.08,xx,yy,front,'#435d68');box(1.32,.12,.22,xx,yy-.85,front+.08,'#d1c6b1')}if(name){if(name==='OAK STREET APARTMENTS')label(name,x,3.96,front+.24,7,0,'#243e3b','#f1ebd9',.42);else if(kind)label(name,x,3.96,front+.24,7,0,'#243e3b','#f1ebd9',.42);else label(name,x,3,front+.12,Math.min(w-1,7));if(!kind)for(let xx=x-w/2+1.5;xx<x+w/2;xx+=3)box(1.8,1.9,.1,xx,1.25,front,'#3d555a')}if(kind){shopShells[kind]=[...new Set([...shopShells[kind],...scene.children.slice(before)])];cameraSolids.push(shopShells[kind][0]);}}
 // Every building comes from the map (map-definition.js), including the backdrop row beyond the city edge.
 for(const b of MAP.buildings)building(b.x,b.z,b.w,b.d,b.h,b.color,b.name,b.shop);
 // Entrance is a distinct replaceable asset; interaction data is separate from scenery.
-const entrance={x:MAP.studio.x,z:MAP.studio.doorZ,radius:3.3};box(2.2,2.7,.18,1,1.35,-8.36,'#213a3c');box(.08,2.3,.05,1,1.3,-8.23,'#aebeb5');box(.12,.25,.08,1.6,1.3,-8.18,'#e3cf93');box(3.6,.18,1.8,1,3.05,-7.8,'#374e46');label('18',1,2.83,-8.16,.45,0,'#213a3c','#e3cf93',.16);
+const entrance={x:MAP.studio.x,z:MAP.studio.doorZ,radius:3.3};{const sx=MAP.studio.x,sz=MAP.studio.doorZ;box(2.2,2.7,.18,sx,1.35,sz-.11,'#213a3c');box(.08,2.3,.05,sx,1.3,sz+.02,'#aebeb5');box(.12,.25,.08,sx+.6,1.3,sz+.07,'#e3cf93');box(3.6,.18,1.8,sx,3.05,sz+.45,'#374e46');label('18',sx,2.83,sz+.09,.45,0,'#213a3c','#e3cf93',.16)} // the studio's door, placed by the map
 const trees=[],lampMeshes=[];
 function tree(x,z){
   const trunk=box(.3,3.8,.3,x,1.9,z,'#726452',true);
@@ -94,13 +97,13 @@ let phone=null,inventoryUI=null,storeUI=null,consuming=null,armRecovery=null,cho
 let doorCooldown=1,doorFade=null,hotbarSignature='',eHeld=false,carried=null,carryWeight=0,gridOn=false,regrowClock=99;
 const pendingLogs=new Set(),lastStages=new Map();
 let inside=false,shop=null;const apartment=createApartment();
-const shops={market:createShop('market'),cafe:createShop('cafe')};for(const [kind,room] of Object.entries(shops)){room.scene.position.set(SHOPS[kind].x,.165,-13.5);scene.add(room.scene);scene.updateMatrixWorld(true);room.camera=createIndoorCamera(camera,[...room.occluders,...shopShells[kind]]);}const worldPlayer={position:new THREE.Vector3()};
+const shops={market:createShop('market'),cafe:createShop('cafe')};for(const [kind,room] of Object.entries(shops)){{const {origin}=MAP.shops[kind].interior;room.scene.position.set(SHOPS[kind].x,origin.y,origin.z)}scene.add(room.scene);scene.updateMatrixWorld(true);room.camera=createIndoorCamera(camera,[...room.occluders,...shopShells[kind]]);}const worldPlayer={position:new THREE.Vector3()};
 // Shop fronts: sliding doors that open as you walk up (only while the shop is open) and an OPEN / CLOSED sign.
 const shopDoors=Object.entries(SHOPS).map(([kind,shopInfo])=>{
  const spec=MAP.shops[kind],door=createSlidingDoor(spec.door);door.group.position.set(shopInfo.x,0,spec.doorZ);scene.add(door.group);
  const open=label('OPEN',shopInfo.x+1.95,1.55,spec.doorZ+.02,.95,0,'#2d6a4f','#f4f9ef',.32),closed=label('CLOSED',shopInfo.x+1.95,1.55,spec.doorZ+.02,.95,0,'#8a2b2b','#fbeaea',.32);
- const blocker={x:shopInfo.x,z:-8.5,hx:1.3,hz:.25};colliders.push(blocker); // shuts the doorway while the door is closed
- colliders.push({x:shopInfo.x,z:-9.3,hx:1.3,hz:.2}); // the back of the doorway: you can step up to the threshold but never walk on into the building
+ const dw=spec.doorway,blocker={x:shopInfo.x,z:dw.blocker.z,hx:dw.halfWidth,hz:dw.blocker.depth};colliders.push(blocker); // shuts the doorway while the door is closed
+ colliders.push({x:shopInfo.x,z:dw.backWall.z,hx:dw.halfWidth,hz:dw.backWall.depth}); // the back of the doorway: you can step up to the threshold but never walk on into the building
  return {kind,x:shopInfo.x,door,open,closed,blocker};
 });
 const indoorCamera=createIndoorCamera(camera,apartment.occluders);
@@ -116,7 +119,7 @@ function getMeWorldPosition(target){
  return player.parent.localToWorld(target);
 }
 
-setMePosition(MAP.spawn.x,MAP.spawn.y,MAP.spawn.z);let yaw=0,pitch=.38,zoom=7,zoomTarget=7,active=false,modal=false,discovered=false,phase=0,busy=null,worldPanel=null,selectedInteraction=null;const keys=createMovementInput(window,document,()=>active&&!modal&&!creatorOpen&&!busy&&!consuming&&!chopping&&!doorFade);const updateCamera=createCameraController(camera,cameraSolids,trees,lampMeshes);
+setMePosition(MAP.spawn.x,MAP.spawn.y,MAP.spawn.z);let yaw=0,pitch=.38,zoom=7,zoomTarget=7,active=false,modal=false,discovered=false,phase=0,busy=null,worldPanel=null,selectedInteraction=null;const keys=createMovementInput(window,document,()=>active&&!modal&&!creatorOpen&&!actionBusy());const updateCamera=createCameraController(camera,cameraSolids,trees,lampMeshes);
 function reset(){if(active)look.resetMotion();if(shop){setMePosition(SHOP_ENTRY.x,.02,SHOP_ENTRY.z);return}if(inside){setMePosition(ENTRY.x,.02,ENTRY.z);return}setMePosition(MAP.spawn.x,MAP.spawn.y,MAP.spawn.z);yaw=0;pitch=.38;camera.position.set(-5,4,22)}reset();
 if(GameState.progress.position&&!blocked(GameState.progress.position.x,GameState.progress.position.z)){me.position.x=GameState.progress.position.x;me.position.z=GameState.progress.position.z;camera.position.set(me.position.x,4,me.position.z+7)}
 function blocked(x,z){if(shop)return shops[shop].blocked(x,z);if(inside)return apartment.blocked(x,z);if(!isWalkable(x,z)||world.blocked(x,z))return true;return colliders.some(b=>Math.abs(x-b.x)<b.hx+.33&&Math.abs(z-b.z)<b.hz+.33)}
@@ -152,13 +155,13 @@ function changeHousing(action){
 function showBills(){const h=GameState.progress.housing,due=totalDue(h);showDialog('HOME / WEEK '+weekNumber(h.day),'Your weekly bills.',h.rented?'Unpaid rent: '+money(h.rentDue)+'. Unpaid utilities: '+money(h.utilitiesDue)+'. Next bill: '+weekday(h.nextBillDay)+' (Week '+weekNumber(h.nextBillDay)+'), in '+dueIn(h)+' days. Weekly rent is $60; estimated utilities are '+money(estimatedUtilities(h))+' ($7 base for the older studio, plus $0.15 per home-cooked meal). No offline charges.':'Visit 18 Oak Street. Move-in is $90: a $30 deposit and $60 for your first week. Utilities start at $7 per week.','Total due '+money(due)+' · cash after payment '+money(GameState.progress.cash-due),due?()=>changeHousing('pay'):null,due?'Pay bills · '+money(due):'')}
 $('billsButton').onclick=()=>{if(active&&!creatorOpen){phone?.close();showBills()}}; // Home & bills lives on the phone's Bank screen
 function extraAction(label,action){$('extraAction').hidden=false;$('extraAction').textContent=label;$('extraAction').onclick=action}
-function enterShop(kind,entry=SHOP_ENTRY){if(!shopOpen(kind,GameState.progress.routine)){toast(`${SHOPS[kind].name} hours: ${hoursText(kind)}`);return}persist();shop=kind;shops[kind].scene.add(player);setMePosition(entry.x,.02,entry.z);yaw=0;pitch=.4;camera.position.set(SHOPS[kind].x,3,-5.5);$('dialog').hidden=true;clearWorldPanel();modal=false;keys.clear()}
-function leaveShop(exitX=0){doorCooldown=2;look.resetMotion();busy=null;const room=shops[shop];for(const mesh of [...room.occluders,...shopShells[shop]]){mesh.material.opacity=1;mesh.material.depthWrite=true}const door=SHOPS[shop];shop=null;scene.add(player);setMePosition(door.x+Math.max(-.8,Math.min(.8,exitX)),.165,-7.6);camera.position.set(door.x,3,door.z+6);persist();keys.clear()}
+function enterShop(kind,entry=SHOP_ENTRY){if(!shopOpen(kind,GameState.progress.routine)){toast(`${SHOPS[kind].name} hours: ${hoursText(kind)}`);return}persist();shop=kind;shops[kind].scene.add(player);setMePosition(entry.x,.02,entry.z);yaw=0;pitch=.4;camera.position.set(SHOPS[kind].x,3,-5.5);$('dialog').hidden=true;clearWorldPanel();keys.clear()}
+function leaveShop(exitX=0){doorCooldown=2;look.resetMotion();busy=null;const room=shops[shop];for(const mesh of [...room.occluders,...shopShells[shop]]){mesh.material.opacity=1;mesh.material.depthWrite=true}const door=SHOPS[shop],dw=MAP.shops[shop].doorway;shop=null;scene.add(player);setMePosition(door.x+Math.max(-dw.exit.clamp,Math.min(dw.exit.clamp,exitX)),.165,dw.exit.z);camera.position.set(door.x,3,door.z+6);persist();keys.clear()}
 function useLife(action){const place=shop||(inside?'home':null);const atCounter=shop&&Math.hypot(me.position.x-COUNTER.x,me.position.z-COUNTER.z)<1.6;const atKitchen=inside&&Math.hypot(me.position.x-3,me.position.z+3.5)<1.5;if(shop&&!shopOpen(shop,GameState.progress.routine)){toast('The shop has closed. Please return tomorrow.');return}if(!atCounter&&!atKitchen){toast('Move closer to the counter.');return}const r=lifeTransaction(GameState.progress,action,place);if(r.error){toast(r.error);return}GameState.progress=r.state;if(action==='cook'&&GameState.progress.housing.rented)GameState.progress.housing.utilityUsage+=15;persist();$('dialog').hidden=true;clearWorldPanel();modal=false;keys.clear();toast(r.message)}
 
 function nearestPerson(){return pedestrians.people.find(p=>Math.hypot(me.position.x-p.group.position.x,me.position.z-p.group.position.z)<1.5)}
 function commitCafe(action,drink){const r=cafeTransaction(GameState.progress,action,me.position,shop,drink);if(r.error){toast(r.error);return false}GameState.progress=r.state;persist();$('dialog').hidden=true;clearWorldPanel();modal=false;keys.clear();toast(r.message);if(['hire','clockin','order','clockout'].includes(action))look.capture();return true}
-function beginCafe(action,drink){const r=cafeTransaction(GameState.progress,action,me.position,shop,drink);if(r.error){toast(r.error);return}if(['brew','serve','clean'].includes(action)){busy={action,drink,elapsed:0,duration:action==='brew'?3:action==='clean'?2.5:1.2};$('dialog').hidden=true;clearWorldPanel();modal=false;keys.clear();look.capture()}else commitCafe(action,drink)}
+function beginCafe(action,drink){if(['brew','serve','clean'].includes(action)&&!canAct('work')){toast(refusal());return}const r=cafeTransaction(GameState.progress,action,me.position,shop,drink);if(r.error){toast(r.error);return}if(['brew','serve','clean'].includes(action)){busy={action,drink,elapsed:0,duration:action==='brew'?3:action==='clean'?2.5:1.2};$('dialog').hidden=true;clearWorldPanel();modal=false;keys.clear();look.capture()}else commitCafe(action,drink)}
 function worldPoint(point,parent=player.parent){return parent.localToWorld(new THREE.Vector3(point.x,point.y??1.2,point.z))}
 function entityPoint(actor){const p=actor.getWorldPosition(new THREE.Vector3());p.y+=1.9;return p}
 function showWorld(anchor,name,text,choices=[],actor=null){
@@ -215,7 +218,10 @@ function candidates(){const all=[],add=(id,point,anchor,label,run,range=1.5)=>al
  }
  for(const car of vehicles)add(car.id,car,()=>new THREE.Vector3(car.x,1.3,car.z),'Inspect '+car.name,()=>showWorld(()=>new THREE.Vector3(car.x,1.4,car.z),car.name,'Parked · not owned. Driving will be available in a future update.'),1.6);return all;
 }
-function interact(){if(!active||modal||busy||consuming||chopping)return;const hit=chooseInteraction(candidates(),me.position,me.rotation.y);if(hit)hit.run()}
+// One thing at a time (actions.js): the flags come straight from the game's own state, so nothing can stay "held" by mistake.
+const actionFlags=()=>({chop:!!chopping,consume:!!consuming,work:!!busy,sleep:sleepElapsed!==null,door:!!doorFade});
+const canAct=kind=>canStart(kind,actionFlags()),actionBusy=()=>!!activeAction(actionFlags());
+function interact(){if(!active||modal||actionBusy())return;const hit=chooseInteraction(candidates(),me.position,me.rotation.y);if(hit)hit.run()}
 function updateWorldUI(){
  camera.updateMatrixWorld(true);const hit=chooseInteraction(candidates(),me.position,me.rotation.y);selectedInteraction=hit;
  { const target=chopping?chopping.tree:hit?.id?.startsWith('tree-')?hit.point:null;world.setTarget(active&&!modal?target:null); }
@@ -225,7 +231,7 @@ function updateWorldUI(){
  
 }
 // Small destination marker, shared by pickups and drop-offs.
-const marker=new THREE.Group();const markerMaterial=new THREE.MeshBasicMaterial({color:'#d4e7b3',transparent:true,opacity:.8,depthWrite:false});
+const marker=new THREE.Group();marker.name='objective-beacon';const markerMaterial=new THREE.MeshBasicMaterial({color:'#d4e7b3',transparent:true,opacity:.8,depthWrite:false});
 const ring=new THREE.Mesh(new THREE.RingGeometry(.62,.72,32),markerMaterial);ring.rotation.x=-Math.PI/2;ring.position.y=.2;marker.add(ring);
 const diamond=new THREE.Mesh(new THREE.OctahedronGeometry(.16),markerMaterial);diamond.position.y=2.5;marker.add(diamond);scene.add(marker);
 const parcel=new THREE.Mesh(new THREE.BoxGeometry(.38,.32,.22),mat('#ad8c60'));parcel.position.set(0,1.16,-.25);player.add(parcel);
@@ -243,7 +249,7 @@ function updateWork(dt){
  workMarker.visible=false;drinkCup.visible=shop==='cafe'&&GameState.progress.cafe.stage==='serve';
  const dest=targetFor(GameState.progress),route=routeFor(GameState.progress),carrying=GameState.progress.phase==='carrying';
  $('housingStatus').textContent=GameState.progress.housing.rented?'Studio 2B · Bills due '+money(totalDue(GameState.progress.housing))+' · next in '+dueIn(GameState.progress.housing)+' days':'No home · Studio move-in $90.00';
- $('clockStatus').textContent=weekday(GameState.progress.housing.day)+' · '+clockText(GameState.progress.routine)+' · Week '+weekNumber(GameState.progress.housing.day);$('earningsStatus').textContent='Earned today '+money(GameState.progress.routine.earned);
+ $('clockStatus').textContent=weekday(GameState.progress.housing.day)+' · '+clockText(GameState.progress.routine)+' · Week '+weekNumber(GameState.progress.housing.day);$('clockChip').textContent=weekday(GameState.progress.housing.day).slice(0,3)+' · '+clockText(GameState.progress.routine);$('earningsStatus').textContent='Earned today '+money(GameState.progress.routine.earned);
  $('needsStatus').textContent='Food '+Math.round(GameState.progress.life.food)+'% · Thirst '+Math.round(GameState.progress.life.thirst)+'% · Energy '+Math.round(GameState.progress.life.energy)+'%';
  $('needsStatus').dataset.depleted=String(GameState.progress.life.food===0||GameState.progress.life.thirst===0);
  renderVitals(GameState.progress.life);
@@ -362,7 +368,7 @@ function commitInventory(result){
 }
 function atMarketCounter(){return shop==='market'&&Math.hypot(me.position.x-COUNTER.x,me.position.z-COUNTER.z)<1.6&&shopOpen('market',GameState.progress.routine)}
 function beginConsumption(index){
- if(consuming||busy)return {error:'Finish your current action first.'};
+ if(!canAct('consume'))return {error:refusal()};
  const item=itemById(GameState.progress.inventory.slots[index]?.id);
  if(item?.type==='tool'){inventoryUI.close();return toggleEquip(item.id)}
  const check=useItem(GameState.progress,index);
@@ -380,7 +386,7 @@ function beginConsumption(index){
 // character's own space: rest, overhead wind-up, then down through the trunk.
 // The swing is chop-path.js: the hand follows a smooth path, the left hand joins the handle and the body leans into the blow.
 function startChop(tree,{quiet=false}={}){
- if(chopping||consuming||busy)return false;
+ if(!canAct('chop'))return false;
  const check=chopTree(GameState.progress,tree.key,me.position);
  if(check.error){if(!quiet)toast(check.error);return false}
  me.rotation.y=Math.atan2(tree.x-me.position.x,tree.z-me.position.z);
@@ -395,7 +401,7 @@ function updateChop(dt){
  const pose=chopPose(c.elapsed/c.total);
  avatar.reach('R',pose.point,1,CARRY_POLE);avatar.setLean(pose.lean);avatar.setTwoHanded(pose.twoHand);
  if(!c.struck&&c.elapsed>=c.impact){c.struck=true;strikeTree(c)}
- if(c.elapsed>=c.total){avatar.reach('R',CARRY,1,CARRY_POLE);avatar.setLean(0);avatar.setTwoHanded(0);carryWeight=1;chopping=null;keys.clear();if(eHeld&&!modal)chopNext()}
+ if(c.elapsed>=c.total){avatar.reach('R',CARRY,1,CARRY_POLE);avatar.setLean(0);avatar.setTwoHanded(1);carryWeight=1;chopping=null;keys.clear();if(eHeld&&!modal)chopNext()}
 }
 function strikeTree(c){
  const result=chopTree(GameState.progress,c.tree.key,me.position);
@@ -423,7 +429,7 @@ function pickUpLog(id){
 }
 // Equipped tool: shown in the hand and carried at the ready (the arm blends back in after chopping or eating).
 function toggleEquip(id,{silent=false}={}){
- if(chopping||consuming||busy)return {error:'Finish your current action first.'};
+ if(!canAct('equip'))return {error:refusal()};
  const result=equipTool(GameState.progress,id);
  if(result.error)return result;
  GameState.progress=result.state;persist();if(!silent)toast(result.message);
@@ -433,16 +439,18 @@ function updateEquipped(dt){
  const want=GameState.progress.equipped;
  if(!want){if(carried){if(carried.parent===avatar.hand)avatar.release();disposeHeldItem(carried);carried=null}avatar.alignHeld(null);
   // The carrying arm lowers back into the animation instead of staying posed once the axe is away.
+  avatar.setTwoHanded(0);
   if(carryWeight>0){carryWeight=Math.max(0,carryWeight-dt*5);avatar.reach('R',CARRY,carryWeight,CARRY_POLE)}
   return}
- if(consuming||busy)return; // they own the hand until they finish
+ if(consuming||busy){avatar.setTwoHanded(0);return} // they own the hand until they finish
  if(!carried||carried.userData.itemId!==want){
   if(carried){if(carried.parent===avatar.hand)avatar.release();disposeHeldItem(carried)}
-  carried=createHeldItem(itemById(want));avatar.hold(carried,{axis:'z',grip:GRIP});
- }else if(carried.parent!==avatar.hand)avatar.hold(carried,{axis:'z',grip:GRIP});
+  carried=createHeldItem(itemById(want));avatar.hold(carried,{axis:'z',grip:GRIP,curl:1});
+ }else if(carried.parent!==avatar.hand)avatar.hold(carried,{axis:'z',grip:GRIP,curl:1});
  const idle=!chopping&&!armRecovery;
- avatar.alignHeld(chopping?null:CARRY_DIR); // carried head-up; follows the forearm while swinging
+ avatar.alignHeld(chopping?null:CARRY_DIR); // carried across the chest; follows the forearm while swinging
  if(idle){carryWeight=Math.min(1,carryWeight+dt*4);avatar.reach('R',CARRY,carryWeight,CARRY_POLE)}else if(!chopping)carryWeight=0;
+ avatar.setTwoHanded(chopping?1:carryWeight); // both hands are on the handle while carrying and swinging
 }
 // Hotbar: every tool and consumable you own, in bag order. Number keys (or a click) equip a tool or use food and drink.
 function refreshHotbar(){
@@ -512,14 +520,14 @@ function updateConsumption(dt){
  keys.clear();toast(result.error||result.message);
 }
 inventoryUI=createInventoryUI({document,getState:()=>GameState,onBeforeOpen:()=>phone?.close(),
- canOpen:()=>active&&!modal&&!creatorOpen&&!busy&&!consuming,
+ canOpen:()=>active&&!modal&&!creatorOpen&&!actionBusy(),
  onOpen:()=>{clearWorldPanel();modal=true;keys.clear();look.release()},
  onClose:()=>{modal=false;keys.clear();look.resetMotion()},
  onUse:beginConsumption,
  onUnequip:type=>commitInventory(unequipItem(GameState.progress,type))
 });
 storeUI=createStoreUI({document,getState:()=>GameState,
- canOpen:()=>active&&!modal&&!creatorOpen&&!busy&&!consuming&&atMarketCounter(),
+ canOpen:()=>active&&!modal&&!creatorOpen&&!actionBusy()&&atMarketCounter(),
  onOpen:()=>{clearWorldPanel();modal=true;keys.clear();look.release()},
  onClose:()=>{modal=false;keys.clear();look.resetMotion()},
  onBuy:id=>atMarketCounter()?commitInventory(addItem(GameState.progress,id,{purchase:true})):{error:'Visit the open market counter to shop.'},
@@ -529,7 +537,7 @@ storeUI=createStoreUI({document,getState:()=>GameState,
 });
 // Phone owns only its overlay; existing modal guards stop WASD and mouse look.
 phone=createPhone({document,getState:()=>GameState,
- canOpen:()=>active&&!modal&&!creatorOpen&&!busy&&!consuming,
+ canOpen:()=>active&&!modal&&!creatorOpen&&!actionBusy(),
  onOpen:()=>{clearWorldPanel();modal=true;keys.clear();look.release()},
  onClose:()=>{modal=false;keys.clear();look.resetMotion()},
  onDrainChange:value=>{setStatDrainMultiplier(value);persist()},
@@ -553,32 +561,33 @@ gigDiamond.position.y=2.1;gigMarker.add(gigDiamond);scene.add(gigMarker);
 let objectiveCollapsed=false;
 // Shop doors have no E. They slide open as you walk up (only while the shop is open); walking through the doorway fades
 // to the other side. A closed shop keeps its door shut, shows CLOSED and tells you its hours. Your studio still uses E.
-function startDoorFade(action){if(doorFade)return;doorFade={t:0,phase:'out',action};keys.clear()}
+function startDoorFade(action){if(doorFade||modal||!canAct('door'))return;doorFade={t:0,phase:'out',action};keys.clear()}
 function updateDoorFade(dt){
- if(!doorFade)return;
+ if(!doorFade||modal)return; // a menu freezes the transition; only pause() owns `modal`
  const veil=$('doorFade');doorFade.t+=dt;
  if(doorFade.phase==='out'){veil.style.opacity=String(Math.min(1,doorFade.t/.16));if(doorFade.t>=.16){doorFade.action();doorFade.phase='in';doorFade.t=0}}
  else{veil.style.opacity=String(Math.max(0,1-doorFade.t/.22));if(doorFade.t>=.22){veil.style.opacity='0';doorFade=null}}
 }
 function updateDoors(dt){
+ if(modal)return; // doors, like everything else, wait while a menu is open
  updateDoorFade(dt);
  doorCooldown=Math.max(0,doorCooldown-dt);
- const ready=doorCooldown<=0&&active&&!modal&&!busy&&!consuming&&!chopping&&!doorFade,routine=GameState.progress.routine;
+ const ready=doorCooldown<=0&&active&&!modal&&!actionBusy(),routine=GameState.progress.routine;
  for(const front of shopDoors){
-  const open=shopOpen(front.kind,routine);front.open.visible=open;front.closed.visible=!open;
-  const dx=me.position.x-front.x,near=!inside&&!shop&&Math.abs(dx)<2.6&&me.position.z<-5.4&&me.position.z>-9.2;
+  const dw=MAP.shops[front.kind].doorway,open=shopOpen(front.kind,routine);front.open.visible=open;front.closed.visible=!open;
+  const dx=me.position.x-front.x,near=!inside&&!shop&&Math.abs(dx)<dw.approach.halfWidth&&me.position.z<dw.approach.z1&&me.position.z>dw.approach.z0;
   front.door.setOpen(open&&near);front.door.update(dt);
   // The doorway is open ground only while the door is open (and never traps you standing in it).
-  const standing=Math.abs(dx)<1.65&&Math.abs(me.position.z+8.5)<.6,passable=(open&&near&&front.door.amount>.7)||(standing&&!inside&&!shop),blocked=colliders.includes(front.blocker);
+  const standing=Math.abs(dx)<dw.halfWidth+.35&&Math.abs(me.position.z-dw.blocker.z)<dw.blocker.depth+.35,passable=(open&&near&&front.door.amount>.7)||(standing&&!inside&&!shop),blocked=colliders.includes(front.blocker);
   if(passable&&blocked)colliders.splice(colliders.indexOf(front.blocker),1);else if(!passable&&!blocked)colliders.push(front.blocker);
-  if(!ready||!near||Math.abs(dx)>=.9)continue;
-  if(open&&front.door.amount>.85&&me.position.z<-8.4){doorCooldown=1;startDoorFade(()=>enterShop(front.kind,{x:Math.max(-.8,Math.min(.8,dx)),z:3.9}));return}
-  if(!open&&me.position.z<-7.6){doorCooldown=3;toast(`${SHOPS[front.kind].name} is closed. Hours ${hoursText(front.kind)}.`)}
+  if(!ready||!near||Math.abs(dx)>=dw.enterHalfWidth)continue;
+  if(open&&front.door.amount>.85&&me.position.z<dw.threshold){doorCooldown=1;startDoorFade(()=>enterShop(front.kind,{x:Math.max(-dw.exit.clamp,Math.min(dw.exit.clamp,dx)),z:MAP.shops[front.kind].interior.entry.z}));return}
+  if(!open&&me.position.z<dw.closedTouch){doorCooldown=3;toast(`${SHOPS[front.kind].name} is closed. Hours ${hoursText(front.kind)}.`)}
  }
  if(shop){
-  const room=shops[shop],near=Math.abs(me.position.x)<2.4&&me.position.z>2.7;
+  const room=shops[shop],exitSpec=MAP.shops[shop].interior.exitDoor,near=Math.abs(me.position.x)<exitSpec.near.halfWidth&&me.position.z>exitSpec.near.z;
   room.exitDoor.setOpen(near);room.exitDoor.update(dt);
-  if(ready&&near&&Math.abs(me.position.x)<.9&&me.position.z>4.3&&room.exitDoor.amount>.85){doorCooldown=1;const exitX=me.position.x;startDoorFade(()=>leaveShop(exitX))}
+  if(ready&&near&&Math.abs(me.position.x)<exitSpec.trigger.halfWidth&&me.position.z>exitSpec.trigger.z&&room.exitDoor.amount>.85){doorCooldown=1;const exitX=me.position.x;startDoorFade(()=>leaveShop(exitX))}
  }
 }
 function toggleObjective(){
@@ -600,18 +609,16 @@ function updateRing(){
  el.style.left=p.x+'px';el.style.top=p.y+'px';el.setAttribute('aria-valuenow',String(percent));el.querySelector('.ring').style.setProperty('--p',String(percent));
  $('workRingTime').textContent=Math.ceil(Math.max(0,ring.left))+'s';$('workRingLabel').textContent=ring.label;
 }
-// The objective beacon (ring and diamond): your delivery drop-off while you carry an order; otherwise the market's doorway
-// from the street, or Noah's counter once you are inside. It disappears when you are already there (the prompt takes over).
-function updateBeacon(dt){
- const progress=GameState.progress,carrying=progress.phase==='carrying',dest=targetFor(progress);
- let spot=null;
- if(!inside&&!shop)spot=carrying?{x:dest.x,z:dest.z,y:0,lift:0,hideWithin:0}:{x:SHOPS.market.x,z:-8.3,y:0,lift:.7,hideWithin:2.4};
- else if(shop==='market'&&!carrying)spot={x:SHOPS.market.x+COUNTER.x,z:-13.5+COUNTER.z,y:.165,lift:0,hideWithin:1.8,local:COUNTER};
- const near=spot?Math.hypot(me.position.x-(spot.local?.x??spot.x),me.position.z-(spot.local?.z??spot.z)):0;
+// The objective beacon (ring and diamond) and the arrow: objective.js decides what to point at (one answer for the gig, the delivery and
+// the market); this is the only place that draws it. The beacon disappears when you are already there (the prompt takes over).
+const OBJECTIVE_WORLD={marketDoor:{x:SHOPS.market.x,z:MAP.shops.market.doorway.beaconZ},counter:{local:COUNTER,world:{x:SHOPS.market.x+COUNTER.x,y:MAP.shops.market.interior.origin.y,z:MAP.shops.market.interior.origin.z+COUNTER.z}},cafeDoor:{x:SHOPS.cafe.x,z:SHOPS.cafe.z}};
+function updateObjective(dt){
+ const progress=GameState.progress,objective=resolveObjective({progress,place:{inside:!!inside,shop},room:currentRoom(),gigTarget,delivery:targetFor(progress),world:OBJECTIVE_WORLD});
+ const spot=objective.beacon,near=spot?Math.hypot(me.position.x-(spot.local?.x??spot.x),me.position.z-(spot.local?.z??spot.z)):0;
  marker.visible=!!spot&&active&&near>spot.hideWithin;
  if(spot){marker.position.set(spot.x,spot.y,spot.z);markerTime+=dt;diamond.position.y=2.5+spot.lift+Math.sin(markerTime*2)*.09;diamond.rotation.y+=dt*.7}
- const aim=spot?(spot.local||spot):dest;
- if(!inside&&!(shop&&!spot?.local))$('direction').style.transform=`rotate(${Math.atan2(aim.x-me.position.x,-(aim.z-me.position.z))+yaw}rad)`;
+ const aim=objective.aim;
+ $('direction').style.transform=aim?`rotate(${Math.atan2(aim.x-me.position.x,-(aim.z-me.position.z))+yaw}rad)`:'none';
 }
 // The needs bars (bottom right): food, thirst and energy as 0-100 bars that turn orange when low and red, with a pulsing icon, when critical.
 function renderVitals(life){
@@ -645,11 +652,9 @@ function updateGig(dt){
  $('objective').querySelector('h2').textContent=job.title;
  $('objective').querySelector('p').textContent=finished?'Return to the gold marker and press E to collect your pay.':job.stage==='travel'?job.description:job.mode==='timed'?'Stay still at the marked station. Moving or leaving resets this task’s timer.':job.mode==='courier'?'Run with Shift toward the delivery marker. Only distance actually run counts.':'Carry the box to the gold delivery marker. Movement uses twice the energy.';
  $('distance').textContent=target.room!==room?(target.room==='cafe'?'Enter Alder Coffee':'Go outside to continue'):Math.round(Math.hypot(me.position.x-target.x,me.position.z-target.z))+' m · '+(finished?'Return for payment':'Gig location');
- const direction=room===target.room?target:shop||inside?null:display;
- $('direction').style.transform=direction?`rotate(${Math.atan2(direction.x-me.position.x,-(direction.z-me.position.z))+yaw}rad)`:'none';
 }
 function startSleep(){
- if(sleepElapsed!==null||!inside||shop||!GameState.progress.housing.rented||Math.hypot(me.position.x-BED.x,me.position.z-BED.z)>=1.4)return;
+ if(!canAct('sleep')||!inside||shop||!GameState.progress.housing.rented||Math.hypot(me.position.x-BED.x,me.position.z-BED.z)>=1.4)return;
  phone?.close();$('dialog').hidden=true;clearWorldPanel();modal=true;keys.clear();look.release();
  sleepElapsed=0;$('sleepFade').hidden=false;$('sleepFade').style.opacity='0';
 }
@@ -707,28 +712,45 @@ function updateMultiplayer(now,moving,dt){
  for(const mesh of Object.values(remoteMeshes))updateRemotePlayer(mesh,dt);
 }
 
-let prev=performance.now(),frames=0,elapsed=0;function frame(now){requestAnimationFrame(frame);const actionDt=Math.max(0,Math.min((now-prev)/1000,.25)),dt=Math.min(actionDt,.04);prev=now;if(creatorOpen){previewAvatar.update(dt);drawCreator();return}frames++;elapsed+=dt;if(elapsed> .75){$('fps').textContent=Math.round(frames/elapsed)+' FPS';frames=0;elapsed=0}
-const frameX=me.position.x,frameZ=me.position.z;
-let moving=false;if(active&&!modal&&!busy&&!consuming&&!chopping&&!doorFade){let f=Number(keys.has('KeyW')||keys.has('ArrowUp'))-Number(keys.has('KeyS')||keys.has('ArrowDown')),s=Number(keys.has('KeyD')||keys.has('ArrowRight'))-Number(keys.has('KeyA')||keys.has('ArrowLeft'));let len=Math.hypot(f,s);if(len){f/=len;s/=len;const speed=keys.has('ShiftLeft')||keys.has('ShiftRight')?8.2:4.5,dx=(-Math.sin(yaw)*f+Math.cos(yaw)*s)*speed*dt,dz=(-Math.cos(yaw)*f-Math.sin(yaw)*s)*speed*dt;if(!blocked(me.position.x+dx,me.position.z))me.position.x+=dx;if(!blocked(me.position.x,me.position.z+dz))me.position.z+=dz;const angle=Math.atan2(dx,dz);me.rotation.y+=Math.atan2(Math.sin(angle-me.rotation.y),Math.cos(angle-me.rotation.y))*(1-Math.exp(-dt*24));phase+=dt*speed*2.0;moving=true}}
-const movedDistance=Math.hypot(me.position.x-frameX,me.position.z-frameZ);moving=moving&&movedDistance>.000001;
-const running=moving&&(keys.has('ShiftLeft')||keys.has('ShiftRight'));
-const poseBlend=1-Math.exp(-dt*18);
+let prev=performance.now(),frames=0,elapsed=0;
+// One slice of simulated time (see timestep.js). Everything that has to advance with real time runs here, once per slice.
+// Returns whether a movement key was pressed during the slice.
+function stepWorld(step){
+ const startX=me.position.x,startZ=me.position.z;
+ let pressed=false;if(active&&!modal&&!actionBusy()){let f=Number(keys.has('KeyW')||keys.has('ArrowUp'))-Number(keys.has('KeyS')||keys.has('ArrowDown')),s=Number(keys.has('KeyD')||keys.has('ArrowRight'))-Number(keys.has('KeyA')||keys.has('ArrowLeft'));let len=Math.hypot(f,s);if(len){f/=len;s/=len;const speed=keys.has('ShiftLeft')||keys.has('ShiftRight')?8.2:4.5,dx=(-Math.sin(yaw)*f+Math.cos(yaw)*s)*speed*step,dz=(-Math.cos(yaw)*f-Math.sin(yaw)*s)*speed*step;if(!blocked(me.position.x+dx,me.position.z))me.position.x+=dx;if(!blocked(me.position.x,me.position.z+dz))me.position.z+=dz;const angle=Math.atan2(dx,dz);me.rotation.y+=Math.atan2(Math.sin(angle-me.rotation.y),Math.cos(angle-me.rotation.y))*(1-Math.exp(-step*24));phase+=step*speed*2.0;pressed=true}}
+ const movedStep=Math.hypot(me.position.x-startX,me.position.z-startZ),moving=pressed&&movedStep>.000001,running=moving&&(keys.has('ShiftLeft')||keys.has('ShiftRight'));
+ if(active&&!modal&&!document.hidden){GameState.progress=expireCafe(advanceTime(GameState.progress,step*.5));const oldStage=GameState.progress.activeJob?.stage;
+const load=GameState.progress.activeJob?.id==='heavy-delivery'&&oldStage==='task'?2:1;
+tickLife(step,moving,running,load);
+GameState.progress=tickContract(GameState.progress,{position:me.position,room:currentRoom(),dt:step,moving,paused:!!consuming,running,distance:movedStep});
+if(oldStage!==GameState.progress.activeJob?.stage)persist();if(!inside&&!shop)pedestrians.update(step,me.position);regrowClock+=step;if(regrowClock>=5){regrowClock=0;tickRegrowth()}if(inside||shop){saveElapsed+=step;if(saveElapsed>=4){saveElapsed=0;persist()}}}
+ if(active&&!modal&&!document.hidden)updateCafeVisuals(step);updateConsumption(step);updateDoors(step);updateChop(step);
+ return pressed;
+}
+function frame(now){
+ requestAnimationFrame(frame);
+ const real=Math.max(0,Math.min((now-prev)/1000,MAX_FRAME)),view=Math.min(real,.1); // real time drives the simulation; visuals smooth over at most 0.1 s
+ prev=now;
+ if(creatorOpen){previewAvatar.update(view);drawCreator();return}
+ frames++;elapsed+=real;if(elapsed> .75){$('fps').textContent=Math.round(frames/elapsed)+' FPS';frames=0;elapsed=0}
+ const frameX=me.position.x,frameZ=me.position.z;
+ let pressed=false;{const {count,step}=substeps(real);for(let i=0;i<count;i++)if(stepWorld(step))pressed=true}
+ const movedDistance=Math.hypot(me.position.x-frameX,me.position.z-frameZ),moving=pressed&&movedDistance>.000001;
+ const running=moving&&(keys.has('ShiftLeft')||keys.has('ShiftRight'));
+const poseBlend=1-Math.exp(-view*18);
 avatar.setMotion(moving?(running?8.2:4.5):0);
 // Match foot height to the road, pavement, or grass rather than hovering.
 const px=me.position.x,pz=me.position.z;
 const sidewalk=(px>=-38&&px<=54&&((pz>=-8.5&&pz<=-3.5)||(pz>=15.5&&pz<=20.5)))||(px>=-21.5&&px<=-16.5&&pz>=-74&&pz<=24);
 const road=(Math.abs(px)<=55&&pz>=-3.5&&pz<=15.5)||(px>=-38&&px<=-22&&Math.abs(pz)<=60);
-me.position.y=THREE.MathUtils.lerp(me.position.y,(inside||shop)?.02:sidewalk?.165:road?.01:-.095,1-Math.exp(-dt*30));
-zoom=THREE.MathUtils.lerp(zoom,zoomTarget,1-Math.exp(-dt*10));
-if(active&&!modal&&!document.hidden){GameState.progress=expireCafe(advanceTime(GameState.progress,actionDt*.5));const oldStage=GameState.progress.activeJob?.stage;
-const load=GameState.progress.activeJob?.id==='heavy-delivery'&&oldStage==='task'?2:1;
-tickLife(actionDt,moving,running,load);
-GameState.progress=tickContract(GameState.progress,{position:me.position,room:currentRoom(),dt:actionDt,moving,paused:!!consuming,running,distance:movedDistance});
-if(oldStage!==GameState.progress.activeJob?.stage)persist();if(!inside&&!shop)pedestrians.update(dt,me.position);regrowClock+=actionDt;if(regrowClock>=5){regrowClock=0;tickRegrowth()}if(inside||shop){saveElapsed+=dt;if(saveElapsed>=4){saveElapsed=0;persist()}}}
-look.tick(dt);
-if(worldPanel?.actor&&!$('dialog').hidden){const actor=worldPanel.actor,pa=getMeWorldPosition(new THREE.Vector3()),pb=actor.getWorldPosition(new THREE.Vector3()),mid=pa.clone().add(pb).multiplyScalar(.5);const angle=Math.atan2(pa.x-pb.x,pa.z-pb.z);actor.rotation.y=angle;me.rotation.y=angle+Math.PI;worldPlayer.position.copy(mid);if(shop)shops[shop].camera(worldPlayer,angle+.45,.32,5.8,dt);else updateCamera(worldPlayer,angle+.45,.32,5.8,dt)}else if(shop){getMeWorldPosition(worldPlayer.position);shops[shop].camera(worldPlayer,yaw,pitch,zoom,dt);}else if(inside)indoorCamera(me,yaw,pitch,zoom,dt);else updateCamera(me,yaw,pitch,zoom,dt);
+me.position.y=THREE.MathUtils.lerp(me.position.y,(inside||shop)?.02:sidewalk?.165:road?.01:-.095,1-Math.exp(-view*30));
+zoom=THREE.MathUtils.lerp(zoom,zoomTarget,1-Math.exp(-view*10));
+
+look.tick(view);
+if(worldPanel?.actor&&!$('dialog').hidden){const actor=worldPanel.actor,pa=getMeWorldPosition(new THREE.Vector3()),pb=actor.getWorldPosition(new THREE.Vector3()),mid=pa.clone().add(pb).multiplyScalar(.5);const angle=Math.atan2(pa.x-pb.x,pa.z-pb.z);actor.rotation.y=angle;me.rotation.y=angle+Math.PI;worldPlayer.position.copy(mid);if(shop)shops[shop].camera(worldPlayer,angle+.45,.32,5.8,view);else updateCamera(worldPlayer,angle+.45,.32,5.8,view)}else if(shop){getMeWorldPosition(worldPlayer.position);shops[shop].camera(worldPlayer,yaw,pitch,zoom,view);}else if(inside)indoorCamera(me,yaw,pitch,zoom,view);else updateCamera(me,yaw,pitch,zoom,view);
 const daylight=Math.max(.12,Math.sin((GameState.progress.routine.minutes-360)/1440*Math.PI*2));sun.intensity=.2+daylight*2.9;scene.background.setRGB(.08+daylight*.65,.12+daylight*.67,.2+daylight*.62);scene.fog.color.copy(scene.background);
-if(active&&!modal&&!document.hidden)updateCafeVisuals(dt);updateConsumption(actionDt);updateDoors(dt);updateChop(actionDt);updateEquipped(modal?0:dt);avatar.update(modal?0:dt);if(shop)shops[shop].clerk.update(modal?0:dt);updateZones(dt);updateSleep(actionDt);updateWork(dt);updateGig(dt);updateBeacon(dt);updateWorldUI();updateRing();updateMultiplayer(now,moving,dt);syncPlayerMesh();renderer.render(inside?apartment.scene:scene,camera)}requestAnimationFrame(frame);
+
+updateEquipped(modal?0:view);avatar.update(modal?0:view);if(shop)shops[shop].clerk.update(modal?0:view);updateZones(view);updateSleep(real);updateWork(view);updateGig(view);updateObjective(view);updateWorldUI();updateRing();updateMultiplayer(now,moving,view);syncPlayerMesh();renderer.render(inside?apartment.scene:scene,camera)}requestAnimationFrame(frame);
 
 // Development hook: open the game with ?debug to inspect state from the console (window.__city).
 if(typeof location!=='undefined'&&new URLSearchParams(location.search).has('debug'))window.__city={GameState,world,scene,camera,avatar,pedestrians,

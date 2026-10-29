@@ -46,11 +46,27 @@ const buildings=[
  ...backdrop
 ];
 
+// The doorway of a shop, in world metres. A 2.6 m gap in the building's collision lets you walk up to the glass; a blocker shuts it
+// while the door is closed and a short back wall stops you at the threshold. Reaching the threshold with the door open fades you inside.
+//   halfWidth      half the width of the open gap (also the blocker's and back wall's half width)
+//   approach       the zone in front of the door where the door slides open (half width, and z from z0 to z1)
+//   threshold      walking past this z (with the door open) goes in
+//   closedTouch    touching this z while the door is shut shows the shop's hours
+//   enterHalfWidth how far off-centre you can be and still go in
+//   blocker/backWall  z and half depth of the two thin colliders
+//   beaconZ        where the objective beacon stands for this door
+//   exit           where you step out to (z), and the most you are shifted sideways (clamp)
+const doorway=()=>({halfWidth:1.3,approach:{halfWidth:2.6,z0:-9.2,z1:-5.4},threshold:-8.4,closedTouch:-7.6,enterHalfWidth:.9,blocker:{z:-8.5,depth:.25},backWall:{z:-9.3,depth:.2},beaconZ:-8.3,exit:{z:-7.6,clamp:.8}});
+// A shop's interior, in the room's own coordinates (x across, z deep; the front wall is at frontWallZ).
+//   origin    where the room sits in the world (x is the shop's door x); origin.z + frontWallZ must be the building's front
+//   entry     where you appear when you walk in; spawn / exit are used after a reset and for the exit prompt
+//   counter   the clerk's counter; exitDoor is the sliding door you leave by, with its approach zone and trigger line
+const interior=()=>({origin:{y:.165,z:-13.5},frontWallZ:5,entry:{x:0,z:3.9},spawn:{x:0,z:3.1},exit:{x:0,z:4},counter:{x:0,z:-2},exitDoor:{z:4.96,width:2.2,height:2.7,near:{halfWidth:2.4,z:2.7},trigger:{halfWidth:.9,z:4.3}}});
 // Shops you can walk into. x is the door centre, z is where you stand outside it, doorZ is the door plane on the building's
 // front, hours are [opens, closes) in minutes since midnight, sign is the text over the door.
 const shops={
- market:{name:'Corner Market',x:19,z:-6.3,doorZ:-8.46,door:{width:2.3,height:2.5},hours:[420,1320],sign:'MARKET 7AM–10PM'},
- cafe:{name:'Alder Coffee',x:36,z:-6.3,doorZ:-8.46,door:{width:2.3,height:2.5},hours:[480,1080],sign:'CAFE 8AM–6PM'}
+ market:{name:'Corner Market',x:19,z:-6.3,doorZ:-8.46,door:{width:2.3,height:2.5},hours:[420,1320],sign:'MARKET 7AM–10PM',doorway:doorway(),interior:interior()},
+ cafe:{name:'Alder Coffee',x:36,z:-6.3,doorZ:-8.46,door:{width:2.3,height:2.5},hours:[480,1080],sign:'CAFE 8AM–6PM',doorway:doorway(),interior:interior()}
 };
 
 // Land set aside for later (ownership, preset buildings). Whole-cell rectangles; kind is 'residential', 'commercial' or
@@ -65,7 +81,7 @@ export const MAP=deepFreeze({
  spawn:{x:-5,y:.2,z:15},
  ground:{x0:-190,x1:190,z0:-90,z1:90}, // how far the ground is drawn (scenery fades into fog beyond the walkable zones)
  zones,roads,fields,buildings,shops,reserved,
- studio:{x:1,z:-6.3,doorZ:-8.25},
+ studio:{x:1,z:-6.3,doorZ:-8.25,interior:{entry:{x:0,z:3.3},exit:{x:0,z:4.45},bed:{x:-3.6,z:-2.3}}},
  minimap:{view:{x0:-176,x1:176,z0:-62,z1:62}},
  // Procedural dressing parameters (world.js): how the generated trees are laid out.
  scenery:{
@@ -135,7 +151,24 @@ export function validateMap(map=MAP){
   if(shop.doorZ<front-.5||shop.doorZ>front+.5)bad(`shop ${kind} door is not on the front wall (${shop.doorZ} vs ${front})`);
   if(!(shop.z>front))bad(`shop ${kind} entrance spot is not in front of the door`);
   const [open,close]=shop.hours;if(!(Number.isInteger(open)&&Number.isInteger(close)&&open>=0&&close<=1440&&open<close))bad(`shop ${kind} has invalid hours`);
+  // Doorway and interior: everything has to be reachable and in the right order along z.
+  const d=shop.doorway,room=shop.interior,R=.33; // R: the player's collision radius
+  if(!d||!room){bad(`shop ${kind} needs a doorway and an interior`);continue}
+  if(d.enterHalfWidth>d.halfWidth-R+1e-9)bad(`shop ${kind} doorway is too narrow to reach its entry trigger`);
+  if(d.approach.halfWidth<d.halfWidth)bad(`shop ${kind} approach zone is narrower than the doorway`);
+  if(!(d.threshold>d.backWall.z+d.backWall.depth+R))bad(`shop ${kind} threshold is behind the back wall (you could never reach it)`);
+  if(Math.abs(d.threshold-shop.doorZ)>.2)bad(`shop ${kind} threshold is not at the door`);
+  if(!(d.closedTouch>d.blocker.z+d.blocker.depth+R))bad(`shop ${kind} closed-door line is behind the blocker (you could never reach it)`);
+  if(!(d.approach.z0<d.threshold&&d.threshold<d.approach.z1&&d.approach.z0<d.closedTouch&&d.closedTouch<d.approach.z1))bad(`shop ${kind} approach zone does not contain its threshold and closed-door line`);
+  if(d.exit.z-d.threshold<.5)bad(`shop ${kind} leaving puts you back inside the entry trigger`);
+  if(Math.abs(room.origin.z+room.frontWallZ-front)>.05)bad(`shop ${kind} interior front wall is not on the building's front (${room.origin.z+room.frontWallZ} vs ${front})`);
+  const trigger=room.exitDoor.trigger;
+  if(!(room.entry.z<trigger.z&&room.spawn.z<trigger.z))bad(`shop ${kind} entry or spawn is inside the exit trigger`);
+  if(!(room.exitDoor.near.z<trigger.z))bad(`shop ${kind} exit door would open after its trigger line`);
+  if(!(Math.abs(room.counter.x)<5.5&&Math.abs(room.counter.z)<4.5))bad(`shop ${kind} counter is outside the room`);
  }
+ const studio=map.studio.interior;
+ if(!studio||![studio.entry,studio.exit,studio.bed].every(p=>p&&Number.isFinite(p.x)&&Number.isFinite(p.z)))bad('studio interior needs an entry, exit and bed');
  // Reserved plots: whole cells, inside a zone, not on top of roads, fields, buildings or each other.
  const reservedIds=new Set();
  for(const plot of map.reserved){

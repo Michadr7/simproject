@@ -12,22 +12,19 @@ Living document. "Model" lines say which Claude model to use for each task: **Ha
 - **Every enterable building has a real interior behind a door**, and buildings can have levels. Shop doors have no E;
   the studio keeps E.
 
-## Foundation fixes before Alder Center (architecture plan, no code yet)
-A review of v0.19.3 raised six issues. I checked each against the code. Five are real; the sixth (hard-coded map data) is partly
-fixed already: shop door position, size, sign and hours moved to `map-definition.js` in 0.19.3, but the doorway geometry and the
-interior placements are still literals. Plan, in this order (three packages):
+## Foundation fixes before Alder Center (done)
+A review of v0.19.3 raised six issues; five were real and one was partly fixed already. All are now fixed and tested:
+| # | Issue | Fixed in | How |
+|---|---|---|---|
+| 5 | Obsolete `waist.mjs` | 0.19.6 | Overwritten with a real test of the skeletal waist |
+| 3 | Controls menu unpaused a door fade | 0.19.6 | The fade and doors freeze while `modal`; only `pause()` owns `modal` |
+| 1 | Eating and chopping overlapped | 0.19.6 | `actions.js`: every action blocks every other, both ways |
+| 2 | Gig arrow overwritten by the beacon | 0.20.0 | `objective.js`: one resolver, one drawer |
+| 4 | Two timesteps | 0.20.0 | `timestep.js`: real time cut into slices of at most 1/30 s |
+| 6 | Hard-coded doorway and interior data | 0.20.0 | `doorway` and `interior` per shop (and the studio) in `map-definition.js`, validated |
 
-| # | Issue | Real? | Files | Fix | Model |
-|---|---|---|---|---|---|
-| 5 | Obsolete `waist.mjs` | Yes in a repo that never deleted it (a zip cannot delete files) | `tests/waist.mjs` | Overwrite it with a real test of the skeletal waist (spine bones, lean, twist, seated hips) so the zip repairs it with no manual delete | Haiku 5.5 |
-| 3 | Controls menu unpauses during a door fade | Yes: `updateDoors` is not gated by `modal`, and `enterShop` sets `modal=false` | `game.js` | The fade timer freezes while `modal`; `startDoorFade` refuses while `modal`; `enterShop` stops touching `modal` (only `pause()` owns it) | Sonnet 5.5 |
-| 1 | Eating and chopping overlap | Yes: `startChop` refuses during eating, but `beginConsumption` does not refuse during chopping; the guards are copied and lopsided | new `actions.js`, `game.js`, `tests/actions.mjs` | One action lock (`chop`, `consume`, `work`, `sleep`, `door`) with `canStart / acquire / release / reset`; every start site asks it, every end site releases it, scene changes `reset()` it | Sonnet 5.5 |
-| 2 | Gig arrow overwritten | Yes: `updateGig` then `updateBeacon` both write `#direction`, the beacon wins, and the market-door beacon also shows during a gig | new `objective.js`, `game.js`, `tests/objective.mjs` | One resolver `resolveObjective(state, place)` returns the single current target (priority: active gig, delivery, market door or counter, none) with its coordinate space; arrow, beacon, distance text and minimap marker all read it; nothing else writes `#direction` | Sonnet 5.5 |
-| 4 | Two timesteps | Yes: movement uses `min(dt, 0.04)`, the clock and needs use `min(dt, 0.25)`; the FPS readout also divides by the capped time, so it over-reports below 25 FPS | new `timestep.js`, `game.js`, `tests/timestep.mjs` | Fixed-step simulation (1/60 s, at most 15 steps per frame) for movement, collisions, pedestrians, doors, action timers and the clock; animation and rendering use the real frame time (capped at 0.1 s); paused menus skip simulation; at 10, 30, 60 and 144 FPS a 5-second walk covers the same distance and the same game minutes pass | Sonnet 5.5 (Opus 5.5 for a second review of the frame loop if you want one) |
-| 6 | Hard-coded doorway and interior data | Partly | `map-definition.js`, `game.js`, `shops.js`, `tests/map.mjs` | Per shop add `doorway` (half-width, approach zone, threshold, closed-touch line, back wall, blocker) and `interior` (origin, entry, counter, exit trigger, exit door); the studio's door gets the same treatment; beacon spots derive from them; `validateMap` checks them (threshold between the door plane and the back wall, entry inside the room and clear of the exit trigger, counter inside the room, door at least as wide as the player) and `tests/map.mjs` proves nothing moved | Sonnet 5.5 |
-
-Packages: A = #5, #3, #1 (the action lock and the menu freeze share a state model); B = #2, #4; C = #6. Each ships with tests that fail on
-the old behaviour. Then Step 0 (the asset pipeline), then Alder Center.
+Remaining literals worth moving later: the pavement and road height bands in the frame loop, and the interior room geometry. The minimap
+strips and the `zoneAt(x)` fallback still assume zones laid out west to east.
 
 ## Map (concept 03 — Town & Outskirts)
 Build now vs reserve for later, as in the concept sheet. Staged geography (no elevation):
@@ -95,6 +92,26 @@ at level 3, a fourth at level 8. Logs sell for $1.00.
   cars: **Sonnet 5.5**, with Alder Center and Eastbank. (2) Driving: a new mode with its own controls, camera, entering and
   leaving, collisions, fuel and a saved position; recheck the 60-90 second travel targets. **Opus 5.5** for the architecture, Sonnet to
   build. (3) Traffic: ambient cars on the road graph, capped at about 10 visible, never running you over at first: **Sonnet 5.5**.
+
+## First pack: Quaternius Stylized Nature MegaKit (waiting for the upload)
+Checked on the pack's page: CC0 (free for personal and commercial use), glTF / FBX / OBJ, textured, 116 models (40 trees, 35 plants and
+flowers, 27 rocks), tree leaves can swap between 7 varieties. The page lists a free "Standard" version (60-70% of the pack) and paid
+tiers, so which trees and logs exist depends on the version you downloaded; I will map from what the folder contains.
+Wanted: **3 pine / spruce models for the Forest zone, 2 broadleaf models for the Farm and City zones, and a log model to replace the
+cylinder logs.** Plan (Sonnet 5.5):
+1. **Convert.** `scripts/build-assets.mjs` reads the glTF files, welds vertices, keeps the pack's flat shading, merges each model into one
+   geometry per material (bark, leaves), packs the textures as data URLs and writes embedded modules, the same way the characters are.
+2. **Manifest.** `assets.js` lists `tree.pine.1-3`, `tree.broadleaf.1-2`, `prop.log.1` with category, licence, source, target height range,
+   trunk radius (for collisions), pivot at the base, and the variants the world places.
+3. **Scale.** Each model is normalised to the manifest's heights (the game's own pines today, so the camera clearance, the dither fade
+   and the chop target ring all keep working), with random per-tree scale and rotation within a range.
+4. **Instancing.** One `InstancedMesh` per model per material (a bark and a leaf mesh each): about 6 for the pines, 4 for the broadleaf
+   and 1-2 for logs, so roughly a dozen draw calls for the whole forest. Felling, stumps, saplings, regrowth and the falling animation
+   keep working on instance matrices exactly as they do now.
+5. **Logs** become instances of the pack's log model (ground logs, `progress.logs` unchanged).
+6. **Tests:** the manifest validates (licence present, heights within range), instance counts equal the layout counts (333 cuttable
+   trees, 1,087 decor), the draw-call budget, collisions and chopping unchanged, and a preview page shows each asset beside the 1.95 m
+   character. Model: Sonnet 5.5.
 
 ## Asset foundation (Step 0, before adding more art)
 - **Contract:** 1 unit = 1 m, the character is 1.95 m, +Z forward, Y up, pivot at the base centre, sizes snapping to the 1-unit grid,

@@ -135,3 +135,16 @@ body.creating #vitals{display:none}
 #minimap{top:96px;bottom:auto}
 #minimap.large{top:auto}
 @media(max-width:600px){#vitals{right:12px;bottom:96px;width:150px}#minimap{top:76px;bottom:auto;transform-origin:top right}#minimap.large{top:auto}}
+
+/* 0.19.6 time chip under the minimap; the store's cash, bag space and purchase confirmation stay pinned while the list scrolls */
+#clockChip{position:fixed;right:34px;top:200px;padding:6px 13px;border-radius:99px;background:#183332cc;border:1px solid #ffffff22;color:#e9efe3;font:600 11px/1 Arial,sans-serif;letter-spacing:.4px;z-index:5;pointer-events:none}
+body.creating #clockChip{display:none}
+@media(max-width:600px){#clockChip{right:12px;top:176px}}
+.store-account{position:sticky;top:0;z-index:4;margin:0 -30px 18px;padding:14px 30px;background:#17302af5;flex-direction:row;flex-wrap:wrap;gap:6px 22px;align-items:center}
+@media(max-width:600px){.store-account{margin:0 -18px 14px;padding:12px 18px}}
+#storeMessage{flex-basis:100%;margin:6px 0 0;padding:9px 13px;border-radius:9px;font:600 13px/1.4 Arial,sans-serif;letter-spacing:0;color:#f1ebd9;animation:store-pop .25s ease-out}
+#storeMessage:empty{display:none}
+#storeMessage[data-kind=ok]{background:#2f6b45;color:#eaf7ec}
+#storeMessage[data-kind=error]{background:#7d3b34;color:#fdeceb}
+@keyframes store-pop{from{transform:translateY(-4px);opacity:.3}}
+@media(prefers-reduced-motion:reduce){#storeMessage{animation:none}}

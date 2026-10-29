@@ -45,6 +45,19 @@ for(const saved of [false,true]){
  const enter=x=>{go(x,-7.5);pump(1);go(x,-8.9);pump(2.5)},leave=()=>{go(0,4.4);pump(2.5)}; // door cooldown is 1-2 s after using a door
  enter(19);assert.equal(ids.get('locationName').textContent,'CORNER MARKET');assert(ids.get('dialog').hidden,'door does not open a job dialog');go(0,-2);pressE();assert(ids.get('storeOverlay').hidden,'counter opens a short menu first');ids.get('jobAction').click();assert(!ids.get('storeOverlay').hidden,'View items for sale opens the store');ids.get('storeWork').click();assert.equal(ids.get('dialogKicker').textContent,'Noah');pump(3);const beforeLook=globalThis.__renderCamera.getWorldDirection(new THREE.Vector3());ids.get('closeDialog').click();pump(3);const afterLook=globalThis.__renderCamera.getWorldDirection(new THREE.Vector3());assert(beforeLook.dot(afterLook)>.99,'conversation close preserves camera heading');const settled=globalThis.__renderCamera.position.clone();pump(3);assert(settled.distanceTo(globalThis.__renderCamera.position)<.02,'camera stays still without fresh input');pressE();ids.get('storeWork').click();ids.get('jobAction').click();leave();go(-10.2,-7);pressE();ids.get('jobAction').click();pump(.1);assert.equal(ids.get('cash').textContent,'$40.00');
  enter(19);go(0,-2);pressE();ids.get('jobAction').click();ids.get('storeGroceries').click();ids.get('storeClose').click();pump(.1);assert.equal(ids.get('cash').textContent,'$36.00');leave();
+ assert.match(ids.get('clockChip').textContent,/^[A-Z][a-z]{2} · \d{1,2}:\d{2} (AM|PM)$/,'the time chip under the minimap');
+ // A menu opened during the door fade freezes the transition (it used to finish it and unpause the game under the menu).
+ {const esc=()=>{const e=new Event('keydown',{cancelable:true});e.code='Escape';win.dispatchEvent(e)};
+  go(19,-7.5);pump(1);go(19,-8.9);pump(.06);ids.get('help').click();assert(!ids.get('controls').hidden,'controls menu is open');pump(2);
+  assert.equal(ids.get('locationName').textContent,'WESTSIDE','the door fade waits while the Controls menu is open');assert(!ids.get('controls').hidden,'the menu stays open');
+  esc();pump(.1);assert(ids.get('controls').hidden,'Escape closes the menu');pump(2.5);assert.equal(ids.get('locationName').textContent,'CORNER MARKET','the fade finishes once the menu is closed');leave();}
+ // Two seconds of walking in 100 ms frames and in 20 ms frames cover the same ground and the same game time (movement used to be
+ // capped at 40 ms a frame while the clock ran on real time, so slow frames made the player slow but not the hunger).
+ {const hold=(code,down)=>{const e=new Event(down?'keydown':'keyup',{cancelable:true});e.code=code;win.dispatchEvent(e)};
+  const walk=frameMs=>{Object.assign(GameState.me.position,{x:-5,y:.2,z:12});pump(.2);const z0=GameState.me.position.z,m0=GameState.progress.routine.minutes;hold('KeyW',true);for(let t=0;t<2000;t+=frameMs){simTime+=frameMs;nextFrame(simTime)}hold('KeyW',false);pump(.2);return {metres:z0-GameState.me.position.z,minutes:GameState.progress.routine.minutes-m0}};
+  const slow=walk(100),fast=walk(20);
+  assert(slow.metres>7&&fast.metres>7,`walked ${slow.metres.toFixed(2)} and ${fast.metres.toFixed(2)} m`);assert(Math.abs(slow.metres-fast.metres)<.3,`ground covered: ${slow.metres.toFixed(2)} m in 100 ms frames, ${fast.metres.toFixed(2)} m in 20 ms frames`);
+  assert(Math.abs(slow.minutes-fast.minutes)<.05,`game time: ${slow.minutes} vs ${fast.minutes}`);}
 
  // A closed shop keeps its door shut, shows CLOSED and tells you its hours.
  {const saved=GameState.progress.routine.minutes;GameState.progress.routine.minutes=23*60+30;go(19,-6.3);pump(.2);go(19,-7.9);pump(2.5);assert.equal(ids.get('locationName').textContent,'WESTSIDE','cannot enter a closed shop');assert.match(ids.get('jobToast').textContent,/Corner Market is closed/);GameState.progress.routine.minutes=saved;go(19,-6.3);pump(.2)}
@@ -109,6 +122,7 @@ for(const saved of [false,true]){
  const beforePay=phoneState.progress.cash;
  Object.assign(phoneState.me.position,{x:CONTRACTS[0].location.x,y:.165,z:CONTRACTS[0].location.z});phoneFrame();
  assert.equal(ids.get('gigStepGo').textContent,'☑');assert.equal(phoneState.progress.activeJob.stage,'task');assert.equal(phoneState.progress.cash,beforePay);
+ assert.match(ids.get('direction').style.transform,/^rotate\(/,'the arrow is the gig arrow (it used to be overwritten by the market beacon)');assert.equal(globalThis.__renderScene.getObjectByName('objective-beacon').visible,false,'no market beacon during a gig');
  ids.get('objectiveToggle').click();assert(ids.get('objectiveDetails').hidden);assert.equal(ids.get('objectiveToggle')['aria-expanded'],'false');ids.get('objectiveToggle').click();assert(!ids.get('objectiveDetails').hidden);
  for(let i=0;i<205;i++)phoneFrame();assert.equal(phoneState.progress.activeJob.stage,'return');assert.equal(ids.get('gigStepTask').textContent,'☑');
  Object.assign(phoneState.me.position,{x:CONTRACTS[0].returnLocation.x,y:.165,z:CONTRACTS[0].returnLocation.z});key('KeyE');phoneFrame();
@@ -119,6 +133,7 @@ for(const saved of [false,true]){
  ids.get('closeDialog').click();
  let networkNow=performance.now()+100000;
  function networkFrame(){networkNow+=10;globalThis.__testNow=networkNow;nextFrame(networkNow)}
+ Object.assign(state.me.position,{x:-5,y:.2,z:12});networkFrame(); // open ground, and one warm-up frame that absorbs the test's big clock jump
  const startZ=state.me.position.z;
  const down=new Event('keydown');down.code='KeyW';win.dispatchEvent(down);
  __testSocket.sent=[];
@@ -174,7 +189,7 @@ for(const saved of [false,true]){
  Object.assign(state.me.position,{x:19,y:.165,z:-7.5});for(let i=0;i<100;i++)networkFrame();Object.assign(state.me.position,{x:19,y:.165,z:-8.9});for(let i=0;i<300;i++)networkFrame();Object.assign(state.me.position,{x:0,y:.02,z:-2});key('KeyE');
  // Noah offers a short menu: browse the store or ask about jobs.
  assert.equal(ids.get('dialogKicker').textContent,'Noah');assert.equal(ids.get('jobAction').textContent,'View items for sale');assert.equal(ids.get('extraAction').textContent,'View jobs');assert(ids.get('storeOverlay').hidden);ids.get('jobAction').click();assert(!ids.get('storeOverlay').hidden);
- const beforeBuy=state.progress.cash;const buyApple=ids.get('storeItems').children[0].children.at(-1);assert.equal(buyApple.id,'buy-apple');buyApple.click();assert.equal(state.progress.cash,beforeBuy-100);assert.equal(state.progress.inventory.slots[0].id,'apple');assert.equal(JSON.parse(store.get('citylife.profile.v1')).progress.cash,beforeBuy-100);
+ const beforeBuy=state.progress.cash;const buyApple=ids.get('storeItems').children[0].children.at(-1);assert.equal(buyApple.id,'buy-apple');buyApple.click();assert.equal(state.progress.cash,beforeBuy-100);assert(ids.get('storeMessage').textContent.startsWith('✓'),'a purchase is confirmed in the pinned header');assert.equal(ids.get('storeMessage').dataset.kind,'ok');assert.equal(state.progress.inventory.slots[0].id,'apple');assert.equal(JSON.parse(store.get('citylife.profile.v1')).progress.cash,beforeBuy-100);
  ids.get('storeFilter-drink').click();assert.equal(ids.get('storeItems').children.length,5);ids.get('storeClose').click();assert(ids.get('storeOverlay').hidden);
  key('KeyI');assert(!ids.get('inventoryOverlay').hidden);assert.equal(ids.get('inventoryGrid').children[0].children[1].textContent,'Apple');key('Escape');
  console.log(saved?'Existing save: gameplay, phone apps/controls/gigs, and multiplayer frame checks passed.':'Fresh save: creator, phone apps/controls/gigs, and multiplayer frame checks passed.');

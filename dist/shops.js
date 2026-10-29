@@ -5,7 +5,9 @@ import {MAP} from './map-definition.js';
 import {createSlidingDoor} from './doors.js';
 // Where each shop's door is and where you stand outside it (see map-definition.js).
 export const SHOPS=Object.fromEntries(Object.entries(MAP.shops).map(([kind,shop])=>[kind,{name:shop.name,x:shop.x,z:shop.z}]));
-export const SHOP_ENTRY={x:0,z:3.1},SHOP_EXIT={x:0,z:4},COUNTER={x:0,z:-2};
+// Interior placements come from the map (both shops share one layout).
+const layout=MAP.shops.market.interior;
+export const SHOP_ENTRY=layout.spawn,SHOP_EXIT=layout.exit,COUNTER=layout.counter;
 export function createShop(kind){const cafe=kind==='cafe',scene=new T.Group();scene.name=kind+'-interior';const occluders=[],blocks=[];
  function box(w,h,d,x,y,z,c,solid=false){const m=new T.Mesh(new T.BoxGeometry(w,h,d),new T.MeshStandardMaterial({color:c,roughness:.85}));m.position.set(x,y,z);scene.add(m);if(y>0)occluders.push(m);if(solid)blocks.push({x,z,hx:w/2,hz:d/2});return m}
  box(12,.2,10,0,-.1,0,cafe?'#ad9271':'#c5c5b2');for(let x=-6;x<=6;x+=1)box(.015,.004,10,x,.002,0,'#a59d88');
@@ -23,6 +25,6 @@ export function createShop(kind){const cafe=kind==='cafe',scene=new T.Group();sc
  const customer=cafe?createCharacter(outfit('female','Casual',{skin:'#d9ae8d',hair:'#bca06a'})):null;
  const usedCup=box(.13,.18,.13,-3.8,.97,-.7,'#eee5d1');usedCup.visible=false;
  if(customer){customer.group.name='cafe-customer';customer.group.visible=false;scene.add(customer.group)}
- const exitDoor=createSlidingDoor({width:2.2,height:2.7});exitDoor.group.position.set(0,0,4.96);scene.add(exitDoor.group);
+ const exitSpec=MAP.shops[kind].interior.exitDoor,exitDoor=createSlidingDoor({width:exitSpec.width,height:exitSpec.height});exitDoor.group.position.set(0,0,exitSpec.z);scene.add(exitDoor.group);
  return {scene,occluders,glass,customer,usedCup,clerk,exitDoor,blocked(x,z){return Math.abs(x)>5.55||Math.abs(z)>4.55||blocks.some(b=>Math.abs(x-b.x)<b.hx+.32&&Math.abs(z-b.z)<b.hz+.32)}};
 }

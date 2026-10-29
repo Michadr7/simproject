@@ -567,3 +567,64 @@ Measured first (angular speed of the forearm and wrist in a headless run), then 
   covers the bars, the warning levels and the lowered arm.
 - Fix: the bar fill was inheriting a global `i{margin:0 12px}` and starting inset; it has its own class now.
 - `DESIGN.md` holds the architecture plan for the six issues from the v0.19.3 review (the next work, before the asset pipeline).
+
+## 0.19.6 package A: one action at a time, menus freeze door fades, a time chip, a clearer store
+
+- **`actions.js`.** Swinging the axe, eating or drinking, shift work, resting and walking through a door each own the player until
+  they finish; nothing else may start meanwhile, in either direction (eating during a swing used to be allowed; chopping during a
+  meal was not). The flags come from the game's own state (`actionFlags()` in `game.js`), so there is no lock to release and nothing
+  can stay stuck. Guards for interacting, equipping, the bag, store and phone, doors, movement and sleeping all ask it.
+- **Menu versus door fade.** The fade (and the doors) freeze while any menu is open, `startDoorFade` refuses while one is open, and
+  `enterShop` no longer sets `modal`, so only `pause()` owns it: opening Controls during a transition can no longer unpause the game.
+- **Axe carry.** The hand sits in front of the chest with a relaxed 90 degree elbow, the shaft rests on the shoulder and the head is
+  behind it, 31 cm clear of the head (the old pose folded the elbow to 115 degrees with the shaft 22 cm off the shoulder). Found by
+  scoring candidates on elbow bend, shaft-to-shoulder distance and head clearance across four characters; the swing's peak forearm
+  speed also dropped from about 70 to about 55 rad/s.
+- **Time chip** under the minimap ("Mon · 6:44 PM").
+- **Store.** Cash, bag space and the purchase message are pinned at the top of the store window while the list scrolls; a purchase
+  shows "✓ Bought ..." in green and a refusal in red, for six seconds.
+- **`tests/waist.mjs`** now tests the skeletal waist (spine order and height, lean at the waist, no primitive torso, seated thighs),
+  so the zip repairs the old failing test with no manual delete.
+
+## 0.20.0 packages B and C: one objective, real-time simulation, doorways as data
+
+- **`objective.js`: one answer to "where next?".** `resolveObjective` returns the single current target (an active gig, then a delivery
+  you are carrying, then the market: its doorway from the street, its counter from inside, otherwise nothing) with the arrow aim in
+  the space you are standing in and the beacon to draw. `updateObjective` in `game.js` is the only code that draws the arrow and the
+  beacon. Before, `updateGig` and `updateBeacon` both wrote the arrow each frame and the beacon always won, and the market doorway
+  beacon kept showing during a gig. The beacon is named `objective-beacon` in the scene.
+- **`timestep.js`: real time drives the simulation.** Each frame's real time (clipped at 0.25 s) is cut into equal slices of at most
+  1/30 s, and `stepWorld` (movement and collisions, the clock, needs, contracts, pedestrians, regrowth, action timers, doors, café
+  visuals) runs once per slice. Animation, camera, UI and rendering run once per frame on the real frame time (at most 0.1 s). At 10
+  FPS the player now covers the same ground and gets as hungry as at 60 FPS; movement used to be capped at 40 ms a frame while the
+  clock and needs ran on up to 250 ms. The FPS readout divides by real time (it over-reported below 25 FPS before). This is
+  sub-stepping rather than an accumulator on purpose: an accumulator at 144 FPS would step in lumps and stutter without
+  interpolation, whereas one small slice per frame needs none. Each slice is at most 27 cm at sprint speed, under the 33 cm collision radius.
+- **Doorways and interiors are map data.** Each shop has a `doorway` (gap half width, approach zone, threshold, closed-door line,
+  blocker, back wall, beacon z, exit step) and an `interior` (origin, front wall, entry, spawn, exit, counter, exit door with its
+  approach zone and trigger line); the studio has its door position and interior entry, exit and bed. `game.js`, `shops.js` and
+  `apartment.js` read them, and `validateMap` checks them: the entry trigger is reachable through the gap, the threshold is in front
+  of the back wall and at the door, the closed-door line is reachable, the approach zone contains both lines, leaving does not put you
+  back in the trigger, the room's front wall sits on the building's front, the entry is clear of the exit trigger and the counter is in
+  the room. `tests/map.mjs` proves every number equals the literal it replaced and catches 42 kinds of broken map.
+- Tests: `objective.mjs`, `timestep.mjs`, and in `startup.mjs` the same two seconds of walking in 100 ms and 20 ms frames (same ground
+  and game time), the gig arrow and hidden market beacon during a gig, and a multiplayer test that no longer depends on the old frame cap.
+- Still literals: the pavement and road height bands in the frame loop, and the interior room geometry itself (shelves, counter model).
+
+## 0.20.1 the axe is carried with both hands
+
+- The over-the-shoulder carry kept looking wrong, so the axe is now carried **with both hands, diagonally across the chest**: the
+  right hand 12 cm up the handle, the left hand on the shaft, the head up by the left shoulder. The pose was found by searching hand
+  positions, shaft directions and grips across four characters and scoring both elbows (about 70 and 95 degrees), the left hand being
+  on the shaft, and the head being over 45 cm clear of the head and over 40 cm from the torso (`CARRY`, `CARRY_DIR`, `GRIP` in
+  `chop-path.js`). Both hands stay on the handle through the whole swing (`chopPose` returns `twoHand: 1`), so there is no hand
+  changing grip at the start or end of a swing, and a hand that holds a tool does not swing while walking.
+- Putting the axe away, or eating (which takes the hand), lets go of the second hand at once.
+- Tests: carry (left wrist on the shaft, relaxed elbows, head clearance) and both forearms' steadiness while walking and jogging.
+
+## 0.20.2 the hands close around the handle
+
+- `hold(object, {curl})`: a hand holding a tool closes its fingers around it, from the relaxed idle fingers to the pack's own fist
+  (taken from the Sprint clip's first keyframe), by `curl` (0 open, 1 closed). The axe uses `curl: 1`; the left hand follows
+  `twoHandWeight`. Walking, jogging and the carry no longer show open, splayed hands hovering near the shaft.
+- Test: the fingers curl well away from the idle pose while a tool is held, and are back to idle after it is released.

@@ -75,10 +75,10 @@ for(const body of ['male','female'])for(const speed of [1.4,2.2,4.5]){
 }
 // An axe carried while walking or jogging does not make the arm or the axe spin.
 for(const body of ['male','female'])for(const speed of [0,2.2,4.5]){
- const w=createCharacter(outfit(body,OUTFITS[body][0][0])),item=new T.Group();w.hold(item,{axis:'z',grip:.18});w.alignHeld(new T.Vector3(.4,.7,-.5));w.reach('R',new T.Vector3(-.28,1.28,.05),1,new T.Vector3(-.15,-.35,1));w.setMotion(speed);for(let i=0;i<20;i++)w.update(.016);
- let prev=null,fastest=0,fastestItem=0,prevItem=null;
- for(let i=0;i<120;i++){w.update(.016);w.group.updateMatrixWorld(true);const q=w.bone('LowerArmR').getWorldQuaternion(new T.Quaternion()),qi=item.getWorldQuaternion(new T.Quaternion());if(prev)fastest=Math.max(fastest,q.angleTo(prev)/.016);if(prevItem)fastestItem=Math.max(fastestItem,qi.angleTo(prevItem)/.016);prev=q;prevItem=qi}
- assert(fastest<16,`${body} at ${speed}: carrying arm turns smoothly (peak ${fastest.toFixed(1)} rad/s)`);assert(fastestItem<2,`${body} at ${speed}: the carried tool holds steady (${fastestItem.toFixed(1)} rad/s)`);
+ const w=createCharacter(outfit(body,OUTFITS[body][0][0])),item=new T.Group();w.hold(item,{axis:'z',grip:.12});w.alignHeld(new T.Vector3(.7,.6,.15));w.reach('R',new T.Vector3(-.14,1.2,.3),1);w.setTwoHanded(1);w.setMotion(speed);for(let i=0;i<45;i++)w.update(.016); // let the walk/jog crossfade and the carry blend finish
+ let prev=null,prevL=null,fastest=0,fastestL=0,fastestItem=0,prevItem=null;
+ for(let i=0;i<120;i++){w.update(.016);w.group.updateMatrixWorld(true);const q=w.bone('LowerArmR').getWorldQuaternion(new T.Quaternion()),ql=w.bone('LowerArmL').getWorldQuaternion(new T.Quaternion()),qi=item.getWorldQuaternion(new T.Quaternion());if(prev)fastest=Math.max(fastest,q.angleTo(prev)/.016);if(prevL)fastestL=Math.max(fastestL,ql.angleTo(prevL)/.016);if(prevItem)fastestItem=Math.max(fastestItem,qi.angleTo(prevItem)/.016);prev=q;prevL=ql;prevItem=qi}
+ assert(fastest<24,`${body} at ${speed}: carrying arm turns smoothly (peak ${fastest.toFixed(1)} rad/s)`);assert(fastestL<24,`${body} at ${speed}: the supporting arm turns smoothly (peak ${fastestL.toFixed(1)} rad/s)`);assert(fastestItem<2,`${body} at ${speed}: the carried tool holds steady (${fastestItem.toFixed(1)} rad/s)`);
 }
 m.update(0);const held=pose();m.update(0);assert.deepEqual(pose(),held,'paused (dt 0) holds the pose');
 // ── Reach and held items ──────────────────────────────────────────────────────

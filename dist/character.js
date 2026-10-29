@@ -101,6 +101,9 @@ export function createCharacter(input){
  // The relaxed idle rotations of the arm bones: every arm override starts from these, never from the animation's pose, so the
  // solver cannot flip about the forearm when the clip's arm happens to be nearly opposite the target.
  const idleLocal=new Map(),swingLag={R:0,L:0};
+ // Gripping: each finger bone's relaxed (idle) rotation and its curled rotation, taken from the pack's sprint fist, so a hand holding a tool
+ // can close around the handle. `curl` on hold() is how far the hand closes (0 open, 1 fully closed).
+ const idleFingers=new Map(),gripFingers=new Map();
  // Held-item orientation override (a carry pose), a second hand on the handle, and a forward/back lean of the spine.
  let alignDir=null,alignAmount=0,twoHandWeight=0,leanAngle=0;const twoHandL={target:new T.Vector3(),weight:0},wantAlign=new T.Quaternion();
 
@@ -121,6 +124,8 @@ export function createCharacter(input){
   const bindEnd={};for(const side of ['R','L']){const lower=byName.get('LowerLeg'+side),foot=byName.get('Foot'+side);if(lower&&foot){foot.getWorldPosition(v1);bindEnd[side]=lower.worldToLocal(v1.clone())}}
   kinds.current=null;motion='';play('Idle_Neutral',1);
   kinds.mixer.update(0); // show the idle pose at once instead of the T-pose until the first update
+  idleFingers.clear();gripFingers.clear();
+  {const fist=set.clips.get('Sprint');if(fist)for(const track of fist.tracks){const m=/^((?:Thumb|Index|Middle|Ring|Pinky)\d[LR])\.quaternion$/.exec(track.name),bone=m&&byName.get(m[1]);if(bone){gripFingers.set(bone,new T.Quaternion().fromArray(track.values,0));idleFingers.set(bone,bone.quaternion.clone())}}}
   idleLocal.clear();for(const name of ['UpperArmR','LowerArmR','WristR','UpperArmL','LowerArmL','WristL']){const bone=byName.get(name);if(bone)idleLocal.set(bone,bone.quaternion.clone())}
   const side=name=>({upper:byName.get('UpperArm'+name),lower:byName.get('LowerArm'+name),wrist:byName.get('Wrist'+name)});
   rig={R:side('R'),L:side('L'),legs:{R:[byName.get('UpperLegR'),byName.get('LowerLegR')],L:[byName.get('UpperLegL'),byName.get('LowerLegL')]},foot:{R:byName.get('FootR'),L:byName.get('FootL')},bindEnd,head:byName.get('Head'),headEnd:byName.get('Head_end')};
@@ -229,7 +234,7 @@ export function createCharacter(input){
   const jog=motion==='Run',lead=T.MathUtils.clamp((zL-zR)/(jog?1.05:.9),-1,1),amount=jog?.55:.42; // lead > 0: left foot ahead, so the right arm swings forward
   group.getWorldQuaternion(qGroup);
   for(const side of ['R','L']){
-   if(reaches[side].weight>.001||(side==='R'&&held))continue;
+   if(reaches[side].weight>.001||(side==='R'&&held)||(side==='L'&&twoHandWeight>.001))continue; // a hand on a tool does not swing
    const arm=rig[side],phi=(side==='R'?lead:-lead)*amount;
    // The forearm lags the upper arm a little, and bends more as the arm comes forward; the arm drifts in across the body as it swings forward.
    swingLag[side]+=(phi-swingLag[side])*Math.min(1,dt*14);const lag=swingLag[side];
@@ -245,6 +250,11 @@ export function createCharacter(input){
   return lead;
  }
  // Lean the spine about the character's side-to-side axis (positive = forward), spread over three bones.
+ // Close one hand's fingers around a handle by `weight` (0 open .. 1 closed), starting from the relaxed idle fingers.
+ function applyGrip(side,weight){
+  if(weight<.001)return;
+  for(const [bone,curled] of gripFingers){if(!bone.name.endsWith(side))continue;if(!memo.has(bone))memo.set(bone,bone.quaternion.clone());bone.quaternion.copy(idleFingers.get(bone)).slerp(curled,Math.min(1,weight))}
+ }
  function applyLean(){
   group.getWorldQuaternion(qGroup);v1.copy(X).applyQuaternion(qGroup);
   for(const [name,share] of [['Abdomen',.3],['Torso',.4],['Chest',.3]]){const bone=kinds.byName.get(name);if(bone)turnBone(bone,new T.Quaternion().setFromAxisAngle(v1,leanAngle*share),1,memo)}
@@ -281,6 +291,7 @@ export function createCharacter(input){
   solveArm('R');if(twoHandWeight<.001)solveArm('L');
   if(held)placeHeld();
   if(held&&twoHandWeight>.001)gripWithLeft();
+  if(held&&held.curl){applyGrip('R',held.curl);applyGrip('L',held.curl*twoHandWeight)}
  }
  // Puts the held item in the palm: upright items stay level, tools follow the forearm.
  const basis=new T.Matrix4(),vX=new T.Vector3(),vY=new T.Vector3(),vZ=new T.Vector3(),want=new T.Quaternion();
@@ -320,7 +331,7 @@ export function createCharacter(input){
   clearReach(){reaches.R.weight=reaches.L.weight=0},
   // upright: stays level (cups, fruit). Otherwise the item's `axis` ('y' or 'z') runs along the forearm.
   // grip: how far along the tool's long axis (from its origin) the palm holds it.
-  hold(object,{upright=false,axis='y',grip=0}={}){this.release();api.hand.add(object);held={object,upright,axis,grip}},
+  hold(object,{upright=false,axis='y',grip=0,curl=0}={}){this.release();api.hand.add(object);held={object,upright,axis,grip,curl}},
   release(){if(held){held.object.removeFromParent();held=null}tilt=0},
   setHeldTilt(angle){tilt=angle},
   // Carry pose for a held tool: point its long axis along `direction` (character space), or null to follow the forearm.

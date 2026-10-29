@@ -24,12 +24,15 @@ export function createStoreUI({document:doc,getState,canOpen,onOpen,onClose,onBu
   }
   for(const name of FILTERS)$('storeFilter-'+name).setAttribute('aria-pressed',String(name===category));
  }
- function transaction(result){$('storeMessage').textContent=result?.error||result?.message||'';refresh()}
+ // The confirmation sits in the pinned header (cash, bag space, message), so a purchase is visible without scrolling the list.
+ let messageTimer=null;
+ function say(text,kind=''){const box=$('storeMessage');box.textContent=text;box.dataset.kind=text?kind:'';clearTimeout(messageTimer);if(text){messageTimer=setTimeout(()=>say(''),6000);messageTimer.unref?.()}}
+ function transaction(result){if(result?.error)say(result.error,'error');else if(result?.message)say('✓ '+result.message,'ok');else say('');refresh()}
  function open(){
   if(opened||!canOpen())return;
-  previousFocus=doc.activeElement;opened=true;category='all';onOpen();$('storeOverlay').hidden=false;$('storeMessage').textContent='';refresh();$('storeClose').focus();
+  previousFocus=doc.activeElement;opened=true;category='all';onOpen();$('storeOverlay').hidden=false;say('');refresh();$('storeClose').focus();
  }
- function close(){if(!opened)return;opened=false;$('storeOverlay').hidden=true;onClose();previousFocus?.focus?.()}
+ function close(){if(!opened)return;opened=false;say('');$('storeOverlay').hidden=true;onClose();previousFocus?.focus?.()}
  for(const name of FILTERS)$('storeFilter-'+name).onclick=()=>{category=name;refresh()};
  $('storeClose').onclick=close;$('storeGroceries').onclick=()=>transaction(onGroceries());$('storeSell').onclick=()=>transaction(onSell());
  $('storeWork').onclick=()=>{close();onWork()};

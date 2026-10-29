@@ -1,5 +1,6 @@
+import {MAP} from './map-definition.js';
 import * as T from './vendor/three.module.js';
-export const EXIT={x:0,z:4.45},BED={x:-3.6,z:-2.3},ENTRY={x:0,z:3.3};
+export const EXIT=MAP.studio.interior.exit,BED=MAP.studio.interior.bed,ENTRY=MAP.studio.interior.entry; // placed by map-definition.js
 export function createApartment(){
  const scene=new T.Scene();scene.background=new T.Color('#b8b5a4');scene.add(new T.HemisphereLight('#fff1da','#898878',1.9));const light=new T.DirectionalLight('#fff2da',2);light.position.set(2,6,1);scene.add(light);
  const colliders=[],solids=[],occluders=[],materials=new Map();

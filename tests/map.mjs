@@ -1,7 +1,8 @@
 import assert from 'node:assert/strict';
 import {MAP,validateMap,roadRects,zoneAtPoint,zoneById,hoursOf} from '../dist/map-definition.js';
 import {ZONES,WALKABLE,GROUND,DIRT_ROADS,FIELDS,CITY_WEST,CITY_EAST,WORLD_SEED,zoneAt,isWalkable,worldLayout,fenceSegments} from '../dist/world.js';
-import {SHOPS} from '../dist/shops.js';
+import {SHOPS,SHOP_ENTRY,SHOP_EXIT,COUNTER} from '../dist/shops.js';
+import {EXIT,BED,ENTRY} from '../dist/apartment.js';
 import {shopOpen,hoursText} from '../dist/routine.js';
 import {STUDIO} from '../dist/housing.js';
 import {MARKET} from '../dist/jobs.js';
@@ -28,6 +29,16 @@ assert.deepEqual(MAP.buildings.slice(-7).map(b=>[b.x,b.z,b.w,b.d,b.h]),[-48,-31,
 // Opening hours: the same boundaries as before.
 for(const [kind,minute,open] of [['market',419,false],['market',420,true],['market',1319,true],['market',1320,false],['cafe',479,false],['cafe',480,true],['cafe',1079,true],['cafe',1080,false]])assert.equal(shopOpen(kind,{minutes:minute}),open,`${kind} at ${minute}`);
 assert.deepEqual(hoursOf('market'),[420,1320]);assert.equal(hoursText('market'),'7 AM–10 PM');assert.equal(hoursText('cafe'),'8 AM–6 PM');
+
+// ── Doorways and interiors: the numbers that used to be literals in game.js, shops.js and apartment.js ──────────────
+for(const kind of ['market','cafe']){
+ const shop=MAP.shops[kind];
+ assert.deepEqual(shop.doorway,{halfWidth:1.3,approach:{halfWidth:2.6,z0:-9.2,z1:-5.4},threshold:-8.4,closedTouch:-7.6,enterHalfWidth:.9,blocker:{z:-8.5,depth:.25},backWall:{z:-9.3,depth:.2},beaconZ:-8.3,exit:{z:-7.6,clamp:.8}},`${kind} doorway`);
+ assert.deepEqual(shop.interior,{origin:{y:.165,z:-13.5},frontWallZ:5,entry:{x:0,z:3.9},spawn:{x:0,z:3.1},exit:{x:0,z:4},counter:{x:0,z:-2},exitDoor:{z:4.96,width:2.2,height:2.7,near:{halfWidth:2.4,z:2.7},trigger:{halfWidth:.9,z:4.3}}},`${kind} interior`);
+}
+assert.notEqual(MAP.shops.market.doorway,MAP.shops.cafe.doorway,'each shop owns its doorway data');
+assert.deepEqual([SHOP_ENTRY,SHOP_EXIT,COUNTER],[{x:0,z:3.1},{x:0,z:4},{x:0,z:-2}]);
+assert.deepEqual([EXIT,BED,ENTRY],[{x:0,z:4.45},{x:-3.6,z:-2.3},{x:0,z:3.3}]);assert.deepEqual(MAP.studio,{x:1,z:-6.3,doorZ:-8.25,interior:{entry:{x:0,z:3.3},exit:{x:0,z:4.45},bed:{x:-3.6,z:-2.3}}});
 
 // ── Zone lookup ───────────────────────────────────────────────────────────────
 for(const [x,z,id] of [[0,0,'city'],[-60.9,10,'city'],[-61,0,'city'],[-61.01,0,'farm'],[-100,-40,'farm'],[58,0,'city'],[58.01,0,'forest'],[120,50,'forest']])assert.equal(zoneAt(x,z).id,id,`${x},${z}`);
@@ -69,4 +80,18 @@ has(broken(m=>{m.reserved.push(plot({x0:-150,z0:-10,x1:-140,z1:-5}))}),/overlaps
 has(broken(m=>{m.reserved.push(plot({x0:15,z0:-20,x1:22,z1:-12}))}),/overlaps a building/);
 has(broken(m=>{m.reserved.push(plot(),plot({x0:85,x1:95}))}),/duplicate reserved plot/);
 has(broken(m=>{m.reserved.push(plot(),plot({id:'R2',x0:85,x1:95}))}),/overlap/);
-console.log('Map data is valid and frozen; zones, roads, fields, trees, shops, hours, studio and spawn match the numbers they replaced; 29 broken maps are each caught.');
+// Doorway and interior rules.
+has(broken(m=>{m.shops.market.doorway.enterHalfWidth=1.2}),/too narrow to reach its entry trigger/);
+has(broken(m=>{m.shops.cafe.doorway.approach.halfWidth=1}),/approach zone is narrower than the doorway/);
+has(broken(m=>{m.shops.market.doorway.threshold=-9.0}),/behind the back wall/);
+has(broken(m=>{m.shops.market.doorway.threshold=-8.0}),/threshold is not at the door/);
+has(broken(m=>{m.shops.cafe.doorway.closedTouch=-8.0}),/behind the blocker/);
+has(broken(m=>{m.shops.cafe.doorway.approach.z1=-8.0}),/approach zone does not contain/);
+has(broken(m=>{m.shops.market.doorway.exit.z=-8.2}),/back inside the entry trigger/);
+has(broken(m=>{m.shops.market.interior.origin.z=-12}),/interior front wall is not on the building's front/);
+has(broken(m=>{m.shops.cafe.interior.entry.z=4.5}),/entry or spawn is inside the exit trigger/);
+has(broken(m=>{m.shops.cafe.interior.exitDoor.near.z=4.5}),/exit door would open after its trigger line/);
+has(broken(m=>{m.shops.market.interior.counter.x=7}),/counter is outside the room/);
+has(broken(m=>{delete m.shops.cafe.doorway}),/needs a doorway and an interior/);
+has(broken(m=>{delete m.studio.interior}),/studio interior needs an entry, exit and bed/);
+console.log('Map data is valid and frozen; zones, roads, fields, trees, shops, hours, studio and spawn match the numbers they replaced; 42 broken maps are each caught.');
