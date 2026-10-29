@@ -1,11 +1,11 @@
 import {ZONES,WALKABLE,DIRT_ROADS,FIELDS} from './world.js';
-import {MAP} from './map-definition.js';
+import {MAP,riverPath} from './map-definition.js';
 
-// Whole-world strip map: farm (west) · city · forest (east), north (-z) up.
+// Whole-world map, north (-z) up: the city in the south, the river and bridge across the middle, Willow Fields (west) and Pine Ridge (east) north of it.
 // The static layer is drawn once (and again when a tree is felled); the
 // player and markers are drawn on top at ~12 fps.
 const VIEW=MAP.minimap.view;
-const SIZES={small:{w:264,h:94},large:{w:720,h:256}};
+const SIZES={small:{w:200,h:163},large:{w:600,h:490}};
 
 export function createMinimap(doc,{canvas,cityRoads=[],buildings=[],trees=()=>[]}){
  if(!canvas)return {update(){},toggle(){},invalidate(){},get large(){return false}};
@@ -24,14 +24,14 @@ export function createMinimap(doc,{canvas,cityRoads=[],buildings=[],trees=()=>[]
   const ctx=layer.getContext('2d'),k=scale();
   ctx.setTransform(1,0,0,1,0,0);
   ctx.fillStyle='#1d2b26';ctx.fillRect(0,0,layer.width,layer.height);
-  // Zone ground colours: brown/yellow farm, grey city, green forest.
-  // The zones run west to east: each zone's strip of the view takes its own surround colour, the walkable part its zone colour.
-  const strips=[...MAP.zones].sort((a,b)=>a.bounds.x0-b.bounds.x0);
-  strips.forEach((zone,i)=>rect(ctx,{x0:i?zone.bounds.x0:VIEW.x0,x1:i===strips.length-1?VIEW.x1:zone.bounds.x1,z0:VIEW.z0,z1:VIEW.z1},zone.minimap.surround));
+  // Meadow, then the river, then each zone's ground, roads, fields, the bridge, buildings, trees and zone names.
+  rect(ctx,VIEW,'#3d5a3c');
+  for(const river of MAP.water.rivers){ctx.strokeStyle='#3f7ea3';ctx.lineWidth=river.width*k;ctx.lineJoin=ctx.lineCap='round';ctx.beginPath();riverPath(river,6).forEach((p,i)=>i?ctx.lineTo(px(p.x),pz(p.z)):ctx.moveTo(px(p.x),pz(p.z)));ctx.stroke()}
   for(const w of WALKABLE)rect(ctx,w,ZONES[w.zone].color);
-  for(const f of FIELDS){rect(ctx,f,'#a99348');ctx.strokeStyle='#6b5530';ctx.lineWidth=Math.max(1,k*.5);ctx.strokeRect(px(f.x0),pz(f.z0),(f.x1-f.x0)*k,(f.z1-f.z0)*k)}
+  for(const f of FIELDS)rect(ctx,f,{plowed:'#6b4f3a',wheat:'#d4b45a',green:'#82a653'}[f.surface]||'#a99348');
   for(const r of DIRT_ROADS)rect(ctx,r,'#9c8462');
   for(const r of cityRoads)rect(ctx,r,'#45494b');
+  for(const b of MAP.water.bridges)rect(ctx,b,'#6f5b43');
   for(const b of buildings)rect(ctx,{x0:b.x-b.hx,x1:b.x+b.hx,z0:b.z-b.hz,z1:b.z+b.hz},'#33383a');
   ctx.fillStyle='#1f3a22';
   const r=Math.max(1,k*.55);

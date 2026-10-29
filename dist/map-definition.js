@@ -4,38 +4,55 @@
 // The map is flat: there is no elevation in version 1.
 
 // Zones tile the walkable world. `bounds` is the walkable rectangle, `grid` turns on the 1x1 plot grid (farm and forest),
-// `minimap` holds how the map draws it. Zones must not overlap; edges may touch.
+// `minimap.label` is where the map writes the zone's name. Zones must not overlap; edges may touch.
+// The world, north (-z) up: the city in the south; a gently curving river rising from the south-west to the north-east, north of the city;
+// the County Road crossing the river by the bridge and reaching the north bank, where Willow Fields (the farm) lies to the north-west and
+// Pine Ridge (the forest) to the north-east.
 const zones=[
- {id:'city',name:'Westside',label:'WESTSIDE',subtitle:'Oak & Alder',color:'#8d9294',grid:false,bounds:{x0:-61,x1:58,z0:-48,z1:48},minimap:{surround:'#5d6265',label:{x:-1,z:-52}}},
- {id:'farm',name:'Oak Farms',label:'OAK FARMS',subtitle:'Fields & plots',color:'#c9ae63',grid:true,bounds:{x0:-168,x1:-61,z0:-56,z1:56},minimap:{surround:'#8d7a45',label:{x:-114,z:-50}}},
- {id:'forest',name:'Alder Woods',label:'ALDER WOODS',subtitle:'Timber & trails',color:'#3f6a3c',grid:true,bounds:{x0:58,x1:168,z0:-56,z1:56},minimap:{surround:'#2f4f2e',label:{x:113,z:-50}}}
+ {id:'city',name:'Westside',label:'WESTSIDE',subtitle:'Oak & Alder',color:'#8d9294',grid:false,bounds:{x0:-61,x1:58,z0:-48,z1:48},minimap:{label:{x:-1,z:44}}},
+ {id:'county',name:'County Road',label:'COUNTY ROAD',subtitle:'Bridge & crossroads',color:'#7a7f83',grid:false,bounds:{x0:-35,x1:-25,z0:-246,z1:-48},minimap:{label:{x:-30,z:-60}}},
+ {id:'farm',name:'Willow Fields',label:'WILLOW FIELDS',subtitle:'Fields & plots',color:'#c9ae63',grid:true,bounds:{x0:-170,x1:-35,z0:-216,z1:-108},minimap:{label:{x:-102,z:-205}}},
+ {id:'forest',name:'Pine Ridge',label:'PINE RIDGE',subtitle:'Timber & trails',color:'#3f6a3c',grid:true,bounds:{x0:-25,x1:150,z0:-246,z1:-146},minimap:{label:{x:62,z:-236}}}
 ];
 
 // Road graph: named points joined by straight, axis-aligned segments with a width and a surface. The drawable rectangles
 // (roadRects) come from it, and it is the structure NPC walking and traffic will route on.
 const roads={
  nodes:{
-  oakWest:{x:-55,z:6},oakEast:{x:55,z:6},alderNorth:{x:-30,z:-60},alderSouth:{x:-30,z:60},
-  farmGate:{x:-168,z:6},farmLaneNorth:{x:-110,z:-56},farmLaneSouth:{x:-110,z:56},
-  woodsGate:{x:168,z:6},woodsLaneNorth:{x:113.5,z:-56},woodsLaneSouth:{x:113.5,z:56}
+  oakWest:{x:-55,z:6},oakEast:{x:55,z:6},alderNorth:{x:-30,z:-60},alderSouth:{x:-30,z:60},countyEnd:{x:-30,z:-246},
+  farmGate:{x:-164,z:-160},farmJoin:{x:-34,z:-160},woodsJoin:{x:-26,z:-180},woodsEnd:{x:150,z:-180},woodsLaneNorth:{x:90,z:-246},woodsLaneSouth:{x:90,z:-146}
  },
  edges:[
   {id:'oak-street',from:'oakWest',to:'oakEast',width:19,surface:'asphalt'},
   {id:'alder-avenue',from:'alderNorth',to:'alderSouth',width:16,surface:'asphalt'},
-  {id:'farm-road',from:'farmGate',to:'oakWest',width:7,surface:'dirt'},
-  {id:'farm-lane',from:'farmLaneNorth',to:'farmLaneSouth',width:4,surface:'dirt'},
-  {id:'woods-road',from:'oakEast',to:'woodsGate',width:7,surface:'dirt'},
+  {id:'county-road',from:'alderNorth',to:'countyEnd',width:8,surface:'asphalt'},
+  {id:'farm-road',from:'farmGate',to:'farmJoin',width:7,surface:'dirt'},
+  {id:'woods-road',from:'woodsJoin',to:'woodsEnd',width:7,surface:'dirt'},
   {id:'woods-lane',from:'woodsLaneNorth',to:'woodsLaneSouth',width:5,surface:'dirt'}
  ]
 };
 
-// Fenced farm fields, in whole cells. gateSide says which side faces the farm road (the fence has a 3-cell gap there).
-const fieldGrid=(columns,rows)=>columns.flatMap(([x0,x1])=>rows.map(([z0,z1],i)=>({id:`field-${x0}-${z0}`,x0,x1,z0,z1,gateSide:i===0?'south-of-road':'north-of-road'})));
-const fields=fieldGrid([[-156,-138],[-132,-114],[-104,-86],[-82,-66]],[[-15,-2],[12,25]]);
+// The river is a centreline through `points` (smoothed into a gentle curve), `width` across with `bank` metres of mud on each side. It rises from
+// the south-west to the north-east, passing north of the city, is flat water and a hard barrier (it lies outside every zone); the only way across
+// is a bridge, which carries the County Road. A bridge's deck is axis-aligned and exactly as wide as the zone it carries.
+const water={
+ rivers:[{id:'north-river',width:12,bank:2.6,points:[[-270,-58],[-190,-66],[-110,-78],[-30,-90],[40,-101],[110,-117],[190,-135],[270,-154]]}],
+ bridges:[{id:'county-bridge',river:'north-river',x0:-35,x1:-25,z0:-104,z1:-76}]
+};
+
+// Willow Fields: three big open rectangles (whole cells) with their own ground, plowed soil, wheat and young crops, and no fences between them, so
+// tractors can cross them later. Nothing grows in them yet. Only the farm's perimeter is fenced (see fenceSegments in world.js), with a gap wherever a
+// dirt road crosses it. `surface` picks the ground texture: 'plowed', 'wheat' or 'green'.
+const fields=[
+ {id:'field-wheat',surface:'wheat',x0:-165,x1:-90,z0:-208,z1:-170},
+ {id:'field-plowed',surface:'plowed',x0:-165,x1:-115,z0:-150,z1:-114},
+ {id:'field-green',surface:'green',x0:-108,x1:-52,z0:-150,z1:-114}
+];
 
 // Buildings: footprint centre (x, z), width (x), depth (z), height, colour. `shop` ties a building to an entry in `shops`.
 // The row at z = -61 is backdrop beyond the walkable city edge.
-const backdrop=[];for(let x=-48;x<=54;x+=17)backdrop.push({x,z:-61,w:13,d:17,h:12+((x+65)%4)*3,color:'#a3ada3'});
+const backdrop=[];for(let x=-48;x<=54;x+=17)if(x!==-31)backdrop.push( // the building at x = -31 would stand on the County Road
+ {x,z:-61,w:13,d:17,h:12+((x+65)%4)*3,color:'#a3ada3'});
 const buildings=[
  {x:1,z:-15,w:17,d:13,h:17,color:'#b08b74',name:'OAK STREET APARTMENTS'},
  {x:19,z:-13.5,w:15,d:10,h:9,color:'#c2bc9b',name:'CORNER MARKET',shop:'market'},
@@ -79,18 +96,58 @@ export const MAP=deepFreeze({
  id:'oak-and-alder',version:1,
  seed:7301, // changing it moves every generated tree and orphans saved forest plots
  spawn:{x:-5,y:.2,z:15},
- ground:{x0:-190,x1:190,z0:-90,z1:90}, // how far the ground is drawn (scenery fades into fog beyond the walkable zones)
- zones,roads,fields,buildings,shops,reserved,
+
+ ground:{x0:-260,x1:260,z0:-310,z1:110}, // how far the ground is drawn (scenery fades into fog beyond the walkable zones)
+ zones,roads,water,fields,buildings,shops,reserved,
+ // Buildings placed from converted models or placeholders (props.js): yaw is a multiple of 90 degrees so the collision boxes stay axis-aligned. The farmstead (a barn,
+ // a farmhouse, a silo and a shed; a placeholder for now) fills the free north-east strip of Willow Fields and faces the farm road; the sawmill stands in Pine Ridge's empty clearing.
+ landmarks:[
+  {id:'farmstead',prop:'farmstead',zone:'farm',x:-62,z:-191,yaw:0},
+  {id:'sawmill',prop:'sawmill',zone:'forest',x:104,z:-208,yaw:0}
+ ],
+ // Signposts: boards are read from the front (yaw 0 faces south, towards walkers arriving from the bridge).
+ signs:[{id:'fork',zone:'county',x:-25.5,z:-170,yaw:0,boards:[{text:'← WILLOW FIELDS',y:2.1},{text:'PINE RIDGE →',y:2.9}]}],
  studio:{x:1,z:-6.3,doorZ:-8.25,interior:{entry:{x:0,z:3.3},exit:{x:0,z:4.45},bed:{x:-3.6,z:-2.3}}},
- minimap:{view:{x0:-176,x1:176,z0:-62,z1:62}},
+ minimap:{view:{x0:-200,x1:180,z0:-250,z1:90}},
  // Procedural dressing parameters (world.js): how the generated trees are laid out.
+
  scenery:{
-  forestClearingX:66, // no pines this close to the city edge
-  // Dense tree belts outside the walkable edges: [x0, x1, z0, z1, spacing, chance, salt]
-  belts:[[58,186,57.5,80,3.2,.85,11],[58,186,-80,-57.5,3.2,.85,12],[169.5,186,-56,57,3.2,.9,13],[-186,-61,58.5,74,4.2,.75,21],[-186,-61,-74,-58.5,4.2,.75,22],[-186,-170,-56,57,4,.8,23]],
-  farmShade:{count:34,clearOfCity:5}
+  // Pine Ridge: one cuttable pine per 4x4-cell block at `density` (varied by `wobble`), an occasional decor pine in the blocks without one,
+  // nothing in the clearings (ellipses) or beside roads. The big clearing at the north-east is kept open for the Sawmill.
+  forest:{density:.7,wobble:.14,decorChance:.25,roadMargin:2.4,clearings:[
+   {x:106,z:-212,rx:30,rz:24},{x:30,z:-170,rx:20,rz:11},{x:56,z:-222,rx:15,rz:12},{x:128,z:-164,rx:15,rz:11},{x:2,z:-222,rx:11,rz:14}
+  ]},
+  // Dense scenery outside the walkable zones that hides the end of the world: [x0, x1, z0, z1, spacing, chance, salt]
+  belts:[[-125,-61,-60,105,5.5,0.085,11],[58,125,-62,105,5.5,0.085,12],[-61,58,48,105,5.5,0.085,13],[-110,110,-80,-48,5.5,0.061,14],
+   [-170,-35,-108,-80,5,0.136,15],[-25,150,-146,-84,5.5,0.102,21],[-235,195,-306,-246,5.5,0.102,16],[-170,-35,-246,-216,5.5,0.102,22],
+   [-235,-170,-246,-90,5.5,0.102,17],[150,235,-246,-100,5.5,0.102,18],[-62,-35,-48,-100,5,0.082,19],[-25,5,-48,-100,5,0.082,20]],
+  view:{distance:158}, // trees farther than this from the player are not drawn (the fog fully hides them at 155 m)
+  farmShade:{count:30,clearOfRoad:8}
  }
 });
+
+// ── Rivers ────────────────────────────────────────────────────────────────────
+// The smoothed centreline: a Catmull-Rom curve through the control points, sampled about every `step` metres, with the unit tangent of each sample.
+const pathCache=new WeakMap();
+export function riverPath(river,step=3){
+ const key=pathCache.get(river)||new Map();pathCache.set(river,key);if(key.has(step))return key.get(step);
+ const p=river.points,at=i=>p[Math.max(0,Math.min(p.length-1,i))],out=[];
+ for(let i=0;i<p.length-1;i++){
+  const [p0,p1,p2,p3]=[at(i-1),at(i),at(i+1),at(i+2)],len=Math.hypot(p2[0]-p1[0],p2[1]-p1[1]),n=Math.max(1,Math.ceil(len/step));
+  for(let k=0;k<n;k++){const t=k/n,t2=t*t,t3=t2*t,c=j=>.5*((2*p1[j])+(-p0[j]+p2[j])*t+(2*p0[j]-5*p1[j]+4*p2[j]-p3[j])*t2+(-p0[j]+3*p1[j]-3*p2[j]+p3[j])*t3);out.push({x:c(0),z:c(1)})}
+ }
+ out.push({x:p.at(-1)[0],z:p.at(-1)[1]});
+ for(let i=0;i<out.length;i++){const a=out[Math.max(0,i-1)],b=out[Math.min(out.length-1,i+1)],l=Math.hypot(b.x-a.x,b.z-a.z)||1;out[i].tx=(b.x-a.x)/l;out[i].tz=(b.z-a.z)/l}
+ key.set(step,Object.freeze(out.map(Object.freeze)));return key.get(step);
+}
+// Distance from a point to the river's centreline.
+export function riverDistance(x,z,river){
+ const path=riverPath(river,3);let best=Infinity;
+ for(let i=0;i<path.length-1;i++){const a=path[i],b=path[i+1],dx=b.x-a.x,dz=b.z-a.z,t=Math.max(0,Math.min(1,((x-a.x)*dx+(z-a.z)*dz)/(dx*dx+dz*dz||1)));best=Math.min(best,Math.hypot(x-(a.x+dx*t),z-(a.z+dz*t)))}
+ return best;
+}
+// The river's centreline height at x (rivers here run mostly west to east).
+export function riverZAt(river,x){const path=riverPath(river,2);for(let i=0;i<path.length-1;i++){const a=path[i],b=path[i+1];if(x>=a.x&&x<=b.x)return a.z+(b.z-a.z)*(x-a.x)/((b.x-a.x)||1)}return null}
 
 // ── Derived data ──────────────────────────────────────────────────────────────
 export const zoneById=(id,map=MAP)=>map.zones.find(z=>z.id===id)||null;
@@ -119,6 +176,39 @@ export function validateMap(map=MAP){
  }
  for(const [i,a] of map.zones.entries())for(const b of map.zones.slice(i+1))if(rectOk(a.bounds)&&rectOk(b.bounds)&&overlaps(a.bounds,b.bounds))bad(`zones ${a.id} and ${b.id} overlap`);
  if(!zoneAtPoint(map.spawn.x,map.spawn.z,map))bad('spawn is outside every zone');
+ // Every zone can be reached on foot from the city: zones that touch along an edge (at least 2 m of it) are connected.
+ {const touches=(a,b)=>{const w=Math.min(a.x1,b.x1)-Math.max(a.x0,b.x0),h=Math.min(a.z1,b.z1)-Math.max(a.z0,b.z0);return (w===0&&h>=2)||(h===0&&w>=2)||(w>0&&h>0)};
+  const city=map.zones.find(z=>z.id==='city')||map.zones[0],seen=new Set([city.id]),queue=[city];
+  while(queue.length){const here=queue.pop();for(const other of map.zones)if(!seen.has(other.id)&&rectOk(here.bounds)&&rectOk(other.bounds)&&touches(here.bounds,other.bounds)){seen.add(other.id);queue.push(other)}}
+  for(const zone of map.zones)if(!seen.has(zone.id))bad(`zone ${zone.id} cannot be reached on foot from the city`)}
+ // Water: rivers are flat hard barriers (outside every zone); the only way across is a bridge whose deck is exactly the width of the zone it carries.
+ {const rivers=map.water?.rivers||[],bridges=map.water?.bridges||[];
+  for(const river of rivers){
+   if(!(river.points?.length>=2)||!(river.width>0)){bad(`river ${river.id} needs at least two points and a width`);continue}
+   const path=riverPath(river,2),reach=river.width/2+river.bank;
+   if(path.some(p=>p.x<map.ground.x0-20||p.x>map.ground.x1+20||p.z<map.ground.z0||p.z>map.ground.z1))bad(`river ${river.id} leaves the ground`);
+   // Both banks and the middle of the river, all along it, must stay out of every zone except under a bridge.
+   for(const zone of map.zones){
+    const hit=path.some(p=>[-1,-.5,0,.5,1].some(k=>{const x=p.x-p.tz*k*reach,z=p.z+p.tx*k*reach;
+     return x>=zone.bounds.x0&&x<=zone.bounds.x1&&z>=zone.bounds.z0&&z<=zone.bounds.z1&&!bridges.some(b=>b.river===river.id&&x>=b.x0&&x<=b.x1&&z>=b.z0&&z<=b.z1)}));
+    if(hit)bad(`zone ${zone.id} walks into river ${river.id} where there is no bridge`)}
+  }
+  for(const bridge of bridges){
+   const river=rivers.find(r=>r.id===bridge.river);
+   if(!river){bad(`bridge ${bridge.id} crosses an unknown river`);continue}
+   const reach=river.width/2+river.bank,edges=riverPath(river,1).filter(p=>p.x>=bridge.x0-2&&p.x<=bridge.x1+2).flatMap(p=>[p.z+p.tx*reach,p.z-p.tx*reach]);
+   if(!edges.length||!(bridge.z0<Math.min(...edges)&&bridge.z1>Math.max(...edges)))bad(`bridge ${bridge.id} does not reach both banks`);
+   if(!inside(bridge,map.ground))bad(`bridge ${bridge.id} reaches outside the ground`);
+   if(!map.zones.some(z=>z.bounds.x0===bridge.x0&&z.bounds.x1===bridge.x1&&z.bounds.z0<=bridge.z0&&z.bounds.z1>=bridge.z1))bad(`bridge ${bridge.id} is not exactly as wide as a walkable zone that crosses the river`);
+  }}
+ // Landmarks and signs stand inside the zone they name; buildings face one of the four directions.
+ {const ids=new Set();for(const item of [...(map.landmarks||[]),...(map.signs||[])]){
+  if(ids.has(item.id))bad(`duplicate landmark or sign ${item.id}`);ids.add(item.id);
+  const zone=map.zones.find(z=>z.id===item.zone);if(!zone||item.x<zone.bounds.x0||item.x>zone.bounds.x1||item.z<zone.bounds.z0||item.z>zone.bounds.z1)bad(`${item.id} is not inside zone ${item.zone}`);
+  if(item.prop!==undefined&&Math.abs(Math.sin(item.yaw*2))>1e-9)bad(`${item.id} must face north, east, south or west`)}}
+ // Forest clearings are ellipses inside the forest zone.
+ for(const clearing of map.scenery?.forest?.clearings||[]){const forest=map.zones.find(z=>z.id===map.scenery.forest.zone||z.id==='forest');
+  if(!forest||clearing.x-clearing.rx<forest.bounds.x0||clearing.x+clearing.rx>forest.bounds.x1||clearing.z-clearing.rz<forest.bounds.z0||clearing.z+clearing.rz>forest.bounds.z1)bad(`clearing at ${clearing.x},${clearing.z} reaches outside the forest`)}
  // Roads
  const edgeIds=new Set();
  for(const edge of map.roads.edges){
@@ -138,7 +228,7 @@ export function validateMap(map=MAP){
   const zone=zoneAtPoint((field.x0+field.x1)/2,(field.z0+field.z1)/2,map);
   if(!zone?.grid||!inside(field,zone.bounds))bad(`field ${field.id} is not inside a plot-grid zone`);
   if(dirt.some(r=>overlaps(field,r)))bad(`field ${field.id} overlaps a dirt road`);
-  if(!['south-of-road','north-of-road'].includes(field.gateSide))bad(`field ${field.id} has no gate side`);
+  if(!['plowed','wheat','green'].includes(field.surface))bad(`field ${field.id} has an unknown surface`);
  }
  for(const [i,a] of map.fields.entries())for(const b of map.fields.slice(i+1))if(overlaps(a,b))bad(`fields ${a.id} and ${b.id} overlap`);
  // Buildings do not overlap each other; shops point at a real building and have sane hours.

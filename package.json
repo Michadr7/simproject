@@ -1,6 +1,6 @@
 {
   "name": "city-life-local-multiplayer",
-  "version": "0.20.2",
+  "version": "0.24.1",
   "private": true,
   "type": "module",
   "scripts": {

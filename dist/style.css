@@ -148,3 +148,7 @@ body.creating #clockChip{display:none}
 #storeMessage[data-kind=error]{background:#7d3b34;color:#fdeceb}
 @keyframes store-pop{from{transform:translateY(-4px);opacity:.3}}
 @media(prefers-reduced-motion:reduce){#storeMessage{animation:none}}
+
+/* 0.22.0 the map is taller now */
+#clockChip{top:268px}
+@media(max-width:600px){#clockChip{top:222px}}

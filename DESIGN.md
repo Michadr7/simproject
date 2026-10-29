@@ -26,21 +26,54 @@ A review of v0.19.3 raised six issues; five were real and one was partly fixed a
 Remaining literals worth moving later: the pavement and road height bands in the frame loop, and the interior room geometry. The minimap
 strips and the `zoneAt(x)` fallback still assume zones laid out west to east.
 
-## Map (concept 03 — Town & Outskirts)
-Build now vs reserve for later, as in the concept sheet. Staged geography (no elevation):
+## Completing the map before the assets (the six areas of concept 03A)
+| Area | Status |
+|---|---|
+| 01 Oak Street | built (the city: Starter apartments, Corner Market, Alder Coffee, Laundry) |
+| 02 Alder Center (town square, police station, plots C1-C2) | **not built** |
+| 03 Cedar Heights (a loop road, plots R1-R3) | **not built** |
+| 04 Eastbank Works (warehouse, vehicle workshop, building supplier, plots I1-I2, Freight Road) | **not built** |
+| 05 Willow Fields | land, three fields, fence and a placeholder farmstead |
+| 06 Pine Ridge | forest, clearings and the sawmill |
+Order (the user's plan, with one prerequisite):
+1. **Walkable areas stop being rectangles** (Opus 5.5 to design, Sonnet 5.5 to build). Build a walkability and ground-type mask at load (about 1 m cells, 0.2 M cells, a few tens of ms) from zone shapes, road ribbons along
+   centrelines (so roads can curve) and water. It replaces the rectangle tests for walking, footing height, scenery exclusion and the minimap, and reachability stays validated. Needed for Cedar Heights' loop and the winding timber road.
+2. **Re-lay the world for six districts** (decisions below), then build Alder Center, Cedar Heights and Eastbank Works as **placeholder** boxes with the reserved plots as data, parking lots, a police station and a gas station (Sonnet 5.5).
+3. Then replace placeholders with assets, district by district.
+Decisions to confirm first: the river and the north bank move about 70 m north (so the south bank holds Alder Center, Cedar Heights and Eastbank Works) and the map grows east to x about 200; a second bridge for the
+Freight Road at the east edge (the concept's cargo route crosses the river there); the County Road keeps its bridge.
 
-| Stage | Content | Model |
+## The sawmill chain and physics (planned)
+Loop: bring logs to the sawmill, they become planks over a few seconds, the blade spins with a sound, and planks pile up beside it (an instanced pile with a cap on how many are drawn; the count is saved, not each plank).
+Needs: a spinning blade (the model is one fused mesh, so either split the blade out of it or lay a spinning disc over it), an audio system (none yet: synthesised with Web Audio or CC0 sound files), item and economy
+rules. Sonnet 5.5 builds it; Opus 5.5 designs the plank item and the stack save format.
+**Physics:** no general rigid-body engine. Scripted animation (logs slide along the rails, planks drop and settle into precomputed pile slots) costs almost nothing and behaves the same on every client. A real engine
+(cannon-es, Rapier) costs CPU for every active body (dozens are fine on a desktop, hundreds are not), needs colliders for the terrain, buildings and trees, must save every body's position, and cannot be kept
+identical between players in multiplayer. If loose objects that tumble are wanted later, cap them at about 20 active bodies near the player that freeze into static props when they stop (Opus 5.5 to design).
+
+## Performance budget (the rule: say so before building anything that would hurt)
+Measured on the current world: all trees together are 0.89 M triangles; with culling a view draws 8% (city) to about 60% (inside Pine Ridge) of them; the
+world has about 45 draw calls. Claude cannot measure real frame rates (the test renderer is software-only), so estimates come from triangle and draw-call counts
+plus your reports (165 FPS in the forest and 105 at the bridge before culling). Flag it, with a number and a cheaper alternative, when a request would:
+- add more than about 1,000 tree-sized instances (1,000 trees is about 1.2 M triangles; choppable ones cost double because of shadows), or any large scatter of
+  grass, rocks or flowers (alpha cards overdraw; keep within a few thousand within 30 m, chunked);
+- plant crops one per cell (each of the three fields is thousands of cells): needs chunked, low-poly instances;
+- put more than about 15 skinned characters on screen, or more than about 10 cars;
+- add shadow-casting objects in bulk, textures above 512 px per asset, or more than about 300 draw calls;
+- Cheaper levers already in place: fog and culling distance, scenery casting no shadows, instancing. Next: chunked far versions and lower-poly LODs.
+
+## Map (concept 03A: Town & Outskirts), chunk by chunk
+The world is being terraformed to the concept, flat (no elevation). The river curves; every zone is still an axis-aligned rectangle and the roads are straight.
+**Before Cedar Heights, the Sawmill road and any curved street:** walkable areas need to stop being rectangles (a walkable polygon or ribbons along road centrelines), because the concept's loop road and winding timber road cannot be walked on a rectangle. Opus 5.5 to design, then Sonnet 5.5.
+| Phase | Content | Status / model |
 |---|---|---|
-| 1 ✔ | Re-express the current world in `map-definition.js` (this release) | Sonnet 5.5 |
-| 2 | Alder Center: town square, two commercial plots (C1–C2) reserved, walkable loop from Oak Street | Sonnet 5.5 |
-| 3 | Eastbank Works: warehouse, vehicle workshop, building supplier, two industrial plots (I1–I2), cargo route as a delivery job | Sonnet 5.5 |
-| 4 | Cedar Heights: residential loop, three plots (R1–R3) reserved | Sonnet 5.5 |
-| 5 | Willow Fields / Pine Ridge: the farm and forest zones grow into the concept's farm and sawmill areas; river as a flat barrier crossed at one bridge; ridge as background props | Sonnet 5.5 |
-| 6 | Ambient trucks on the cargo route, with hooks for player-driven vehicles later | Sonnet 5.5 (Opus 5.5 if vehicles become drivable) |
+| 1 | The land, a curving river, the County Bridge and road, the zones (city, County Road, Willow Fields, Pine Ridge), a thinned forest with clearings, three open tractor-ready fields | **Done in 0.22.0 and 0.23.0** |
+| 2 | Farmyard (barn, farmhouse, silos) in the farm's north-east strip and the Sawmill in Pine Ridge's clearing, both placed from the map; the fork signpost | **Done in 0.24.0**. Still to do: timber loading props, river-bank rocks and grass, farm animals and crops (Sonnet 5.5) |
+| 3 | Alder Center in the city's northern half (town square, police station, plots C1-C2); parking lots | Sonnet 5.5 |
+| 4 | Eastbank Works and its cargo route (the first gas station); Cedar Heights and plots R1-R3 | Sonnet 5.5 |
+| 5 | Ambient traffic on the road graph, then drivable vehicles | Opus 5.5 for the vehicle architecture, Sonnet 5.5 to build |
 
-Target: under 60–90 seconds on foot between main hubs. Fast travel or vehicles later. Interiors tiers: full interiors for
-the apartments, market and café; one reusable template interior (counter, shelves, a task) for the laundromat, warehouse,
-workshop and supplier; façade-only houses until plot ownership exists.
+Target: under 60-90 seconds on foot between main hubs (the city to Pine Ridge's first clearing is about 150 m, about 35 s walking).
 
 ## NPCs
 - Homes and schedules: home → work / shop / park → home by time of day, walking the sidewalks, entering and leaving through
@@ -93,25 +126,13 @@ at level 3, a fourth at level 8. Logs sell for $1.00.
   leaving, collisions, fuel and a saved position; recheck the 60-90 second travel targets. **Opus 5.5** for the architecture, Sonnet to
   build. (3) Traffic: ambient cars on the road graph, capped at about 10 visible, never running you over at first: **Sonnet 5.5**.
 
-## First pack: Quaternius Stylized Nature MegaKit (waiting for the upload)
-Checked on the pack's page: CC0 (free for personal and commercial use), glTF / FBX / OBJ, textured, 116 models (40 trees, 35 plants and
-flowers, 27 rocks), tree leaves can swap between 7 varieties. The page lists a free "Standard" version (60-70% of the pack) and paid
-tiers, so which trees and logs exist depends on the version you downloaded; I will map from what the folder contains.
-Wanted: **3 pine / spruce models for the Forest zone, 2 broadleaf models for the Farm and City zones, and a log model to replace the
-cylinder logs.** Plan (Sonnet 5.5):
-1. **Convert.** `scripts/build-assets.mjs` reads the glTF files, welds vertices, keeps the pack's flat shading, merges each model into one
-   geometry per material (bark, leaves), packs the textures as data URLs and writes embedded modules, the same way the characters are.
-2. **Manifest.** `assets.js` lists `tree.pine.1-3`, `tree.broadleaf.1-2`, `prop.log.1` with category, licence, source, target height range,
-   trunk radius (for collisions), pivot at the base, and the variants the world places.
-3. **Scale.** Each model is normalised to the manifest's heights (the game's own pines today, so the camera clearance, the dither fade
-   and the chop target ring all keep working), with random per-tree scale and rotation within a range.
-4. **Instancing.** One `InstancedMesh` per model per material (a bark and a leaf mesh each): about 6 for the pines, 4 for the broadleaf
-   and 1-2 for logs, so roughly a dozen draw calls for the whole forest. Felling, stumps, saplings, regrowth and the falling animation
-   keep working on instance matrices exactly as they do now.
-5. **Logs** become instances of the pack's log model (ground logs, `progress.logs` unchanged).
-6. **Tests:** the manifest validates (licence present, heights within range), instance counts equal the layout counts (333 cuttable
-   trees, 1,087 decor), the draw-call budget, collisions and chopping unchanged, and a preview page shows each asset beside the 1.95 m
-   character. Model: Sonnet 5.5.
+## First pack: Quaternius Stylized Nature MegaKit (done in 0.21.0)
+Three pines for the woods, two broadleaf trees for the farm and the edges, converted and instanced (see `ASSETS.md` and the README). The Standard
+version has no log or stump model. Follow-ups, in order of value:
+1. **Performance check in the forest** on your machine (worst case 1.64 M triangles in view; instanced meshes are culled whole). If it is slow: split
+   the instances into 32 m chunks so distant chunks are culled, or add a lower-poly far version. Sonnet 5.5.
+2. **A log and stump model** from a fuller pack (or the Source version) to replace the textured cylinders. Sonnet 5.5.
+3. **More of the pack:** bushes, ferns, flowers, grass, rocks and pebbles for the farm and the forest floor, the dead and twisted trees for variety. Sonnet 5.5.
 
 ## Asset foundation (Step 0, before adding more art)
 - **Contract:** 1 unit = 1 m, the character is 1.95 m, +Z forward, Y up, pivot at the base centre, sizes snapping to the 1-unit grid,

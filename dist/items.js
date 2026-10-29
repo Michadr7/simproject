@@ -24,8 +24,8 @@ export const ITEMS=Object.freeze([
  equipment('basic-jacket','Basic jacket','🧥','jacket',2,1500),
  equipment('small-backpack','Small backpack','🎒','backpack',10,2500),
  equipment('large-backpack','Large backpack','🎒','backpack',20,4500),
- tool('axe','Axe','🪓','Equip it, then press E (hold to keep chopping) at a pine in Alder Woods',2000),
- material('wood-log','Wood log','🪵','Timber from Alder Woods · sells for $1.00 at the Corner Market',100)
+ tool('axe','Axe','🪓','Equip it, then press E (hold to keep chopping) at a pine in Pine Ridge',2000),
+ material('wood-log','Wood log','🪵','Timber from Pine Ridge · sells for $1.00 at the Corner Market',100)
 ].map(Object.freeze));
 export const itemById=id=>ITEMS.find(item=>item.id===id);
 export const isConsumable=item=>item?.type==='food'||item?.type==='drink';

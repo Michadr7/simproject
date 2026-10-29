@@ -1,5 +1,7 @@
 import * as THREE from './vendor/three.module.js';
-import {MAP,zoneById,zoneAtPoint,roadRects} from './map-definition.js';
+import {MAP,zoneById,zoneAtPoint,roadRects,riverPath,riverDistance} from './map-definition.js';
+import {PINES,BROADLEAVES,modelInfo,modelGeometry,createNatureMaterials} from './nature.js';
+import {propInfo,createProp} from './props.js';
 
 // ─── Layout (pure data, safe to import from rules and tests) ──────────────────
 // The city keeps its original footprint. Oak Farms lies west of it, Alder Woods east.
@@ -14,9 +16,10 @@ export const WALKABLE=Object.freeze(MAP.zones.map(z=>Object.freeze({zone:z.id,gr
 // Visual extent of the ground (beyond the walkable area, scenery fades into fog).
 export const GROUND=MAP.ground;
 
+// The zone a point is in. Edges belong to the first zone that claims them; outside every zone it falls back to the city.
 export function zoneAt(x,z){
- if(z!==undefined){const zone=zoneAtPoint(x,z);if(zone)return ZONES[zone.id]}
- return x<CITY_WEST?ZONES.farm:x>CITY_EAST?ZONES.forest:ZONES.city;
+ const zone=zoneAtPoint(x,z??0);
+ return ZONES[(zone||zoneById('city')).id];
 }
 export function isWalkable(x,z){return WALKABLE.some(r=>x>=r.x0&&x<=r.x1&&z>=r.z0&&z<=r.z1)}
 
@@ -38,23 +41,31 @@ export function gridZoneAt(ix,iz){
 export const DIRT_ROADS=Object.freeze(roadRects('dirt').map(r=>Object.freeze({zone:zoneAtPoint((r.x0+r.x1)/2,(r.z0+r.z1)/2).id,x0:r.x0,x1:r.x1,z0:r.z0,z1:r.z1})));
 const distanceToRect=(x,z,r)=>Math.hypot(Math.max(r.x0-x,0,x-r.x1),Math.max(r.z0-z,0,z-r.z1));
 export const nearDirtRoad=(x,z,margin=0)=>DIRT_ROADS.some(r=>distanceToRect(x,z,r)<=margin);
+const ASPHALT_ROADS=Object.freeze(roadRects('asphalt'));
+export const nearAsphalt=(x,z,margin=0)=>ASPHALT_ROADS.some(r=>distanceToRect(x,z,r)<=margin);
+// Within `margin` metres of the water itself (not counting its muddy banks).
+export const inRiver=(x,z,margin=0)=>MAP.water.rivers.some(r=>riverDistance(x,z,r)<=r.width/2+margin);
+const nearBuilding=(x,z,margin=0)=>MAP.buildings.some(b=>Math.abs(x-b.x)<b.w/2+margin&&Math.abs(z-b.z)<b.d/2+margin);
+// Pine Ridge's side of the world: decor trees here are pines, everywhere else broadleaf.
+export const forestSide=(x,z)=>x>-24&&z<-100;
 
 // Fenced farm plots (from the map), in whole cells, each with a 3-cell gate facing the main farm road.
 export const FIELDS=Object.freeze(MAP.fields.map(f=>Object.freeze({...f})));
 export const fieldAt=(ix,iz)=>FIELDS.find(f=>ix>=f.x0&&ix<f.x1&&iz>=f.z0&&iz<f.z1)||null;
 export function fenceSegments(){
- const segments=[];
- const run=(x0,x1,z)=>{for(let x=x0;x<x1;x+=2)segments.push({x0:x,z0:z,x1:Math.min(x+2,x1),z1:z})};
- for(const f of FIELDS){
-  // A 3-cell gate gap, cell-aligned, in the middle of the side facing the farm road.
-  const gateZ=f.gateSide==='south-of-road'?f.z1:f.z0,gate0=Math.floor((f.x0+f.x1)/2)-1,gate1=gate0+3;
-  for(const z of [f.z0,f.z1]){if(z===gateZ){run(f.x0,gate0,z);run(gate1,f.x1,z)}else run(f.x0,f.x1,z)}
-  for(const x of [f.x0,f.x1])for(let z=f.z0;z<f.z1;z+=2)segments.push({x0:x,z0:z,x1:x,z1:Math.min(z+2,f.z1)});
+ // Only the farm's outer edge is fenced (to mark the zone); the fields inside are open for vehicles. A dirt road that crosses the edge opens a
+ // gap as wide as the road plus a metre on each side.
+ const farm=zoneById('farm').bounds,segments=[];
+ const edges=[{fixed:farm.z0,a:farm.x0,b:farm.x1,along:'x'},{fixed:farm.z1,a:farm.x0,b:farm.x1,along:'x'},{fixed:farm.x0,a:farm.z0,b:farm.z1,along:'z'},{fixed:farm.x1,a:farm.z0,b:farm.z1,along:'z'}];
+ for(const e of edges){
+  const gaps=DIRT_ROADS.filter(r=>e.along==='x'?(r.z0<=e.fixed&&r.z1>=e.fixed&&r.x1>e.a&&r.x0<e.b):(r.x0<=e.fixed&&r.x1>=e.fixed&&r.z1>e.a&&r.z0<e.b))
+   .map(r=>e.along==='x'?[r.x0-1,r.x1+1]:[r.z0-1,r.z1+1]).sort((p,q)=>p[0]-q[0]);
+  const run=(from,to)=>{for(let t=from;t<to-1e-6;t+=2){const end=Math.min(t+2,to);segments.push(e.along==='x'?{x0:t,z0:e.fixed,x1:end,z1:e.fixed}:{x0:e.fixed,z0:t,x1:e.fixed,z1:end})}};
+  let at=e.a;for(const [g0,g1] of gaps){run(at,Math.max(at,g0));at=Math.max(at,g1)}run(at,e.b);
  }
  return segments;
 }
 
-// Deterministic per-block random numbers: the same block always makes the same trees.
 function random(seed){return ()=>{seed=seed+0x6D2B79F5|0;let t=Math.imul(seed^seed>>>15,1|seed);t=t+Math.imul(t^t>>>7,61|t)^t;return((t^t>>>14)>>>0)/4294967296}}
 const blockSeed=(a,b,salt)=>(Math.imul(a,73856093)^Math.imul(b,19349663)^Math.imul(salt,83492791))|0;
 
@@ -62,28 +73,29 @@ let cachedLayout=null;
 // Generates every tree once. Cuttable trees sit on cell centres and are keyed by cell.
 export function worldLayout(){
  if(cachedLayout)return cachedLayout;
- const cuttable=[],decor=[];
- const forest=WALKABLE.find(r=>r.zone==='forest'),farm=WALKABLE.find(r=>r.zone==='farm'),scenery=MAP.scenery;
- // Alder Woods interior: 4×4-cell blocks, at most one cuttable pine per block (no touching trunks).
+ const cuttable=[],decor=[],scenery=MAP.scenery,forestRules=scenery.forest;
+ const forest=zoneById('forest').bounds,farm=zoneById('farm').bounds;
+ const inClearing=(x,z)=>forestRules.clearings.some(c=>((x-c.x)/c.rx)**2+((z-c.z)/c.rz)**2<1);
+ // Pine Ridge: 4×4-cell blocks, at most one cuttable pine per block (no touching trunks), thinned by `density`, with wide clearings.
  for(let bx=Math.ceil((forest.x0+2)/4);bx*4+4<=forest.x1-1;bx++)for(let bz=Math.ceil((forest.z0+1)/4);bz*4+4<=forest.z1-1;bz++){
   const r=random(blockSeed(bx,bz,WORLD_SEED));
-  const density=.62+.22*Math.sin(bx*.71)*Math.cos(bz*.93);
+  const density=forestRules.density+forestRules.wobble*Math.sin(bx*.71)*Math.cos(bz*.93);
   const ix=bx*4+1+Math.floor(r()*2),iz=bz*4+1+Math.floor(r()*2),c=cellCenter(ix,iz);
-  const clearing=c.x<scenery.forestClearingX||nearDirtRoad(c.x,c.z,2.2);
-  if(!clearing&&r()<density){cuttable.push(Object.freeze({key:cellKey(ix,iz),ix,iz,x:c.x,z:c.z,kind:'pine',scale:.85+r()*.35,rot:r()*Math.PI*2}));continue}
-  // Blocks without a pine sometimes get a broadleaf decor tree between cell centres.
+  const open=inClearing(c.x,c.z)||nearDirtRoad(c.x,c.z,forestRules.roadMargin)||nearAsphalt(c.x,c.z,forestRules.roadMargin);
+  if(!open&&r()<density){cuttable.push(Object.freeze({key:cellKey(ix,iz),ix,iz,x:c.x,z:c.z,kind:'pine',scale:.85+r()*.35,rot:r()*Math.PI*2}));continue}
+  // Blocks without a pine sometimes get a decor pine between cell centres.
   const x=bx*4+.5+r()*3,z=bz*4+.5+r()*3;
-  if(!clearing&&!nearDirtRoad(x,z,2.4)&&r()<.38)decor.push({x,z,scale:.8+r()*.45,rot:r()*Math.PI*2,tone:Math.floor(r()*4)});
+  if(!inClearing(x,z)&&!nearDirtRoad(x,z,forestRules.roadMargin+.2)&&!nearAsphalt(x,z,forestRules.roadMargin+.2)&&r()<forestRules.decorChance)decor.push({x,z,scale:.8+r()*.45,rot:r()*Math.PI*2,tone:Math.floor(r()*4)});
  }
- // Dense scenery belts outside the walkable edges hide the end of the world.
+ // Dense scenery outside the walkable zones hides the end of the world (never on roads, in the river or on a building).
  const belt=(x0,x1,z0,z1,spacing,chance,salt)=>{for(let x=x0;x<x1;x+=spacing)for(let z=z0;z<z1;z+=spacing){
   const r=random(blockSeed(Math.round(x*10),Math.round(z*10),salt));if(r()>chance)continue;
-  const tx=x+r()*spacing*.8,tz=z+r()*spacing*.8;if(isWalkable(tx,tz)||nearDirtRoad(tx,tz,1.5))continue;
+  const tx=x+r()*spacing*.8,tz=z+r()*spacing*.8;if(isWalkable(tx,tz)||nearDirtRoad(tx,tz,1.5)||nearAsphalt(tx,tz,3.5)||inRiver(tx,tz,4)||nearBuilding(tx,tz,3))continue;
   decor.push({x:tx,z:tz,scale:.9+r()*.5,rot:r()*Math.PI*2,tone:Math.floor(r()*4)})}};
  for(const spec of scenery.belts)belt(...spec);
  // A few shade trees between the farm fields.
  for(let i=0;i<scenery.farmShade.count;i++){const r=random(blockSeed(i,7,WORLD_SEED+1)),x=farm.x0+4+r()*(farm.x1-farm.x0-10),z=farm.z0+3+r()*(farm.z1-farm.z0-6),c=cellOf(x,z);
-  if(nearDirtRoad(x,z,2.5)||FIELDS.some(f=>x>f.x0-2&&x<f.x1+2&&z>f.z0-2&&z<f.z1+2)||x>CITY_WEST-scenery.farmShade.clearOfCity)continue;
+  if(nearDirtRoad(x,z,2.5)||FIELDS.some(f=>x>f.x0-2&&x<f.x1+2&&z>f.z0-2&&z<f.z1+2)||x>farm.x1-scenery.farmShade.clearOfRoad)continue;
   decor.push({x:c.ix+.5,z:c.iz+.5,scale:.9+r()*.4,rot:r()*Math.PI*2,tone:Math.floor(r()*4)})}
  cachedLayout=Object.freeze({cuttable:Object.freeze(cuttable),decor:Object.freeze(decor.map(Object.freeze)),
   cuttableByKey:new Map(cuttable.map(t=>[t.key,t]))});
@@ -115,10 +127,14 @@ function createColliders(){
 function groundTexture(kind){
  const c=document.createElement('canvas');c.width=c.height=256;const ctx=c.getContext('2d');
  const r=random(kind.length*977);
- const base={farm:'#7d9a52',forest:'#4b663c',dirt:'#8a7152',field:'#86a057'}[kind];
+ const base={farm:'#7d9a52',forest:'#4b663c',dirt:'#8a7152',field:'#86a057',plowed:'#5d4532',wheat:'#c7a249',green:'#6f9a45'}[kind];
  ctx.fillStyle=base;ctx.fillRect(0,0,256,256);
  const specks=kind==='dirt'?['#00000014','#ffffff12','#5f4a3322']:kind==='forest'?['#00000016','#6d7d3a22','#7a5c3a24','#ffffff08']:['#00000010','#ffffff10','#9fb86522'];
  for(let i=0;i<7000;i++){ctx.fillStyle=specks[i%specks.length];const s=kind==='dirt'?1+r()*2.5:1+r()*1.5;ctx.fillRect(r()*256,r()*256,s,kind==='dirt'?s:s*2.2)}
+ // Field rows: furrows of plowed soil, standing wheat, and rows of young crops.
+ if(kind==='plowed')for(let y=0;y<256;y+=16){ctx.fillStyle='#3f2c1d88';ctx.fillRect(0,y,256,5);ctx.fillStyle='#7d5d4440';ctx.fillRect(0,y+6,256,3)}
+ if(kind==='wheat')for(let x=0;x<256;x+=6){ctx.fillStyle=x%12?'#e2c46a55':'#a9873a55';ctx.fillRect(x,0,3,256)}
+ if(kind==='green')for(let y=0;y<256;y+=12){ctx.fillStyle='#5a8a3a99';ctx.fillRect(0,y,256,4);ctx.fillStyle='#8db25c55';ctx.fillRect(0,y+5,256,3)}
  if(kind==='forest')for(let i=0;i<90;i++){ctx.fillStyle=i%3?'#3a522f55':'#7b603c40';ctx.fillRect(r()*256,r()*256,6+r()*14,4+r()*9)}
  const tex=new THREE.CanvasTexture(c);tex.wrapS=tex.wrapT=THREE.RepeatWrapping;tex.colorSpace=THREE.SRGBColorSpace;tex.anisotropy=4;
  return tex;
@@ -154,24 +170,57 @@ float fadeBayer(vec2 p){ivec2 i=ivec2(mod(p,4.0));int n=i.x+i.y*4;
 }
 
 // options.label(text,x,y,z,width,rot,bg,fg,height) draws a sign (game.js's label helper).
-export function createWorld(scene,{label}={}){
+export function createWorld(scene,{label,cullRadius}={}){
  const layout=worldLayout(),colliders=createColliders(),fade=createSightlineFade();
  const group=new THREE.Group();group.name='world-zones';scene.add(group);
 
- // Ground: one plane per zone, each with its own material.
- const textures={farm:groundTexture('farm'),forest:groundTexture('forest'),dirt:groundTexture('dirt'),field:groundTexture('field')};
+
+ // Ground: one base plane for the whole map, the farm's and forest's own ground over their zones, then dirt roads, field interiors, the river and the bridge.
+ const textures={farm:groundTexture('farm'),forest:groundTexture('forest'),dirt:groundTexture('dirt'),field:groundTexture('field'),plowed:groundTexture('plowed'),wheat:groundTexture('wheat'),green:groundTexture('green')};
  function plane(x0,x1,z0,z1,y,material,name){
   const mesh=new THREE.Mesh(new THREE.PlaneGeometry(x1-x0,z1-z0),material);mesh.rotation.x=-Math.PI/2;
   mesh.position.set((x0+x1)/2,y,(z0+z1)/2);mesh.receiveShadow=true;mesh.name=name;group.add(mesh);return mesh;
  }
  function textured(tex,w,h,scale,color='#ffffff'){const map=tex.clone();map.needsUpdate=true;map.repeat.set(w/scale,h/scale);return new THREE.MeshStandardMaterial({map,color,roughness:1})}
- const gw=GROUND.z1-GROUND.z0;
- plane(CITY_WEST,CITY_EAST,GROUND.z0,GROUND.z1,-.075,new THREE.MeshStandardMaterial({color:'#8a9a7c',roughness:.95}),'ground-city');
- plane(GROUND.x0,CITY_WEST,GROUND.z0,GROUND.z1,-.075,textured(textures.farm,CITY_WEST-GROUND.x0,gw,7),'ground-farm');
- plane(CITY_EAST,GROUND.x1,GROUND.z0,GROUND.z1,-.075,textured(textures.forest,GROUND.x1-CITY_EAST,gw,6),'ground-forest');
+ const farmZone=zoneById('farm').bounds,forestZone=zoneById('forest').bounds;
+ plane(GROUND.x0,GROUND.x1,GROUND.z0,GROUND.z1,-.075,new THREE.MeshStandardMaterial({color:'#8a9a7c',roughness:.95}),'ground-base');
+ {const f={x0:farmZone.x0-14,x1:farmZone.x1,z0:farmZone.z0-14,z1:farmZone.z1+7};plane(f.x0,f.x1,f.z0,f.z1,-.074,textured(textures.farm,f.x1-f.x0,f.z1-f.z0,7),'ground-farm')}
+ {const f={x0:forestZone.x0,x1:forestZone.x1+14,z0:forestZone.z0-14,z1:forestZone.z1+7};plane(f.x0,f.x1,f.z0,f.z1,-.074,textured(textures.forest,f.x1-f.x0,f.z1-f.z0,6),'ground-forest')}
  for(const r of DIRT_ROADS)plane(r.x0,r.x1,r.z0,r.z1,-.066,textured(textures.dirt,r.x1-r.x0,r.z1-r.z0,5),'dirt-road');
- // Field interiors: a slightly richer grass so the plots read from a distance.
- for(const f of FIELDS)plane(f.x0,f.x1,f.z0,f.z1,-.069,textured(textures.field,f.x1-f.x0,f.z1-f.z0,6),'field-'+f.id);
+ // Fields: plowed soil, wheat and young crops, each its own ground, open to vehicles.
+ for(const f of FIELDS)plane(f.x0,f.x1,f.z0,f.z1,-.069,textured(textures[f.surface],f.x1-f.x0,f.z1-f.z0,6),'field-'+f.id);
+ // The County Road north of the city (the city's own streets are built in game.js), with a dashed centre line.
+ const asphalt=new THREE.MeshStandardMaterial({color:'#585d60',roughness:.95});
+ for(const r of roadRects('asphalt'))if(r.id==='county-road'){
+  plane(r.x0,r.x1,r.z0,r.z1,-.045,asphalt,'county-road');
+  const dashes=[];for(let z=r.z1-4;z>r.z0+2;z-=6)dashes.push(z);
+  const line=new THREE.InstancedMesh(new THREE.BoxGeometry(.18,.02,2.2),new THREE.MeshStandardMaterial({color:'#e8e2c8',roughness:.9}),dashes.length);
+  {const mat=new THREE.Matrix4(),at=new THREE.Vector3(),turn=new THREE.Quaternion(),one=new THREE.Vector3(1,1,1);
+  dashes.forEach((z,i)=>{const onBridge=MAP.water.bridges.some(b=>z>b.z0&&z<b.z1);line.setMatrixAt(i,mat.compose(at.set((r.x0+r.x1)/2,onBridge?-.005:-.032,z),turn,one))})}
+  line.name='county-road-line';group.add(line);
+ }
+ // The river: flat water between two muddy banks, outside every zone (a hard barrier). The bridge is the only way across.
+ const water=new THREE.MeshStandardMaterial({color:'#4a86a6',roughness:.2,metalness:.1,transparent:true,opacity:.94,side:THREE.DoubleSide,depthWrite:false}),mud=new THREE.MeshStandardMaterial({color:'#7d7352',roughness:1,side:THREE.DoubleSide});
+
+ function ribbon(path,half,y,material,name){
+  const position=[],uv=[],index=[];let along=0;
+  path.forEach((p,i)=>{if(i)along+=Math.hypot(p.x-path[i-1].x,p.z-path[i-1].z);
+   position.push(p.x-p.tz*half,y,p.z+p.tx*half,p.x+p.tz*half,y,p.z-p.tx*half);uv.push(0,along/12,1,along/12);
+   if(i){const a=(i-1)*2;index.push(a,a+2,a+1,a+1,a+2,a+3)}});
+  const geometry=new THREE.BufferGeometry();geometry.setAttribute('position',new THREE.Float32BufferAttribute(position,3));geometry.setAttribute('uv',new THREE.Float32BufferAttribute(uv,2));geometry.setIndex(index);geometry.computeVertexNormals();
+  const mesh=new THREE.Mesh(geometry,material);mesh.name=name;mesh.receiveShadow=true;group.add(mesh);return mesh;
+ }
+ for(const r of MAP.water.rivers){const path=riverPath(r,3);ribbon(path,r.width/2+r.bank,-.068,mud,'river-bank');ribbon(path,r.width/2,-.058,water,'river')}
+ const stone=new THREE.MeshStandardMaterial({color:'#8b8f8c',roughness:1}),timber=new THREE.MeshStandardMaterial({color:'#6f5b43',roughness:1});
+ for(const b of MAP.water.bridges){
+  const len=b.z1-b.z0,cx=(b.x0+b.x1)/2,cz=(b.z0+b.z1)/2,width=b.x1-b.x0;
+  const part=(w,h,d,x,y,z,material,name)=>{const mesh=new THREE.Mesh(new THREE.BoxGeometry(w,h,d),material);mesh.position.set(x,y,z);mesh.castShadow=mesh.receiveShadow=true;mesh.name=name;group.add(mesh);return mesh};
+  part(width,.3,len,cx,-.17,cz,asphalt,'bridge-deck'); // top at y = -0.02, level with the road
+  for(const side of [-1,1]){ // low parapets along both sides, solid so nobody walks off the deck
+   const x=cx+side*(width/2-.25);part(.5,.7,len,x,.33,cz,stone,'bridge-parapet');part(.62,.12,len,x,.72,cz,timber,'bridge-cap');colliders.box(x,cz,.25,len/2);
+  }
+  for(const dz of [-len*.22,len*.22])for(const side of [-1,1])part(.9,1.4,.9,cx+side*(width/2-.8),-.7,cz+dz,stone,'bridge-pier');
+ }
 
  // Fences (instanced posts and rails, solid for walking).
  const segments=fenceSegments(),wood=new THREE.MeshStandardMaterial({color:'#8b6d4b',roughness:.95});
@@ -188,57 +237,91 @@ export function createWorld(scene,{label}={}){
  });
  group.add(posts,rails);
 
- // Decor trees: broadleaf, instanced, solid trunks, never cuttable.
- const canopyGeometry=new THREE.IcosahedronGeometry(1.35,1);
- {const p=canopyGeometry.attributes.position;for(let j=0;j<p.count;j++){const x=p.getX(j),y=p.getY(j),z=p.getZ(j),f=1+.13*Math.sin(x*4+z*3);p.setXYZ(j,x*f,y*1.1*(1+.07*Math.cos(z*5)),z*f)}canopyGeometry.computeVertexNormals();canopyGeometry.translate(0,4.7,0)}
- const decorTrunks=new THREE.InstancedMesh(new THREE.CylinderGeometry(.16,.24,3.9,6).translate(0,1.95,0),fade.apply(new THREE.MeshStandardMaterial({color:'#6f5f4c',roughness:1})),layout.decor.length);
- const decorCanopies=new THREE.InstancedMesh(canopyGeometry,fade.apply(new THREE.MeshStandardMaterial({color:'#ffffff',roughness:.95})),layout.decor.length);
- const tones=['#617e58','#6d8559','#58774e','#4c6a43'].map(c=>new THREE.Color(c));
- layout.decor.forEach((t,i)=>{
-  m4.compose(v.set(t.x,0,t.z),q.setFromAxisAngle(yAxis,t.rot),s.setScalar(t.scale));
-  decorTrunks.setMatrixAt(i,m4);decorCanopies.setMatrixAt(i,m4);decorCanopies.setColorAt(i,tones[t.tone]);
-  colliders.circle(t.x,t.z,.24*t.scale);
- });
- decorTrunks.castShadow=decorCanopies.castShadow=true;decorTrunks.name='decor-tree-trunks';decorCanopies.name='decor-tree-canopies';
- group.add(decorTrunks,decorCanopies);
+ // ── Trees: the Quaternius models (nature.js). One InstancedMesh per model per material (bark and leaves): 16 draw calls for the whole forest.
+ // Which trees are *in* those meshes changes as you move (see rebuild): only trees within the fog distance are drawn, scenery well behind the
+ // camera is skipped and felled trees are not drawn at all, so the cost follows what is near you, not how many trees exist. Which model a tree
+ // gets is a hash of its position (it does not use the layout's random numbers, so no tree has moved). Collisions never depend on what is drawn.
+ const nature=createNatureMaterials(fade);
+ const variantHash=(x,z)=>{const h=Math.sin(x*12.9898+z*78.233)*43758.5453;return h-Math.floor(h)};
+ const pick=(list,x,z)=>list[Math.min(list.length-1,Math.floor(variantHash(x,z)*list.length))];
+ const tints=['#ffffff','#f3f7e8','#e9f2da','#dfeccf'].map(c=>new THREE.Color(c));
+ const viewDistance=cullRadius??MAP.scenery.view.distance,view2=viewDistance*viewDistance,useCone=Number.isFinite(viewDistance);
+ const groups=[],cutMeshes=[]; // groups: {id, info, meshes:[bark, leaves], entries, dynamic}; cutMeshes: the meshes whose instances animate
+ function treeGroup(id,count,name,dynamic){
+  const info=modelInfo(id),leafMaterial=id.startsWith('pine')?nature.pineLeaves:nature.broadleafLeaves,capacity=Math.max(1,count);
+  const bark=new THREE.InstancedMesh(modelGeometry(id,'bark'),nature.bark,capacity),leaves=new THREE.InstancedMesh(modelGeometry(id,'leaves'),leafMaterial,capacity);
+  leaves.instanceColor=new THREE.InstancedBufferAttribute(new Float32Array(capacity*3),3);leaves.instanceColor.setUsage(THREE.DynamicDrawUsage);
+  bark.name=`${name}-${id}-bark`;leaves.name=`${name}-${id}-leaves`;
+  for(const mesh of [bark,leaves]){
+   mesh.count=0;mesh.castShadow=dynamic; // scenery trees cast no shadow: that halves the shadow pass
+   mesh.receiveShadow=true;mesh.frustumCulled=false; // the instances are culled by rebuild(), so the mesh's own bounds would be stale
+   mesh.instanceMatrix.setUsage(THREE.DynamicDrawUsage);if(dynamic)cutMeshes.push(mesh);group.add(mesh);
+  }
+  const g={id,info,meshes:[bark,leaves],entries:[],dynamic};groups.push(g);return g;
+ }
+ const addEntry=(g,t,tint)=>{m4.compose(v.set(t.x,0,t.z),q.setFromAxisAngle(yAxis,t.rot),s.setScalar(t.scale));const entry={x:t.x,z:t.z,matrix:Float32Array.from(m4.elements),tint,off:false,slot:-1};g.entries.push(entry);return entry};
+ // Decor trees (never cuttable, solid trunks): pines on Pine Ridge's side, broadleaf everywhere else.
+ const decorModels=layout.decor.map(t=>pick(forestSide(t.x,t.z)?PINES:BROADLEAVES,t.x,t.z));
+ const decorGroups=new Map([...new Set(decorModels)].map(id=>[id,treeGroup(id,decorModels.filter(m=>m===id).length,'decor',false)]));
+ layout.decor.forEach((t,i)=>{const g=decorGroups.get(decorModels[i]);addEntry(g,t,tints[t.tone]);colliders.circle(t.x,t.z,g.info.trunkRadius*t.scale*.85)});
 
- // Cuttable trees: pines on cell centres (two cone tiers + trunk), plus hidden stumps.
- const n=layout.cuttable.length;
- const pineTrunks=new THREE.InstancedMesh(new THREE.CylinderGeometry(.13,.21,2.7,7).translate(0,1.35,0),fade.apply(new THREE.MeshStandardMaterial({color:'#6a523b',roughness:1})),n);
- const pineMaterial=fade.apply(new THREE.MeshStandardMaterial({color:'#ffffff',roughness:.9,flatShading:true}));
- const pineLow=new THREE.InstancedMesh(new THREE.ConeGeometry(1.3,2.7,8).translate(0,3,0),pineMaterial,n);
- const pineTop=new THREE.InstancedMesh(new THREE.ConeGeometry(.9,2.1,8).translate(0,4.45,0),pineMaterial,n);
- const stumps=new THREE.InstancedMesh(new THREE.CylinderGeometry(.21,.26,.34,8).translate(0,.17,0),new THREE.MeshStandardMaterial({color:'#7b6247',roughness:1}),n);
- pineTrunks.name='pine-trunks';pineLow.name='pine-canopy-low';pineTop.name='pine-canopy-top';stumps.name='pine-stumps';
- for(const m of [pineTrunks,pineLow,pineTop,stumps]){m.castShadow=true;m.receiveShadow=true;m.instanceMatrix.setUsage(THREE.DynamicDrawUsage);group.add(m)}
- const pineTones=['#3b6a45','#467550','#355f3e'].map(c=>new THREE.Color(c));
+ // Cuttable trees: pines on cell centres, plus hidden stumps.
+ const n=layout.cuttable.length,cutModels=layout.cuttable.map(t=>pick(PINES,t.x,t.z));
+ const cutGroups=new Map(PINES.map(id=>[id,treeGroup(id,cutModels.filter(m=>m===id).length,'pine',true)]));
+ const stumps=new THREE.InstancedMesh(new THREE.CylinderGeometry(.21,.26,.34,8).translate(0,.17,0),new THREE.MeshStandardMaterial({map:nature.logBark,color:'#d8b88c',roughness:1}),n);
+ stumps.name='pine-stumps';stumps.castShadow=stumps.receiveShadow=true;stumps.instanceMatrix.setUsage(THREE.DynamicDrawUsage);group.add(stumps);
  const hidden=new THREE.Matrix4().makeScale(0,0,0);
  const trees=new Map();
  const tilt=new THREE.Quaternion(),yaw=new THREE.Quaternion(),axis=new THREE.Vector3();
  layout.cuttable.forEach((t,i)=>{
-  const tone=pineTones[i%3];pineLow.setColorAt(i,tone);pineTop.setColorAt(i,tone);
-  const state={...t,index:i,standing:true,stage:'mature',collider:colliders.circle(t.x,t.z,.21*t.scale+.04,t.key),anim:null};
+  const g=cutGroups.get(cutModels[i]),entry=addEntry(g,t,tints[i%4]);
+  const state={...t,index:i,model:g.id,meshes:g.meshes,entry,get slot(){return entry.slot},standing:true,stage:'mature',collider:colliders.circle(t.x,t.z,g.info.trunkRadius*t.scale+.04,t.key),anim:null};
   trees.set(t.key,state);poseTree(state);stumps.setMatrixAt(i,hidden);
  });
+ // Which trees are in the meshes: those within the view distance of the player; trees farther than 30 m (choppable pines: 70 m) also have to be in front
+ // of the camera (within about 110 degrees of where it looks). Felled trees (off) are not drawn. Rebuilt when you move 3 m, turn about 14 degrees or a tree changes.
+ const view={x:0,z:0,fx:0,fz:-1,ready:false},dir=new THREE.Vector3();let dirty=true;
+ function rebuild(){
+  for(const g of groups){
+   const [bark,leaves]=g.meshes,bm=bark.instanceMatrix.array,lm=leaves.instanceMatrix.array,lc=leaves.instanceColor.array;let k=0;
+   for(const e of g.entries){
+    e.slot=-1;if(e.off)continue;
+    const dx=e.x-view.x,dz=e.z-view.z,d2=dx*dx+dz*dz;if(d2>view2)continue;
+    if(useCone&&d2>(g.dynamic?4900:900)&&dx*view.fx+dz*view.fz<-.35*Math.sqrt(d2))continue; // far behind the camera (scenery after 30 m, choppable pines after 70 m: their shadows only matter near you)
+    bm.set(e.matrix,k*16);lm.set(e.matrix,k*16);lc[k*3]=e.tint.r;lc[k*3+1]=e.tint.g;lc[k*3+2]=e.tint.b;e.slot=k++;
+   }
+   bark.count=leaves.count=k;bark.instanceMatrix.needsUpdate=leaves.instanceMatrix.needsUpdate=leaves.instanceColor.needsUpdate=true;
+  }
+  dirty=false;
+ }
+ function refreshView(camera,target){
+  camera.getWorldDirection(dir);const l=Math.hypot(dir.x,dir.z)||1,fx=dir.x/l,fz=dir.z/l;
+  if(!view.ready||dirty||Math.hypot(target.x-view.x,target.z-view.z)>3||fx*view.fx+fz*view.fz<.97){view.x=target.x;view.z=target.z;view.fx=fx;view.fz=fz;view.ready=true;rebuild()}
+ }
  // Writes one pine's transforms. fall = 0..1 tips it over; shake wobbles it.
  function poseTree(t,{fall=0,shake=0,dirX=0,dirZ=1,shrink=1}={}){
   yaw.setFromAxisAngle(yAxis,t.rot);
   axis.set(dirZ,0,-dirX).normalize();
   tilt.setFromAxisAngle(axis.lengthSq()?axis:v.set(1,0,0),fall*Math.PI*.47+shake);
   m4.compose(v.set(t.x,0,t.z),tilt.multiply(yaw),s.setScalar(t.scale*shrink));
-  pineTrunks.setMatrixAt(t.index,m4);pineLow.setMatrixAt(t.index,m4);pineTop.setMatrixAt(t.index,m4);
+  t.entry.matrix.set(m4.elements);if(t.entry.slot>=0)for(const mesh of t.meshes)mesh.setMatrixAt(t.entry.slot,m4);
  }
- function hideTree(t){for(const m of [pineTrunks,pineLow,pineTop])m.setMatrixAt(t.index,hidden);
+ function hideTree(t){t.entry.off=true;dirty=true; // a felled tree leaves the draw lists altogether
   stumps.setMatrixAt(t.index,m4.compose(v.set(t.x,0,t.z),yaw.setFromAxisAngle(yAxis,t.rot),s.set(t.scale,1,t.scale)))}
- function touch(){for(const m of [pineTrunks,pineLow,pineTop,stumps])m.instanceMatrix.needsUpdate=true}
+ function touch(){if(dirty)rebuild();for(const mesh of cutMeshes)mesh.instanceMatrix.needsUpdate=true;stumps.instanceMatrix.needsUpdate=true}
+ rebuild();
 
- // Zone entrance signs beside the dirt road, facing travellers leaving the city.
- for(const [x,rot,text,bg,fg] of [[-57.5,Math.PI/2,'OAK FARMS','#5a4a2c','#f1e6c4'],[55.5,-Math.PI/2,'ALDER WOODS','#2f4a33','#e3edd2']]){
-  const post=new THREE.Mesh(new THREE.BoxGeometry(.14,2.3,.14),wood);post.position.set(x,1.15,11.4);post.castShadow=true;group.add(post);
-  colliders.box(x,11.4,.07,.07);
-  if(label)label(text,x+(rot>0?.09:-.09),2.05,11.4,2.4,rot,bg,fg,.48);
+ // ── Landmarks (the farmyard, the sawmill) placed from the map, solid where their walls are, and the fork's signpost ──────────────────────────────────
+ const landmarks=MAP.landmarks.map(l=>{
+  const info=propInfo(l.prop),mesh=createProp(l.prop,fade);mesh.position.set(l.x,0,l.z);mesh.rotation.y=l.yaw;group.add(mesh);
+  const cos=Math.round(Math.cos(l.yaw)),sin=Math.round(Math.sin(l.yaw)),turned=sin!==0;
+  for(const b of info.colliders)colliders.box(l.x+b.x*cos+b.z*sin,l.z-b.x*sin+b.z*cos,turned?b.hz:b.hx,turned?b.hx:b.hz);
+  return {id:l.id,mesh,x:l.x,z:l.z,yaw:l.yaw,floor:info.floor||null,radius:Math.hypot(info.width,info.depth)/2};
+ });
+ for(const sign of MAP.signs){
+  const post=new THREE.Mesh(new THREE.BoxGeometry(.18,3.4,.18),timber);post.position.set(sign.x,1.7,sign.z);post.castShadow=true;post.name='sign-post';group.add(post);colliders.circle(sign.x,sign.z,.16);
+  if(label)for(const board of sign.boards)label(board.text,sign.x,board.y,sign.z+.12,4.4,sign.yaw,'#3a2f22','#f1ebd9',.62);
  }
-
  // Faint grid overlay around the player, plus a brighter outline on the targeted cell.
  const RADIUS=11,maxSegments=(RADIUS*2+2)*(RADIUS*2+2)*2;
  const gridGeometry=new THREE.BufferGeometry();
@@ -268,12 +351,17 @@ export function createWorld(scene,{label}={}){
  const ring=new THREE.Mesh(new THREE.RingGeometry(.62,.76,40),new THREE.MeshBasicMaterial({color:'#fff6c8',transparent:true,opacity:.9,depthWrite:false,side:THREE.DoubleSide}));
  ring.rotation.x=-Math.PI/2;ring.visible=false;ring.renderOrder=4;ring.name='tree-target';group.add(ring);
  const MAX_LOG_INSTANCES=96;
- const logMesh=new THREE.InstancedMesh(new THREE.CylinderGeometry(.12,.12,1.15,8).rotateZ(Math.PI/2),new THREE.MeshStandardMaterial({color:'#8a6a45',roughness:1}),MAX_LOG_INSTANCES);
+ const logMesh=new THREE.InstancedMesh(new THREE.CylinderGeometry(.12,.12,1.15,8).rotateZ(Math.PI/2),new THREE.MeshStandardMaterial({map:nature.logBark,color:'#d2b080',roughness:1}),MAX_LOG_INSTANCES);
  logMesh.count=0;logMesh.castShadow=logMesh.receiveShadow=true;logMesh.frustumCulled=false;logMesh.name='ground-logs';group.add(logMesh);
  let clock=0;
  return {
   group,layout,trees,fade,
   blocked:(x,z)=>colliders.blocked(x,z),
+  // The height of a deck or platform under the point (a building's raised floor), or null on open ground.
+  floorAt(x,z){for(const l of landmarks){if(!l.floor)continue;const cos=Math.round(Math.cos(l.yaw)),sin=Math.round(Math.sin(l.yaw)),dx=x-l.x,dz=z-l.z,lx=dx*cos-dz*sin,lz=dx*sin+dz*cos,f=l.floor;if(lx>=f.x0&&lx<=f.x1&&lz>=f.z0&&lz<=f.z1)return f.y}return null},
+  // What is drawn: trees in the draw lists and the triangles they cost (for tests and the debug hook). setViewer places the view without a camera.
+  cullStats(){let drawn=0,total=0,triangles=0,all=0;for(const g of groups){const per=g.info.triangles;for(const e of g.entries){if(!e.off)total++;if(e.slot>=0)drawn++}triangles+=g.meshes[0].count*per;all+=g.entries.filter(e=>!e.off).length*per}return {radius:viewDistance,drawn,total,triangles,allTriangles:all}},
+  setViewer(x,z,fx=0,fz=-1){view.x=x;view.z=z;view.fx=fx;view.fz=fz;view.ready=true;rebuild()},
   // Standing cuttable trees within range of a point.
   cuttableNear(x,z,range=2.2){const out=[];for(const t of trees.values())if(t.standing&&Math.abs(t.x-x)<=range&&Math.abs(t.z-z)<=range&&Math.hypot(t.x-x,t.z-z)<=range)out.push(t);return out},
   // Instantly reflect a saved felled tree (no animation): a stump.
@@ -282,12 +370,12 @@ export function createWorld(scene,{label}={}){
   setStage(key,stage){
    const t=trees.get(key);if(!t||t.standing||t.anim||t.stage===stage)return false;
    t.stage=stage;
-   if(stage==='sapling'){for(const m of [pineTrunks,pineLow,pineTop])m.setMatrixAt(t.index,hidden);stumps.setMatrixAt(t.index,hidden);poseTree(t,{shrink:.3});stumps.setMatrixAt(t.index,m4.compose(v.set(t.x,0,t.z),yaw.setFromAxisAngle(yAxis,t.rot),s.set(t.scale*.8,.5,t.scale*.8)))}
+   if(stage==='sapling'){t.entry.off=false;dirty=true;stumps.setMatrixAt(t.index,hidden);poseTree(t,{shrink:.3});stumps.setMatrixAt(t.index,m4.compose(v.set(t.x,0,t.z),yaw.setFromAxisAngle(yAxis,t.rot),s.set(t.scale*.8,.5,t.scale*.8)))}
    else hideTree(t);
    touch();return true;
   },
   // A fully regrown tree: standing, solid and choppable again.
-  setRegrown(key){const t=trees.get(key);if(!t||t.standing)return false;t.standing=true;t.stage='mature';t.collider.active=true;t.anim=null;stumps.setMatrixAt(t.index,hidden);poseTree(t);touch();return true},
+  setRegrown(key){const t=trees.get(key);if(!t||t.standing)return false;t.standing=true;t.stage='mature';t.collider.active=true;t.anim=null;t.entry.off=false;dirty=true;stumps.setMatrixAt(t.index,hidden);poseTree(t);touch();return true},
   // Visual feedback only; rules live in grid.js.
   hitTree(key,from){const t=trees.get(key);if(!t?.standing)return;const d=Math.hypot(t.x-from.x,t.z-from.z)||1;t.anim={type:'shake',time:0,dirX:(t.x-from.x)/d,dirZ:(t.z-from.z)/d}},
   // onDone runs once the trunk has finished falling (that is when the logs appear).
@@ -312,7 +400,8 @@ export function createWorld(scene,{label}={}){
    return zone?{...t,key:cellKey(t.ix,t.iz),zone}:null;
   },
   update(dt,camera,fadeTarget){
-   fade.update(camera,fadeTarget);
+   fade.update(camera,fadeTarget);refreshView(camera,fadeTarget);
+   for(const l of landmarks)l.mesh.visible=Math.hypot(fadeTarget.x-l.x,fadeTarget.z-l.z)<viewDistance+l.radius; // far buildings are not drawn
    clock+=dt;if(ring.visible)ring.scale.setScalar(1+.07*Math.sin(clock*6));
    let changed=false;
    for(const t of trees.values()){

@@ -49,10 +49,10 @@ assert.match(collectLog(c.state,1).error,/gone/);
 let full=fell.state;while(full.inventory.slots.length<inventoryCapacity(full.inventory))full=addItem(full,'axe').state;
 const refused=collectLog(full,1);assert.match(refused.error,/bag is full/);assert.equal(refused.state,undefined);
 let logs=fresh;for(let i=0;i<12;i++)logs=addItem(logs,'wood-log').state;assert.deepEqual(logs.inventory.slots.map(x=>x.quantity),[10,2]);
-assert.deepEqual(normalizeLogs([{id:1,x:100,z:5,rot:1,t:30},{id:1,x:101,z:5},{id:2,x:900,z:0},{id:3,x:NaN,z:0},{id:0,x:100,z:5},{id:4,x:101,z:6,rot:'x',t:-1},null,'x']),[{id:1,x:100,z:5,rot:1,t:30},{id:4,x:101,z:6,rot:0,t:0}]);
-assert.equal(normalizeLogs(Array.from({length:200},(_,i)=>({id:i+1,x:100,z:5}))).length,MAX_LOGS);assert.deepEqual(normalizeLogs('nope'),[]);
+assert.deepEqual(normalizeLogs([{id:1,x:100,z:-150,rot:1,t:30},{id:1,x:101,z:-150},{id:2,x:900,z:0},{id:3,x:NaN,z:0},{id:0,x:100,z:-150},{id:4,x:101,z:-149,rot:'x',t:-1},null,'x']),[{id:1,x:100,z:-150,rot:1,t:30},{id:4,x:101,z:-149,rot:0,t:0}]);
+assert.equal(normalizeLogs(Array.from({length:200},(_,i)=>({id:i+1,x:100,z:-150}))).length,MAX_LOGS);assert.deepEqual(normalizeLogs('nope'),[]);
 assert.equal(nextLogIdFor(undefined,[]),1);assert.equal(nextLogIdFor(2,[{id:9}]),10);assert.equal(nextLogIdFor(50,[{id:9}]),50);
-const aged={...fell.state,logs:[{id:1,x:100,z:5,rot:0,t:0},{id:2,x:100,z:5,rot:0,t:LOG_LIFETIME}]};assert.deepEqual(expireLogs(aged,LOG_LIFETIME+10).logs.map(l=>l.id),[2]);assert.equal(expireLogs(aged,10),aged);
+const aged={...fell.state,logs:[{id:1,x:100,z:-150,rot:0,t:0},{id:2,x:100,z:-150,rot:0,t:LOG_LIFETIME}]};assert.deepEqual(expireLogs(aged,LOG_LIFETIME+10).logs.map(l=>l.id),[2]);assert.equal(expireLogs(aged,10),aged);
 // ── Regrowth: stump, then sapling, then a pine again ──────────────────────────────
 const felledAt=1000,stump={type:'forest',tree:null,hits:0,felledAt};
 assert.deepEqual([felledAt,felledAt+SAPLING_AFTER-1,felledAt+SAPLING_AFTER,felledAt+MATURE_AFTER-1,felledAt+MATURE_AFTER].map(t=>treeStage(stump,t)),['stump','stump','sapling','sapling','mature']);
@@ -67,6 +67,6 @@ assert.equal(regrowTrees(fresh,5).state,fresh,'nothing to do leaves the state al
 // ── Saves ─────────────────────────────────────────────────────────────────────
 saveProgress(storage,fell.state);const back=loadProgress(storage);assert.deepEqual(back.logs,fell.state.logs);assert.equal(back.nextLogId,3);assert.equal(back.skills.lumberjack.xp,16);assert.deepEqual(back.stats,{treesFelled:1,logsCollected:0});assert.equal(back.equipped,'axe');assert.deepEqual(felledTrees(back),[pine.key]);
 assert.equal(normalizeProgress({equipped:'axe'}).equipped,null,'cannot equip a tool you do not own');assert.equal(normalizeProgress({equipped:'apple',inventory:withAxe().inventory}).equipped,null);
-assert.deepEqual(normalizeProgress({position:{x:120,z:-30}}).position,{x:120,z:-30});assert.deepEqual(normalizeProgress({position:{x:-150,z:40}}).position,{x:-150,z:40});assert.equal(normalizeProgress({position:{x:500,z:0}}).position,null);
+assert.deepEqual(normalizeProgress({position:{x:120,z:-150}}).position,{x:120,z:-150});assert.deepEqual(normalizeProgress({position:{x:-150,z:-150}}).position,{x:-150,z:-150});assert.equal(normalizeProgress({position:{x:500,z:0}}).position,null);
 initializeState({progress:freshProgress()});assert.deepEqual(getPlot(pine.key),{type:'forest',tree:'pine',hits:0});setStatePlot(farmKey,{type:'farm',crop:null,tilled:true});assert.equal(GameState.progress.plots[farmKey].tilled,true);
 console.log('Plot defaults and validation, equipped-axe chopping, XP and level perks, logs on the ground (fall direction, pickup, full bag, expiry), stump-sapling-pine regrowth, and saves passed.');

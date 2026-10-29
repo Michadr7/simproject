@@ -253,7 +253,7 @@ function updateWork(dt){
  $('needsStatus').textContent='Food '+Math.round(GameState.progress.life.food)+'% · Thirst '+Math.round(GameState.progress.life.thirst)+'% · Energy '+Math.round(GameState.progress.life.energy)+'%';
  $('needsStatus').dataset.depleted=String(GameState.progress.life.food===0||GameState.progress.life.thirst===0);
  renderVitals(GameState.progress.life);
- $('locationName').textContent=shop?SHOPS[shop].name.toUpperCase():inside?'STUDIO 2B':zoneAt(me.position.x).label;$('locationSubtitle').textContent=shop||inside?'Oak & Alder':zoneAt(me.position.x).subtitle;
+ $('locationName').textContent=shop?SHOPS[shop].name.toUpperCase():inside?'STUDIO 2B':zoneAt(me.position.x,me.position.z).label;$('locationSubtitle').textContent=shop||inside?'Oak & Alder':zoneAt(me.position.x,me.position.z).subtitle;
  if(shop){const task=cafeTask(GameState.progress),isCafe=shop==='cafe',c=GameState.progress.cafe;const exit=Math.hypot(me.position.x-SHOP_EXIT.x,me.position.z-SHOP_EXIT.z)<1.5,counter=Math.hypot(me.position.x-COUNTER.x,me.position.z-COUNTER.z)<1.6,atTask=isCafe&&Math.hypot(me.position.x-task.x,me.position.z-task.z)<1.35;
  $('cash').textContent=money(GameState.progress.cash);$('objective').querySelector('.eyebrow').textContent=isCafe&&c.stage!=='off'?'ON SHIFT · ALDER COFFEE':'NEIGHBORHOOD';$('objective').querySelector('h2').textContent=isCafe?task.title:SHOPS[shop].name;$('objective').querySelector('p').textContent=isCafe?(c.stage==='off'?'Speak to Elena at the counter about café work. $24 per shift. Start 8 AM–4 PM.':'Orders served: '+c.served+'/2 · '+(c.stage==='brew'||c.stage==='serve'?'Ticket: '+ORDERS[c.customer].drink+'. ':'')+'Follow the floor marker. Clock out to collect wages.'):'Visit the cashier for groceries. Open 7 AM–10 PM.';$('distance').textContent=busy?'Working… '+Math.round(busy.elapsed/busy.duration*100)+'%':'Talk at the counter (E or click) · walk out the front door to leave';$('direction').style.transform='none';$('prompt').hidden=!active||modal||!!busy||(!exit&&!counter&&!atTask);$('prompt').querySelector('span').textContent=atTask?task.title:exit?'Go outside':isCafe?'Order lunch':'Buy groceries';marker.visible=false;workMarker.visible=isCafe;workMarker.position.set(task.x,.04,task.z);parcel.visible=carrying;return}
 
@@ -496,7 +496,7 @@ const minimap=createMinimap(document,{canvas:$('minimap'),
  buildings:MAP.buildings.map(b=>({x:b.x,z:b.z,hx:b.w/2,hz:b.d/2})),
  trees:()=>world.trees.values()});
 function updateZones(dt){
- const outdoors=!inside&&!shop,zone=zoneAt(me.position.x).id;
+ const outdoors=!inside&&!shop,zone=zoneAt(me.position.x,me.position.z).id;
  world.targetCell=world.updateGrid(me.position,me.rotation.y,gridOn&&outdoors&&active&&!modal&&zone!=='city');
  world.fade.uniforms.uFadeEnabled.value=outdoors?1:0;
  fadeTarget.set(me.position.x,me.position.y+1.5,me.position.z);
@@ -743,7 +743,9 @@ avatar.setMotion(moving?(running?8.2:4.5):0);
 const px=me.position.x,pz=me.position.z;
 const sidewalk=(px>=-38&&px<=54&&((pz>=-8.5&&pz<=-3.5)||(pz>=15.5&&pz<=20.5)))||(px>=-21.5&&px<=-16.5&&pz>=-74&&pz<=24);
 const road=(Math.abs(px)<=55&&pz>=-3.5&&pz<=15.5)||(px>=-38&&px<=-22&&Math.abs(pz)<=60);
-me.position.y=THREE.MathUtils.lerp(me.position.y,(inside||shop)?.02:sidewalk?.165:road?.01:-.095,1-Math.exp(-view*30));
+const bridgeDeck=MAP.water.bridges.some(b=>px>=b.x0&&px<=b.x1&&pz>=b.z0&&pz<=b.z1),countyRoad=px>=-34&&px<=-26&&pz<-60;
+ const deck=world.floorAt(px,pz);
+ me.position.y=THREE.MathUtils.lerp(me.position.y,(inside||shop)?.02:deck!==null?deck:bridgeDeck?-.01:countyRoad?-.035:sidewalk?.165:road?.01:-.095,1-Math.exp(-view*30));
 zoom=THREE.MathUtils.lerp(zoom,zoomTarget,1-Math.exp(-view*10));
 
 look.tick(view);
