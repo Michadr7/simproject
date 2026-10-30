@@ -1,5 +1,6 @@
 import {createStoreUI} from './store.js';
 import {createWorld,zoneAt,isWalkable,footingAt} from './world.js';
+import {worldDoors} from './properties.js';
 import {chopTree,felledTrees,plotAt,collectLog,expireLogs,regrowTrees,felledStages,CHOP_RANGE} from './grid.js';
 import {levelOf,swingTime,hitsNeeded,perkText} from './skills.js';
 import {createMinimap} from './minimap.js';
@@ -209,6 +210,8 @@ function candidates(){const all=[],add=(id,point,anchor,label,run,range=1.5)=>al
  if(GameState.progress.phase==='carrying'&&GameState.progress.completed%3!==1){const r=routeFor(GameState.progress);add('delivery',r,()=>new THREE.Vector3(r.x,1.3,r.z),'Leave delivery · '+money(r.pay),()=>station(r,'Delivery collection box','Order for '+r.name+'. Payment: '+money(r.pay)+'.',[{label:'Place order & collect payment',run:()=>finishJob('deliver')}]),1.4)}
  for(const person of pedestrians.people)add('person-'+person.name,person.group.position,()=>entityPoint(person.group),'Talk to '+person.name,()=>speak(person.group,person.name,'Hey! How’s your day going?',[{label:'Any advice for someone new?',run:()=>speak(person.group,person.name,person.line)},{label:'Nice to meet you.',run:()=>speak(person.group,person.name,'You too. See you around the neighborhood!')}]),1.5);
  if(!inside&&!shop){
+  // Doors of houses (properties.js): every one is locked until its owner is you, and the inside does not exist yet.
+  for(const door of HOUSE_DOORS)add('door-'+door.id,door,()=>new THREE.Vector3(door.x,1.4,door.z),door.label,()=>showWorld(()=>new THREE.Vector3(door.x,1.7,door.z),door.title,door.message),2.2);
   const progress=GameState.progress,axe=hasItem(progress,'axe'),equipped=progress.equipped==='axe',need=hitsNeeded(levelOf(progress.skills.lumberjack.xp).level);
   for(const tree of world.cuttableNear(me.position.x,me.position.z,CHOP_RANGE)){
    const hits=plotAt(progress,tree.key).hits;
@@ -218,6 +221,7 @@ function candidates(){const all=[],add=(id,point,anchor,label,run,range=1.5)=>al
  }
  for(const car of vehicles)add(car.id,car,()=>new THREE.Vector3(car.x,1.3,car.z),'Inspect '+car.name,()=>showWorld(()=>new THREE.Vector3(car.x,1.4,car.z),car.name,'Parked · not owned. Driving will be available in a future update.'),1.6);return all;
 }
+const HOUSE_DOORS=worldDoors([]); // the player owns nothing yet; ownership moves into the save with the interiors build
 // One thing at a time (actions.js): the flags come straight from the game's own state, so nothing can stay "held" by mistake.
 const actionFlags=()=>({chop:!!chopping,consume:!!consuming,work:!!busy,sleep:sleepElapsed!==null,door:!!doorFade});
 const canAct=kind=>canStart(kind,actionFlags()),actionBusy=()=>!!activeAction(actionFlags());

@@ -65,7 +65,7 @@ import {terrain,SURFACE} from '../dist/terrain.js';
   assert(h.x+f.x0>=plot.x0&&h.x+f.x1<=plot.x1&&h.z+f.z0>=plot.z0&&h.z+f.z1<=plot.z1,`${h.id} stands inside its plot ${h.plot}`);
   assert(plot.z1-(h.z+f.z1)>=2,`${h.id} keeps a front yard of ${(plot.z1-(h.z+f.z1)).toFixed(1)} m`);
   assert(info.colliders.length>=6,`${h.id} has collision boxes (${info.colliders.length})`);
-  for(const b of info.colliders)for(const [dx,dz] of [[-1,-1],[1,-1],[-1,1],[1,1]]){const x=h.x+b.x+dx*b.hx*.98,z=h.z+b.z+dz*b.hz*.98;assert(T.surfaceAt(x,z)===SURFACE.GRASS,`${h.id}'s walls stand on plot grass, never on the road (${x.toFixed(1)},${z.toFixed(1)})`)}
+  for(const b of info.colliders)for(const [dx,dz] of [[-1,-1],[1,-1],[-1,1],[1,1]]){const x=h.x+b.x+dx*b.hx*.98,z=h.z+b.z+dz*b.hz*.98;assert([SURFACE.GRASS,SURFACE.DRIVEWAY,SURFACE.PATH].includes(T.surfaceAt(x,z)),`${h.id}'s walls stand on plot ground (grass, or the very start of its path or driveway), never on the road (${x.toFixed(1)},${z.toFixed(1)})`)}
   // they block the player...
   assert(world.blocked(h.x+info.colliders[0].x,h.z+info.colliders[0].z),`${h.id} blocks the player`);
   // ...but the loop road and the yard in front of the door stay open

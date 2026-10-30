@@ -779,3 +779,24 @@ The land, the river, the bridge and the zones, rebuilt in `map-definition.js` an
 - `build-props.mjs` now takes a second folder (the Kenney GLB format folder), a `scale` per prop instead of a width, external palette textures and PNG output.
 - A landmark may name a plot (`plot: 'R1'`); `validateMap` checks the plot exists and the landmark stands inside it; `props.mjs` checks each house's collision boxes stand on plot grass, inside the plot, with the yard and the road open.
 - Design notes (no code yet): tool progression with hits per tool (Axe 8, Steel Axe 6, Lumberjack Axe 4, Chainsaw locked to lumberjack level 15), replanting and regrowth, and the map-size and vehicle-speed answer are in `DESIGN.md`.
+
+## 0.28.0 driveways and locked doors (the property registry)
+
+- **Driveways.** Each house has a 3.5 m concrete driveway from its front wall to the loop road (it runs under the road, so the join is clean), a 1.5 m paved front path to its door beside it, and a parking spot (`park`, nose toward the house)
+  on the driveway for vehicles later. They are plot data (`driveway`, `path`, `park`), two new terrain surfaces (walkable, footing -0.04 m, shown on the minimap) and flat planes; trees keep off them. Tests walk the whole length of each and check
+  that it meets the road, is open of walls and has room for a car.
+- **The property registry** (`MAP.properties`, used through `dist/properties.js`) lists everything that can be entered or deliberately cannot: the two shops (public), the studio (its tenant), the three houses (owner only) and the sawmill and
+  farmstead (`enterable: false` with a reason). `validateMap` fails if a landmark has no entry, a shop or the studio is missing, or a rule is incomplete, so a new building cannot be forgotten.
+- **Doors you can walk up to.** Each house model carries its door (middle of the front wall, 1.4 x 2.05 m, measured at x8 scale). Walk within 2.2 m and the prompt reads **Locked · For sale** (R1, R3) or
+  **Locked · Marta Ellison's home** (R2); press E for a panel saying the door is locked. Nobody can enter any house yet: only a house you own opens, and even that waits for interiors. The player owns nothing
+  and no save format changed in this build; `doorState(property, ownedIds)` is ready for the ownership save.
+- **Not in this build** (next phase, once the furniture assets arrive): interior templates, owning or renting a house, NPC owners opening their doors, and a swinging door leaf.
+
+## 0.28.1 road fixes: one connected network
+
+- **Alder Center's roads re-laid** after a top-down check found them unjoined: the cross street (z -90) now runs from the County Road in the west to Cedar Heights' loop in the east, meeting the loop's west side at a square T;
+  **Alder Street** (x 50, 10 m) runs north from Oak Street's pavement, between the cafe and the city's east edge, to the cross street. The old main street (a dead end in an empty field, 25 m from the market's back wall) and the diagonal
+  link (it ended in a slanted slab) are gone. The town square (x 8..38, z -120..-95) now touches the cross street, and C1 and C2 face it (north and south).
+- Corners and ends: Oak Street East runs into the Freight Road, the Freight Road's south leg squares its corner, and the Freight Road ends at the woods road (it used to run 66 m past it to nowhere); the woods road reaches its centreline.
+- **`tests/roads.mjs`**: every street, road, pavement, driveway, path and bridge is one connected paved network (it first reported the floating square), every walkable road can be walked along its whole centreline with road under it, and every road
+  end lies on another road or is a declared dead end (Oak Street's west end, Alder Avenue's south end, the County Road's north end, Alder Street's north end, the Freight Road's west end, the farm gate, the woods lane).

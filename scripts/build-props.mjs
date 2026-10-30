@@ -15,12 +15,13 @@ const folder=resolve(process.argv[2]||'.'),kenney=resolve(process.argv[3]||folde
 // texture size in px and JPEG quality, collisions: a grid cell in metres, a height band (only upright faces inside it count, so a roof above the band
 // does not make the whole building solid), and whether to drop one-cell specks. `skip` leaves a prop out of the output.
 const SCALE_HOUSE=Number(process.env.SCALE_HOUSE||8); // metres per Kenney model unit: set from the door height (a front door should be about 2.1 m)
+const DOOR_HOUSE={x:0,width:1.4,height:2.05}; // the Kenney front door: in the middle of the front wall, about 1.4 m wide and 2.05 m high at x8 (measured against the avatar)
 const PROPS={
  sawmill:{file:'sawmill.glb',width:12,cut:null,triangles:null,texture:[1024,80],collide:{cell:.5,band:[.5,2.1],walls:true,despeckle:false}},
  // Kenney houses (CC0): a metres-per-model-unit `scale` instead of a width, `dir:'kenney'`, and a palette texture kept sharp (nearest-neighbour PNG).
- 'house-a':{dir:'kenney',file:'building-type-a.glb',scale:SCALE_HOUSE,cut:null,triangles:null,texture:[128,'png'],collide:{cell:.5,band:[.5,2.1],walls:true,despeckle:false}},
- 'house-e':{dir:'kenney',file:'building-type-e.glb',scale:SCALE_HOUSE,cut:null,triangles:null,texture:[128,'png'],collide:{cell:.5,band:[.5,2.1],walls:true,despeckle:false}},
- 'house-h':{dir:'kenney',file:'building-type-h.glb',scale:SCALE_HOUSE,cut:null,triangles:null,texture:[128,'png'],collide:{cell:.5,band:[.5,2.1],walls:true,despeckle:false}},
+ 'house-a':{dir:'kenney',file:'building-type-a.glb',scale:SCALE_HOUSE,door:DOOR_HOUSE,cut:null,triangles:null,texture:[128,'png'],collide:{cell:.5,band:[.5,2.1],walls:true,despeckle:false}},
+ 'house-e':{dir:'kenney',file:'building-type-e.glb',scale:SCALE_HOUSE,door:DOOR_HOUSE,cut:null,triangles:null,texture:[128,'png'],collide:{cell:.5,band:[.5,2.1],walls:true,despeckle:false}},
+ 'house-h':{dir:'kenney',file:'building-type-h.glb',scale:SCALE_HOUSE,door:DOOR_HOUSE,cut:null,triangles:null,texture:[128,'png'],collide:{cell:.5,band:[.5,2.1],walls:true,despeckle:false}},
  farmyard:{skip:true,file:'LowPOlyFarm_buildings.glb',width:40,cut:'auto',triangles:13000,texture:[1024,78],collide:{cell:1,band:[2,99],walls:false,despeckle:true}} // not used: it looked too rough in the game
 };
 function parse(path){const d=readFileSync(path),jsonLength=d.readUInt32LE(12);let off=12,json,bin;
@@ -86,7 +87,7 @@ for(const [id,spec] of Object.entries(PROPS)){
  const png=quality==='png',jpeg=png?await sharp(raw).resize(size,size,{fit:'fill',kernel:'nearest'}).png({palette:true}).toBuffer():await sharp(raw).resize(size,size,{fit:'fill'}).jpeg({quality,mozjpeg:true}).toBuffer();
  const posA=Float32Array.from(P),norA=Float32Array.from(N),uvA=Float32Array.from(U),idxA=Uint16Array.from(I);if(count>65535)throw new Error(id+' has too many vertices for 16-bit indices');
  let wx0=1e9,wx1=-1e9,wz0=1e9,wz1=-1e9;for(let i=0;i<P.length;i+=3){wx0=Math.min(wx0,P[i]);wx1=Math.max(wx1,P[i]);wz0=Math.min(wz0,P[i+2]);wz1=Math.max(wz1,P[i+2])}
- out.props[id]={source:spec.file,width:+(wx1-wx0).toFixed(2),depth:+(wz1-wz0).toFixed(2),height:+sy.toFixed(2),triangles:I.length/3,footprint:{x0:+wx0.toFixed(2),x1:+wx1.toFixed(2),z0:+wz0.toFixed(2),z1:+wz1.toFixed(2)},colliders:boxes,floor,
+ out.props[id]={source:spec.file,width:+(wx1-wx0).toFixed(2),depth:+(wz1-wz0).toFixed(2),height:+sy.toFixed(2),triangles:I.length/3,footprint:{x0:+wx0.toFixed(2),x1:+wx1.toFixed(2),z0:+wz0.toFixed(2),z1:+wz1.toFixed(2)},colliders:boxes,floor,door:spec.door?{x:spec.door.x,z:+wz1.toFixed(2),width:spec.door.width,height:spec.door.height}:null,
   texture:'data:image/'+(png?'png':'jpeg')+';base64,'+jpeg.toString('base64'),pos:b64(posA),nor:b64(norA),uv:b64(uvA),idx:b64(idxA),vertices:count};
  report.push(`${id.padEnd(9)} ${before} -> ${I.length/3} triangles, ${(wx1-wx0).toFixed(1)} x ${(wz1-wz0).toFixed(1)} m, ${sy.toFixed(1)} m tall, ${boxes.length} collision boxes, floor ${floor?floor.y+' m high':'none'}, texture ${(jpeg.length/1024).toFixed(0)} KB, ${count} vertices`);
 }

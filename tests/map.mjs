@@ -20,14 +20,14 @@ assert.deepEqual(WALKABLE.map(w=>w.grid),[false,false,true,true,false,false,fals
 assert.deepEqual(ZONES.farm,{id:'farm',name:'Willow Fields',label:'WILLOW FIELDS',subtitle:'Fields & plots',color:'#c9ae63'});assert.equal(ZONES.city.label,'WESTSIDE');assert.equal(ZONES.forest.name,'Pine Ridge');assert.equal(ZONES.county.label,'COUNTY ROAD');
 assert.deepEqual([ZONES.alder.label,ZONES.cedar.label,ZONES.eastbank.label,ZONES.freight.label],['ALDER CENTER','CEDAR HEIGHTS','EASTBANK WORKS','FREIGHT ROAD']);
 // The north bank moved by exactly one shift: every north-bank number equals its old value minus 70.
-assert.deepEqual(DIRT_ROADS.map(({zone,x0,x1,z0,z1})=>[zone,x0,x1,z0,z1]),[["farm", -164, -34, -233.5, -226.5], ["forest", -26, 189, -253.5, -246.5], ["forest", 87.5, 92.5, -316, -216]]);
-assert.deepEqual(roadRects('asphalt').map(({id,x0,x1,z0,z1})=>[id,x0,x1,z0,z1]),[["oak-street", -55, 55, -3.5, 15.5], ["alder-avenue", -38, -22, -60, 60], ["county-road", -34, -26, -316, -60], ["alder-main", 15, 25, -125, -48], ["alder-cross", -20, 58, -95, -85], ["oak-east", 55, 190, 0, 12], ["cedar-link", 115.5, 124.5, -57, 6], ["freight-south", 72, 195, 63.5, 72.5], ["freight-road", 190.5, 199.5, -316, 68]],'straight roads only: the curved ones are ribbons');
-assert.deepEqual(MAP.roads.edges.filter(e=>e.path).map(e=>e.id),['alder-cedar','cedar-loop'],'the two ribbon roads');
+assert.deepEqual(DIRT_ROADS.map(({zone,x0,x1,z0,z1})=>[zone,x0,x1,z0,z1]),[["farm", -164, -34, -233.5, -226.5], ["forest", -26, 195, -253.5, -246.5], ["forest", 87.5, 92.5, -316, -216]]);
+assert.deepEqual(roadRects('asphalt').map(({id,x0,x1,z0,z1})=>[id,x0,x1,z0,z1]),[["oak-street", -55, 55, -3.5, 15.5], ["alder-avenue", -38, -22, -60, 60], ["county-road", -34, -26, -316, -60], ["alder-street", 45, 55, -125, -3.5], ["alder-cross", -30, 84, -95, -85], ["oak-east", 55, 195, 0, 12], ["cedar-link", 115.5, 124.5, -57, 6], ["freight-south", 72, 199.5, 63.5, 72.5], ["freight-road", 190.5, 199.5, -253.5, 68]],'straight roads only: the loop is a ribbon');
+assert.deepEqual(MAP.roads.edges.filter(e=>e.path).map(e=>e.id),['cedar-loop'],'the loop is the one ribbon road');
 assert.deepEqual(FIELDS.map(f=>[f.id,f.surface,f.x0,f.x1,f.z0,f.z1]),[['field-wheat','wheat',-165,-90,-278,-240],['field-plowed','plowed',-165,-115,-220,-184],['field-green','green',-108,-52,-220,-184]]);
 for(const f of FIELDS)assert((f.x1-f.x0)>=50&&(f.z1-f.z0)>=36,'big enough for a tractor to turn in: '+f.id);
 assert.equal(fenceSegments().length,240);
 const layout=worldLayout();let hash=0;for(const t of layout.cuttable)hash=(hash*31+Math.round(t.x*100)*7919+Math.round(t.z*100)*104729)%2147483647;for(const d of layout.decor)hash=(hash*31+Math.round(d.x*100)*7919+Math.round(d.z*100)*104729)%2147483647;
-assert.deepEqual([layout.cuttable.length,layout.decor.length,hash],[395,548,-1465715651],'the generated forest and scenery are unchanged (a deliberate change to the map means updating these numbers)');
+assert.deepEqual([layout.cuttable.length,layout.decor.length,hash],[395,549,-1403809518],'the generated forest and scenery are unchanged (a deliberate change to the map means updating these numbers)');
 const forestTrees=layout.cuttable.length+layout.decor.filter(t=>zoneAtPoint(t.x,t.z)?.id==='forest').length;assert(forestTrees>=400&&forestTrees<=500,'Pine Ridge has '+forestTrees+' trees');
 for(const c of MAP.scenery.forest.clearings)assert(![...layout.cuttable,...layout.decor].some(t=>((t.x-c.x)/c.rx)**2+((t.z-c.z)/c.rz)**2<1),'nothing grows in a clearing');
 assert(MAP.scenery.forest.clearings.some(c=>c.x===106&&c.z===-282&&c.rx===30&&c.rz===24),'the north-east Sawmill clearing is kept (60 x 48 m)');
@@ -44,7 +44,7 @@ for(const [x,z] of [[-30,-160],[-34.9,-160],[-25.1,-150],[-30,-170],[-30,-60],[1
 for(const [x,z] of [[-35.1,-160],[-24.9,-160],[-100,-146],[100,-185],[0,-164],[250,-219],[189.9,-206],[200.1,-206],[-30,-385],[295,0]])assert(!isWalkable(x,z),`the river is a wall at ${x},${z}`);
 {const z0=riverZAt(river,0);assert(inRiver(-30,-160)&&inRiver(0,z0)&&!inRiver(-30,-140)&&inRiver(0,z0-8.6,4)&&!inRiver(0,z0-16,4));assert(riverDistance(0,z0,river)<.1)}
 // Reserved land: C1-C2 in Alder Center, R1-R3 in Cedar Heights, I1-I2 in Eastbank Works; whole cells, inside their district.
-assert.deepEqual(MAP.reserved.map(p=>[p.id,p.kind,p.facing]),[['C1','commercial','east'],['C2','commercial','east'],['R1','residential','south'],['R2','residential','south'],['R3','residential','south'],['I1','industrial','north'],['I2','industrial','south']]);
+assert.deepEqual(MAP.reserved.map(p=>[p.id,p.kind,p.facing]),[['C1','commercial','north'],['C2','commercial','south'],['R1','residential','south'],['R2','residential','south'],['R3','residential','south'],['I1','industrial','north'],['I2','industrial','south']]);
 for(const plot of MAP.reserved){const want={commercial:'alder',residential:'cedar',industrial:'eastbank'}[plot.kind];for(const [x,z] of [[plot.x0,plot.z0],[plot.x1,plot.z1]])assert.equal(zoneAtPoint(x,z)?.id,want,`${plot.id} lies in ${want}`)}
 // Signposts: one for the fork and one for each new district.
 assert.deepEqual(MAP.signs.map(g=>g.id),['fork','alder-sign','cedar-sign','eastbank-sign']);
@@ -117,6 +117,19 @@ has(broken(m=>{m.water.rivers[0].points[3]=[-30,-130]}),/walks into river/);
 has(broken(m=>{m.zones[2].bounds.x1=-40}),/zone farm cannot be reached on foot from the city/);
 has(broken(m=>{m.zones[3].bounds.x0=-20;m.zones[3].bounds.x1=185}),/zone forest cannot be reached on foot from the city/);
 has(broken(m=>{m.scenery.forest.clearings.push({x:140,z:-190,rx:30,rz:30})}),/clearing at 140,-190 reaches outside the forest/);
+// The property registry and driveways.
+has(broken(m=>{m.properties.push({...m.properties[0]})}),/duplicate property market/);
+has(broken(m=>{m.properties.splice(m.properties.findIndex(p=>p.id==='market'),1)}),/shop market has no property entry/);
+has(broken(m=>{m.properties.splice(m.properties.findIndex(p=>p.id==='studio'),1)}),/the studio has no property entry/);
+has(broken(m=>{m.properties.splice(m.properties.findIndex(p=>p.id==='house-r2'),1)}),/landmark house-r2 has no property entry/);
+has(broken(m=>{m.properties.find(p=>p.id==='sawmill').reason=''}),/property sawmill is not enterable but gives no reason/);
+has(broken(m=>{m.properties.find(p=>p.id==='house-r1').access='anyone'}),/property house-r1 has no valid access rule/);
+has(broken(m=>{m.properties.find(p=>p.id==='house-r2').owner={type:'npc'}}),/owned by an NPC with no name/);
+has(broken(m=>{m.properties.find(p=>p.id==='house-r3').landmark='nowhere'}),/names an unknown landmark nowhere/);
+has(broken(m=>{m.reserved.find(p=>p.id==='R1').driveway.x1=102}),/plot R1 driveway is narrower than 3.5 m/);
+has(broken(m=>{m.reserved.find(p=>p.id==='R1').driveway.x0=300;m.reserved.find(p=>p.id==='R1').driveway.x1=310}),/plot R1 driveway is not a rectangle inside its district/);
+has(broken(m=>{m.reserved.find(p=>p.id==='R2').park.x=140}),/plot R2 parking spot is not on its driveway/);
+has(broken(m=>{m.reserved.find(p=>p.id==='R2').path.x1=119.5}),/plot R2 path is narrower than 1.2 m/);
 // A landmark that names a plot must stand inside it.
 has(broken(m=>{m.landmarks.find(l=>l.id==='house-r1').plot='R9'}),/house-r1 names an unknown plot R9/);
 has(broken(m=>{m.landmarks.find(l=>l.id==='house-r1').x=130}),/house-r1 is not inside its plot R1/);
@@ -142,4 +155,4 @@ has(broken(m=>{m.shops.cafe.interior.exitDoor.near.z=4.5}),/exit door would open
 has(broken(m=>{m.shops.market.interior.counter.x=7}),/counter is outside the room/);
 has(broken(m=>{delete m.shops.cafe.doorway}),/needs a doorway and an interior/);
 has(broken(m=>{delete m.studio.interior}),/studio interior needs an entry, exit and bed/);
-console.log('Map data is valid and frozen; zones, roads, fields, trees, shops, hours, studio and spawn match the numbers they replaced; 65 broken maps are each caught; Alder Center, Cedar Heights, Eastbank Works, the second bridge and the plots are in place.');
+console.log('Map data is valid and frozen; zones, roads, fields, trees, shops, hours, studio and spawn match the numbers they replaced; 77 broken maps are each caught; Alder Center, Cedar Heights, Eastbank Works, the second bridge and the plots are in place.');

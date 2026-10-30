@@ -77,7 +77,7 @@ const blockSeed=(a,b,salt)=>(Math.imul(a,73856093)^Math.imul(b,19349663)^Math.im
 let cachedLayout=null;
 // Generates every tree once. Cuttable trees sit on cell centres and are keyed by cell.
 // Ground that belongs to something other than open country: a zone, a road, a pavement, a field, the river or a bridge. Scenery belts keep off it.
-const CLAIMED=new Set([SURFACE.STREET,SURFACE.ROAD,SURFACE.DIRT,SURFACE.PAVEMENT,SURFACE.WATER,SURFACE.BANK,SURFACE.BRIDGE,SURFACE.WHEAT,SURFACE.PLOWED,SURFACE.GREEN]);
+const CLAIMED=new Set([SURFACE.STREET,SURFACE.ROAD,SURFACE.DIRT,SURFACE.PAVEMENT,SURFACE.WATER,SURFACE.BANK,SURFACE.BRIDGE,SURFACE.WHEAT,SURFACE.PLOWED,SURFACE.GREEN,SURFACE.DRIVEWAY,SURFACE.PATH]);
 function claimed(x,z){const t=terrain(),c=t.index(x,z);return c<0||t.zone[c]!==0||CLAIMED.has(t.surface[c])}
 export function worldLayout(){
  if(cachedLayout)return cachedLayout;
@@ -336,6 +336,9 @@ export function createWorld(scene,{label,cullRadius}={}){
   const post=new THREE.Mesh(new THREE.BoxGeometry(.18,3.4,.18),timber);post.position.set(sign.x,1.7,sign.z);post.castShadow=true;post.name='sign-post';group.add(post);colliders.circle(sign.x,sign.z,.16);
   if(label)for(const board of sign.boards)label(board.text,sign.x,board.y,sign.z+.12,4.4,sign.yaw,'#3a2f22','#f1ebd9',.62);
  }
+ // Driveways and front paths: flat concrete and paving just above the grass and just under the road they join.
+ {const concrete=new THREE.MeshStandardMaterial({color:'#8f9396',roughness:.95}),paving=new THREE.MeshStandardMaterial({color:'#b9b3a4',roughness:.9});
+  for(const plot of MAP.reserved){if(plot.driveway)plane(plot.driveway.x0,plot.driveway.x1,plot.driveway.z0,plot.driveway.z1,-.05,concrete,'driveway-'+plot.id);if(plot.path)plane(plot.path.x0,plot.path.x1,plot.path.z0,plot.path.z1,-.049,paving,'path-'+plot.id)}}
  // ── Reserved plots (O): a tinted patch, an outline and the plot's id on the ground, hidden until switched on ─────────────────────────────────────────
  const plotColour={residential:'#2fbf9f',commercial:'#b0529b',industrial:'#e0a02e'},plotOverlay=new THREE.Group();plotOverlay.name='plot-overlay';plotOverlay.visible=false;group.add(plotOverlay);
  for(const plot of MAP.reserved){

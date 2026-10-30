@@ -12,8 +12,8 @@ const T=terrain(),at=(x,z)=>T.surfaceAt(x,z);
 
 // ── The city is exactly as it was: walking and footing match the old rectangle rules at every sampled point of the city zone ────────────────────
 const oldFooting=(px,pz)=>{const sidewalk=(px>=-38&&px<=54&&((pz>=-8.5&&pz<=-3.5)||(pz>=15.5&&pz<=20.5)))||(px>=-21.5&&px<=-16.5&&pz>=-74&&pz<=24),road=(Math.abs(px)<=55&&pz>=-3.5&&pz<=15.5)||(px>=-38&&px<=-22&&Math.abs(pz)<=60);return sidewalk?.165:road?.01:-.095};
-let cityPoints=0,bad=[];for(let x=-60.9;x<54.9;x+=.37)for(let z=-47.9;z<48;z+=.43){cityPoints++;if(!isWalkable(x,z)||Math.abs(footingAt(x,z)-oldFooting(x,z))>1e-9){if(bad.length<5)bad.push([+x.toFixed(2),+z.toFixed(2),footingAt(x,z),oldFooting(x,z)])}}
-assert(cityPoints>70000&&bad.length===0,`the city (up to where Oak Street East takes over at x = 55): ${cityPoints} points sampled, differences ${JSON.stringify(bad)}`);
+let cityPoints=0,bad=[];for(let x=-60.9;x<44.9;x+=.37)for(let z=-47.9;z<48;z+=.43){cityPoints++;if(!isWalkable(x,z)||Math.abs(footingAt(x,z)-oldFooting(x,z))>1e-9){if(bad.length<5)bad.push([+x.toFixed(2),+z.toFixed(2),footingAt(x,z),oldFooting(x,z)])}}
+assert(cityPoints>60000&&bad.length===0,`the city (up to where Alder Street, at x = 45, and Oak Street East, at x = 55, take over): ${cityPoints} points sampled, differences ${JSON.stringify(bad)}`);
 
 // ── Open country: everything inside the playable area is walkable except water; nothing outside it is; no invisible walls where the green starts ─────────────────
 let landCells=0,waterCells=0,outsideCells=0,odd=[];const play=MAP.playable;
@@ -31,7 +31,7 @@ const walkFromSpawn=T.reach(MAP.spawn.x,MAP.spawn.z);for(const [x,z] of [[-22,-9
 // ── Named places: the surfaces are where the map says ──────────────────────────────────────────────
 assert.equal(at(0,6),SURFACE.STREET);assert.equal(at(0,-6),SURFACE.PAVEMENT);assert.equal(at(-30,-230),SURFACE.ROAD);assert.equal(at(-30,-160),SURFACE.BRIDGE);assert.equal(at(195,-206),SURFACE.BRIDGE);assert.equal(at(-100,-230),SURFACE.DIRT);
 assert.equal(at(-130,-260),SURFACE.WHEAT);assert.equal(at(-140,-200),SURFACE.PLOWED);assert.equal(at(-80,-200),SURFACE.GREEN);assert.equal(at(0,riverZAt(MAP.water.rivers[0],0)),SURFACE.WATER);assert.equal(at(60,-290),SURFACE.GRASS);
-assert.equal(at(40,-110),SURFACE.PAVEMENT,"Alder Center's town square is paved");assert.equal(at(20,-70),SURFACE.ROAD,'Alder Center main street');assert.equal(at(20,-90),SURFACE.ROAD,'and the crossing');
+assert.equal(at(20,-110),SURFACE.PAVEMENT,"Alder Center's town square is paved");assert.equal(at(50,-70),SURFACE.ROAD,'Alder Street');assert.equal(at(20,-90),SURFACE.ROAD,'the cross street');assert.equal(at(-28,-90),SURFACE.ROAD,'which reaches the County Road');assert.equal(at(50,-90),SURFACE.ROAD,'and crosses Alder Street');assert.equal(at(70,-90),SURFACE.ROAD,'and runs on to the loop')
 assert.equal(at(100,6),SURFACE.ROAD,'Oak Street East');assert.equal(at(120,-30),SURFACE.ROAD,'the link up to Cedar Heights');assert.equal(at(195,0),SURFACE.ROAD,'the Freight Road');assert.equal(at(130,68),SURFACE.ROAD,'and its south side');
 assert.equal(T.zoneAt(-100,-230).id,'farm');assert.equal(T.zoneAt(19,-90).id,'alder');assert.equal(T.zoneAt(120,-100).id,'cedar');assert.equal(T.zoneAt(130,30).id,'eastbank');assert.equal(T.zoneAt(195,-100).id,'freight');assert.equal(T.zoneAt(0,-164),null);assert.equal(FOOTING[SURFACE.PAVEMENT],.165);
 assert(!isWalkable(MAP.ground.x0-5,0)&&!isWalkable(0,MAP.ground.z1+5));assert.equal(footingAt(9999,9999),FOOTING[SURFACE.GRASS]);
@@ -59,8 +59,8 @@ for(const bridge of MAP.water.bridges){
  // Room for vehicles: nowhere does the road bend tighter than a 17 m radius (a car turns in about 6 m, a small truck in 12), and it is two 3.5 m lanes plus shoulders wide.
  let minRadius=1e9;for(let i=3;i<line.length-3;i++){const a=line[i-3],b=line[i],c=line[i+3],ab=Math.hypot(b[0]-a[0],b[1]-a[1]),bc=Math.hypot(c[0]-b[0],c[1]-b[1]),ca=Math.hypot(a[0]-c[0],a[1]-c[1]),area=Math.abs((b[0]-a[0])*(c[1]-a[1])-(b[1]-a[1])*(c[0]-a[0]))/2;if(area>1e-9)minRadius=Math.min(minRadius,ab*bc*ca/(4*area))}
  assert(minRadius>=17,'the tightest bend has a radius of '+minRadius.toFixed(1)+' m');assert(loop.width>=9)}
-// Reserved plots are open ground inside their district: never on a road, a pavement, water or a bridge.
-for(const plot of MAP.reserved)for(let x=plot.x0+.25;x<plot.x1;x+=.5)for(let z=plot.z0+.25;z<plot.z1;z+=.5){const s=at(x,z);assert(isWalkable(x,z)&&s===SURFACE.GRASS,`${plot.id} is open grass at ${x},${z} (surface ${s})`)}
+// Reserved plots are open ground inside their district (grass, or a driveway or front path): never on a road, a pavement, water or a bridge.
+for(const plot of MAP.reserved)for(let x=plot.x0+.25;x<plot.x1;x+=.5)for(let z=plot.z0+.25;z<plot.z1;z+=.5){const s=at(x,z);assert(isWalkable(x,z)&&(s===SURFACE.GRASS||s===SURFACE.DRIVEWAY||s===SURFACE.PATH),`${plot.id} is open ground at ${x},${z} (surface ${s})`)}
 
 // ── What rectangles could not do: a curved, walkable road anywhere (here on spare ground in the east) ──────────────────────────────────────
 const curvy=structuredClone(MAP);

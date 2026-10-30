@@ -7,10 +7,10 @@
 // order: zones, roads, fields, pavements, the river and its banks, bridges. Water and banks are never walkable; a bridge deck always is.
 import {MAP,roadRect,riverPath} from './map-definition.js';
 
-export const SURFACE=Object.freeze({GRASS:1,STREET:2,ROAD:3,DIRT:4,PAVEMENT:5,WATER:6,BANK:7,BRIDGE:8,WHEAT:9,PLOWED:10,GREEN:11});
+export const SURFACE=Object.freeze({GRASS:1,STREET:2,ROAD:3,DIRT:4,PAVEMENT:5,WATER:6,BANK:7,BRIDGE:8,WHEAT:9,PLOWED:10,GREEN:11,DRIVEWAY:12,PATH:13});
 // How high the player's feet sit on each surface (the city's streets and pavements are raised meshes; the County Road is a plane on the grass).
-export const FOOTING=Object.freeze({1:-.095,2:.01,3:-.035,4:-.095,5:.165,6:-.095,7:-.095,8:-.01,9:-.095,10:-.095,11:-.095});
-export const MINIMAP_COLOUR=Object.freeze({2:'#45494b',3:'#45494b',4:'#9c8462',5:'#8d9294',6:'#3f7ea3',7:'#5b6448',8:'#6f5b43',9:'#d4b45a',10:'#6b4f3a',11:'#82a653'});
+export const FOOTING=Object.freeze({1:-.095,2:.01,3:-.035,4:-.095,5:.165,6:-.095,7:-.095,8:-.01,9:-.095,10:-.095,11:-.095,12:-.04,13:-.04});
+export const MINIMAP_COLOUR=Object.freeze({2:'#45494b',3:'#45494b',4:'#9c8462',5:'#8d9294',6:'#3f7ea3',7:'#5b6448',8:'#6f5b43',9:'#d4b45a',10:'#6b4f3a',11:'#82a653',12:'#8f9396',13:'#b9b3a4'});
 const FIELD_SURFACE={wheat:SURFACE.WHEAT,plowed:SURFACE.PLOWED,green:SURFACE.GREEN};
 
 // The centreline of a road edge: its two nodes with any `path` points between them, smoothed into a curve when `curve` is set.
@@ -48,6 +48,8 @@ export function buildTerrain(map=MAP,{cell=.5}={}){
  rect(map.playable||g,c=>{walk[c]=1});
  // 1. zones (the first zone in the list wins where two touch, as zoneAtPoint does)
  for(let k=map.zones.length-1;k>=0;k--)rect(map.zones[k].bounds,c=>{walk[c]=1;zone[c]=k+1});
+ // 1b. driveways and front paths (painted before the roads, so a driveway ends under the road it joins)
+ for(const plot of map.reserved||[]){if(plot.driveway)rect(plot.driveway,c=>{surface[c]=SURFACE.DRIVEWAY});if(plot.path)rect(plot.path,c=>{surface[c]=SURFACE.PATH})}
  // 2. roads: straight axis-aligned edges are their rectangle; edges with a path are ribbons. `walkable` roads also make their ground walkable.
  for(const edge of map.roads.edges){
   const kind=edge.surface==='dirt'?SURFACE.DIRT:edge.level==='rural'?SURFACE.ROAD:SURFACE.STREET,named=edge.zone?map.zones.findIndex(z=>z.id===edge.zone)+1:0,

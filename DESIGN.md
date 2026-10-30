@@ -57,6 +57,28 @@ Checks: `validateMap` (zones, water, bridges, plots), `validateTerrain` (every d
 (each bridge's deck spans its river and meets its road; the roads meet their zones).
 **Build 2 (done in 0.27.0 for Cedar Heights; Alder Center and Eastbank Works follow as assets arrive):** the real Kenney houses in Cedar Heights (house slots sized from their real footprints, scaled about x8), then Alder Center and Eastbank Works as their asset packs arrive.
 
+## Enterable buildings: what exists and what Step 2 (Opus) must design
+**Exists (0.28.0).** `MAP.properties` is the registry (id, type, name, `access` public | tenant | owner, `owner` null | npc | city | landlord, or `enterable: false` with a reason); `properties.js` turns it into doors in the world and `doorState`;
+`validateMap` and `tests/properties.mjs` make sure nothing enterable is left out. Houses carry their door in the model data; shops and the studio keep their own door systems (shops.js, apartment.js) and are only registered.
+**Step 2 to design (Opus 5.5).**
+1. **Interior templates:** built on demand, sized to the house's footprint (10.4 x 7.3-8.2 m), one room per floor with stairs as a fade (the two-storey type has two), furniture stored as a list of `{item, x, z, yaw}` so the player can edit it; the outside world is hidden while inside.
+   Reuse the shop-room and studio builders where they fit; the Kenney houses have no inside, so windows stay opaque.
+2. **Ownership in the save:** `progress.properties = {id: {owner, since, furniture}}`, migrating old saves (none own anything). Server-authoritative for multiplayer: the client asks, the server answers `doorState`.
+3. **Getting a key:** buying or renting a vacant house (an estate agent, the phone's bank screen), price and rent per type, what happens when rent is missed (the studio's billing is the model).
+4. **NPC owners:** residents with schedules, who are home when; knocking, being invited in; whether an NPC house can be burgled (probably never).
+5. **A swinging door leaf:** split the door recess from the fused mesh in the converter, or draw a leaf over it; a door sound.
+Everything new must be enterable unless it says otherwise in the registry: that rule is a test, not a convention.
+
+## Filling the map while the assets are on their way (no assets needed)
+Every item is data first, so nothing is thrown away when the real buildings arrive. Models: **Sonnet 5.5** for all of it; **Haiku 5.5** for the number tweaks.
+1. **Cedar Heights, the outer ring** (Kenney houses already in hand): plots R4-R9 around the outside of the loop with their driveways, front paths and parking spots (more houses from the 18 unused types); the registry gets entries, all locked.
+2. **Street furniture** (plain geometry): pavements along Alder Street and the cross street, crossings where they meet Oak Street, street lamps on the loops (instanced, about 60 posts), benches and bins on the town square, bus-stop shelters.
+3. **Eastbank Works as data**: reserved plots for the warehouse, vehicle workshop, building supplier and gas station (pump island positions, a forecourt, truck yards 8 m wide, parking bays), their driveways and the registry entries; no models.
+   Alder Center the same: the police station, shop fronts and a parking lot as plots with facings, driveways and registry entries.
+4. **Scenery from the Quaternius pack** (in hand, CC0): river-bank rocks, reeds and grass, bushes and flowers on the meadows, ferns and mushrooms in Pine Ridge; all instanced and culled like the trees. Performance budget: about +150,000 triangles drawn at most, checked with the same culling stats before it ships.
+5. **The edge of the world**: a low ring of hills (a few large low-poly meshes, drawn beyond the fog) so the map edge reads as a horizon, not a stop.
+6. **Pine Ridge's timber yard**: a reserved loading area beside the sawmill with truck bays on the woods road, a log-pile area and the Freight Road junction as data, for the sawmill chain.
+
 ## Open country and vehicles
 - Walkable ground is "the playable rectangle minus water", not "the zones". Zones are names and rules (grid, labels); keep new districts as zones, never as fences. Solid things get colliders.
 - Roads are designed for vehicles from the start: lanes 3.5 m, shoulder 1 m (a 9 m road), curve radius at least 17 m, 12 m streets where trucks turn. When vehicles arrive they follow road edges (`roadCenterline`) and the plots' `facing`.

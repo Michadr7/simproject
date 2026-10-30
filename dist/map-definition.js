@@ -29,10 +29,10 @@ const zones=[
 const roads={
  nodes:{
   oakWest:{x:-55,z:6},oakEast:{x:55,z:6},alderNorth:{x:-30,z:-60},alderSouth:{x:-30,z:60},countyEnd:{x:-30,z:n(-246)},
-  farmGate:{x:-164,z:n(-160)},farmJoin:{x:-34,z:n(-160)},woodsJoin:{x:-26,z:n(-180)},woodsEnd:{x:189,z:n(-180)},woodsLaneNorth:{x:90,z:n(-246)},woodsLaneSouth:{x:90,z:n(-146)},
-  alderMainS:{x:20,z:-48},alderMainN:{x:20,z:-125},alderCrossW:{x:-20,z:-90},alderCrossE:{x:58,z:-90},
-  oakEastEnd:{x:190,z:6},cedarLinkS:{x:120,z:6},cedarLoopStart:{x:120,z:-57},alderCedarA:{x:58,z:-90},alderCedarB:{x:83,z:-85},
-  freightW:{x:72,z:68},freightS:{x:195,z:68},freightN:{x:195,z:n(-246)}
+  farmGate:{x:-164,z:n(-160)},farmJoin:{x:-34,z:n(-160)},woodsJoin:{x:-26,z:n(-180)},woodsEnd:{x:195,z:n(-180)},woodsLaneNorth:{x:90,z:n(-246)},woodsLaneSouth:{x:90,z:n(-146)},
+  alderStreetS:{x:50,z:-3.5},alderStreetN:{x:50,z:-125},alderCrossW:{x:-30,z:-90},alderCrossE:{x:84,z:-90},
+  oakEastEnd:{x:195,z:6},cedarLinkS:{x:120,z:6},cedarLoopStart:{x:120,z:-57},
+  freightW:{x:72,z:68},freightS:{x:195,z:68},freightE:{x:199.5,z:68},freightN:{x:195,z:n(-180)-3.5}
  },
  edges:[
   {id:'oak-street',from:'oakWest',to:'oakEast',width:19,surface:'asphalt',level:'street'},
@@ -41,19 +41,19 @@ const roads={
   {id:'farm-road',from:'farmGate',to:'farmJoin',width:7,surface:'dirt'},
   {id:'woods-road',from:'woodsJoin',to:'woodsEnd',width:7,surface:'dirt'},
   {id:'woods-lane',from:'woodsLaneNorth',to:'woodsLaneSouth',width:5,surface:'dirt'},
-  // Alder Center: a main street north from Oak Street and a cross street.
-  {id:'alder-main',from:'alderMainS',to:'alderMainN',width:10,surface:'asphalt',level:'rural',walkable:true,zone:'alder'},
-  {id:'alder-cross',from:'alderCrossW',to:'alderCrossE',width:10,surface:'asphalt',level:'rural',walkable:true,zone:'alder'},
+  // Alder Center: Alder Street runs north from Oak Street's pavement (between the cafe and the city's east edge) to the cross street, which joins the County Road in the west and meets
+  // Cedar Heights' loop at a T in the east (the loop's west side is vertical there, so the join is square).
+  {id:'alder-street',from:'alderStreetS',to:'alderStreetN',width:10,surface:'asphalt',level:'rural',walkable:true},
+  {id:'alder-cross',from:'alderCrossW',to:'alderCrossE',width:10,surface:'asphalt',level:'rural',walkable:true},
   // Oak Street continues east through Eastbank Works to the Freight Road; Cedar Heights hangs off it to the north and off Alder Center's cross street.
   {id:'oak-east',from:'oakEast',to:'oakEastEnd',width:12,surface:'asphalt',level:'rural',walkable:true,zone:'eastbank'},
   {id:'cedar-link',from:'cedarLinkS',to:'cedarLoopStart',width:9,surface:'asphalt',level:'rural',walkable:true},
-  {id:'alder-cedar',from:'alderCedarA',to:'alderCedarB',width:9,surface:'asphalt',level:'rural',walkable:true,path:[]},
   // Cedar Heights' loop: a closed, smoothed oval around (120, -85), 76 m by 56 m, 9 m wide (two 3.5 m lanes and a 1 m shoulder each side). Its tightest bend has a
   // radius of about 20 m, comfortable for cars and a small truck.
   {id:'cedar-loop',from:'cedarLoopStart',to:'cedarLoopStart',width:9,surface:'asphalt',level:'rural',walkable:true,zone:'cedar',curve:true,closed:true,
    path:[[101.0,-60.8],[87.1,-71.0],[82.0,-85.0],[87.1,-99.0],[101.0,-109.2],[120.0,-113.0],[139.0,-109.2],[152.9,-99.0],[158.0,-85.0],[152.9,-71.0],[139.0,-60.8]]},
   // The Freight Road: along the south side of Eastbank Works, then north up its own corridor, over the east bridge, to Pine Ridge.
-  {id:'freight-south',from:'freightW',to:'freightS',width:9,surface:'asphalt',level:'rural',walkable:true,zone:'eastbank'},
+  {id:'freight-south',from:'freightW',to:'freightE',width:9,surface:'asphalt',level:'rural',walkable:true,zone:'eastbank'},
   {id:'freight-road',from:'freightS',to:'freightN',width:9,surface:'asphalt',level:'rural',walkable:true,zone:'freight'}
  ]
 };
@@ -112,15 +112,32 @@ const shops={
 // Land set aside for later (ownership, preset buildings). Whole-cell rectangles; kind is 'residential', 'commercial' or
 // 'industrial'. None are reserved on the current map; validateMap checks any you add.
 const reserved=[
+ // A residential plot also has a `driveway` (3.5 m wide, from the house front to the loop road, where it runs under the road), a front `path` to the door, and a `park` spot (car nose toward the house).
  // Reserved land (whole cells; the ground overlay on the O key and the minimap show them): kept as data until buildings or ownership arrive. `facing` is the side the
  // plot's door and driveway are on: the street it fronts.
- {id:'C1',name:'Commercial plot C1',kind:'commercial',facing:'east',x0:-16,x1:2,z0:-82,z1:-62},{id:'C2',name:'Commercial plot C2',kind:'commercial',facing:'east',x0:-16,x1:2,z0:-118,z1:-98},
- {id:'R1',name:'Residential plot R1',kind:'residential',facing:'south',x0:94,x1:106,z0:-85,z1:-73},{id:'R2',name:'Residential plot R2',kind:'residential',facing:'south',x0:114,x1:126,z0:-83,z1:-71},{id:'R3',name:'Residential plot R3',kind:'residential',facing:'south',x0:134,x1:146,z0:-85,z1:-73},
+ {id:'C1',name:'Commercial plot C1',kind:'commercial',facing:'north',x0:-16,x1:2,z0:-82,z1:-62},{id:'C2',name:'Commercial plot C2',kind:'commercial',facing:'south',x0:-16,x1:2,z0:-118,z1:-98},
+ {id:'R1',name:'Residential plot R1',kind:'residential',facing:'south',x0:94,x1:106,z0:-85,z1:-73,
+  driveway:{x0:101.6,x1:105.1,z0:-75.9,z1:-63.5},path:{x0:99.25,x1:100.75,z0:-75.9,z1:-63.5},park:{x:103.35,z:-73.3,heading:'north'}},{id:'R2',name:'Residential plot R2',kind:'residential',facing:'south',x0:114,x1:126,z0:-83,z1:-71,
+  driveway:{x0:121.6,x1:125.1,z0:-73.9,z1:-61},path:{x0:119.25,x1:120.75,z0:-73.9,z1:-61},park:{x:123.35,z:-71.3,heading:'north'}},{id:'R3',name:'Residential plot R3',kind:'residential',facing:'south',x0:134,x1:146,z0:-85,z1:-73,
+  driveway:{x0:141.6,x1:145.1,z0:-76.4,z1:-65.5},path:{x0:139.25,x1:140.75,z0:-76.4,z1:-65.5},park:{x:143.35,z:-73.8,heading:'north'}},
  {id:'I1',name:'Industrial plot I1',kind:'industrial',facing:'north',x0:150,x1:176,z0:18,z1:46},{id:'I2',name:'Industrial plot I2',kind:'industrial',facing:'south',x0:150,x1:176,z0:-18,z1:-2}
 ];
 
 function deepFreeze(value){if(value&&typeof value==='object'&&!Object.isFrozen(value)){Object.freeze(value);for(const key of Object.keys(value))deepFreeze(value[key])}return value}
 
+// The property registry: every building that can be entered, and the rule for its door. `access`: 'public' (open in its hours: the shops), 'tenant' (the studio, for its renter) or 'owner'
+// (only its owner). `owner`: null (vacant, for sale), {type:'npc', name} or {type:'city'|'landlord'}. A building that is not enterable says so and why (`enterable: false, reason`): nothing is left out by accident.
+// The player owns nothing yet; ownership will move into the save with the interiors build.
+const properties=[
+ {id:'market',type:'shop',name:'Corner Market',access:'public',owner:{type:'city'}},
+ {id:'cafe',type:'shop',name:'Alder Coffee',access:'public',owner:{type:'city'}},
+ {id:'studio',type:'apartment',name:'Studio 2B',access:'tenant',owner:{type:'landlord',name:'the landlord'}},
+ {id:'house-r1',type:'house',landmark:'house-r1',plot:'R1',name:'1 Cedar Loop',access:'owner',owner:null},
+ {id:'house-r2',type:'house',landmark:'house-r2',plot:'R2',name:'2 Cedar Loop',access:'owner',owner:{type:'npc',name:'Marta Ellison'}},
+ {id:'house-r3',type:'house',landmark:'house-r3',plot:'R3',name:'3 Cedar Loop',access:'owner',owner:null},
+ {id:'sawmill',type:'industrial',landmark:'sawmill',name:'Sawmill',enterable:false,reason:'An open-sided working yard; the machinery is its inside.'},
+ {id:'farmstead',type:'farm',landmark:'farmstead',name:'Willow Farmstead',enterable:false,reason:'Placeholder buildings; the real farmhouse and barn will be enterable when the farm assets arrive.'}
+];
 export const MAP=deepFreeze({
  id:'oak-and-alder',version:1,
  seed:7301, // changing it moves every generated tree and orphans saved forest plots
@@ -130,9 +147,9 @@ export const MAP=deepFreeze({
  // Where you can walk: everywhere inside this rectangle except water (and trees, fences and buildings, which are solid objects). The zones name and shape the districts; they no longer fence them in.
  playable:{x0:-250,x1:290,z0:-380,z1:100},
  openCountry:{id:'open',name:'Open Country',label:'OPEN COUNTRY',subtitle:'Meadows between districts',color:'#6e8a5c'}, // how far the ground is drawn (scenery fades into fog beyond the walkable zones)
- zones,roads,water,fields,buildings,shops,reserved,
+ zones,roads,water,fields,buildings,shops,reserved,properties,
  // The city's raised pavements (footing 0.165 m): either side of Oak Street, and beside Alder Avenue.
- pavements:[{x0:-38,x1:54,z0:-8.5,z1:-3.5},{x0:-38,x1:54,z0:15.5,z1:20.5},{x0:-21.5,x1:-16.5,z0:-74,z1:24},{x0:28,x1:52,z0:-120,z1:-98}], // the last one is Alder Center's town square
+ pavements:[{x0:-38,x1:54,z0:-8.5,z1:-3.5},{x0:-38,x1:54,z0:15.5,z1:20.5},{x0:-21.5,x1:-16.5,z0:-74,z1:24},{x0:8,x1:38,z0:-120,z1:-95}], // the last one is Alder Center's town square, on the cross street's north side
  // Buildings placed from converted models or placeholders (props.js): yaw is a multiple of 90 degrees so the collision boxes stay axis-aligned. The farmstead (a barn,
  // a farmhouse, a silo and a shed; a placeholder for now) fills the free north-east strip of Willow Fields and faces the farm road; the sawmill stands in Pine Ridge's empty clearing.
  landmarks:[
@@ -144,7 +161,7 @@ export const MAP=deepFreeze({
  // Signposts: boards are read from the front (yaw 0 faces south, towards walkers arriving from the bridge).
  signs:[
   {id:'fork',zone:'county',x:-25.5,z:n(-170),yaw:0,boards:[{text:'← WILLOW FIELDS',y:2.1},{text:'PINE RIDGE →',y:2.9}]},
-  {id:'alder-sign',zone:'alder',x:26.5,z:-56,yaw:0,boards:[{text:'ALDER CENTER',y:2.4}]},
+  {id:'alder-sign',zone:'alder',x:57,z:-56,yaw:0,boards:[{text:'ALDER CENTER',y:2.4}]},
   {id:'cedar-sign',zone:'cedar',x:127,z:-44,yaw:0,boards:[{text:'CEDAR HEIGHTS',y:2.4}]},
   {id:'eastbank-sign',zone:'eastbank',x:74,z:-5,yaw:-1.5707963267948966,boards:[{text:'EASTBANK WORKS →',y:2.4}]}
  ],
@@ -254,6 +271,28 @@ export function validateMap(map=MAP){
   const zone=map.zones.find(z=>z.id===item.zone);if(!zone||item.x<zone.bounds.x0||item.x>zone.bounds.x1||item.z<zone.bounds.z0||item.z>zone.bounds.z1)bad(`${item.id} is not inside zone ${item.zone}`);
   if(item.prop!==undefined&&Math.abs(Math.sin(item.yaw*2))>1e-9)bad(`${item.id} must face north, east, south or west`);
   if(item.plot!==undefined){const plot=(map.reserved||[]).find(p=>p.id===item.plot);if(!plot)bad(`${item.id} names an unknown plot ${item.plot}`);else if(item.x<plot.x0||item.x>plot.x1||item.z<plot.z0||item.z>plot.z1)bad(`${item.id} is not inside its plot ${item.plot}`)}}}
+ // The property registry: nothing enterable is left out, and a door rule is complete.
+ {const ids=new Set(),owners=['npc','city','landlord'];
+  for(const p of map.properties||[]){
+   if(ids.has(p.id))bad(`duplicate property ${p.id}`);ids.add(p.id);
+   if(!['shop','apartment','house','industrial','farm'].includes(p.type))bad(`property ${p.id} has an unknown type`);
+   if(p.landmark!==undefined&&!(map.landmarks||[]).some(l=>l.id===p.landmark))bad(`property ${p.id} names an unknown landmark ${p.landmark}`);
+   if(p.enterable===false){if(!p.reason)bad(`property ${p.id} is not enterable but gives no reason`);continue}
+   if(!['public','tenant','owner'].includes(p.access))bad(`property ${p.id} has no valid access rule`);
+   if(p.owner!==null&&!(p.owner&&owners.includes(p.owner.type)))bad(`property ${p.id} has an invalid owner`);
+   if(p.owner?.type==='npc'&&!p.owner.name)bad(`property ${p.id} is owned by an NPC with no name`);
+   if(p.type==='house'){const l=(map.landmarks||[]).find(x=>x.id===p.landmark);if(!l||!l.plot)bad(`house ${p.id} must stand on a plot`)}
+  }
+  for(const l of map.landmarks||[])if(l.prop&&!(map.properties||[]).some(p=>p.landmark===l.id))bad(`landmark ${l.id} has no property entry (an enterable building needs a door rule, or enterable: false and a reason)`);
+  for(const kind of Object.keys(map.shops||{}))if(!(map.properties||[]).some(p=>p.id===kind&&p.type==='shop'))bad(`shop ${kind} has no property entry`);
+  if(!(map.properties||[]).some(p=>p.id==='studio'))bad('the studio has no property entry')}
+ // Driveways: a driveway, a front path and a parking spot are whole-rectangles inside the plot's own zone, wide enough for a car, with the spot on the driveway.
+ for(const plot of map.reserved||[]){if(!plot.driveway&&!plot.path&&!plot.park)continue;
+  const zone=zoneAtPoint((plot.x0+plot.x1)/2,(plot.z0+plot.z1)/2,map);
+  for(const key of ['driveway','path'])if(plot[key]){const r=plot[key];if(!rectOk(r)||!zone||!inside(r,zone.bounds))bad(`plot ${plot.id} ${key} is not a rectangle inside its district`)}
+  if(plot.driveway&&plot.driveway.x1-plot.driveway.x0<3.5-1e-9)bad(`plot ${plot.id} driveway is narrower than 3.5 m`);
+  if(plot.path&&plot.path.x1-plot.path.x0<1.2-1e-9)bad(`plot ${plot.id} path is narrower than 1.2 m`);
+  if(plot.park){const q=plot.park,d=plot.driveway;if(!d||q.x<d.x0||q.x>d.x1||q.z<d.z0||q.z>d.z1)bad(`plot ${plot.id} parking spot is not on its driveway`);if(!['north','south','east','west'].includes(q.heading))bad(`plot ${plot.id} parking spot has no heading`)}}
  // Forest clearings are ellipses inside the forest zone.
  for(const clearing of map.scenery?.forest?.clearings||[]){const forest=map.zones.find(z=>z.id===map.scenery.forest.zone||z.id==='forest');
   if(!forest||clearing.x-clearing.rx<forest.bounds.x0||clearing.x+clearing.rx>forest.bounds.x1||clearing.z-clearing.rz<forest.bounds.z0||clearing.z+clearing.rz>forest.bounds.z1)bad(`clearing at ${clearing.x},${clearing.z} reaches outside the forest`)}
