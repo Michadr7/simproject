@@ -34,9 +34,9 @@ const overlaps=(a,b)=>a.x0<b.x1&&b.x0<a.x1&&a.z0<b.z1&&b.z0<a.z1;
 const farmyard=MAP.landmarks.find(l=>l.id==='farmstead'),sawmill=MAP.landmarks.find(l=>l.id==='sawmill');
 {const r=rect(farmyard);assert(r.x0>=farmZone.x0&&r.x1<=farmZone.x1&&r.z0>=farmZone.z0&&r.z1<=farmZone.z1,'the farmyard is inside Willow Fields');
  for(const road of DIRT_ROADS)assert(!overlaps(r,road),'the farmyard is clear of the dirt roads');for(const f of FIELDS)assert(!overlaps(r,f),'and of the three fields: '+f.id);
- assert(farmyard.yaw===0&&r.z1<-163.5-.5,'it faces south, toward the farm road (z -160), and does not cover it')}
+ assert(farmyard.yaw===0&&r.z1<-233.5-.5,'it faces south, toward the farm road (z -230), and does not cover it')}
 {const r=rect(sawmill);assert(r.x0>=forestZone.x0&&r.x1<=forestZone.x1&&r.z0>=forestZone.z0&&r.z1<=forestZone.z1,'the sawmill is inside Pine Ridge');
- const c=MAP.scenery.forest.clearings.find(c=>c.x===106&&c.z===-212);for(const [x,z] of [[r.x0,r.z0],[r.x1,r.z0],[r.x0,r.z1],[r.x1,r.z1]])assert(((x-c.x)/c.rx)**2+((z-c.z)/c.rz)**2<1,'the sawmill stands wholly inside the empty clearing');
+ const c=MAP.scenery.forest.clearings.find(c=>c.x===106&&c.z===-282);for(const [x,z] of [[r.x0,r.z0],[r.x1,r.z0],[r.x0,r.z1],[r.x1,r.z1]])assert(((x-c.x)/c.rx)**2+((z-c.z)/c.rz)**2<1,'the sawmill stands wholly inside the empty clearing');
  for(const road of DIRT_ROADS)assert(!overlaps(r,road),'the sawmill is clear of the dirt roads')}
 const scene=new THREE.Scene(),world=createWorld(scene,{cullRadius:Infinity});
 for(const id of ['farmstead','sawmill'])assert(scene.getObjectByName('prop-'+id),id+' is in the scene');
@@ -47,8 +47,8 @@ assert(zoneAt(farmyard.x,farmyard.z).id==='farm'&&zoneAt(sawmill.x,sawmill.z).id
 // Far buildings are not drawn.
 {const culled=createWorld(new THREE.Scene(),{});const camera=new THREE.PerspectiveCamera();const yard=(culled,x,z)=>{culled.update(.016,camera,new THREE.Vector3(x,0,z))};
  const s2=new THREE.Scene(),w2=createWorld(s2,{});yard(w2,0,0);assert.equal(s2.getObjectByName('prop-farmstead').visible,false,'not drawn from the city');assert.equal(s2.getObjectByName('prop-sawmill').visible,false);
- yard(w2,-62,-150);assert.equal(s2.getObjectByName('prop-farmstead').visible,true,'drawn from the farm road');assert.equal(s2.getObjectByName('prop-sawmill').visible,false);
- yard(w2,104,-180);assert.equal(s2.getObjectByName('prop-sawmill').visible,true);}
+ yard(w2,-62,-220);assert.equal(s2.getObjectByName('prop-farmstead').visible,true,'drawn from the farm road');assert.equal(s2.getObjectByName('prop-sawmill').visible,false);
+ yard(w2,104,-250);assert.equal(s2.getObjectByName('prop-sawmill').visible,true);}
 // The signpost at the fork.
 {const sign=MAP.signs[0];assert.equal(sign.zone,'county');assert(world.blocked(sign.x,sign.z),'the post is solid');assert.deepEqual(sign.boards.map(b=>b.text),['← WILLOW FIELDS','PINE RIDGE →'])}
 // The sawmill is solid: flood-fill from open ground around it and the deck, posts and machinery cannot be reached (you cannot walk through it).

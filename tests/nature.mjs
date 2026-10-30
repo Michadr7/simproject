@@ -33,8 +33,8 @@ const trees=meshes.filter(m=>/-(pine|broadleaf)\.\d-(bark|leaves)$/.test(m.name)
 assert(trees.length<=20,`${trees.length} tree meshes (about ${trees.length} draw calls) for the whole forest`);
 assert(!scene.getObjectByName('pine-trunks')&&!scene.getObjectByName('decor-tree-canopies'),'the procedural trees are gone');
 const count=(prefix,kind)=>trees.filter(m=>m.name.startsWith(prefix)&&m.name.endsWith(kind)).reduce((n,m)=>n+m.count,0);
-assert.equal(count('pine-','-bark'),406);assert.equal(count('pine-','-leaves'),406,'every cuttable pine has bark and leaves');
-assert.equal(count('decor-','-bark'),354);assert.equal(count('decor-','-leaves'),354);
+assert.equal(count('pine-','-bark'),395);assert.equal(count('pine-','-leaves'),395,'every cuttable pine has bark and leaves');
+assert.equal(count('decor-','-bark'),548);assert.equal(count('decor-','-leaves'),548);
 for(const m of trees)assert(m.material&&m.material.onBeforeCompile&&m.material.customProgramCacheKey()==='city-sightline-fade',`${m.name} keeps the sightline fade`);
 for(const m of trees.filter(m=>m.name.endsWith('leaves'))){assert.equal(m.material.alphaTest,.2);assert.equal(m.material.side,THREE.DoubleSide)}
 // Pines in the woods, broadleaf trees elsewhere; every model gets used.

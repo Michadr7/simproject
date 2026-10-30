@@ -1,6 +1,7 @@
 import * as THREE from './vendor/three.module.js';
 import {MAP,zoneById,zoneAtPoint,roadRects,riverPath,riverDistance} from './map-definition.js';
 import {PINES,BROADLEAVES,modelInfo,modelGeometry,createNatureMaterials} from './nature.js';
+import {terrain,SURFACE,roadCenterline} from './terrain.js';
 import {propInfo,createProp} from './props.js';
 
 // ─── Layout (pure data, safe to import from rules and tests) ──────────────────
@@ -9,19 +10,22 @@ import {propInfo,createProp} from './props.js';
 
 // Everything here is derived from map-definition.js (zones, roads, fields, scenery parameters).
 export const WORLD_SEED=MAP.seed;
-export const ZONES=Object.freeze(Object.fromEntries(MAP.zones.map(z=>[z.id,Object.freeze({id:z.id,name:z.name,label:z.label,subtitle:z.subtitle,color:z.color})])));
+export const ZONES=Object.fromEntries(MAP.zones.map(z=>[z.id,Object.freeze({id:z.id,name:z.name,label:z.label,subtitle:z.subtitle,color:z.color})]));
+ZONES.open=Object.freeze({...MAP.openCountry}); // the name for ground outside every zone
 const cityZone=zoneById('city');
 export const CITY_WEST=cityZone.bounds.x0,CITY_EAST=cityZone.bounds.x1;
 export const WALKABLE=Object.freeze(MAP.zones.map(z=>Object.freeze({zone:z.id,grid:z.grid,...z.bounds})));
 // Visual extent of the ground (beyond the walkable area, scenery fades into fog).
 export const GROUND=MAP.ground;
 
-// The zone a point is in. Edges belong to the first zone that claims them; outside every zone it falls back to the city.
+// The zone a point is in. Edges belong to the first zone that claims them; outside every zone it is the open country.
 export function zoneAt(x,z){
  const zone=zoneAtPoint(x,z??0);
- return ZONES[(zone||zoneById('city')).id];
+ return ZONES[zone?zone.id:'open'];
 }
-export function isWalkable(x,z){return WALKABLE.some(r=>x>=r.x0&&x<=r.x1&&z>=r.z0&&z<=r.z1)}
+// Walking and footing come from the terrain mask (terrain.js), built from the map at first use.
+export function isWalkable(x,z){return terrain().walkable(x,z)}
+export function footingAt(x,z){return terrain().footingAt(x,z)}
 
 // ─── Grid: 1 world unit = 1 plot. Cell (ix,iz) covers [ix,ix+1) × [iz,iz+1). ──
 export const cellOf=(x,z)=>({ix:Math.floor(x),iz:Math.floor(z)});
@@ -41,13 +45,14 @@ export function gridZoneAt(ix,iz){
 export const DIRT_ROADS=Object.freeze(roadRects('dirt').map(r=>Object.freeze({zone:zoneAtPoint((r.x0+r.x1)/2,(r.z0+r.z1)/2).id,x0:r.x0,x1:r.x1,z0:r.z0,z1:r.z1})));
 const distanceToRect=(x,z,r)=>Math.hypot(Math.max(r.x0-x,0,x-r.x1),Math.max(r.z0-z,0,z-r.z1));
 export const nearDirtRoad=(x,z,margin=0)=>DIRT_ROADS.some(r=>distanceToRect(x,z,r)<=margin);
-const ASPHALT_ROADS=Object.freeze(roadRects('asphalt'));
-export const nearAsphalt=(x,z,margin=0)=>ASPHALT_ROADS.some(r=>distanceToRect(x,z,r)<=margin);
+// Near any street, road or bridge (straight or curved): the terrain mask is searched in a ring of `margin` metres.
+export const nearAsphalt=(x,z,margin=0)=>{const t=terrain(),step=Math.max(.75,margin/4);
+ for(let dx=-margin;dx<=margin+1e-9;dx+=step)for(let dz=-margin;dz<=margin+1e-9;dz+=step){if(dx*dx+dz*dz>margin*margin+1e-9)continue;const k=t.surfaceAt(x+dx,z+dz);if(k===SURFACE.STREET||k===SURFACE.ROAD||k===SURFACE.BRIDGE)return true}return false};
 // Within `margin` metres of the water itself (not counting its muddy banks).
 export const inRiver=(x,z,margin=0)=>MAP.water.rivers.some(r=>riverDistance(x,z,r)<=r.width/2+margin);
 const nearBuilding=(x,z,margin=0)=>MAP.buildings.some(b=>Math.abs(x-b.x)<b.w/2+margin&&Math.abs(z-b.z)<b.d/2+margin);
 // Pine Ridge's side of the world: decor trees here are pines, everywhere else broadleaf.
-export const forestSide=(x,z)=>x>-24&&z<-100;
+export const forestSide=(x,z)=>x>-24&&z<-200;
 
 // Fenced farm plots (from the map), in whole cells, each with a 3-cell gate facing the main farm road.
 export const FIELDS=Object.freeze(MAP.fields.map(f=>Object.freeze({...f})));
@@ -71,6 +76,9 @@ const blockSeed=(a,b,salt)=>(Math.imul(a,73856093)^Math.imul(b,19349663)^Math.im
 
 let cachedLayout=null;
 // Generates every tree once. Cuttable trees sit on cell centres and are keyed by cell.
+// Ground that belongs to something other than open country: a zone, a road, a pavement, a field, the river or a bridge. Scenery belts keep off it.
+const CLAIMED=new Set([SURFACE.STREET,SURFACE.ROAD,SURFACE.DIRT,SURFACE.PAVEMENT,SURFACE.WATER,SURFACE.BANK,SURFACE.BRIDGE,SURFACE.WHEAT,SURFACE.PLOWED,SURFACE.GREEN]);
+function claimed(x,z){const t=terrain(),c=t.index(x,z);return c<0||t.zone[c]!==0||CLAIMED.has(t.surface[c])}
 export function worldLayout(){
  if(cachedLayout)return cachedLayout;
  const cuttable=[],decor=[],scenery=MAP.scenery,forestRules=scenery.forest;
@@ -90,7 +98,7 @@ export function worldLayout(){
  // Dense scenery outside the walkable zones hides the end of the world (never on roads, in the river or on a building).
  const belt=(x0,x1,z0,z1,spacing,chance,salt)=>{for(let x=x0;x<x1;x+=spacing)for(let z=z0;z<z1;z+=spacing){
   const r=random(blockSeed(Math.round(x*10),Math.round(z*10),salt));if(r()>chance)continue;
-  const tx=x+r()*spacing*.8,tz=z+r()*spacing*.8;if(isWalkable(tx,tz)||nearDirtRoad(tx,tz,1.5)||nearAsphalt(tx,tz,3.5)||inRiver(tx,tz,4)||nearBuilding(tx,tz,3))continue;
+  const tx=x+r()*spacing*.8,tz=z+r()*spacing*.8;if(claimed(tx,tz)||nearDirtRoad(tx,tz,1.5)||nearAsphalt(tx,tz,3.5)||inRiver(tx,tz,4)||nearBuilding(tx,tz,3))continue;
   decor.push({x:tx,z:tz,scale:.9+r()*.5,rot:r()*Math.PI*2,tone:Math.floor(r()*4)})}};
  for(const spec of scenery.belts)belt(...spec);
  // A few shade trees between the farm fields.
@@ -183,21 +191,27 @@ export function createWorld(scene,{label,cullRadius}={}){
  }
  function textured(tex,w,h,scale,color='#ffffff'){const map=tex.clone();map.needsUpdate=true;map.repeat.set(w/scale,h/scale);return new THREE.MeshStandardMaterial({map,color,roughness:1})}
  const farmZone=zoneById('farm').bounds,forestZone=zoneById('forest').bounds;
+ plane(GROUND.x0-700,GROUND.x1+700,GROUND.z0-700,GROUND.z1+700,-.077,new THREE.MeshStandardMaterial({color:'#8a9a7c',roughness:.95}),'ground-far'); // far beyond the fog, so the world never seems to end at the map's edge
  plane(GROUND.x0,GROUND.x1,GROUND.z0,GROUND.z1,-.075,new THREE.MeshStandardMaterial({color:'#8a9a7c',roughness:.95}),'ground-base');
  {const f={x0:farmZone.x0-14,x1:farmZone.x1,z0:farmZone.z0-14,z1:farmZone.z1+7};plane(f.x0,f.x1,f.z0,f.z1,-.074,textured(textures.farm,f.x1-f.x0,f.z1-f.z0,7),'ground-farm')}
  {const f={x0:forestZone.x0,x1:forestZone.x1+14,z0:forestZone.z0-14,z1:forestZone.z1+7};plane(f.x0,f.x1,f.z0,f.z1,-.074,textured(textures.forest,f.x1-f.x0,f.z1-f.z0,6),'ground-forest')}
  for(const r of DIRT_ROADS)plane(r.x0,r.x1,r.z0,r.z1,-.066,textured(textures.dirt,r.x1-r.x0,r.z1-r.z0,5),'dirt-road');
  // Fields: plowed soil, wheat and young crops, each its own ground, open to vehicles.
  for(const f of FIELDS)plane(f.x0,f.x1,f.z0,f.z1,-.069,textured(textures[f.surface],f.x1-f.x0,f.z1-f.z0,6),'field-'+f.id);
- // The County Road north of the city (the city's own streets are built in game.js), with a dashed centre line.
- const asphalt=new THREE.MeshStandardMaterial({color:'#585d60',roughness:.95});
- for(const r of roadRects('asphalt'))if(r.id==='county-road'){
-  plane(r.x0,r.x1,r.z0,r.z1,-.045,asphalt,'county-road');
-  const dashes=[];for(let z=r.z1-4;z>r.z0+2;z-=6)dashes.push(z);
-  const line=new THREE.InstancedMesh(new THREE.BoxGeometry(.18,.02,2.2),new THREE.MeshStandardMaterial({color:'#e8e2c8',roughness:.9}),dashes.length);
-  {const mat=new THREE.Matrix4(),at=new THREE.Vector3(),turn=new THREE.Quaternion(),one=new THREE.Vector3(1,1,1);
-  dashes.forEach((z,i)=>{const onBridge=MAP.water.bridges.some(b=>z>b.z0&&z<b.z1);line.setMatrixAt(i,mat.compose(at.set((r.x0+r.x1)/2,onBridge?-.005:-.032,z),turn,one))})}
-  line.name='county-road-line';group.add(line);
+
+ // Every rural asphalt road (the County Road, Alder Center's streets, Oak Street East, Cedar Heights' loop, the Freight Road) is a ribbon along its centreline with a dashed
+ // line down the middle. The city's own streets are built in game.js.
+ const asphalt=new THREE.MeshStandardMaterial({color:'#585d60',roughness:.95}),lineMaterial=new THREE.MeshStandardMaterial({color:'#e8e2c8',roughness:.9}),upAxis=new THREE.Vector3(0,1,0);
+ const densify=(points,max=6)=>{const out=[points[0]];for(let i=1;i<points.length;i++){const [ax,az]=points[i-1],[bx,bz]=points[i],k=Math.max(1,Math.ceil(Math.hypot(bx-ax,bz-az)/max));for(let s=1;s<=k;s++)out.push([ax+(bx-ax)*s/k,az+(bz-az)*s/k])}return out};
+ const toPath=points=>points.map((p,i)=>{const a=points[Math.max(0,i-1)],b=points[Math.min(points.length-1,i+1)],l=Math.hypot(b[0]-a[0],b[1]-a[1])||1;return {x:p[0],z:p[1],tx:(b[0]-a[0])/l,tz:(b[1]-a[1])/l}});
+ for(const edge of MAP.roads.edges){
+  if(edge.surface!=='asphalt'||edge.level!=='rural')continue;
+  const line=densify(roadCenterline(edge));ribbon(toPath(line),edge.width/2,-.045,asphalt,'road-'+edge.id);
+  const dashes=[];let carried=0;for(let i=1;i<line.length;i++){const [ax,az]=line[i-1],[bx,bz]=line[i],len=Math.hypot(bx-ax,bz-az);let at=6-carried;while(at<=len){dashes.push({x:ax+(bx-ax)*at/len,z:az+(bz-az)*at/len,yaw:Math.atan2(bx-ax,bz-az)});at+=6}carried=len-(at-6)}
+  if(!dashes.length)continue;
+  const marks=new THREE.InstancedMesh(new THREE.BoxGeometry(.18,.02,2.2),lineMaterial,dashes.length),mat=new THREE.Matrix4(),at=new THREE.Vector3(),turn=new THREE.Quaternion(),one=new THREE.Vector3(1,1,1);
+  dashes.forEach((d,i)=>{const bridge=MAP.water.bridges.some(b=>d.x>=b.x0&&d.x<=b.x1&&d.z>b.z0&&d.z<b.z1);marks.setMatrixAt(i,mat.compose(at.set(d.x,bridge?-.005:-.032,d.z),turn.setFromAxisAngle(upAxis,d.yaw),one))});
+  marks.name='road-line-'+edge.id;group.add(marks);
  }
  // The river: flat water between two muddy banks, outside every zone (a hard barrier). The bridge is the only way across.
  const water=new THREE.MeshStandardMaterial({color:'#4a86a6',roughness:.2,metalness:.1,transparent:true,opacity:.94,side:THREE.DoubleSide,depthWrite:false}),mud=new THREE.MeshStandardMaterial({color:'#7d7352',roughness:1,side:THREE.DoubleSide});
@@ -322,6 +336,15 @@ export function createWorld(scene,{label,cullRadius}={}){
   const post=new THREE.Mesh(new THREE.BoxGeometry(.18,3.4,.18),timber);post.position.set(sign.x,1.7,sign.z);post.castShadow=true;post.name='sign-post';group.add(post);colliders.circle(sign.x,sign.z,.16);
   if(label)for(const board of sign.boards)label(board.text,sign.x,board.y,sign.z+.12,4.4,sign.yaw,'#3a2f22','#f1ebd9',.62);
  }
+ // ── Reserved plots (O): a tinted patch, an outline and the plot's id on the ground, hidden until switched on ─────────────────────────────────────────
+ const plotColour={residential:'#2fbf9f',commercial:'#b0529b',industrial:'#e0a02e'},plotOverlay=new THREE.Group();plotOverlay.name='plot-overlay';plotOverlay.visible=false;group.add(plotOverlay);
+ for(const plot of MAP.reserved){
+  const w=plot.x1-plot.x0,d=plot.z1-plot.z0,cx=(plot.x0+plot.x1)/2,cz=(plot.z0+plot.z1)/2,color=plotColour[plot.kind];
+  const fill=new THREE.Mesh(new THREE.PlaneGeometry(w,d),new THREE.MeshBasicMaterial({color,transparent:true,opacity:.24,depthWrite:false}));fill.rotation.x=-Math.PI/2;fill.position.set(cx,.06,cz);plotOverlay.add(fill);
+  const outline=new THREE.LineLoop(new THREE.BufferGeometry().setFromPoints([[plot.x0,plot.z0],[plot.x1,plot.z0],[plot.x1,plot.z1],[plot.x0,plot.z1]].map(([x,z])=>new THREE.Vector3(x,.08,z))),new THREE.LineBasicMaterial({color}));plotOverlay.add(outline);
+  const canvas=document.createElement('canvas');canvas.width=256;canvas.height=128;const ctx=canvas.getContext('2d');ctx.clearRect(0,0,256,128);ctx.fillStyle='#ffffffee';ctx.font='bold 84px Arial';ctx.textAlign='center';ctx.textBaseline='middle';ctx.fillText(plot.id,128,66);
+  const tag=new THREE.Mesh(new THREE.PlaneGeometry(5,2.5),new THREE.MeshBasicMaterial({map:new THREE.CanvasTexture(canvas),transparent:true,depthWrite:false}));tag.rotation.x=-Math.PI/2;tag.position.set(cx,.09,cz);plotOverlay.add(tag);
+ }
  // Faint grid overlay around the player, plus a brighter outline on the targeted cell.
  const RADIUS=11,maxSegments=(RADIUS*2+2)*(RADIUS*2+2)*2;
  const gridGeometry=new THREE.BufferGeometry();
@@ -361,6 +384,7 @@ export function createWorld(scene,{label,cullRadius}={}){
   floorAt(x,z){for(const l of landmarks){if(!l.floor)continue;const cos=Math.round(Math.cos(l.yaw)),sin=Math.round(Math.sin(l.yaw)),dx=x-l.x,dz=z-l.z,lx=dx*cos-dz*sin,lz=dx*sin+dz*cos,f=l.floor;if(lx>=f.x0&&lx<=f.x1&&lz>=f.z0&&lz<=f.z1)return f.y}return null},
   // What is drawn: trees in the draw lists and the triangles they cost (for tests and the debug hook). setViewer places the view without a camera.
   cullStats(){let drawn=0,total=0,triangles=0,all=0;for(const g of groups){const per=g.info.triangles;for(const e of g.entries){if(!e.off)total++;if(e.slot>=0)drawn++}triangles+=g.meshes[0].count*per;all+=g.entries.filter(e=>!e.off).length*per}return {radius:viewDistance,drawn,total,triangles,allTriangles:all}},
+  setPlotOverlay(on){plotOverlay.visible=!!on},plotOverlayVisible(){return plotOverlay.visible},
   setViewer(x,z,fx=0,fz=-1){view.x=x;view.z=z;view.fx=fx;view.fz=fz;view.ready=true;rebuild()},
   // Standing cuttable trees within range of a point.
   cuttableNear(x,z,range=2.2){const out=[];for(const t of trees.values())if(t.standing&&Math.abs(t.x-x)<=range&&Math.abs(t.z-z)<=range&&Math.hypot(t.x-x,t.z-z)<=range)out.push(t);return out},

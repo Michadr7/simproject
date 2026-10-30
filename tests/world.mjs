@@ -5,14 +5,14 @@ import {zoneAt,isWalkable,cellOf,cellKey,parseCellKey,gridZoneAt,worldLayout,cut
 
 // Zones and bounds: every original city coordinate stays in the city.
 assert.equal(zoneAt(0).id,'city');assert.equal(zoneAt(-61).id,'city');assert.equal(zoneAt(58).id,'city');
-assert.equal(zoneAt(-30,-100).id,'county');assert.equal(zoneAt(-100,-150).id,'farm');assert.equal(zoneAt(60,-150).id,'forest');assert.equal(zoneAt(-30,-60).id,'county');
+assert.equal(zoneAt(-30,-100).id,'county');assert.equal(zoneAt(-100,-220).id,'farm');assert.equal(zoneAt(60,-260).id,'forest');assert.equal(zoneAt(-30,-60).id,'county');
 for(const [x,z] of [[-5,15],[1,-6.3],[-60,-47],[57,47]])assert(isWalkable(x,z),'old city point '+x+','+z);
-assert(isWalkable(-100,-150)&&isWalkable(100,-150)&&isWalkable(-30,-88)&&isWalkable(-30,-60),'farm, forest, bridge and county road');assert(!isWalkable(0,60)&&!isWalkable(-100,0)&&!isWalkable(100,0)&&!isWalkable(0,-86)&&!isWalkable(-40,-86)&&!isWalkable(-20,-86)&&!isWalkable(-30,-250),'outskirts and the river block; only the bridge crosses');
+assert(isWalkable(-100,-220)&&isWalkable(100,-260)&&isWalkable(-30,-160)&&isWalkable(-30,-60)&&isWalkable(19,-90)&&isWalkable(120,-100)&&isWalkable(130,30)&&isWalkable(195,-210),'farm, forest, the two bridges, the county road and the three new districts');assert(isWalkable(0,60)&&isWalkable(-100,0)&&isWalkable(250,0)&&isWalkable(-100,-100),'open country between the districts is walkable (no invisible walls where the green starts)');assert(!isWalkable(0,-164)&&!isWalkable(-40,-160)&&!isWalkable(-20,-160)&&!isWalkable(-30,-385)&&!isWalkable(0,105)&&!isWalkable(-255,0)&&!isWalkable(295,0),'the river is a wall and so is the edge of the map; only the bridges cross');
 // Grid maths.
 assert.deepEqual(cellOf(10.9,-14.2),{ix:10,iz:-15});assert.equal(cellKey(-3,4),'-3,4');
 assert.deepEqual(parseCellKey('-120,15'),{ix:-120,iz:15});for(const bad of ['1,2,3','a,b','1.5,2',' 1,2','',null,'99999,1'])assert.equal(parseCellKey(bad),null);
-assert.equal(gridZoneAt(0,0),null,'city is not gridded');assert.equal(gridZoneAt(-100,-150),'farm');assert.equal(gridZoneAt(100,-150),'forest');assert.equal(gridZoneAt(-30,-150),null,'the County Road is not gridded');
-assert.equal(gridZoneAt(-36,-150),'farm');assert.equal(gridZoneAt(-35,-150),null,'cell must be fully inside');assert.equal(gridZoneAt(100,-100),null);
+assert.equal(gridZoneAt(0,0),null,'city is not gridded');assert.equal(gridZoneAt(-100,-220),'farm');assert.equal(gridZoneAt(100,-260),'forest');assert.equal(gridZoneAt(-30,-220),null,'the County Road is not gridded');
+assert.equal(gridZoneAt(-36,-220),'farm');assert.equal(gridZoneAt(-35,-220),null,'cell must be fully inside');assert.equal(gridZoneAt(100,-200),null);
 // Deterministic generation; pines sit on forest cell centres, off roads, never touching.
 const a=worldLayout();assert.equal(a,worldLayout(),'cached');
 assert(a.cuttable.length>250&&a.cuttable.length<450,'pine count '+a.cuttable.length);assert(a.decor.length>300);{const inForest=a.decor.filter(t=>zoneAt(t.x,t.z).id==='forest').length,total=a.cuttable.length+inForest;assert(total>=400&&total<=500,'Pine Ridge has '+total+' trees (400-500 wanted)')}
@@ -33,7 +33,7 @@ globalThis.document={createElement:()=>({width:0,height:0,getContext:()=>new Pro
 const scene=new THREE.Scene(),world=createWorld(scene,{cullRadius:Infinity});
 const pine=a.cuttable[0];
 assert(world.blocked(pine.x+.3,pine.z),'trunk blocks');assert(!world.blocked(pine.x+1,pine.z+1)||a.decor.some(d=>Math.hypot(d.x-pine.x-1,d.z-pine.z-1)<1));
-assert(world.blocked(-100,-216),'the perimeter fence blocks');assert(world.blocked(-35,-190),'and so does the side along the County Road');assert(!world.blocked(-35,-160),'the gap where the farm road enters is open');for(const f of FIELDS)assert(!world.blocked((f.x0+f.x1)/2,(f.z0+f.z1)/2)&&!world.blocked(f.x0+1,f.z0+1),'fields are open ground for vehicles: '+f.id);
+assert(world.blocked(-100,-286),'the perimeter fence blocks');assert(world.blocked(-35,-260),'and so does the side along the County Road');assert(!world.blocked(-35,-230),'the gap where the farm road enters is open');for(const f of FIELDS)assert(!world.blocked((f.x0+f.x1)/2,(f.z0+f.z1)/2)&&!world.blocked(f.x0+1,f.z0+1),'fields are open ground for vehicles: '+f.id);
 assert(world.cuttableNear(pine.x+1.5,pine.z).some(t=>t.key===pine.key));assert(!world.cuttableNear(pine.x+5,pine.z).some(t=>t.key===pine.key));
 world.hitTree(pine.key,{x:pine.x-1,z:pine.z});world.update(.2,new THREE.PerspectiveCamera(),new THREE.Vector3());assert(world.trees.get(pine.key).standing,'a hit only shakes');
 world.fellTree(pine.key,{x:pine.x-1,z:pine.z});assert(!world.blocked(pine.x+.3,pine.z),'felled tree no longer blocks');assert(!world.cuttableNear(pine.x,pine.z).some(t=>t.key===pine.key));
@@ -60,7 +60,7 @@ const other=a.cuttable[1];assert(world.setFelled(other.key));assert(!world.setFe
  world.setLogs(Array.from({length:500},(_,i)=>({x:100,z:5,rot:0})));assert(logs.count<=96,'instance cap');world.setLogs([]);}
 // Grid overlay: hidden in the city, visible with a target cell in the zones.
 assert.equal(world.updateGrid({x:0,z:0},0,false),null);assert(!scene.getObjectByName('plot-grid').visible);
-const target=world.updateGrid({x:100.2,z:-149.8},0,true);assert.deepEqual([target.ix,target.iz,target.zone,target.key],[100,-149,'forest','100,-149']);
+const target=world.updateGrid({x:100.2,z:-259.8},0,true);assert.deepEqual([target.ix,target.iz,target.zone,target.key],[100,-259,'forest','100,-259']);
 assert(scene.getObjectByName('plot-grid').visible&&scene.getObjectByName('plot-grid').geometry.drawRange.count>100);
-assert.equal(world.updateGrid({x:-35.2,z:-150},Math.PI/2,true),null,'no target cell across the farm and County Road seam');
+assert.equal(world.updateGrid({x:-35.2,z:-230},Math.PI/2,true),null,'no target cell across the farm and County Road seam');
 console.log(`World zones, bounds, grid maths, tree stages and fall callback, target ring, ground logs, deterministic ${a.cuttable.length} pines + ${a.decor.length} decor trees, fenced fields with gates, collisions, felling, stumps and grid overlay passed.`);

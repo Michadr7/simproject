@@ -30,18 +30,38 @@ strips and the `zoneAt(x)` fallback still assume zones laid out west to east.
 | Area | Status |
 |---|---|
 | 01 Oak Street | built (the city: Starter apartments, Corner Market, Alder Coffee, Laundry) |
-| 02 Alder Center (town square, police station, plots C1-C2) | **not built** |
-| 03 Cedar Heights (a loop road, plots R1-R3) | **not built** |
-| 04 Eastbank Works (warehouse, vehicle workshop, building supplier, plots I1-I2, Freight Road) | **not built** |
+| 02 Alder Center (town square, police station, plots C1-C2) | roads, a paved square and plots C1-C2; no buildings |
+| 03 Cedar Heights (a loop road, plots R1-R3) | the curved loop road, its links and plots R1-R3; no houses |
+| 04 Eastbank Works (warehouse, vehicle workshop, building supplier, plots I1-I2, Freight Road) | Oak Street East, the Freight Road and a second bridge, plots I1-I2; no buildings |
 | 05 Willow Fields | land, three fields, fence and a placeholder farmstead |
 | 06 Pine Ridge | forest, clearings and the sawmill |
 Order (the user's plan, with one prerequisite):
-1. **Walkable areas stop being rectangles** (Opus 5.5 to design, Sonnet 5.5 to build). Build a walkability and ground-type mask at load (about 1 m cells, 0.2 M cells, a few tens of ms) from zone shapes, road ribbons along
+1. **Walkable areas stop being rectangles: done in 0.25.0** (`terrain.js`, the terrain mask; see the README). Build a walkability and ground-type mask at load (about 1 m cells, 0.2 M cells, a few tens of ms) from zone shapes, road ribbons along
    centrelines (so roads can curve) and water. It replaces the rectangle tests for walking, footing height, scenery exclusion and the minimap, and reachability stays validated. Needed for Cedar Heights' loop and the winding timber road.
 2. **Re-lay the world for six districts** (decisions below), then build Alder Center, Cedar Heights and Eastbank Works as **placeholder** boxes with the reserved plots as data, parking lots, a police station and a gas station (Sonnet 5.5).
 3. Then replace placeholders with assets, district by district.
 Decisions to confirm first: the river and the north bank move about 70 m north (so the south bank holds Alder Center, Cedar Heights and Eastbank Works) and the map grows east to x about 200; a second bridge for the
 Freight Road at the east edge (the concept's cargo route crosses the river there); the County Road keeps its bridge.
+
+## Next step: re-lay the world for six districts, in two builds (skeleton first)
+Confirmed: the river and the north bank move north, the map widens east, the Freight Road gets a second bridge, and **no placeholder buildings**: finish the map as roads, ground, plots and signposts, then add real assets.
+**Build 1, the skeleton (done in 0.26.0, nothing is populated):**
+1. Everything on the north bank (river, County Bridge, farm, fields, farmstead, forest, clearings, sawmill, fork signpost) moves 70 m north by one shift constant, not retyped coordinates.
+2. The map widens east (ground to x 300; the forest to x 190).
+3. A second bridge at x 190..200 and the Freight Road: a rural road up a 10 m corridor from Eastbank Works to Pine Ridge's woods road.
+4. Roads for the three districts as walkable ribbons: **Alder Center** (x -20..58, z -125..-48: a main street and a cross street, a paved square), **Cedar Heights** (x 70..170, z -135..-40: a closed, curved loop road with links to Alder Center and
+   to Oak Street East), **Eastbank Works** (x 70..190, z -20..75: Oak Street East, the Freight Road along its south side). The backdrop buildings along z -61 go (Alder Center replaces them).
+5. Reserved plots as data (C1-C2 commercial, R1-R3 residential, I1-I2 industrial), drawn on the minimap and as a ground overlay toggled with O.
+6. A signpost for each district.
+Checks: `validateMap` (zones, water, bridges, plots), `validateTerrain` (every district reachable on foot from the spawn, over the new bridges), plots never on a road, trees never on a road or in the river, and an alignment test
+(each bridge's deck spans its river and meets its road; the roads meet their zones).
+**Build 2 (next, once you have walked the skeleton and confirmed the alignment):** the real Kenney houses in Cedar Heights (house slots sized from their real footprints, scaled about x8), then Alder Center and Eastbank Works as their asset packs arrive.
+
+## Open country and vehicles
+- Walkable ground is "the playable rectangle minus water", not "the zones". Zones are names and rules (grid, labels); keep new districts as zones, never as fences. Solid things get colliders.
+- Roads are designed for vehicles from the start: lanes 3.5 m, shoulder 1 m (a 9 m road), curve radius at least 17 m, 12 m streets where trucks turn. When vehicles arrive they follow road edges (`roadCenterline`) and the plots' `facing`.
+- Tree regrowth exists (stump, a sapling after 3 game days, a full pine after 7; one game day is 48 real minutes of play). That is about 70 trees an hour across Pine Ridge's 395, far less than one player can fell (about 4 a minute),
+  so the forest empties in a couple of hours; the lumberjack rebalance (shorter maturity of about 2 game days, replanting saplings with a tool, wood prices) belongs to the tool-tier work.
 
 ## The sawmill chain and physics (planned)
 Loop: bring logs to the sawmill, they become planks over a few seconds, the blade spins with a sound, and planks pile up beside it (an instanced pile with a cap on how many are drawn; the count is saved, not each plank).

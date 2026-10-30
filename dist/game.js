@@ -1,5 +1,5 @@
 import {createStoreUI} from './store.js';
-import {createWorld,zoneAt,isWalkable} from './world.js';
+import {createWorld,zoneAt,isWalkable,footingAt} from './world.js';
 import {chopTree,felledTrees,plotAt,collectLog,expireLogs,regrowTrees,felledStages,CHOP_RANGE} from './grid.js';
 import {levelOf,swingTime,hitsNeeded,perkText} from './skills.js';
 import {createMinimap} from './minimap.js';
@@ -276,6 +276,7 @@ window.addEventListener('keydown',e=>{
  if((e.code==='KeyT'||e.code==='KeyJ')&&active&&!e.ctrlKey&&!e.metaKey&&!e.altKey){e.preventDefault();if(!e.repeat)toggleObjective();return}
  if(e.code==='KeyM'&&active&&!e.ctrlKey&&!e.metaKey&&!e.altKey){e.preventDefault();if(!e.repeat)minimap.toggle();return}
  if(consuming){if(e.code==='Escape'){pause(!modal);if(!modal)look.capture()}return}
+ if(e.code==='KeyO'&&active&&!modal&&!creatorOpen&&!e.ctrlKey&&!e.metaKey&&!e.altKey){e.preventDefault();if(!e.repeat){world.setPlotOverlay(!world.plotOverlayVisible());toast(world.plotOverlayVisible()?'Reserved plots shown (C commercial, R residential, I industrial).':'Reserved plots hidden.')}return}
  if(e.code==='KeyG'&&active&&!modal&&!creatorOpen&&!e.ctrlKey&&!e.metaKey&&!e.altKey){e.preventDefault();if(!e.repeat){gridOn=!gridOn;toast(gridOn?'Plot grid shown in the farm and woods.':'Plot grid hidden.')}return}
  if(/^Digit[1-6]$/.test(e.code)&&active&&!modal&&!creatorOpen&&!e.ctrlKey&&!e.metaKey&&!e.altKey){if(!e.repeat)hotbarUse(Number(e.code.slice(-1))-1);return}
  if((e.code==='Tab'||e.code==='KeyP')&&!e.ctrlKey&&!e.metaKey&&!e.altKey&&active){
@@ -741,11 +742,8 @@ const poseBlend=1-Math.exp(-view*18);
 avatar.setMotion(moving?(running?8.2:4.5):0);
 // Match foot height to the road, pavement, or grass rather than hovering.
 const px=me.position.x,pz=me.position.z;
-const sidewalk=(px>=-38&&px<=54&&((pz>=-8.5&&pz<=-3.5)||(pz>=15.5&&pz<=20.5)))||(px>=-21.5&&px<=-16.5&&pz>=-74&&pz<=24);
-const road=(Math.abs(px)<=55&&pz>=-3.5&&pz<=15.5)||(px>=-38&&px<=-22&&Math.abs(pz)<=60);
-const bridgeDeck=MAP.water.bridges.some(b=>px>=b.x0&&px<=b.x1&&pz>=b.z0&&pz<=b.z1),countyRoad=px>=-34&&px<=-26&&pz<-60;
  const deck=world.floorAt(px,pz);
- me.position.y=THREE.MathUtils.lerp(me.position.y,(inside||shop)?.02:deck!==null?deck:bridgeDeck?-.01:countyRoad?-.035:sidewalk?.165:road?.01:-.095,1-Math.exp(-view*30));
+ me.position.y=THREE.MathUtils.lerp(me.position.y,(inside||shop)?.02:deck!==null?deck:footingAt(px,pz),1-Math.exp(-view*30));
 zoom=THREE.MathUtils.lerp(zoom,zoomTarget,1-Math.exp(-view*10));
 
 look.tick(view);

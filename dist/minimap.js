@@ -1,5 +1,6 @@
 import {ZONES,WALKABLE,DIRT_ROADS,FIELDS} from './world.js';
 import {MAP,riverPath} from './map-definition.js';
+import {terrain,MINIMAP_COLOUR} from './terrain.js';
 
 // Whole-world map, north (-z) up: the city in the south, the river and bridge across the middle, Willow Fields (west) and Pine Ridge (east) north of it.
 // The static layer is drawn once (and again when a tree is felled); the
@@ -24,15 +25,16 @@ export function createMinimap(doc,{canvas,cityRoads=[],buildings=[],trees=()=>[]
   const ctx=layer.getContext('2d'),k=scale();
   ctx.setTransform(1,0,0,1,0,0);
   ctx.fillStyle='#1d2b26';ctx.fillRect(0,0,layer.width,layer.height);
-  // Meadow, then the river, then each zone's ground, roads, fields, the bridge, buildings, trees and zone names.
-  rect(ctx,VIEW,'#3d5a3c');
-  for(const river of MAP.water.rivers){ctx.strokeStyle='#3f7ea3';ctx.lineWidth=river.width*k;ctx.lineJoin=ctx.lineCap='round';ctx.beginPath();riverPath(river,6).forEach((p,i)=>i?ctx.lineTo(px(p.x),pz(p.z)):ctx.moveTo(px(p.x),pz(p.z)));ctx.stroke()}
-  for(const w of WALKABLE)rect(ctx,w,ZONES[w.zone].color);
-  for(const f of FIELDS)rect(ctx,f,{plowed:'#6b4f3a',wheat:'#d4b45a',green:'#82a653'}[f.surface]||'#a99348');
-  for(const r of DIRT_ROADS)rect(ctx,r,'#9c8462');
-  for(const r of cityRoads)rect(ctx,r,'#45494b');
-  for(const b of MAP.water.bridges)rect(ctx,b,'#6f5b43');
+  // The ground comes from the terrain mask (terrain.js): each pixel takes its cell's surface, or its zone's colour on walkable grass, or meadow.
+  {const t=terrain(),w=layer.width,h=layer.height,img=ctx.createImageData?.(w,h),rgb=c=>[parseInt(c.slice(1,3),16),parseInt(c.slice(3,5),16),parseInt(c.slice(5,7),16)];
+   const surfaceRgb=Object.fromEntries(Object.entries(MINIMAP_COLOUR).map(([k,c])=>[k,rgb(c)])),zoneRgb=MAP.zones.map(z=>rgb(z.color)),meadow=rgb('#3d5a3c');
+   if(img?.data)for(let y=0;y<h;y++)for(let x=0;x<w;x++){const wx=VIEW.x0+(x+.5)/k,wz=VIEW.z0+(y+.5)/k,c=t.index(wx,wz);let col=meadow;
+    if(c>=0){const s=t.surface[c];if(surfaceRgb[s])col=surfaceRgb[s];else if(t.walk[c]&&t.zone[c])col=zoneRgb[t.zone[c]-1]}
+    const o=(y*w+x)*4;img.data[o]=col[0];img.data[o+1]=col[1];img.data[o+2]=col[2];img.data[o+3]=255}
+   if(img?.data)ctx.putImageData(img,0,0)}
   for(const b of buildings)rect(ctx,{x0:b.x-b.hx,x1:b.x+b.hx,z0:b.z-b.hz,z1:b.z+b.hz},'#33383a');
+  // Reserved plots: a coloured outline (and the id on the big map).
+  {const colour={residential:'#2fbf9f',commercial:'#b0529b',industrial:'#e0a02e'};ctx.lineWidth=Math.max(1,dpr);for(const plot of MAP.reserved){ctx.strokeStyle=colour[plot.kind];ctx.strokeRect(px(plot.x0),pz(plot.z0),(plot.x1-plot.x0)*k,(plot.z1-plot.z0)*k);if(size==='large'){ctx.fillStyle=colour[plot.kind];ctx.font=`${Math.round(11*dpr)}px Arial`;ctx.textAlign='center';ctx.fillText(plot.id,px((plot.x0+plot.x1)/2),pz((plot.z0+plot.z1)/2)+4*dpr)}}}
   ctx.fillStyle='#1f3a22';
   const r=Math.max(1,k*.55);
   for(const t of trees())if(t.standing)ctx.fillRect(px(t.x)-r/2,pz(t.z)-r/2,r,r);

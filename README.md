@@ -728,3 +728,46 @@ The land, the river, the bridge and the zones, rebuilt in `map-definition.js` an
   **placeholder farmstead** from plain coloured boxes like the city's: a red barn, a farmhouse, a silo and a shed around a yard, facing the farm road, with collision boxes. A placeholder has the same shape as a
   converted prop, so swapping in a real model later is one prop id in `MAP.landmarks` (`farmstead`).
 - Tests: the sawmill's boxes and floor, solidity by flood fill, placement of both landmarks, distance culling, and no farmyard in the shipped props.
+
+## 0.25.0 the terrain mask (walkable ground that can take any shape)
+
+- **`terrain.js`** rasterises the map at load into 0.5 m cells (1,040 x 840, about 130 ms): per cell whether you may walk there, the surface (grass, city street, rural road, dirt, pavement, water, bank,
+  bridge, wheat, plowed, green) and the zone. Shapes are painted in a fixed order (zones, roads, fields, pavements, river and banks, bridges); a cell is inside a shape when its centre is; water is never walkable and a
+  bridge deck is walkable wherever it lies in a zone.
+- **Walking, footing heights and the minimap now read the mask.** `isWalkable` is a lookup; `footingAt(x, z)` replaces the hard-coded pavement, street, County Road and bridge rectangles that were in `game.js`
+  (the pavements are now map data, `MAP.pavements`, and each road edge has a `level`: 'street' or 'rural'); the minimap's ground is drawn pixel by pixel from the mask, so whatever the map holds is what the map shows.
+- **Roads can curve.** A road edge may carry `path` points between its nodes and `curve: true`; the mask lays it as a ribbon of its width along that centreline, and `walkable: true` makes a road walkable
+  outside any zone. This is what Cedar Heights' loop and the winding timber road need.
+- **Nothing visible changed**: `tests/terrain.mjs` compares walking and footing with the old rectangle rules at 491,257 points (identical), checks named surfaces, checks that every zone is reachable from the spawn and
+  no water is walkable (`validateTerrain`), and lays a curved walkable road on a test map.
+
+## 0.26.0 the map skeleton: the river moves north, three districts, a second bridge (no buildings yet)
+
+- **One shift.** Everything on the north bank (the river, the County Bridge, Willow Fields, its fields and farmstead, Pine Ridge, its clearings and sawmill, the fork signpost) moved 70 m north by a single constant in
+  `map-definition.js` (`NORTH`, `n(z)`), so nothing was retyped and nothing can drift. The river got a ninth point so it now runs on east (to x = 318). The ground widens to x 300 and z -390; Pine Ridge widens east to x 190.
+- **Three districts on the south bank**, each a zone with its own roads, ground and plots:
+  - **Alder Center** (x -20..58, z -125..-48): a main street north from Oak Street, a cross street, a paved town square (a pavement surface). The backdrop buildings that stood there are gone.
+  - **Cedar Heights** (x 70..170, z -135..-40): a closed, smoothed oval loop road (76 x 56 m, 7 m wide) with a link south to Oak Street East and a diagonal link west to Alder Center's cross street.
+  - **Eastbank Works** (x 70..190, z -20..75): Oak Street East runs through it, and the Freight Road runs along its south side.
+- **The Freight Road and a second bridge**: a rural road up a 10 m corridor zone (x 190..200) from Eastbank Works to Pine Ridge, over the **Freight Bridge** (x 190..200, z -226..-186), joining the woods road, which now runs
+  east to the corridor. Every district is reachable on foot from the spawn point, over both bridges (`validateTerrain`).
+- **Reserved plots** are data (`MAP.reserved`): C1-C2 (commercial) in Alder Center, R1-R3 (residential) in Cedar Heights, I1-I2 (industrial) in Eastbank Works. **Press O** to show them on the ground (a tinted patch, an outline and
+  the id); they are always outlined on the minimap. A signpost names each district (`MAP.signs`), and the fork's moved with the County Road.
+- **Roads**: every rural asphalt road is drawn as a ribbon along its centreline with a dashed line. A road can be an edge with a `path`, `curve` and `closed` (see `roads` in `map-definition.js`) and a `zone` it counts as; trees
+  keep clear of curved roads too (`nearAsphalt` reads the terrain mask).
+- **Trees**: 395 choppable pines + 558 scenery trees (Pine Ridge has 481), about 1.1 M triangles if every tree were drawn (it was 0.89 M; the map is 40% bigger); culling keeps what you draw about the same.
+- **Minimap** covers x -200..330, z -330..110 and shows the districts, the loop, both bridges and the plots.
+- Tests: `terrain.mjs` (the city identical to the old rules; zones walkable and only road ribbons walkable outside them; both bridges aligned with their roads and water on both sides; the loop closed, smooth and one full turn;
+  plots on open grass; the bridges are needed to reach Pine Ridge), `map.mjs`, `world.mjs`, `grid.mjs`, `nature.mjs`, `culling.mjs` and `props.mjs` updated for the new coordinates.
+- **Not done on purpose**: no houses in Cedar Heights, no buildings in Alder Center or Eastbank Works (they arrive with their assets), and Oak Street East starts at the city's east end with a 5 cm height step.
+
+## 0.26.1 open country (no invisible walls), roads built for vehicles
+
+- **You can walk anywhere on open ground.** The old rule was that only the zones were walkable, so every road edge and every meadow was an invisible wall (you could not step from the County Road into Alder Center). Now everything inside
+  `MAP.playable` (x -250..290, z -380..100) is walkable except the river and its banks; the zones name the districts (HUD label, plot grid) but no longer fence them in. Solid things are still solid: trees, the farm
+  fence, buildings, the bridge parapets. Bridges are always walkable. Outside the playable area (and over water) you are stopped; a far ground plane keeps the edge of the map out of sight. Ground outside every zone is labelled **Open Country**.
+- **Roads wide enough for vehicles**: the loop, its two links and the Freight Road are 9 m (two 3.5 m lanes and a 1 m shoulder each side); Alder Center's streets are 10 m, Oak Street East 12 m. The Cedar Heights loop is
+  smoothed through 12 points; its tightest bend is a 19 m radius (a test keeps it at 17 m or more).
+- **Plots** now have a `facing` (the street they front). R1-R3 moved onto the loop's south arc, facing south, so their driveways meet the loop's south road; C1-C2 face the main street (east); I1 faces Oak Street East (north), I2 south.
+- Scenery trees keep off anything claimed by a zone, road, field, pavement, river or bridge (not off open country, where the sparse belts stand).
+- Tests: `terrain.mjs` now checks that every sampled land point inside the playable area is walkable and every water or outside point is not, that each district can be entered from open ground on every side, and the loop's tightest bend.
