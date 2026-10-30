@@ -79,6 +79,56 @@ Every item is data first, so nothing is thrown away when the real buildings arri
 5. **The edge of the world**: a low ring of hills (a few large low-poly meshes, drawn beyond the fog) so the map edge reads as a horizon, not a stop.
 6. **Pine Ridge's timber yard**: a reserved loading area beside the sawmill with truck bays on the woods road, a log-pile area and the Freight Road junction as data, for the sawmill chain.
 
+## Store jobs and the POS (supermarket-sim lite)
+Idea: the Corner Market, Alder Coffee and later your own shop become small working retail, in the spirit of a supermarket sim but kept to a corner shop: at most 8 shelves, 1-2 registers, about 40 products, and no more than 6 customers in the shop at once.
+**The ladder (each rung is a skill level and a wage step):**
+1. **Cashier** (first job, next to today's delivery gigs): customers queue at the counter with a basket; the player scans each item at the POS (hold E on the basket, or click items across the scanner), takes payment (cash: count the change on the POS screen; card: tap) and bags it. Wage plus tips by speed and accuracy; energy and hunger drain as for other work.
+2. **Stocker:** take a box from the stockroom or the delivery van (a Furniture Kit cardboard box), carry it to a shelf and fill slots; empty shelves lose sales.
+3. **Shift lead, then manager:** open and close the shop, count the drawer, hire NPC cashiers (hired workers are already a planned feature), set the day's prices.
+4. **Owner:** buy a shop plot (C1 or C2 in Alder Center) or rent the Corner Market, order stock from a supplier (the Eastbank Works warehouse and building supplier), set prices, pay wages and rent. Profit depends on price against the going rate, stock on the shelf, time of day and reputation.
+**Data (all server-owned for multiplayer, money in integer cents like the rest of the game):**
+- `products`: `{id, name, category, costCents, retailCents, size}`; `shelves`: slots by category in a shop's interior; `registers`: a POS entity on the counter with a counter zone and a queue line.
+- Saved per shop: `{stock: {productId: n}, prices: {productId: cents}, drawerCents, openHours}`. A customer is an NPC state machine: enter, browse (picks 1-6 products by price and need), queue, pay, leave; the same pedestrian walking code, driven from a script, not a new AI.
+- The POS screen is a UI overlay opened at the register (its 3D screen is only a prop): item list, total, payment buttons, change counter.
+**Assets:** the POS machine (J-Toastie, an FBX that needs one-time conversion to GLB), the Kenney Furniture Kit for shelves (Bookcase Open), the counter (Kitchen Bar), cardboard boxes, and the Store model or a Kenney commercial building for the shop front. Products can be plain coloured boxes and cans, instanced; Quaternius's Ultimate Food Pack (CC0) would give real food shapes if you want them.
+**Performance:** all of it happens inside the shop's interior (built on demand, dropped on leaving), with at most 6 customers and about 200 product instances drawn as instances.
+**Models:** Opus 5.5 for the economy, the customer flow and the server-side transaction model; Sonnet 5.5 for the interior, POS screen and NPC scripts; Haiku 5.5 for price and wage numbers afterwards.
+
+## Interior art direction
+Two interior sets are in hand: the **Kenney Furniture Kit** (117 pieces, flat colours like the Kenney houses and commercial buildings, modular walls with doorway and window pieces, stairs in four kinds, a complete kitchen set, TV, computer, shower, washer) and the **Quaternius house interior pack** (about 40 detailed pieces in a smoother style). Mixed in one room they clash, so: **the Kenney kit is the base** for every house, flat and shop; the Quaternius pieces are used sparingly (lamps, rugs, plants, couches) or kept for a later "luxury" tier. Scales: the Kenney kit is 2 m per model unit, the Quaternius pack 0.5 m per unit, the Kenney houses and commercial buildings 8 m per unit.
+Fixed fixtures (walls, doorways, windows, stairs, kitchen runs) are not movable; everything else is a furniture item with uses (see the furniture design in the interiors brief).
+
+## Tools, wear, and the logging chain (decisions after the tool uploads)
+**Which model is which tool** (the hit counts and unlock levels are in the table under "Decided model"):
+| Tool | Model | Level | Notes |
+|---|---|---|---|
+| Axe | CreativeTrio axe (a plain wooden-handled axe) | 1 | the first axe, 8 hits |
+| Steel Axe | Quaternius axe, head recoloured to steel | 5 | 6 hits |
+| Lumberjack Axe | the high-end axe (AXE.fbx with normal, specular and displacement maps; 128 triangles, so it relies on the maps: checked after import) | 10 | 4 hits; two-handed, a bonus log now and then |
+| Chainsaw (low end) | the green mini chainsaw from Sketchfab (not uploaded yet) | lumberjack 15 | cheap, thirsty (about twice the fuel per tree), wears fast |
+| Chainsaw (high end) | SKU0374 Petrol Chainsaw (2,647 triangles, TGA textures) | lumberjack 20 | dearer, half the fuel, wears slowly, cuts a pine in about 1.8 s |
+**Wear (the economy's tool sink).** Every tool has a condition from 100% to 0%, shown as a bar on its hotbar slot. Each hit (or second of cutting) takes a little off; a dull tool deals less: damage x (0.6 + 0.4 x condition). At 0% a tool is *broken*, not
+destroyed: it cannot be used until it is repaired. Repairs: a whetstone (cheap, restores 25%, at the hardware counter and the workshop) and a repair at the workshop (about 40% of the price, restores 100%). The Eastbank building supplier sells both.
+Targets to tune: a felled pine should sell for 3-6 times the wear and fuel it cost, so wear is a visible tax of 15-30% at the low end and 5-10% at the high end. Cost per tree in tool wear: Axe $0.50 (durability about 320 hits), Steel Axe $0.30 (2,400 hits),
+Lumberjack Axe $0.25 (5,600 hits), low chainsaw about $1.00 plus $0.40 of fuel, high chainsaw about $0.50 plus $0.20 of fuel. Upfront prices rise in the same order, so a better tool is cheaper per tree but dearer to start with, and the chainsaws win on time, not on money.
+**Fuel.** A Gas Can (a 5-litre stack item, Quaternius model) fuels chainsaws now and vehicles later; a gas station fills it. The chainsaw uses a fixed amount per cut, so the low-end one burns twice what the high-end one does.
+**The logging chain (each step has its own tool and can be skipped by a better one):** fell (axe or chainsaw) -> buck the trunk into logs (the **Hand Saw**, 4 s a cut; with a chainsaw 1 s; an optional step that rewards the lumberjack ladder) -> haul (carry, then a pickup or truck) -> mill (the sawmill's circular
+**Saw Blade** spins at the bench and wears: a spare blade is a supply item bought at the supplier, replaced every few hundred planks) -> planks -> sell or build. The saw blade model also decorates the logging camp's sign and the sawmill shed.
+**Power Drill:** the **Handyman** skill's tool, a prop at the vehicle workshop and the building supplier first, then jobs: assemble delivered furniture, install shelves, fix an NPC's door or fence; a higher Repairs level lowers the cost of tool repairs.
+Models: **Opus 5.5** to finalise the numbers with the save format (condition per tool instance, fuel in cans); **Sonnet 5.5** for `tools.js`, the wear and fuel code and the HUD bar; **Haiku 5.5** for prices and durability afterwards.
+
+## The farm: buildings, animals, crops (what arrived and what it costs)
+- **Buildings (Quaternius, red barn set):** Barn 2,910 triangles, Big Barn 4,220, Small Barn 2,176, Open Barn 1,612, Silo 1,592, Silo House 2,880, Chicken Coop 948, Tower Windmill 7,827 (simplify to about 3,000), two fences (5.9 m panels of 188 and 324 triangles). They replace the placeholder
+  farmstead (barn, shed, silo). **There is no farmhouse in the set**: use one of the unused Kenney suburban houses (it will be enterable like the others) or ask for one.
+- **Animals (Quaternius, 7 skinned and animated models):** Cow 796 triangles, Horse 690, Pig 562, Sheep 610, Llama 661, Pug 644, Zebra 1,354, with 2-6 clips each; a chicken is missing for the coop. Skinned meshes cannot be instanced: cap at about 20 animated animals in view, freeze the far ones in their pose.
+- **Crops (Quaternius Ultimate Crops, 102 FBX, 61,600 triangles in all, average 604, largest 2,896):** 20 kinds (wheat, corn, tomato, carrot, pumpkin, lettuce, apple, beet, rice, watermelon, berries, mushroom, ...), each with growth stages 1-4, a field "Crop" patch and a "Harvested" pile. They need a one-time FBX-to-GLB conversion.
+  **Performance rule for fields:** Willow Fields has three fields of about 2,800 m2; filling them with one mesh per plant would cost millions of triangles. Crops are drawn as instanced patches (the lowest-poly stage 1 meshes are 40-130 triangles), only within 90 m of the player, with a hard cap of 150,000 crop triangles on screen; the growth stage is a per-patch choice.
+- **Other farm uses:** the Hand Saw and Saw Blade on the logging side; the Gas Can for the farm's tractor later.
+
+## Vehicles in hand (and not yet)
+Cars Bundle (7 cars), Jeep (CC-BY, 8,022 triangles: simplify to about 2,500), Van (952 triangles, one texture; the delivery and restock job) and the late-game City Pack cars. The **Pickup** (FBX, 8,655 triangles: simplify to about 2,800) and the **Flatbed truck** (FBX, 13,024 triangles, 12 materials, SpawnCamp Games on itch.io: simplify to about 3,500; the timber haul) have arrived.
+**Not uploaded yet:** the Bus (send FBX, OBJ, glTF or GLB with textures; I can also unpack ZIP and RAR). Simplification budget: everyday cars about 1,200 triangles, premium and utility vehicles up to 3,000.
+
 ## Open country and vehicles
 - Walkable ground is "the playable rectangle minus water", not "the zones". Zones are names and rules (grid, labels); keep new districts as zones, never as fences. Solid things get colliders.
 - Roads are designed for vehicles from the start: lanes 3.5 m, shoulder 1 m (a 9 m road), curve radius at least 17 m, 12 m streets where trucks turn. When vehicles arrive they follow road edges (`roadCenterline`) and the plots' `facing`.
