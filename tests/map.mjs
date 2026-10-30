@@ -117,6 +117,9 @@ has(broken(m=>{m.water.rivers[0].points[3]=[-30,-130]}),/walks into river/);
 has(broken(m=>{m.zones[2].bounds.x1=-40}),/zone farm cannot be reached on foot from the city/);
 has(broken(m=>{m.zones[3].bounds.x0=-20;m.zones[3].bounds.x1=185}),/zone forest cannot be reached on foot from the city/);
 has(broken(m=>{m.scenery.forest.clearings.push({x:140,z:-190,rx:30,rz:30})}),/clearing at 140,-190 reaches outside the forest/);
+// A landmark that names a plot must stand inside it.
+has(broken(m=>{m.landmarks.find(l=>l.id==='house-r1').plot='R9'}),/house-r1 names an unknown plot R9/);
+has(broken(m=>{m.landmarks.find(l=>l.id==='house-r1').x=130}),/house-r1 is not inside its plot R1/);
 // The playable area, plot frontage and road widths.
 has(broken(m=>{m.playable={x0:-999,x1:290,z0:-380,z1:100}}),/the playable area must be a rectangle inside the ground/);
 has(broken(m=>{delete m.reserved[0].facing}),/reserved plot C1 has no facing/);
@@ -139,4 +142,4 @@ has(broken(m=>{m.shops.cafe.interior.exitDoor.near.z=4.5}),/exit door would open
 has(broken(m=>{m.shops.market.interior.counter.x=7}),/counter is outside the room/);
 has(broken(m=>{delete m.shops.cafe.doorway}),/needs a doorway and an interior/);
 has(broken(m=>{delete m.studio.interior}),/studio interior needs an entry, exit and bed/);
-console.log('Map data is valid and frozen; zones, roads, fields, trees, shops, hours, studio and spawn match the numbers they replaced; 63 broken maps are each caught; Alder Center, Cedar Heights, Eastbank Works, the second bridge and the plots are in place.');
+console.log('Map data is valid and frozen; zones, roads, fields, trees, shops, hours, studio and spawn match the numbers they replaced; 65 broken maps are each caught; Alder Center, Cedar Heights, Eastbank Works, the second bridge and the plots are in place.');

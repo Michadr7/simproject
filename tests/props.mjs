@@ -7,8 +7,8 @@ import {MAP,validateMap} from '../dist/map-definition.js';
 globalThis.document={createElement:()=>({width:0,height:0,getContext:()=>new Proxy({},{get:()=>()=>{}})})}; // ground textures draw on a canvas; tests have none
 
 // ── The converted models ──────────────────────────────────────────────────────────
-assert.deepEqual(Object.keys(PROPS),['sawmill'],'the rough farmyard model is not shipped (a placeholder farmstead stands in)');
-for(const [id,expect] of Object.entries({sawmill:{tris:[4000,4500],width:12,height:[5,8]}})){
+assert.deepEqual(Object.keys(PROPS),['sawmill','house-a','house-e','house-h'],'the sawmill and three Kenney houses; the rough farmyard model is not shipped (a placeholder farmstead stands in)');
+for(const [id,expect] of Object.entries({sawmill:{tris:[4000,4500],width:12,height:[5,8]},'house-a':{tris:[1100,1250],width:10.4,height:[6,7.5]},'house-e':{tris:[1650,1800],width:10.4,height:[8.5,9.8]},'house-h':{tris:[700,850],width:10.4,height:[5.2,6.5]}})){
  const info=propInfo(id),g=propGeometry(id);
  assert(info.triangles>=expect.tris[0]&&info.triangles<=expect.tris[1],`${id}: ${info.triangles} triangles`);assert.equal(g.index.count/3,info.triangles);
  assert(Math.abs(info.width-expect.width)<.05,`${id}: ${info.width} m wide`);assert(info.height>=expect.height[0]&&info.height<=expect.height[1],`${id}: ${info.height} m tall`);
@@ -17,7 +17,7 @@ for(const [id,expect] of Object.entries({sawmill:{tris:[4000,4500],width:12,heig
  const box=new THREE.Box3().setFromBufferAttribute(g.attributes.position);
  assert(box.min.y>=-1&&box.min.y<.4,`${id}: stands on the ground (lowest point ${box.min.y.toFixed(2)}; anything below it is hidden by the terrain)`);{let under=0;const pos=g.attributes.position;for(let i=0;i<pos.count;i++)if(pos.getY(i)<-.15)under++;assert(under<pos.count*.05,`${id}: little of it is underground (${under} of ${pos.count} vertices)`)}assert(Math.abs(box.max.y-info.height)<.01);
  assert(Math.abs((box.min.x+box.max.x)/2)<.01&&Math.abs((box.min.z+box.max.z)/2)<.01,`${id}: centred`);
- assert(info.texture.startsWith('data:image/jpeg;base64,')&&info.texture.length<400e3,`${id}: texture ${(info.texture.length/1024).toFixed(0)} KB`);
+ assert(info.texture.startsWith(id.startsWith('house-')?'data:image/png;base64,':'data:image/jpeg;base64,')&&info.texture.length<400e3,`${id}: texture ${(info.texture.length/1024).toFixed(0)} KB`);
  assert(info.colliders.length>=3&&info.colliders.length<=40,`${id}: ${info.colliders.length} collision boxes`);
  for(const c of info.colliders)assert(c.x-c.hx>=info.footprint.x0-1.01&&c.x+c.hx<=info.footprint.x1+1.01&&c.z-c.hz>=info.footprint.z0-1.01&&c.z+c.hz<=info.footprint.z1+1.01,`${id}: a collision box lies outside the model`);
  assert(propGeometry(id)===g,'geometry is shared');
@@ -58,5 +58,24 @@ assert(zoneAt(farmyard.x,farmyard.z).id==='farm'&&zoneAt(sawmill.x,sawmill.z).id
  let deckOpen=0,deckReached=0,blocked=0;for(let j=0;j<nz;j++)for(let i=0;i<nx;i++){const x=x0+i*step,z=z0+j*step,f=info.floor;if(blockedAt(i,j)){if(x>=f.x0&&x<=f.x1&&z>=f.z0&&z<=f.z1)blocked++}else if(x>=f.x0+.5&&x<=f.x1-.5&&z>=f.z0+.5&&z<=f.z1-.5){deckOpen++;if(seen[j*nx+i])deckReached++}}
  assert(blocked>100,'posts, rails and machinery are solid ('+blocked+' cells on the deck)');assert(deckReached<=deckOpen*.25,'only the north-east corner of the deck can be walked onto, not the machinery: '+deckReached+' of '+deckOpen+' open deck cells are reachable from outside');
  const f=info.floor;assert.equal(world.floorAt(sawmill.x+(f.x0+f.x1)/2,sawmill.z+(f.z0+f.z1)/2),f.y,'standing on the deck');assert.equal(world.floorAt(sawmill.x+30,sawmill.z),null,'and not beside it');assert.equal(world.floorAt(farmyard.x,farmyard.z),null,'the farmstead has no deck')}
+// ── Cedar Heights: three Kenney houses on R1-R3, solid but clear of the road ────────────────────────────────────────────────────
+import {terrain,SURFACE} from '../dist/terrain.js';
+{const T=terrain(),houses=MAP.landmarks.filter(l=>l.plot);assert.deepEqual(houses.map(h=>[h.id,h.prop,h.plot,h.yaw]),[['house-r1','house-a','R1',0],['house-r2','house-e','R2',0],['house-r3','house-h','R3',0]],'one house per residential plot, all facing south (the Kenney front is +z) toward the loop road');
+ for(const h of houses){const plot=MAP.reserved.find(p=>p.id===h.plot),info=propInfo(h.prop),f=info.footprint;
+  assert(h.x+f.x0>=plot.x0&&h.x+f.x1<=plot.x1&&h.z+f.z0>=plot.z0&&h.z+f.z1<=plot.z1,`${h.id} stands inside its plot ${h.plot}`);
+  assert(plot.z1-(h.z+f.z1)>=2,`${h.id} keeps a front yard of ${(plot.z1-(h.z+f.z1)).toFixed(1)} m`);
+  assert(info.colliders.length>=6,`${h.id} has collision boxes (${info.colliders.length})`);
+  for(const b of info.colliders)for(const [dx,dz] of [[-1,-1],[1,-1],[-1,1],[1,1]]){const x=h.x+b.x+dx*b.hx*.98,z=h.z+b.z+dz*b.hz*.98;assert(T.surfaceAt(x,z)===SURFACE.GRASS,`${h.id}'s walls stand on plot grass, never on the road (${x.toFixed(1)},${z.toFixed(1)})`)}
+  // they block the player...
+  assert(world.blocked(h.x+info.colliders[0].x,h.z+info.colliders[0].z),`${h.id} blocks the player`);
+  // ...but the loop road and the yard in front of the door stay open
+  assert(!world.blocked(h.x,plot.z1-.5),`${h.id}: the front yard is open`);
+  assert(!world.blocked(h.x,plot.z1+3),`${h.id}: so is the space between the yard and the road`);
+  // a house is about as wide as 6 people shoulder to shoulder and a door is about 2 m: width 10.4 m is 8 m per model unit (checked against the avatar in the game)
+  assert(Math.abs(info.width-1.3*8)<.6||Math.abs(info.width-10.4)<.01,'x8 scale');
+ }
+ const loop=terrain();for(const [x,z] of [[100,-64],[120,-62],[140,-64]])assert(!world.blocked(x,z),`the loop road is open at ${x},${z}`);
+}
+
 const triangles=Object.values(PROPS).reduce((n,p)=>n+p.triangles,0);
-console.log(`Props: the sawmill (${triangles} triangles; solid posts, rails and machinery you cannot walk through, a 0.54 m deck) and a placeholder farmstead, placed inside their zones clear of roads and fields, drawn only when near.`);
+console.log(`Props: three Kenney houses on R1-R3 (solid, inside their plots, a front yard each, the road open) and the sawmill (${triangles} triangles; solid posts, rails and machinery you cannot walk through, a 0.54 m deck) and a placeholder farmstead, placed inside their zones clear of roads and fields, drawn only when near.`);

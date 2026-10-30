@@ -771,3 +771,11 @@ The land, the river, the bridge and the zones, rebuilt in `map-definition.js` an
 - **Plots** now have a `facing` (the street they front). R1-R3 moved onto the loop's south arc, facing south, so their driveways meet the loop's south road; C1-C2 face the main street (east); I1 faces Oak Street East (north), I2 south.
 - Scenery trees keep off anything claimed by a zone, road, field, pavement, river or bridge (not off open country, where the sparse belts stand).
 - Tests: `terrain.mjs` now checks that every sampled land point inside the playable area is walkable and every water or outside point is not, that each district can be entered from open ground on every side, and the loop's tightest bend.
+
+## 0.27.0 Cedar Heights: three real houses
+
+- **Three Kenney houses** (CC0) stand on R1, R2 and R3 along the loop road's south arc, each set toward the back of its plot so it keeps a front yard of at least 2 m, all facing south toward the road: `building-type-a` (one storey), `-e` (two storeys) and `-h`.
+  Scale is **8 m per model unit**: a front door is about 2 m high (checked against the avatar). Each house is 10.4 m wide and 7.3-8.2 m deep, 770-1,731 triangles (about 3,700 in all), solid collision boxes from its walls; the road, yard and driveway space are open.
+- `build-props.mjs` now takes a second folder (the Kenney GLB format folder), a `scale` per prop instead of a width, external palette textures and PNG output.
+- A landmark may name a plot (`plot: 'R1'`); `validateMap` checks the plot exists and the landmark stands inside it; `props.mjs` checks each house's collision boxes stand on plot grass, inside the plot, with the yard and the road open.
+- Design notes (no code yet): tool progression with hits per tool (Axe 8, Steel Axe 6, Lumberjack Axe 4, Chainsaw locked to lumberjack level 15), replanting and regrowth, and the map-size and vehicle-speed answer are in `DESIGN.md`.

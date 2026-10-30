@@ -9,13 +9,18 @@ import {join,resolve} from 'node:path';
 const toolRequire=createRequire(join(resolve(process.env.TOOL_DIR||'.'),'noop.js'));
 const {MeshoptSimplifier}=toolRequire('meshoptimizer'),sharp=toolRequire('sharp');
 await MeshoptSimplifier.ready;
-const folder=resolve(process.argv[2]||'.');
+const folder=resolve(process.argv[2]||'.'),kenney=resolve(process.argv[3]||folder); // the second folder holds the Kenney City Kit (Suburban) .glb files; its colour texture is in Textures/colormap.png
 
 // file, finished width (x extent) in metres, cut ('auto' removes the base plate and ground), target triangles (null keeps all),
 // texture size in px and JPEG quality, collisions: a grid cell in metres, a height band (only upright faces inside it count, so a roof above the band
 // does not make the whole building solid), and whether to drop one-cell specks. `skip` leaves a prop out of the output.
+const SCALE_HOUSE=Number(process.env.SCALE_HOUSE||8); // metres per Kenney model unit: set from the door height (a front door should be about 2.1 m)
 const PROPS={
  sawmill:{file:'sawmill.glb',width:12,cut:null,triangles:null,texture:[1024,80],collide:{cell:.5,band:[.5,2.1],walls:true,despeckle:false}},
+ // Kenney houses (CC0): a metres-per-model-unit `scale` instead of a width, `dir:'kenney'`, and a palette texture kept sharp (nearest-neighbour PNG).
+ 'house-a':{dir:'kenney',file:'building-type-a.glb',scale:SCALE_HOUSE,cut:null,triangles:null,texture:[128,'png'],collide:{cell:.5,band:[.5,2.1],walls:true,despeckle:false}},
+ 'house-e':{dir:'kenney',file:'building-type-e.glb',scale:SCALE_HOUSE,cut:null,triangles:null,texture:[128,'png'],collide:{cell:.5,band:[.5,2.1],walls:true,despeckle:false}},
+ 'house-h':{dir:'kenney',file:'building-type-h.glb',scale:SCALE_HOUSE,cut:null,triangles:null,texture:[128,'png'],collide:{cell:.5,band:[.5,2.1],walls:true,despeckle:false}},
  farmyard:{skip:true,file:'LowPOlyFarm_buildings.glb',width:40,cut:'auto',triangles:13000,texture:[1024,78],collide:{cell:1,band:[2,99],walls:false,despeckle:true}} // not used: it looked too rough in the game
 };
 function parse(path){const d=readFileSync(path),jsonLength=d.readUInt32LE(12);let off=12,json,bin;
@@ -28,7 +33,7 @@ const b64=a=>Buffer.from(a.buffer,a.byteOffset,a.byteLength).toString('base64');
 const out={props:{}},report=[];
 for(const [id,spec] of Object.entries(PROPS)){
  if(spec.skip)continue;
- const glb=parse(join(folder,spec.file)),json=glb.json,prim=json.meshes[0].primitives[0];
+ const glb=parse(join(spec.dir==='kenney'?kenney:folder,spec.file)),json=glb.json,prim=json.meshes[0].primitives[0];
  if(json.nodes.some(n=>n.scale||n.rotation||n.translation))throw new Error(spec.file+' has a node transform; bake it first');
  let pos=accessor(glb,prim.attributes.POSITION),nor=accessor(glb,prim.attributes.NORMAL),uv=accessor(glb,prim.attributes.TEXCOORD_0),idx=Uint32Array.from(accessor(glb,prim.indices));
  const before=idx.length/3;
@@ -48,6 +53,7 @@ for(const [id,spec] of Object.entries(PROPS)){
  const used=new Map(),P=[],N=[],U=[],I=new Uint32Array(idx.length);let count=0;
  for(let i=0;i<idx.length;i++){const o=idx[i];if(!used.has(o)){used.set(o,count++);P.push(pos[o*3],pos[o*3+1],pos[o*3+2]);N.push(nor[o*3],nor[o*3+1],nor[o*3+2]);U.push(uv[o*2],uv[o*2+1])}I[i]=used.get(o)}
  const lo=[1e9,1e9,1e9],hi=[-1e9,-1e9,-1e9];for(let i=0;i<P.length;i+=3)for(let c=0;c<3;c++){lo[c]=Math.min(lo[c],P[i+c]);hi[c]=Math.max(hi[c],P[i+c])}
+ if(spec.scale)spec.width=(hi[0]-lo[0])*spec.scale;
  const k=spec.width/(hi[0]-lo[0]),cx=(lo[0]+hi[0])/2,cz=(lo[2]+hi[2])/2,base=spec._ground??lo[1];
  for(let i=0;i<P.length;i+=3){P[i]=(P[i]-cx)*k;P[i+1]=(P[i+1]-base)*k;P[i+2]=(P[i+2]-cz)*k}
  let sy=0,minY=1e9;for(let i=1;i<P.length;i+=3){sy=Math.max(sy,P[i]);minY=Math.min(minY,P[i])}
@@ -75,13 +81,13 @@ for(const [id,spec] of Object.entries(PROPS)){
   if(best&&best[1]>spec.width*spec.width*.04){const y=best[0]*.03;let fx0=1e9,fx1=-1e9,fz0=1e9,fz1=-1e9;for(const [a,b,c,key] of floorTris)if(Math.abs(key-best[0])<=1)for(const v of [a,b,c]){fx0=Math.min(fx0,P[v]);fx1=Math.max(fx1,P[v]);fz0=Math.min(fz0,P[v+2]);fz1=Math.max(fz1,P[v+2])}
    if(y>.05&&y<1.5)floor={y:+y.toFixed(2),x0:+fx0.toFixed(2),x1:+fx1.toFixed(2),z0:+fz0.toFixed(2),z1:+fz1.toFixed(2)}}}
  // 5. the colour texture, shrunk
- const tex=json.textures[json.materials[0].pbrMetallicRoughness.baseColorTexture.index],image=json.images[tex.source],view=json.bufferViews[image.bufferView];
- const raw=Buffer.from(glb.bin.subarray(view.byteOffset||0,(view.byteOffset||0)+view.byteLength)),[size,quality]=spec.texture;
- const jpeg=await sharp(raw).resize(size,size,{fit:'fill'}).jpeg({quality,mozjpeg:true}).toBuffer();
+ const tex=json.textures[json.materials[0].pbrMetallicRoughness.baseColorTexture.index],image=json.images[tex.source],[size,quality]=spec.texture;
+ let raw;if(image.uri)raw=readFileSync(join(spec.dir==='kenney'?kenney:folder,image.uri));else{const view=json.bufferViews[image.bufferView];raw=Buffer.from(glb.bin.subarray(view.byteOffset||0,(view.byteOffset||0)+view.byteLength))}
+ const png=quality==='png',jpeg=png?await sharp(raw).resize(size,size,{fit:'fill',kernel:'nearest'}).png({palette:true}).toBuffer():await sharp(raw).resize(size,size,{fit:'fill'}).jpeg({quality,mozjpeg:true}).toBuffer();
  const posA=Float32Array.from(P),norA=Float32Array.from(N),uvA=Float32Array.from(U),idxA=Uint16Array.from(I);if(count>65535)throw new Error(id+' has too many vertices for 16-bit indices');
  let wx0=1e9,wx1=-1e9,wz0=1e9,wz1=-1e9;for(let i=0;i<P.length;i+=3){wx0=Math.min(wx0,P[i]);wx1=Math.max(wx1,P[i]);wz0=Math.min(wz0,P[i+2]);wz1=Math.max(wz1,P[i+2])}
  out.props[id]={source:spec.file,width:+(wx1-wx0).toFixed(2),depth:+(wz1-wz0).toFixed(2),height:+sy.toFixed(2),triangles:I.length/3,footprint:{x0:+wx0.toFixed(2),x1:+wx1.toFixed(2),z0:+wz0.toFixed(2),z1:+wz1.toFixed(2)},colliders:boxes,floor,
-  texture:'data:image/jpeg;base64,'+jpeg.toString('base64'),pos:b64(posA),nor:b64(norA),uv:b64(uvA),idx:b64(idxA),vertices:count};
+  texture:'data:image/'+(png?'png':'jpeg')+';base64,'+jpeg.toString('base64'),pos:b64(posA),nor:b64(norA),uv:b64(uvA),idx:b64(idxA),vertices:count};
  report.push(`${id.padEnd(9)} ${before} -> ${I.length/3} triangles, ${(wx1-wx0).toFixed(1)} x ${(wz1-wz0).toFixed(1)} m, ${sy.toFixed(1)} m tall, ${boxes.length} collision boxes, floor ${floor?floor.y+' m high':'none'}, texture ${(jpeg.length/1024).toFixed(0)} KB, ${count} vertices`);
 }
 const text=`// GENERATED by scripts/build-props.mjs from single-mesh GLB models (see ASSETS.md for sources and licences).\nexport const PROPS=${JSON.stringify(out.props)};\n`;

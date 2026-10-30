@@ -55,13 +55,20 @@ Confirmed: the river and the north bank move north, the map widens east, the Fre
 6. A signpost for each district.
 Checks: `validateMap` (zones, water, bridges, plots), `validateTerrain` (every district reachable on foot from the spawn, over the new bridges), plots never on a road, trees never on a road or in the river, and an alignment test
 (each bridge's deck spans its river and meets its road; the roads meet their zones).
-**Build 2 (next, once you have walked the skeleton and confirmed the alignment):** the real Kenney houses in Cedar Heights (house slots sized from their real footprints, scaled about x8), then Alder Center and Eastbank Works as their asset packs arrive.
+**Build 2 (done in 0.27.0 for Cedar Heights; Alder Center and Eastbank Works follow as assets arrive):** the real Kenney houses in Cedar Heights (house slots sized from their real footprints, scaled about x8), then Alder Center and Eastbank Works as their asset packs arrive.
 
 ## Open country and vehicles
 - Walkable ground is "the playable rectangle minus water", not "the zones". Zones are names and rules (grid, labels); keep new districts as zones, never as fences. Solid things get colliders.
 - Roads are designed for vehicles from the start: lanes 3.5 m, shoulder 1 m (a 9 m road), curve radius at least 17 m, 12 m streets where trucks turn. When vehicles arrive they follow road edges (`roadCenterline`) and the plots' `facing`.
 - Tree regrowth exists (stump, a sapling after 3 game days, a full pine after 7; one game day is 48 real minutes of play). That is about 70 trees an hour across Pine Ridge's 395, far less than one player can fell (about 4 a minute),
   so the forest empties in a couple of hours; the lumberjack rebalance (shorter maturity of about 2 game days, replanting saplings with a tool, wood prices) belongs to the tool-tier work.
+
+## Map size and vehicles
+The playable area is 540 x 480 m. On foot (run 8.2 m/s) that is about 66 s across; a car at 14 m/s (50 km/h) would cross in about 39 s, which is too soon. Real routes: Eastbank Works to the sawmill by the Freight Road is about 440 m (31 s at 14 m/s); the city to Willow Fields about 260 m (19 s).
+- **Recommendation: do not enlarge the map for now.** The levers that cost nothing: early vehicle speeds of 9-11 m/s (a bike 6, a delivery van 10, a loaded truck 8, a fast car later), speed limits, fuel and loading time, and winding the long roads (the terrain mask lays curved ribbons; the Freight Road and the County Road can snake and lengthen their routes by 30-50%).
+  Targets: city to farm 45-60 s, city to sawmill about 90 s, corner to corner 2-3 minutes by the early vehicles.
+- Enlarge when a district needs it, not before. The mask is 0.5 m cells (1,120 x 1,000 = 1.1 M cells, about 3 MB, built in 100 ms): a map twice as long is still cheap; the costs are trees, props and the roads to author. The east edge (beyond x = 300) and the far north have room for a highway or harbour district later.
+- Vehicles follow `roadCenterline`, use the plots' `facing` for driveways and park on the lots reserved in the zones. **Model: Opus 5.5** for the vehicle architecture (physics model, networking, saves); **Sonnet 5.5** for the district roads and parking lots.
 
 ## The sawmill chain and physics (planned)
 Loop: bring logs to the sawmill, they become planks over a few seconds, the blade spins with a sound, and planks pile up beside it (an instanced pile with a cap on how many are drawn; the count is saved, not each plank).
@@ -106,19 +113,30 @@ Target: under 60-90 seconds on foot between main hubs (the city to Pine Ridge's 
 for each level after that, capped at 20 (about 4,180 XP, roughly 260 pines). Perks: faster swings every level, a third log
 at level 3, a fourth at level 8. Logs sell for $1.00.
 
-**Proposed model: tools set power, levels refine.**
-- Each tool has `power`; each tree species has `toughness` (pine 3, oak 6, giant 10). Hits = ceil(toughness / damage) with
-  damage = power × (1 + 0.04 × (level − 1)). Levels then improve swing speed, log yield and XP, not hit count.
-- Tool ladder (numbers to tune in play):
+**Decided model: the equipped tool sets the hits; levels refine it a little.**
+- A tree has `toughness` in chop points (pine 24, a bigger tree later 36 or 48). A swing deals `damage` = tool damage x (1 + 0.04 x (level - 1)); hits = ceil(toughness / damage).
+  `chopTree` reads the tool in the equipped hotbar slot (`progress.equipped`) and nothing else, so an axe in the bag but not equipped does nothing, and a tool without a `chop` entry cannot chop.
+- Tools (numbers to tune in play), hits for a pine at level 1 and at level 20:
 
-| Tool | Unlock | Price | Power | Notes |
-|---|---|---|---|---|
-| Hand axe (today's axe) | level 1 | $20 | 1.0 | |
-| Forester's axe | level 5 | $85 | 1.6 | faster swing, better balanced carry |
-| Felling axe | level 10 | $240 | 2.4 | two-handed swing, bigger bonus logs |
-| Chainsaw | level 15 | $900 + fuel | 6.0 | hold to cut continuously, uses fuel, loud, ruins some log quality |
-| Harvester (optional, late) | level 20 | job-site | — | industrial, tied to the sawmill |
+| Tool | Unlock | Price | Damage | Hits (L1 / L20) | Notes |
+|---|---|---|---|---|---|
+| Axe (today's, not called "starter") | level 1 | $20 | 3 | 8 / 5 | one-handed carry; about 6.4 s a tree |
+| Steel Axe | level 5 | $120 | 4 | 6 / 4 | |
+| Lumberjack Axe | level 10 | $350 | 6 | 4 / 3 | two-handed swing, a bonus log now and then |
+| Chainsaw | **lumberjack level 15 and the Steel Axe** | $1,200 + fuel | 24 per 2.5 s hold | one cut, about 2.5 s | hold E to cut; uses fuel; loud; needs a gas station; locked until level 15 |
+| Harvester (optional, late) | level 20 | job-site | n/a | n/a | industrial, tied to the sawmill |
 
+- The hotbar already shows the equipped tool, so the chop code and the HUD "N hits" hint both read the same tool table (one place: `tools.js`). Level perks no longer reduce hits directly (they raise damage 4% a level), and swing time still shrinks from 0.8 s to 0.5 s.
+- XP: 2 per swing, and the XP for a fall scales with toughness so a level-15 chainsaw user is not out-levelled by the axe grind. Retune so level 15 takes about 150 pines (about 40 minutes of play), not 85.
+- Old saves: plots store `hits` as whole numbers; switch to `damage` (chop points taken) and migrate by hits x 8 (the old three-hit pine becomes 3/8 chopped).
+
+### Regrowth and replanting
+- **Today:** a felled pine is a stump, a sapling after 3 game days and a pine again after 7 (one game day is 48 real minutes of play: about 5.6 hours). Pine Ridge's 395 pines regrow about 70 an hour; one player fells about 260 an hour with the Axe, so the forest runs out in roughly 90 minutes of nonstop chopping.
+- **Proposed:** natural regrowth is faster (sapling after 1 game day, a full pine after 2.5, about 2 real hours) but a stump blocks it: the tree only comes back after the stump is cleared (3 swings) or on its own after 4 game days.
+  **Replanting** speeds it up: pine cones drop from felled trees (about 1 in 3), a cone plants a sapling in a cleared forest cell (hold E with the cone, about 3 s) and that sapling matures in 2 game days; each replant also earns forestry XP.
+  A tree you plant counts for a **Reforestation** bonus the sawmill pays (a small price premium) while the forest holds more than 70% of its trees, so replanting is the sustainable choice, not a chore.
+  Targets: a player who replants every tree they fell keeps the forest above 60%; one who does not empties it.
+- **Plots, saves and multiplayer:** a plot stores `{tree, damage, felledAt, plantedAt}`; maturity is derived from the game clock, as today. **Model: Opus 5.5** to design the save migration and the balance numbers; **Sonnet 5.5** to build `tools.js`, the chop path, cones, planting and the HUD; **Haiku 5.5** for price and number tweaks afterwards.
 - Tool durability and sharpening are optional extras; skip until the economy needs a money sink.
 - Species: pine now; add oak and a giant tree in the deeper forest so tools matter. XP per fell scales with toughness, which
   also fixes the grind at high levels.

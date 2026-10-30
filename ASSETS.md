@@ -40,6 +40,10 @@ farmyard's ground and base plate away, centres each prop with the ground at y = 
 collision boxes from the walls (cells at least 2 m high for the farmyard, 1.5 m for the sawmill). The originals are not stored in the repository: rebuild with
 `TOOL_DIR=<folder with meshoptimizer and sharp> node scripts/build-props.mjs "<folder holding the two .glb files>"`.
 
+## Kenney City Kit (Suburban): three houses in Cedar Heights (0.27.0)
+CC0 1.0 (https://kenney.nl/assets/city-kit-suburban). Converted by `scripts/build-props.mjs` at **8 metres per model unit** (`SCALE_HOUSE`): a front door comes out about 2 m high, checked against the avatar in the game. The converter keeps every triangle and
+shrinks the shared palette texture to a 128 px nearest-neighbour PNG (about 3 KB). Used: `building-type-a` (1,174 triangles, 10.4 x 8.2 m, one storey) on R1, `building-type-e` (1,731 triangles, 10.4 x 8.2 m, two storeys, 9.1 m) on R2, `building-type-h` (770 triangles, 10.4 x 7.3 m) on R3;
+about 3,700 triangles in all. Rebuild: `TOOL_DIR=<tools> node scripts/build-props.mjs "<folder with sawmill.glb>" "<Kenney GLB format folder>"`.
+
 ## Received but not imported yet
-- **Kenney City Kit (Suburban)**, CC0 1.0 (https://kenney.nl/assets/city-kit-suburban): 21 houses (770-2,060 triangles each, 27,500 for one of each), 9 fence pieces, a planter, two tiny
-  trees, driveway and path tiles, all sharing one colour palette texture. Intended for Cedar Heights (Phase 4). Houses are about 1-1.8 units wide as shipped (scale about x8).
+- **Kenney City Kit (Suburban)**, the rest: 18 more houses (800-2,060 triangles each), 9 fence pieces, a planter, two tiny trees, driveway and path tiles, all on the same palette texture. Candidates for more houses (building types b, c, d, f, j, n, o and others), driveways and fences once Cedar Heights grows.

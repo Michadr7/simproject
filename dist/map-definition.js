@@ -137,7 +137,9 @@ export const MAP=deepFreeze({
  // a farmhouse, a silo and a shed; a placeholder for now) fills the free north-east strip of Willow Fields and faces the farm road; the sawmill stands in Pine Ridge's empty clearing.
  landmarks:[
   {id:'farmstead',prop:'farmstead',zone:'farm',x:-62,z:n(-191),yaw:0},
-  {id:'sawmill',prop:'sawmill',zone:'forest',x:104,z:n(-208),yaw:0}
+  {id:'sawmill',prop:'sawmill',zone:'forest',x:104,z:n(-208),yaw:0},
+  // Cedar Heights: Kenney houses (CC0) on R1-R3, set toward the back of their plots so each keeps a front yard facing the loop road. `plot` names the plot a landmark stands on.
+  {id:'house-r1',prop:'house-a',plot:'R1',zone:'cedar',x:100,z:-80,yaw:0},{id:'house-r2',prop:'house-e',plot:'R2',zone:'cedar',x:120,z:-78,yaw:0},{id:'house-r3',prop:'house-h',plot:'R3',zone:'cedar',x:140,z:-80,yaw:0}
  ],
  // Signposts: boards are read from the front (yaw 0 faces south, towards walkers arriving from the bridge).
  signs:[
@@ -250,7 +252,8 @@ export function validateMap(map=MAP){
  {const ids=new Set();for(const item of [...(map.landmarks||[]),...(map.signs||[])]){
   if(ids.has(item.id))bad(`duplicate landmark or sign ${item.id}`);ids.add(item.id);
   const zone=map.zones.find(z=>z.id===item.zone);if(!zone||item.x<zone.bounds.x0||item.x>zone.bounds.x1||item.z<zone.bounds.z0||item.z>zone.bounds.z1)bad(`${item.id} is not inside zone ${item.zone}`);
-  if(item.prop!==undefined&&Math.abs(Math.sin(item.yaw*2))>1e-9)bad(`${item.id} must face north, east, south or west`)}}
+  if(item.prop!==undefined&&Math.abs(Math.sin(item.yaw*2))>1e-9)bad(`${item.id} must face north, east, south or west`);
+  if(item.plot!==undefined){const plot=(map.reserved||[]).find(p=>p.id===item.plot);if(!plot)bad(`${item.id} names an unknown plot ${item.plot}`);else if(item.x<plot.x0||item.x>plot.x1||item.z<plot.z0||item.z>plot.z1)bad(`${item.id} is not inside its plot ${item.plot}`)}}}
  // Forest clearings are ellipses inside the forest zone.
  for(const clearing of map.scenery?.forest?.clearings||[]){const forest=map.zones.find(z=>z.id===map.scenery.forest.zone||z.id==='forest');
   if(!forest||clearing.x-clearing.rx<forest.bounds.x0||clearing.x+clearing.rx>forest.bounds.x1||clearing.z-clearing.rz<forest.bounds.z0||clearing.z+clearing.rz>forest.bounds.z1)bad(`clearing at ${clearing.x},${clearing.z} reaches outside the forest`)}
