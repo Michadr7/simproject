@@ -152,3 +152,7 @@ body.creating #clockChip{display:none}
 /* 0.22.0 the map is taller now */
 #clockChip{top:268px}
 @media(max-width:600px){#clockChip{top:222px}}
+
+#credits .dialog{max-height:86vh;overflow:auto}#credits h2{font-size:28px;margin-top:8px}.credits-note{color:#c8d6c2;margin:6px 0 14px}#creditsList .credit{border-bottom:1px solid #ffffff14;padding:10px 0}#creditsList b{display:block;font-size:15px}#creditsList span{display:block;color:#cfdcc9;font-size:13px;margin-top:3px}#creditsList small{display:block;color:#9fb59a;font-size:11px;letter-spacing:.4px;margin-top:3px}#creditsList a{color:#d4e7b3}
+
+.homes-icon{background:#cfe0b8;color:#2c4a31}.phone-home .phone-home-actions{display:flex;gap:8px;flex-wrap:wrap;margin-top:10px}.phone-home .phone-home-status{color:#d4e7b3;font-size:12px;margin:6px 0 0}.phone-home button[hidden]{display:none}

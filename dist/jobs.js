@@ -7,6 +7,7 @@ import {normalizeCafe} from './cafe-job.js';
 import {normalizeRoutine} from './routine.js';
 import {normalizeLife,normalizeDrainMultiplier} from './life.js';
 import {freshHousing,normalizeHousing} from './housing.js';
+import {SCHEMA,normalizeProperties,normalizeNotices} from './ownership.js';
 import {normalizePlots,normalizeLogs,nextLogIdFor} from './grid.js';
 import {isWalkable} from './world.js';
 export const MARKET={name:MAP.shops.market.name,x:MAP.shops.market.x,z:MAP.shops.market.z};
@@ -16,7 +17,7 @@ export const ROUTES=[
  {name:'Oak Street Laundry',description:'A grocery order for the laundry staff.',x:-10.2,z:-7,pay:1800}
 ];
 export const PROGRESS_KEY='citylife.progress.v1';
-export const freshProgress=()=>({cash:0,completed:0,phase:'available',activeJob:null,inventory:freshInventory(),settings:{statDrainMultiplier:1},cooldowns:{},gigBoard:{ids:[],refreshAt:0},position:null,housing:freshHousing(),life:normalizeLife(),routine:normalizeRoutine(),cafe:normalizeCafe(),plots:{},equipped:null,skills:freshSkills(),stats:freshStats(),logs:[],nextLogId:1});
+export const freshProgress=()=>({schema:SCHEMA,properties:{},homeNotices:[],cash:0,completed:0,phase:'available',activeJob:null,inventory:freshInventory(),settings:{statDrainMultiplier:1},cooldowns:{},gigBoard:{ids:[],refreshAt:0},position:null,housing:freshHousing(),life:normalizeLife(),routine:normalizeRoutine(),cafe:normalizeCafe(),plots:{},equipped:null,skills:freshSkills(),stats:freshStats(),logs:[],nextLogId:1});
 export const money=cents=>'$'+(cents/100).toFixed(2);
 export function normalizeProgress(value){
  const a=value&&typeof value==='object'?value:{},s=freshProgress();
@@ -26,6 +27,8 @@ export function normalizeProgress(value){
  if(a.position&&Number.isFinite(a.position.x)&&Number.isFinite(a.position.z)&&isWalkable(a.position.x,a.position.z))s.position={x:a.position.x,z:a.position.z};
  s.inventory=normalizeInventory(a.inventory);s.settings={statDrainMultiplier:normalizeDrainMultiplier(a.settings?.statDrainMultiplier)};
  s.activeJob=normalizeActiveJob(a.activeJob);s.cooldowns=normalizeCooldowns(a.cooldowns);s.gigBoard=normalizeGigBoard(a.gigBoard);
+ // Saves from before the schema number (0.29 and earlier) are schema 1: they have no properties, which is exactly what a fresh save has, so the step to schema 2 only adds the fields.
+ s.schema=SCHEMA;s.properties=normalizeProperties(a.properties);s.homeNotices=normalizeNotices(a.homeNotices);
  s.housing=normalizeHousing(a.housing);s.life=normalizeLife(a.life);s.routine=normalizeRoutine(a.routine);s.cafe=normalizeCafe(a.cafe);s.plots=normalizePlots(a.plots);s.skills=normalizeSkills(a.skills);s.stats=normalizeStats(a.stats);s.logs=normalizeLogs(a.logs);s.nextLogId=nextLogIdFor(a.nextLogId,s.logs);
  const tool=itemById(a.equipped);s.equipped=tool?.type==='tool'&&hasItem(s,tool.id)?tool.id:null;return s;
 }

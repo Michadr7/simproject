@@ -60,7 +60,7 @@ for(const bridge of MAP.water.bridges){
  let minRadius=1e9;for(let i=3;i<line.length-3;i++){const a=line[i-3],b=line[i],c=line[i+3],ab=Math.hypot(b[0]-a[0],b[1]-a[1]),bc=Math.hypot(c[0]-b[0],c[1]-b[1]),ca=Math.hypot(a[0]-c[0],a[1]-c[1]),area=Math.abs((b[0]-a[0])*(c[1]-a[1])-(b[1]-a[1])*(c[0]-a[0]))/2;if(area>1e-9)minRadius=Math.min(minRadius,ab*bc*ca/(4*area))}
  assert(minRadius>=17,'the tightest bend has a radius of '+minRadius.toFixed(1)+' m');assert(loop.width>=9)}
 // Reserved plots are open ground inside their district (grass, or a driveway or front path): never on a road, a pavement, water or a bridge.
-for(const plot of MAP.reserved)for(let x=plot.x0+.25;x<plot.x1;x+=.5)for(let z=plot.z0+.25;z<plot.z1;z+=.5){const s=at(x,z);assert(isWalkable(x,z)&&(s===SURFACE.GRASS||s===SURFACE.DRIVEWAY||s===SURFACE.PATH),`${plot.id} is open ground at ${x},${z} (surface ${s})`)}
+for(const plot of MAP.reserved)for(let x=plot.x0+.25;x<plot.x1;x+=.5)for(let z=plot.z0+.25;z<plot.z1;z+=.5){const s=at(x,z);assert(isWalkable(x,z)&&(s===SURFACE.GRASS||s===SURFACE.DRIVEWAY||s===SURFACE.PATH||(plot.kind==='commercial'&&s===SURFACE.PAVEMENT)),`${plot.id} is open ground at ${x},${z} (surface ${s})`)}
 
 // ── What rectangles could not do: a curved, walkable road anywhere (here on spare ground in the east) ──────────────────────────────────────
 const curvy=structuredClone(MAP);

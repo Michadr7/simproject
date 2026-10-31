@@ -87,3 +87,19 @@ Licence notes: Kenney and Quaternius packs are CC0. The user states everything b
 | Pickup (FBX) | CGTrader free model | 8,655 triangles, 2 materials | simplify to about 2,800 |
 | Flatbed truck (FBX) | SpawnCamp Games, itch.io (credit them) | 13,024 triangles, 12 materials | simplify to about 3,500; the timber haul |
 Still missing: the low-end green chainsaw (Sketchfab), the Bus, a farmhouse and a chicken.
+
+## Shipped in 0.29.0 (converted into props-assets.js from `assets-src/`; every one has a credit in credits.js)
+Kenney City Kit (Suburban) houses a, c, e, h, j, l, o, r, t; Kenney City Kit (Commercial) buildings e, i, l; Store (Poly Pizza); Quaternius farm buildings Barn, Small Barn, Open Barn, Silo House, ChickenCoop, Tower Windmill; Hut (Quaternius); Wood Log (Poly Pizza);
+Quaternius cars Car, SUV, Sports Car, Police Car (about 2,800-3,100 triangles each, wheels kept: the first conversion simplified them to 1,200 and lost the tyres); Pickup (FBX, 8,655 to 4,442 triangles, painted farm red by the converter because the file has no colours); Flatbed truck (SpawnCamp Games, FBX, 13,024 to 3,024 triangles); the Tripo sawmill. Everything else received is still only in `assets-src/` (the unused Kenney
+houses and commercial buildings, the Furniture Kit, the interior pack, crops, animals, food, tools, chainsaws, the remaining vehicles, the City Pack) waiting for its feature.
+## assets-src/
+The originals the game is built from, kept outside the repo's `dist/`: download the archive that comes with each release, unpack it into the project as `assets-src/`, and run `scripts/build-props.mjs` to rebuild `dist/props-assets.js`. The big Quaternius nature and character packs are not in it
+(they are converted by `scripts/build-assets.mjs` and `scripts/build-characters.mjs`; download them again from quaternius.com if you need to rebuild those).
+
+## Added in 0.30.0
+The Kenney Furniture Kit (CC0) pieces now shipped as interior furniture: Bed Double, Bed Single, Lounge Sofa, Table Coffee, Table, Chair, Television, Cabinet Television, Bookcase Open, Bookcase Closed Doors (the wardrobe), Desk, Chair Desk, Kitchen Cabinet, Kitchen Sink, Kitchen Stove, Kitchen Fridge Large, Toilet, Bathtub,
+Bathroom Sink, Lamp Round Floor, Rug Rectangle, Potted Plant, Stairs, Side Table (24 pieces, 41,000 triangles in the whole kit, about 9,500 in these), at 2 m per model unit, plain colours baked to vertex colours. They face -z (a piece with yaw 0 looks north). The rest of the kit and the Quaternius interior pack are for 0.31.
+
+## Added in 0.31.0
+Shipped: six more Kenney commercial buildings (a, c, d, f, g, h), the Store recoloured (slate, teal and warmer greys), and three more Quaternius cars (Taxi, Car-unqq, a second Sports Car). Received and kept in `assets-src/kenney-industrial/`, not yet used (for Eastbank Works, 0.32): Kenney City Kit (Industrial), CC0 (its License.txt is in the folder): 20 buildings
+(700-2,400 triangles, 7-20 m wide at 8 m per model unit), 4 chimneys, 2 tanks, 3 shipping containers, 5 solar panels, a water tower and 2 windmills.

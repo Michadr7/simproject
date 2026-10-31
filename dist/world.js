@@ -2,6 +2,8 @@ import * as THREE from './vendor/three.module.js';
 import {MAP,zoneById,zoneAtPoint,roadRects,riverPath,riverDistance} from './map-definition.js';
 import {PINES,BROADLEAVES,modelInfo,modelGeometry,createNatureMaterials} from './nature.js';
 import {terrain,SURFACE,roadCenterline} from './terrain.js';
+import {lampSpots} from './streetfurniture.js';
+import {markingBars,townSpots,FOUNTAIN,BUS_STOP} from './town.js';
 import {propInfo,createProp} from './props.js';
 
 // ─── Layout (pure data, safe to import from rules and tests) ──────────────────
@@ -135,10 +137,12 @@ function createColliders(){
 function groundTexture(kind){
  const c=document.createElement('canvas');c.width=c.height=256;const ctx=c.getContext('2d');
  const r=random(kind.length*977);
- const base={farm:'#7d9a52',forest:'#4b663c',dirt:'#8a7152',field:'#86a057',plowed:'#5d4532',wheat:'#c7a249',green:'#6f9a45'}[kind];
+ const base={farm:'#7d9a52',forest:'#4b663c',dirt:'#8a7152',field:'#86a057',plowed:'#5d4532',wheat:'#c7a249',green:'#6f9a45',paving:'#b9b7a8',plaza:'#c9c4b2'}[kind];
  ctx.fillStyle=base;ctx.fillRect(0,0,256,256);
  const specks=kind==='dirt'?['#00000014','#ffffff12','#5f4a3322']:kind==='forest'?['#00000016','#6d7d3a22','#7a5c3a24','#ffffff08']:['#00000010','#ffffff10','#9fb86522'];
  for(let i=0;i<7000;i++){ctx.fillStyle=specks[i%specks.length];const s=kind==='dirt'?1+r()*2.5:1+r()*1.5;ctx.fillRect(r()*256,r()*256,s,kind==='dirt'?s:s*2.2)}
+ // Pavements: 2 m slabs with grout lines; the town square adds a darker chequer of 1 m squares.
+ if(kind==='paving'||kind==='plaza'){if(kind==='plaza')for(let y=0;y<256;y+=64)for(let x=0;x<256;x+=64)if((x+y)/64%2===0){ctx.fillStyle='#00000014';ctx.fillRect(x,y,64,64)}ctx.strokeStyle='#8d9186b0';ctx.lineWidth=2;for(let n=0;n<256;n+=128){ctx.strokeRect(n,0,128,128);ctx.strokeRect(n,128,128,128)}}
  // Field rows: furrows of plowed soil, standing wheat, and rows of young crops.
  if(kind==='plowed')for(let y=0;y<256;y+=16){ctx.fillStyle='#3f2c1d88';ctx.fillRect(0,y,256,5);ctx.fillStyle='#7d5d4440';ctx.fillRect(0,y+6,256,3)}
  if(kind==='wheat')for(let x=0;x<256;x+=6){ctx.fillStyle=x%12?'#e2c46a55':'#a9873a55';ctx.fillRect(x,0,3,256)}
@@ -179,12 +183,13 @@ float fadeBayer(vec2 p){ivec2 i=ivec2(mod(p,4.0));int n=i.x+i.y*4;
 
 // options.label(text,x,y,z,width,rot,bg,fg,height) draws a sign (game.js's label helper).
 export function createWorld(scene,{label,cullRadius}={}){
+ let fountainParts=null,townTime=0;
  const layout=worldLayout(),colliders=createColliders(),fade=createSightlineFade();
  const group=new THREE.Group();group.name='world-zones';scene.add(group);
 
 
  // Ground: one base plane for the whole map, the farm's and forest's own ground over their zones, then dirt roads, field interiors, the river and the bridge.
- const textures={farm:groundTexture('farm'),forest:groundTexture('forest'),dirt:groundTexture('dirt'),field:groundTexture('field'),plowed:groundTexture('plowed'),wheat:groundTexture('wheat'),green:groundTexture('green')};
+ const textures={paving:groundTexture('paving'),plaza:groundTexture('plaza'),farm:groundTexture('farm'),forest:groundTexture('forest'),dirt:groundTexture('dirt'),field:groundTexture('field'),plowed:groundTexture('plowed'),wheat:groundTexture('wheat'),green:groundTexture('green')};
  function plane(x0,x1,z0,z1,y,material,name){
   const mesh=new THREE.Mesh(new THREE.PlaneGeometry(x1-x0,z1-z0),material);mesh.rotation.x=-Math.PI/2;
   mesh.position.set((x0+x1)/2,y,(z0+z1)/2);mesh.receiveShadow=true;mesh.name=name;group.add(mesh);return mesh;
@@ -339,6 +344,59 @@ export function createWorld(scene,{label,cullRadius}={}){
  // Driveways and front paths: flat concrete and paving just above the grass and just under the road they join.
  {const concrete=new THREE.MeshStandardMaterial({color:'#8f9396',roughness:.95}),paving=new THREE.MeshStandardMaterial({color:'#b9b3a4',roughness:.9});
   for(const plot of MAP.reserved){if(plot.driveway)plane(plot.driveway.x0,plot.driveway.x1,plot.driveway.z0,plot.driveway.z1,-.05,concrete,'driveway-'+plot.id);if(plot.path)plane(plot.path.x0,plot.path.x1,plot.path.z0,plot.path.z1,-.049,paving,'path-'+plot.id)}}
+ // Street lamps (instanced poles and heads, solid) and the town square's benches.
+ {const spots=lampSpots().concat(townSpots().lamp.map(l=>({x:l.x,z:l.z,dx:l.dx,dz:l.dz,road:l.frontage}))),metal=new THREE.MeshStandardMaterial({color:'#3b4247',roughness:.7,metalness:.3}),glow=new THREE.MeshStandardMaterial({color:'#f4ecd2',emissive:'#ffe9a8',emissiveIntensity:.55,roughness:.5});
+  const poles=new THREE.InstancedMesh(new THREE.CylinderGeometry(.07,.1,4.6,8),metal,spots.length),heads=new THREE.InstancedMesh(new THREE.BoxGeometry(.75,.14,.3),glow,spots.length),m=new THREE.Matrix4(),q=new THREE.Quaternion(),one=new THREE.Vector3(1,1,1),at=new THREE.Vector3();
+  spots.forEach((s,i)=>{poles.setMatrixAt(i,m.compose(at.set(s.x,2.3,s.z),q.identity(),one));q.setFromAxisAngle(new THREE.Vector3(0,1,0),Math.atan2(s.dx,s.dz)+Math.PI/2);heads.setMatrixAt(i,m.compose(at.set(s.x+s.dx*.35,4.6,s.z+s.dz*.35),q,one));colliders.circle(s.x,s.z,.22)});
+  poles.name='street-lamp-poles';heads.name='street-lamp-heads';poles.castShadow=true;group.add(poles,heads);
+}
+ // ── The town (0.31): raised pavements and the town square, the parking lot, painted markings, street furniture, the fountain and the bus stop ──────────────────────────────
+ {
+  const T=terrain(),m4=new THREE.Matrix4(),quat=new THREE.Quaternion(),yAxis=new THREE.Vector3(0,1,0),at=new THREE.Vector3(),one=new THREE.Vector3(1,1,1),flat=new THREE.Vector3();
+  const lit=(c,r=.85,extra={})=>new THREE.MeshStandardMaterial({color:c,roughness:r,...extra}),PAVED=.165;
+  // pavements that world.js draws (the city's own are built in game.js): slabs 0.3 m thick whose top is the pavement's footing height
+  for(const p of MAP.pavements)if(p.draw){const w=p.x1-p.x0,d=p.z1-p.z0,slab=new THREE.Mesh(new THREE.BoxGeometry(w,.3,d),textured(textures[p.plaza?'plaza':'paving'],w,d,4));slab.position.set((p.x0+p.x1)/2,PAVED-.15,(p.z0+p.z1)/2);slab.receiveShadow=true;slab.name=p.plaza?'town-square':'pavement';group.add(slab)}
+  for(const lot of MAP.lots)plane(lot.x0,lot.x1,lot.z0,lot.z1,-.045,asphalt,'lot-'+lot.id);
+  // painted markings: one instanced mesh of thin white bars (on the city's raised street they sit a little higher)
+  {const bars=markingBars(),paint=new THREE.InstancedMesh(new THREE.BoxGeometry(1,.012,1),lit('#ecebe0',.9),bars.length);
+   bars.forEach((b,i)=>paint.setMatrixAt(i,m4.compose(at.set(b.x,T.surfaceAt(b.x,b.z)===SURFACE.STREET?.016:-.037,b.z),quat.identity(),flat.set(b.w,1,b.d))));paint.name='road-markings';paint.receiveShadow=true;group.add(paint)}
+  // instanced street furniture: each kind is a few parts (geometry, colour, offset), one InstancedMesh per part, placed and turned by its spots
+  const place=(name,parts,spots,solid)=>{if(!spots.length)return;const base=PAVED;
+   for(const [geo,color,[lx,ly,lz],rough] of parts){const mesh=new THREE.InstancedMesh(geo,lit(color,rough??.8),spots.length);
+    spots.forEach((s,i)=>{const yaw=s.yaw||0,c=Math.cos(yaw),n=Math.sin(yaw);mesh.setMatrixAt(i,m4.compose(at.set(s.x+lx*c+lz*n,base+ly,s.z-lx*n+lz*c),quat.setFromAxisAngle(yAxis,yaw),one))});
+    mesh.name=name;mesh.castShadow=name==='tree';group.add(mesh)}
+   if(solid)for(const s of spots)solid(s)};
+  const spots=townSpots(),cyl=(a,b,h,n=10)=>new THREE.CylinderGeometry(a,b,h,n),box=(w,h,d)=>new THREE.BoxGeometry(w,h,d),ico=(r,d=1)=>new THREE.IcosahedronGeometry(r,d);
+  place('hydrant',[[cyl(.17,.19,.55),'#b8322a',[0,.275,0]],[cyl(.21,.21,.12),'#8a2420',[0,.6,0]],[box(.34,.1,.1),'#8a2420',[0,.42,0]]],spots.hydrant,s=>colliders.circle(s.x,s.z,.26));
+  place('bin',[[cyl(.28,.25,.8),'#41564c',[0,.4,0]],[cyl(.31,.31,.07),'#2f3f37',[0,.83,0]]],spots.bin,s=>colliders.circle(s.x,s.z,.3));
+  place('parking-meter',[[cyl(.035,.035,1.05,6),'#6b7076',[0,.525,0]],[box(.2,.32,.12),'#4a5258',[0,1.2,0]]],spots.meter,s=>colliders.circle(s.x,s.z,.15));
+  place('bench',[[box(1.7,.08,.5),'#8a6a47',[0,.46,0]],[box(1.7,.45,.06),'#8a6a47',[0,.75,-.22]],[box(.06,.46,.46),'#3b4247',[-.75,.23,0]],[box(.06,.46,.46),'#3b4247',[.75,.23,0]]],spots.bench,s=>{const c=Math.round(Math.cos(s.yaw)),n=Math.round(Math.sin(s.yaw));colliders.box(s.x,s.z,Math.abs(c)*.85+Math.abs(n)*.3,Math.abs(c)*.3+Math.abs(n)*.85)});
+  place('tree',[[cyl(.12,.16,2.4,6),'#6b4a2f',[0,1.2,0]],[ico(1.5),'#4f7f45',[0,3.4,0],.95],[ico(1,1),'#5e8f4f',[.55,4.1,.2],.95]],spots.tree,s=>colliders.circle(s.x,s.z,.3));
+  place('planter',[[box(1.6,.5,1.6),'#9a8f7a',[0,.25,0]],[ico(.62),'#4c7a46',[0,.85,0],.95],[ico(.45),'#5d8c50',[.38,.8,.3],.95]],spots.planter,s=>colliders.box(s.x,s.z,1.6,1.6));
+  place('bollard',[[cyl(.11,.11,.85,8),'#5b6368',[0,.425,0]],[cyl(.115,.115,.1,8),'#d6b64c',[0,.7,0]]],spots.bollard,s=>colliders.circle(s.x,s.z,.14));
+  // the town square: a stone ring path and the fountain (a basin, still water, a pedestal, a bowl and a jet that breathes)
+  const fountain=new THREE.Group();fountain.name='fountain';fountain.position.set(FOUNTAIN.x,PAVED,FOUNTAIN.z);group.add(fountain);
+  {const ring=new THREE.Mesh(new THREE.RingGeometry(FOUNTAIN.r+1,FOUNTAIN.r+2.2,48),lit('#a39f90',.9,{side:THREE.DoubleSide}));ring.rotation.x=-Math.PI/2;ring.position.y=.004;fountain.add(ring);
+   const stone=lit('#b4b0a2',.9),basin=new THREE.Mesh(cyl(FOUNTAIN.r,FOUNTAIN.r,.55,36),stone);basin.position.y=.275;fountain.add(basin);
+   const water=new THREE.Mesh(new THREE.CircleGeometry(FOUNTAIN.r-.4,36),lit('#4aa3c8',.15,{transparent:true,opacity:.88,metalness:.1}));water.rotation.x=-Math.PI/2;water.position.y=.56;fountain.add(water);
+   const pedestal=new THREE.Mesh(cyl(.45,.6,1.7,12),stone);pedestal.position.y=1.4;fountain.add(pedestal);const bowl=new THREE.Mesh(cyl(1.35,.8,.38,20),stone);bowl.position.y=2.35;fountain.add(bowl);
+   const bowlWater=new THREE.Mesh(new THREE.CircleGeometry(1.1,20),lit('#4aa3c8',.15,{transparent:true,opacity:.9}));bowlWater.rotation.x=-Math.PI/2;bowlWater.position.y=2.55;fountain.add(bowlWater);
+   const jet=new THREE.Mesh(new THREE.ConeGeometry(.16,1.2,10),lit('#dff3fb',.2,{transparent:true,opacity:.7}));jet.position.y=3.15;fountain.add(jet);
+   colliders.circle(FOUNTAIN.x,FOUNTAIN.z,FOUNTAIN.r+.2);fountainParts={jet,water,bowlWater}}
+  // the bus stop: a shelter with a glass back and a bench, and a sign post
+  {const g=new THREE.Group();g.name='bus-stop';g.position.set(BUS_STOP.x,PAVED,BUS_STOP.z);g.rotation.y=BUS_STOP.yaw;group.add(g);
+   const add=(geo,color,x,y,z,extra)=>{const mesh=new THREE.Mesh(geo,lit(color,.8,extra));mesh.position.set(x,y,z);g.add(mesh);return mesh};
+   add(box(3.4,.12,1.7),'#3d5a6c',0,2.5,0);for(const x of [-1.55,1.55])add(box(.1,2.5,.1),'#3b4247',x,1.25,-.7);add(box(3.2,1.6,.04),'#b9d8e4',0,1.3,-.8,{transparent:true,opacity:.4,roughness:.2});
+   add(box(1.8,.08,.5),'#8a6a47',0,.46,-.45);add(box(.06,.46,.46),'#3b4247',-.8,.23,-.45);add(box(.06,.46,.46),'#3b4247',.8,.23,-.45);add(cyl(.04,.04,2.8,6),'#6b7076',2.1,1.4,.2);add(box(.62,.62,.05),'#2f6fa5',2.1,2.55,.2);add(box(.3,.34,.06),'#f4f1e6',2.1,2.55,.23);
+   const c=Math.round(Math.cos(BUS_STOP.yaw)),n=Math.round(Math.sin(BUS_STOP.yaw));colliders.box(BUS_STOP.x+(-.8*n),BUS_STOP.z+(-.8*c),Math.abs(c)*3.2+Math.abs(n)*.12,Math.abs(c)*.12+Math.abs(n)*3.2)}
+ }
+ // The edge of the world: a ring of low hills far beyond the fog (they ignore it), so the map ends at a horizon, not at nothing.
+ {const fogColor=new THREE.Color(scene.fog?scene.fog.color:'#b9cbd0'),top=fogColor.clone().lerp(new THREE.Color('#5f7686'),.5),mid=fogColor.clone().lerp(new THREE.Color('#5f7686'),.28),N=96,cx=20,cz=-140,pos=[],col=[],idx=[];
+  const h=a=>.5+.5*Math.sin(a*3+1.3)*Math.cos(a*5+.4)+.25*Math.sin(a*11+2.1);
+  for(let i=0;i<N;i++){const a=i/N*Math.PI*2,r=520+Math.sin(a*4)*30,ridge=18+Math.max(0,h(a))*52;for(const [rr,y,c] of [[r+60,-12,fogColor],[r,ridge*.45,mid],[r-35,ridge,top]]){pos.push(cx+Math.cos(a)*rr,y,cz+Math.sin(a)*rr);col.push(c.r,c.g,c.b)}}
+  for(let i=0;i<N;i++){const j=(i+1)%N;for(let k=0;k<2;k++){const a=i*3+k,b=i*3+k+1,c=j*3+k,d=j*3+k+1;idx.push(a,c,b,b,c,d)}}
+  const g=new THREE.BufferGeometry();g.setAttribute('position',new THREE.Float32BufferAttribute(pos,3));g.setAttribute('color',new THREE.Float32BufferAttribute(col,3));g.setIndex(idx);
+  const hills=new THREE.Mesh(g,new THREE.MeshBasicMaterial({vertexColors:true,fog:false,side:THREE.DoubleSide,depthWrite:false}));hills.name='distant-hills';hills.renderOrder=-1;hills.frustumCulled=false;group.add(hills)}
  // ── Reserved plots (O): a tinted patch, an outline and the plot's id on the ground, hidden until switched on ─────────────────────────────────────────
  const plotColour={residential:'#2fbf9f',commercial:'#b0529b',industrial:'#e0a02e'},plotOverlay=new THREE.Group();plotOverlay.name='plot-overlay';plotOverlay.visible=false;group.add(plotOverlay);
  for(const plot of MAP.reserved){
@@ -428,6 +486,7 @@ export function createWorld(scene,{label,cullRadius}={}){
   },
   update(dt,camera,fadeTarget){
    fade.update(camera,fadeTarget);refreshView(camera,fadeTarget);
+   if(fountainParts){townTime+=dt;fountainParts.jet.scale.y=1+.14*Math.sin(townTime*3.1);fountainParts.jet.position.y=3.15+.08*Math.sin(townTime*3.1);fountainParts.water.material.opacity=.86+.04*Math.sin(townTime*1.7)}
    for(const l of landmarks)l.mesh.visible=Math.hypot(fadeTarget.x-l.x,fadeTarget.z-l.z)<viewDistance+l.radius; // far buildings are not drawn
    clock+=dt;if(ring.visible)ring.scale.setScalar(1+.07*Math.sin(clock*6));
    let changed=false;

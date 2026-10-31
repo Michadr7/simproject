@@ -1,6 +1,7 @@
 import {ZONES,WALKABLE,DIRT_ROADS,FIELDS} from './world.js';
 import {MAP,riverPath} from './map-definition.js';
 import {terrain,MINIMAP_COLOUR} from './terrain.js';
+import {propInfo} from './props.js';
 
 // Whole-world map, north (-z) up: the city in the south, the river and bridge across the middle, Willow Fields (west) and Pine Ridge (east) north of it.
 // The static layer is drawn once (and again when a tree is felled); the
@@ -33,6 +34,9 @@ export function createMinimap(doc,{canvas,cityRoads=[],buildings=[],trees=()=>[]
     const o=(y*w+x)*4;img.data[o]=col[0];img.data[o+1]=col[1];img.data[o+2]=col[2];img.data[o+3]=255}
    if(img?.data)ctx.putImageData(img,0,0)}
   for(const b of buildings)rect(ctx,{x0:b.x-b.hx,x1:b.x+b.hx,z0:b.z-b.hz,z1:b.z+b.hz},'#33383a');
+  // Buildings placed from models (houses, shops, barns, the sawmill): their footprints, turned to face the way they stand. Vehicles and yard props are left off.
+  ctx.fillStyle='#3f4548';for(const l of MAP.landmarks){if(l.decor)continue;const f=propInfo(l.prop).footprint,s=Math.round(Math.sin(l.yaw)),c=Math.round(Math.cos(l.yaw)),xs=[f.x0,f.x1].flatMap(x=>[f.z0,f.z1].map(z=>l.x+x*c+z*s)),zs=[f.x0,f.x1].flatMap(x=>[f.z0,f.z1].map(z=>l.z-x*s+z*c));
+   ctx.fillRect(px(Math.min(...xs)),pz(Math.min(...zs)),(Math.max(...xs)-Math.min(...xs))*k,(Math.max(...zs)-Math.min(...zs))*k)}
   // Reserved plots: a coloured outline (and the id on the big map).
   {const colour={residential:'#2fbf9f',commercial:'#b0529b',industrial:'#e0a02e'};ctx.lineWidth=Math.max(1,dpr);for(const plot of MAP.reserved){ctx.strokeStyle=colour[plot.kind];ctx.strokeRect(px(plot.x0),pz(plot.z0),(plot.x1-plot.x0)*k,(plot.z1-plot.z0)*k);if(size==='large'){ctx.fillStyle=colour[plot.kind];ctx.font=`${Math.round(11*dpr)}px Arial`;ctx.textAlign='center';ctx.fillText(plot.id,px((plot.x0+plot.x1)/2),pz((plot.z0+plot.z1)/2)+4*dpr)}}}
   ctx.fillStyle='#1f3a22';

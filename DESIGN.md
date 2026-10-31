@@ -60,7 +60,7 @@ Checks: `validateMap` (zones, water, bridges, plots), `validateTerrain` (every d
 ## Enterable buildings: what exists and what Step 2 (Opus) must design
 **Exists (0.28.0).** `MAP.properties` is the registry (id, type, name, `access` public | tenant | owner, `owner` null | npc | city | landlord, or `enterable: false` with a reason); `properties.js` turns it into doors in the world and `doorState`;
 `validateMap` and `tests/properties.mjs` make sure nothing enterable is left out. Houses carry their door in the model data; shops and the studio keep their own door systems (shops.js, apartment.js) and are only registered.
-**Step 2 to design (Opus 5.5).**
+**Step 2 to design (Opus 5.5): done, see "The design pass" below.**
 1. **Interior templates:** built on demand, sized to the house's footprint (10.4 x 7.3-8.2 m), one room per floor with stairs as a fade (the two-storey type has two), furniture stored as a list of `{item, x, z, yaw}` so the player can edit it; the outside world is hidden while inside.
    Reuse the shop-room and studio builders where they fit; the Kenney houses have no inside, so windows stay opaque.
 2. **Ownership in the save:** `progress.properties = {id: {owner, since, furniture}}`, migrating old saves (none own anything). Server-authoritative for multiplayer: the client asks, the server answers `doorState`.
@@ -127,7 +127,103 @@ Models: **Opus 5.5** to finalise the numbers with the save format (condition per
 
 ## Vehicles in hand (and not yet)
 Cars Bundle (7 cars), Jeep (CC-BY, 8,022 triangles: simplify to about 2,500), Van (952 triangles, one texture; the delivery and restock job) and the late-game City Pack cars. The **Pickup** (FBX, 8,655 triangles: simplify to about 2,800) and the **Flatbed truck** (FBX, 13,024 triangles, 12 materials, SpawnCamp Games on itch.io: simplify to about 3,500; the timber haul) have arrived.
-**Not uploaded yet:** the Bus (send FBX, OBJ, glTF or GLB with textures; I can also unpack ZIP and RAR). Simplification budget: everyday cars about 1,200 triangles, premium and utility vehicles up to 3,000.
+**Not uploaded yet:** the Bus (send FBX, OBJ, glTF or GLB with textures; I can also unpack ZIP and RAR). Budget (revised in 0.30.1): these flat-shaded low-poly cars cannot be simplified without losing their wheels, so a car is 2,800-3,100 triangles and the pickup 4,400; fine for the few parked ones, but traffic (15 vehicles drawn at once) needs either a lighter car model (a few hundred triangles), or a distance version with the wheels as separate small parts.
+
+## The design pass (Opus 5.5, before 0.29): interiors, ownership, furniture, tools, shops, farming, vehicles
+Everything below builds on how the game already works, so each feature is a small step, not a rewrite:
+- **Saves** are one plain object (`citylife.progress.v1` in localStorage) rebuilt on load by `normalizeProgress` (jobs.js): unknown fields are dropped, bad values get defaults. **Changes** go through pure transaction functions (`transactJob`, `housingTransaction`, `lifeTransaction`): state and an action in, new state or an error out.
+  Keep that rule for everything new: it is what lets the same functions move to a server later.
+- **Interiors** are separate three.js scenes (the studio: apartment.js; the shops: shops.js). Entering swaps the scene, so the outside world costs nothing while you are inside.
+- **Multiplayer** today is a relay (server.js) that forwards positions and a `room` name from a fixed list ('street', 'market', 'cafe', 'home'); players only see others in the same room. Nothing is server-authoritative yet.
+- **Needs** are food, thirst and energy (life.js), with a `groceries` count for cooking at home. Money is integer cents everywhere.
+
+### 1. Save format: a schema number and migrations
+- Add `progress.schema` (missing means 1). A build that only **adds** fields needs no bump: the normaliser fills defaults. A build that **changes the meaning** of a field bumps the schema and adds one migration step in `normalizeProgress` (`if (schema < 3) ...`). Steps run in order, so a very old save walks forward.
+- Every migration gets a test fed with a saved fixture of the old shape (tests/fixtures/save-schema-N.json).
+- Planned bumps: **schema 2** (0.30) adds `properties`; **schema 3** (0.32) turns tree plot `hits` into `damage` (chop points: hits x 8) and gives every tool in the bag a condition.
+
+### 2. Interiors
+- **Rooms.** A house interior is a scene built on demand from a **template** when you go in, kept while you are inside and for the next one other house, then disposed. Its room name is `house:<propertyId>` (server.js accepts the pattern `^house:[a-z0-9-]{1,40}$` besides the fixed rooms).
+  In multiplayer each owner gets their own copy of a house's interior (the room name becomes `house:<propertyId>:<ownerId>`), so two players never fight over one sofa; visiting comes later.
+- **Templates are data** (`interiors.js`): `{id, size: {w, d}, floors: [{y, walls, doors, windows, fixtures, spawn}], exit, starter: [...furniture]}`. Walls are built from the Kenney Furniture Kit's 2 m wall pieces (Wall, Wall Doorway, Wall Window) on a 2 m grid, so a template is a few dozen pieces.
+  Three templates match the three Kenney houses: **cottage** (house-a, one storey, 10 x 8 m inside), **two-storey** (house-e, 10 x 8 m on two floors) and **small cottage** (house-h, 10 x 7 m). Ceilings are 2.8 m (taller than the outside storey; nobody sees both at once).
+- **Stairs** in v1 are a fixture with a "Go upstairs / downstairs" prompt and a fade (the second floor is the same scene at y 3.2). Walkable stairs come later with ramp footing.
+- **Fixtures** do not move: walls, doors, windows, stairs, the kitchen run (cabinets, stove, sink) and the bathroom (toilet, shower or bath, sink). **Everything else is furniture** (section 4).
+- **Look:** a hemisphere light and one directional light, no shadows indoors; windows are flat panes tinted by the time of day; the front door is the exit (back outside 1.2 m in front of the door, facing away from the house).
+- **Budget:** at most 80 furniture pieces in a home; about 20,000-40,000 triangles; and the world is not drawn while you are inside, so indoor frames are cheaper than outdoor ones.
+
+### 3. Ownership: renting and buying
+- **Where:** a **Homes** app on the phone (list, photo, address, rooms, rent or price), later also an estate agent's office in Alder Center. Requirements: cash for the deposit or price; renting a second home ends nothing (you can hold several), and you choose which one is **home** (where you sleep and wake up).
+- **Save:** `progress.properties = {[propertyId]: {tenure: 'rent' | 'own', since: day, nextBillDay, rentDue, home: true|false, furniture: [...], storage: [...], containers: {...}}}`. The studio stays in `housing` (its billing works) and counts as an owned id for door rules (`ownedIds` = the keys of `properties`, plus 'studio' when rented). They merge later.
+- **Rent** reuses the studio's weekly billing (`advanceHousingDays`), generalised to a list of tenancies: rent and utilities due weekly; one missed week is a warning, two missed weeks lock the door (eviction), and the furniture goes to storage you can collect within 7 days.
+- **Buying** is the long goal: a deposit of 20% and weekly mortgage payments, or the full price. **Numbers to tune (Haiku 5.5):** studio rent $60 a week (today); a Cedar Heights house to rent $180 a week plus a $360 deposit; to buy $14,000, or $2,800 down and $175 a week for 64 weeks.
+- **Doors** come from `doorState(property, ownedIds)` (properties.js, already written): owned or rented opens the template interior; NPC homes and vacant ones stay locked.
+- **New homes come furnished** with a starter set (bed, fridge, table and two chairs, couch, lamp), so a new home works the moment you move in.
+
+### 4. Furniture: placing it and using it
+- **Catalogue** (`furniture.js`, separate from ITEMS because furniture never goes in the bag): `{id, name, model, price, size: {w, d, h}, layer: 'floor' | 'surface' | 'wall' | 'rug' | 'ceiling', surface?: height it offers, uses: [...], container?: {slots, accepts}}`.
+- **Buying** furniture (the phone's **Furnish** app first, a furniture shop later) delivers it **boxed to the home's storage** (later: a delivery job). Selling back pays 50%.
+- **Edit mode** (B, only inside a home you own or rent): choose a boxed item or pick up a placed one (E). A ghost follows the floor point under the cursor, snapping to a 0.25 m grid; R turns it a quarter turn. It is valid (green) when it is inside the room, does not overlap a wall, fixture or other floor piece, keeps a 1 m clearance in front of doors and stairs, and, for a surface item (a lamp, a plant, the TV), stands on something that offers a surface. Click places it; Esc leaves edit mode.
+- **Placed pieces** are `{uid, item, x, z, yaw (quarter turns 0-3), on?: uid}` in room coordinates; collision boxes come from the size and the quarter turn (axis-aligned, like the studio's colliders).
+- **Uses** (each an E prompt in the existing interaction list):
+
+| Piece | Use | Effect (existing systems first) |
+|---|---|---|
+| Bed (single, double, bunk) | Sleep | the studio's sleep (energy, the clock jumps); a bed in your home sets where you wake |
+| Fridge | Open | a container of 20 food and drink slots; eat from it as from the bag |
+| Stove or oven | Cook | turns 1 grocery into a meal (`life.groceries`): more food restored than raw groceries |
+| Sink | Drink | +25 thirst, free (the tap); wash later |
+| Couch, chair, stool, bench | Sit | energy recovers 1.5 times faster while seated |
+| Desk with a computer | Use | opens the phone's apps on a big screen; work-from-home gigs later |
+| TV | Watch | sit and pass time 4 times faster (a mood need later) |
+| Drawers, night stand, bookcase, shelf | Open | containers of 4-12 slots for any item |
+| Closet | Change | opens the character creator (outfit only) |
+| Lamp, ceiling light | Switch | light on or off |
+| Washer, dryer, bath, shower, toilet | (none yet) | placeholders for a hygiene need, if we ever add one |
+| Plants, rugs, coat rack, pictures | Decor | none |
+- **Containers** live in `properties[id].containers[uid] = [slots]`, with the bag's slot rules (stacking, item types the container accepts).
+
+### 5. Tools, wear and fuel: the save details (the rules are in "Tools, wear, and the logging chain")
+- **A tool's numbers** live in one table (`tools.js`): `{id, model, damage, swingSeconds, durabilityHits, unlockLevel, price, fuel?: {tankMl, mlPerSecond}}`; the chainsaw's damage is per second of holding.
+- **Each tool in the bag** carries its own condition: a bag slot for a tool becomes `{id, quantity: 1, cond: 0-1000, fuel?: ml}`. `normalizeInventory` keeps `cond` and `fuel` for tools and drops them for anything else. Condition falls by `1000 / durabilityHits` per hit (rounded so it always reaches 0).
+- **Gas Can** is an item with its own `fuel` (0-5,000 ml): refuelling moves fuel from the can to the saw. A can is bought full at the supplier and refilled at a gas station later.
+- **Tree plots** store `damage` (chop points taken) instead of `hits`; a pine has toughness 24. Migration in schema 3: `damage = hits x 8`.
+- **Repairs:** a whetstone item (+250, consumed) and the workshop (to 1,000 for 40% of the price) are transactions like the rest.
+
+### 6. Store jobs: the cashier shift (the first rung of "Store jobs and the POS")
+- **Starting:** the Corner Market's clerk offers a shift (as delivery work is offered today). A shift is `progress.work.shift = {shop, role: 'cashier', startedAt, served, mistakes, tipsCents}`; it ends at closing time or when you clock out.
+- **Customers** are NPCs spawned inside the shop's scene (at most 6 at once): enter, browse 2-3 shelves (each picks 1-6 products), queue at the counter, pay, leave. They reuse the pedestrian walking code, steered by a short script.
+- **The POS** (the 3D model is a prop): press E at the register to open the POS overlay. Scan each item (click it, or hold E to scan the next), the total builds up; the customer pays by card (tap) or cash (enter the change; the overlay checks it). Pay: a base per customer plus tips for speed and accuracy; mistakes cost tips, not wages.
+- **Products** are the existing food and drink ITEMS plus new ones from the Food Pack (bread, eggs, cheese, steak, vegetables), with prices in the item table. Shelves in an NPC-run shop are not saved (they refill each day); saved stock begins with player-owned shops.
+- **Budget:** at most 6 customers and about 200 product instances (drawn as instances) inside the shop scene.
+
+### 7. Farming and animals (designed now, built after the tools)
+- **Allotments:** Willow Fields' fields are split into 10 x 10 m allotments you lease weekly from the farmstead (like rent). Each 1 m cell in a leased allotment can be tilled, planted, watered and harvested.
+- **Save:** `progress.farm = {allotments: {[id]: {leasedUntil, cells: {"x,z": {crop, plantedAt, wateredAt}}}}}`. The growth stage is never saved: it is computed from the time since planting, faster when watered within the last game day.
+- **Crops** come from Ultimate Crops (stages 1-4, then harvest); harvested produce becomes Food Pack items you can eat, cook or sell.
+- **Drawing:** instanced, one instanced mesh per crop and stage; only cells within 90 m; at most 150,000 crop triangles on screen.
+- **Animals** live in pens by the barns and wander inside them (steering only, no path-finding). They are skinned (no instancing): at most 20 animated in view, the rest frozen in a pose; products and feeding come later.
+- **Assets still missing for farming:** a hoe or shovel, a watering can, seed packets and a chicken.
+
+### 8. Vehicles: the basics (a fuller Opus pass before the vehicle build)
+- **Driving** is arcade and kinematic, not a physics engine: `{x, z, yaw, speed, steer}`, with acceleration, braking, top speed and turning radius per vehicle class. A vehicle stays on drivable ground (roads, driveways, dirt, grass at half speed; never water, buildings or trees, which use the existing colliders).
+- **Speeds (metres a second):** a bike 6, an everyday car 11, the van 10, a loaded truck 8, premium cars 16. With the map's size (540 x 480 m) that keeps a corner-to-corner drive at about 1-2 minutes.
+- **Save:** `progress.vehicles = [{uid, model, x, z, yaw, fuel, cond, parkedAt?: propertyId}]`; a vehicle parks on a plot's `park` spot. Multiplayer: the relay forwards each player's vehicle model and pose with their position.
+- **Budget:** at most 15 vehicles drawn, each simplified (about 1,200 triangles for cars, up to 3,000 for trucks).
+
+### 9. Build order and models
+| Version | What | Model |
+|---|---|---|
+| 0.29 (done) | Asset import pass: converter (GLB, glTF, FBX, vertex colours, simplify), farm buildings and a Kenney farmhouse, Alder Center's buildings, five more Cedar Heights houses, the timber yard, parked vehicles, street lamps and benches, the distant hills, the Credits screen, the `assets-src` archive. Moved to later builds: TGA textures and skinned animals (farming), river rocks and bushes (map fill) | Sonnet 5.5 |
+| 0.31 (done) | A living town (not in the first build order): Alder Center's street wall, sidewalks, the town square with a fountain, a marked parking lot, crosswalks and markings, street furniture, 15 parked cars, a bus stop, the Store recoloured | Sonnet 5.5 |
+| 0.32 (next) | Eastbank Works from the Kenney Industrial kit (warehouse, workshop, supplier, a gas station with a canopy and pumps, truck yards, containers), then the carry and sawmill chain (Opus 5.5 designs it first) | Sonnet 5.5 |
+| 0.30 (done) | Interiors v1 and ownership: nine house rooms (generated from each model's size and door, not three fixed templates), renting and buying in the Homes app, a starter set of furniture, sleep and cook. Built with plain wall boxes, not the Kenney wall pieces; rooms are kept after the first visit, not disposed; sink, fridge, sofa and TV uses and mortgages move to 0.31 | Sonnet 5.5 |
+| 0.31 | Furniture edit mode, storage and the Furnish app | Sonnet 5.5 |
+| 0.32 | Tools: the axe and chainsaw ladder, wear, fuel, repairs, the schema 3 migration, the bucking step and the sawmill blade | Sonnet 5.5 |
+| 0.33 | Store jobs: the cashier shift and the POS | Sonnet 5.5 |
+| 0.34 | Farming and animals | Opus 5.5 checks the numbers, Sonnet 5.5 builds |
+| 0.35+ | Vehicles | Opus 5.5 architecture pass, then Sonnet 5.5 |
+After each build, **Haiku 5.5** for number tuning (prices, wages, durability, growth times). Every build keeps the rules that have worked: data first, pure transactions with tests, `validateMap` for anything placed, and the performance budget checked before shipping.
 
 ## Open country and vehicles
 - Walkable ground is "the playable rectangle minus water", not "the zones". Zones are names and rules (grid, labels); keep new districts as zones, never as fences. Solid things get colliders.

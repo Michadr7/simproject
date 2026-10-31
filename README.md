@@ -800,3 +800,60 @@ The land, the river, the bridge and the zones, rebuilt in `map-definition.js` an
 - Corners and ends: Oak Street East runs into the Freight Road, the Freight Road's south leg squares its corner, and the Freight Road ends at the woods road (it used to run 66 m past it to nowhere); the woods road reaches its centreline.
 - **`tests/roads.mjs`**: every street, road, pavement, driveway, path and bridge is one connected paved network (it first reported the floating square), every walkable road can be walked along its whole centreline with road under it, and every road
   end lies on another road or is a declared dead end (Oak Street's west end, Alder Avenue's south end, the County Road's north end, Alder Street's north end, the Freight Road's west end, the farm gate, the woods lane).
+
+## 0.29.0 the asset pass: real buildings, a new converter, street furniture, credits
+
+- **Converter v2 (`scripts/build-props.mjs`)** now reads GLB, glTF and **FBX**, models with many meshes and node transforms, and models with plain materials (baked into vertex colours) as well as one colour texture. Per prop it can turn (`turn`),
+  scale to a width, a length, the longer side or metres per model unit, simplify to a triangle budget (welding FBX vertices first), derive collision boxes (walls only, or solid for vehicles and logs) and record a door. Normals are stored as signed bytes.
+  It reads from an **`assets-src/`** folder of originals (the layout is in `assets-src/README.md`): `TOOL_DIR=<node_modules with meshoptimizer, sharp, three> node scripts/build-props.mjs assets-src [id,id]`.
+- **28 models ship** (2.4 MB in `props-assets.js`, 51,600 triangles if every one were drawn; 14,000-24,000 are drawn from any spot):
+  - **Cedar Heights**: five more Kenney houses (R4-R8) around the loop (R4-R6 north of it facing south, R7-R8 south of it facing north), each with a driveway, front path, parking spot and a registry entry; cars (a Car, an SUV and a Sports Car) parked at the lived-in homes.
+  - **Alder Center**: the Store (C1), a police station (C2, Kenney building e, with a police car out front) and two office buildings (C3, C4), each 3 m back from the street it faces.
+  - **Willow Fields**: the red barn, small barn, open barn, silo with its shed, chicken coop and windmill (Quaternius, 1.55 times their size), a Kenney house as the farmhouse and a pickup. The placeholder farmstead is gone.
+  - **Pine Ridge's timber yard**: a hut for lumber, three logs and a flatbed truck beside the sawmill.
+- **Vehicles** are parked as props with solid boxes; they become drivable with the vehicle build. (0.29 simplified the cars to about 1,200 triangles and, as 0.30.1 found, that removed their tyres: see below.)
+- **Street furniture and edge scenery:** 26 street lamps along Alder Street, the cross street, Oak Street East, the loop, its link and the Freight Road's south side (instanced, solid, on grass, clear of buildings), five benches on the town square, and a ring of
+  low hills far beyond the fog (384 triangles, drawn without fog) so the map ends at a horizon. The camera now sees to 700 m.
+- **Credits** (`credits.js`, Controls > Credits): every artist and tool, with licence and link; `tests/credits.mjs` fails if a shipped model has no credit, so nothing ships without one.
+- The minimap draws every building footprint. Landmarks may be `decor: true` (vehicles and yard props): they need no registry entry. The registry gained 'civic' and 'commercial' types and entries for everything placed (the offices, barns and sawmill are `enterable: false` with a reason).
+- **Not in this build** (on purpose): crops and animals (farming build), river-bank rocks, bushes and flowers from the unused Quaternius nature models (next map-fill), the Kenney Industrial kit (not uploaded yet), and interiors (0.30).
+- Tests: `props.mjs` now checks all 28 models and every placed landmark (inside its zone and plot, clear of roads and of each other, solid, doors facing their street); `properties.mjs` covers nine doors, eight driveways and the parked cars; new `credits.mjs` and `streetfurniture.mjs`.
+
+## 0.30.0 interiors and ownership: rent or buy a house, walk into it
+
+- **Homes app on the phone.** The four vacant Cedar Loop houses (1, 3, 5 and 7) are listed with their weekly rent, deposit and price: **Rent** (deposit and the first week), **Buy** (a renter's deposit counts toward the price), **Pay rent** and **Move out** (the deposit comes back if nothing is owed).
+  Rent is taken from your cash every 7 game days, on the same clock as the studio. A week you cannot pay raises a warning, the second unpaid week evicts you and the deposit is lost; the game tells you with a notice. Owners owe nothing. No mortgages yet.
+- **Doors open for the homes you hold.** Walk up to your own door: *Enter · 5 Cedar Loop*. The other homes stay locked (for sale, or a resident's). Pressing E goes in; the world is hidden while you are indoors, as in the studio.
+- **Nine house interiors** (`dist/interiors.js`), one per house model, laid out from the model's size and door: a kitchen run (cabinets, sink, stove, fridge) along the north wall, a bathroom (bath, toilet, sink) in the north-east corner, a living area (sofa, coffee table, TV on a cabinet, rug, lamp), a dining table and two chairs in the roomier houses,
+  and in a single-storey house a double bed and a wardrobe. In the six two-storey houses there are stairs (E at the foot or the top: *Go upstairs* / *Go downstairs*) and the bedrooms upstairs: a double and a single bed, a desk and chair, a wardrobe, a bookcase, a lamp and a rug.
+  Furniture is 24 Kenney Furniture Kit pieces (CC0) in `props-assets.js`. Rooms are built the first time you enter (and kept); walls fade between the camera and you, as in the studio.
+- **What you can do inside:** *Sleep* in the double bed (energy to 100, as in the studio), *Prepare a meal* at the stove (uses a grocery pack, as in the studio), take the stairs, and go outside. The sink, fridge, sofa, TV and the rest are for looks until the furniture update (0.31).
+  Multiplayer: indoors you are in the room `house:<id>` and see only others in the same house (the server accepts the new room names).
+- **Saves: schema 2.** `progress.schema` and `progress.properties` (what you rent or own) and `progress.homeNotices` are new; a save from 0.29 or earlier loads unchanged (it is schema 1 with nothing to migrate but the new empty fields); `tests/fixtures/save-schema-1.json` proves it.
+- **Also in 0.30:** the zone label inside reads the house's address; every house door prompt, the Homes cards and the notices come from data (`MAP.properties[].listing`).
+- Tests: `ownership.mjs` (renting, buying, paying, leaving, weekly billing on the clock, warnings and eviction, the schema fixture), `interiors.mjs` (nine rooms: every piece inside the room, nothing overlapping, the door clear, the whole room walkable from the door to the stove, bed and stairs on every floor, the built scene), and updated props, credits and properties tests.
+
+## 0.30.1 the cars get their tyres back
+
+- **The bug:** the cars, the SUV and the sports car had no visible wheels (the pickup's were white and lost in its body). The wheels are separate parts with 282 triangles each (1,680 of a car's 3,000), small and dark, and a car body is already flat-shaded low-poly that cannot be simplified,
+  so the simplifier's only saving was to throw the wheels away.
+- **The fix:** `scripts/build-props.mjs` knows about wheels (`wheels:` in a prop's spec): wheel parts are split off and simplified on their own with their shading ignored (they are round and tiny), never pruned, and the body is left alone. The cars now keep their four wheels at about 2,800-3,100 triangles
+  each (14,000 for the four parked ones; traffic later will need a lighter model or a distance version).
+- **The pickup** had no colour in its file at all. The converter now finds its wheels by shape (a thick disc standing on the ground is a tyre, a thin disc inside it a rim) and paints it: a farm-red body, black tyres, silver rims, pale lights. The colours are one line in the pickup's spec (`paint:`) if you want another.
+- **`tests/props.mjs`** now checks that every vehicle has dark wheel triangles at wheel height at all four corners.
+
+## 0.31.0 a living town: street wall, markings, parking, a town square and street furniture
+
+- **The Store** was a harsh navy, black and grey block. The converter's new `recolour` option repaints palette colours before the texture is shrunk: slate for the black trim, a soft teal for the navy columns, warmer greys.
+- **A street wall in Alder Center.** The cross street (now 12 m: two 3.5 m lanes and a 2.5 m parking lane each side) has ten buildings shoulder to shoulder: seven on its south side (the Store, the offices, the tower, a bakery, a barber, a pharmacy and a bank) and three on its north side (the police station,
+  a bookshop and a cinema), each at the back of a 3.3 m sidewalk with no more than half a metre between neighbours. Plots C1-C10 are cut to the half metre to match (plots may now be whole or half metres). The old Alder Avenue sidewalk strip was shortened to end where Alder Avenue does (it ran through the Store).
+- **Pavements that are drawn.** `MAP.pavements` entries marked `draw: true` are slabs drawn by world.js (the city's own are still built in game.js): the cross street's sidewalks, Alder Street's, and the town square. The square had been terrain data only; it is now a raised, chequered paved square.
+- **Painted markings** (237 white bars, one instanced mesh): crosswalks (on all four arms of Alder Street and the cross street, at the County Road end, across Oak Street and Alder Avenue and where Cedar Heights' link meets Oak Street East), stop lines, parking-lane edge lines and bay ticks, and the lot's bay lines.
+  They come from `MAP.crossings`, `MAP.stopLines`, `MAP.parking` and `MAP.lots` (`town.js`).
+- **The parking lot** behind the south row: 20 marked bays along its north edge, an aisle that joins Alder Street, its own asphalt.
+- **Parked cars:** 15 (three more cars converted: a taxi, a second sedan and a second sports car), nose-in in the lot, parallel in the cross street's lanes (the police car outside the police station) and three along Oak Street.
+- **Street furniture** along the pavement rows (`MAP.frontages`, placed by `town.js`, each dropped if it would stand on a crosswalk, in a building, in front of a door or within 1.5 m of another): street lamps, fire hydrants, bins, parking meters, benches and street trees along Oak Street, Alder Avenue, the cross street and Alder Street,
+  all instanced and solid. Alder Center's and the old city's streets now have lamps (before, only the newer roads did).
+- **The town square:** a fountain (a basin, still water, a pedestal, a bowl and a jet that breathes), a stone ring path, four planters with shrubs, four trees, seven benches and a row of bollards on the street side. And a **bus stop** with a glass-backed shelter and a sign on Alder Street's east sidewalk.
+- Tests: new `town.mjs` (the street wall, the sidewalk in front of every shop, every marking on a road, a crosswalk on each arm of the junction, every parked car in its own bay and clear of crosswalks, every piece of furniture on the pavement and clear of buildings, crosswalks and each other, the fountain solid with the square walkable around it); the others updated.
+- **Performance:** props drawn from any one spot are now up to about 82,000 triangles (the parked cars are about 3,000 each), on top of 50,000-100,000 of trees in town; the forest's trees (up to 620,000) are unchanged. Everything new is instanced or culled by distance.

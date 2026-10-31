@@ -21,7 +21,7 @@ assert.deepEqual(ZONES.farm,{id:'farm',name:'Willow Fields',label:'WILLOW FIELDS
 assert.deepEqual([ZONES.alder.label,ZONES.cedar.label,ZONES.eastbank.label,ZONES.freight.label],['ALDER CENTER','CEDAR HEIGHTS','EASTBANK WORKS','FREIGHT ROAD']);
 // The north bank moved by exactly one shift: every north-bank number equals its old value minus 70.
 assert.deepEqual(DIRT_ROADS.map(({zone,x0,x1,z0,z1})=>[zone,x0,x1,z0,z1]),[["farm", -164, -34, -233.5, -226.5], ["forest", -26, 195, -253.5, -246.5], ["forest", 87.5, 92.5, -316, -216]]);
-assert.deepEqual(roadRects('asphalt').map(({id,x0,x1,z0,z1})=>[id,x0,x1,z0,z1]),[["oak-street", -55, 55, -3.5, 15.5], ["alder-avenue", -38, -22, -60, 60], ["county-road", -34, -26, -316, -60], ["alder-street", 45, 55, -125, -3.5], ["alder-cross", -30, 84, -95, -85], ["oak-east", 55, 195, 0, 12], ["cedar-link", 115.5, 124.5, -57, 6], ["freight-south", 72, 199.5, 63.5, 72.5], ["freight-road", 190.5, 199.5, -253.5, 68]],'straight roads only: the loop is a ribbon');
+assert.deepEqual(roadRects('asphalt').map(({id,x0,x1,z0,z1})=>[id,x0,x1,z0,z1]),[["oak-street", -55, 55, -3.5, 15.5], ["alder-avenue", -38, -22, -60, 60], ["county-road", -34, -26, -316, -60], ["alder-street", 45, 55, -125, -3.5], ["alder-cross", -30, 84, -96, -84], ["oak-east", 55, 195, 0, 12], ["cedar-link", 115.5, 124.5, -57, 6], ["freight-south", 72, 199.5, 63.5, 72.5], ["freight-road", 190.5, 199.5, -253.5, 68]],'straight roads only: the loop is a ribbon');
 assert.deepEqual(MAP.roads.edges.filter(e=>e.path).map(e=>e.id),['cedar-loop'],'the loop is the one ribbon road');
 assert.deepEqual(FIELDS.map(f=>[f.id,f.surface,f.x0,f.x1,f.z0,f.z1]),[['field-wheat','wheat',-165,-90,-278,-240],['field-plowed','plowed',-165,-115,-220,-184],['field-green','green',-108,-52,-220,-184]]);
 for(const f of FIELDS)assert((f.x1-f.x0)>=50&&(f.z1-f.z0)>=36,'big enough for a tractor to turn in: '+f.id);
@@ -44,7 +44,7 @@ for(const [x,z] of [[-30,-160],[-34.9,-160],[-25.1,-150],[-30,-170],[-30,-60],[1
 for(const [x,z] of [[-35.1,-160],[-24.9,-160],[-100,-146],[100,-185],[0,-164],[250,-219],[189.9,-206],[200.1,-206],[-30,-385],[295,0]])assert(!isWalkable(x,z),`the river is a wall at ${x},${z}`);
 {const z0=riverZAt(river,0);assert(inRiver(-30,-160)&&inRiver(0,z0)&&!inRiver(-30,-140)&&inRiver(0,z0-8.6,4)&&!inRiver(0,z0-16,4));assert(riverDistance(0,z0,river)<.1)}
 // Reserved land: C1-C2 in Alder Center, R1-R3 in Cedar Heights, I1-I2 in Eastbank Works; whole cells, inside their district.
-assert.deepEqual(MAP.reserved.map(p=>[p.id,p.kind,p.facing]),[['C1','commercial','north'],['C2','commercial','south'],['R1','residential','south'],['R2','residential','south'],['R3','residential','south'],['I1','industrial','north'],['I2','industrial','south']]);
+assert.deepEqual(MAP.reserved.map(p=>[p.id,p.kind,p.facing]),[['C1','commercial','north'],['C2','commercial','north'],['C3','commercial','north'],['C4','commercial','north'],['C5','commercial','north'],['C6','commercial','north'],['C7','commercial','north'],['C8','commercial','south'],['C9','commercial','south'],['C10','commercial','south'],['R1','residential','south'],['R2','residential','south'],['R3','residential','south'],['R4','residential','south'],['R5','residential','south'],['R6','residential','south'],['R7','residential','north'],['R8','residential','north'],['I1','industrial','north'],['I2','industrial','south']]);
 for(const plot of MAP.reserved){const want={commercial:'alder',residential:'cedar',industrial:'eastbank'}[plot.kind];for(const [x,z] of [[plot.x0,plot.z0],[plot.x1,plot.z1]])assert.equal(zoneAtPoint(x,z)?.id,want,`${plot.id} lies in ${want}`)}
 // Signposts: one for the fork and one for each new district.
 assert.deepEqual(MAP.signs.map(g=>g.id),['fork','alder-sign','cedar-sign','eastbank-sign']);
@@ -99,7 +99,7 @@ has(broken(m=>{delete m.buildings[1].shop}),/shop market has no building/);
 const plot=(over={})=>({id:'T1',kind:'residential',facing:'south',x0:60,z0:-310,x1:70,z1:-300,...over});
 assert.deepEqual(broken(m=>{m.reserved.push(plot())}),[]);
 has(broken(m=>{m.reserved.push(plot({kind:'castle'}))}),/unknown kind/);
-has(broken(m=>{m.reserved.push(plot({x0:60.5}))}),/whole-cell/);
+has(broken(m=>{m.reserved.push(plot({x0:60.3}))}),/whole-cell/); // plots are whole or half metres (Alder Center's shops are cut to the half metre)
 has(broken(m=>{m.reserved.push(plot({x0:-300,x1:-290}))}),/outside every zone/);
 has(broken(m=>{m.reserved.push(plot({x0:0,z0:2,x1:5,z1:8}))}),/overlaps a road/);
 has(broken(m=>{m.reserved.push(plot({x0:-150,z0:-270,x1:-140,z1:-265}))}),/overlaps a field/);
@@ -140,7 +140,9 @@ has(broken(m=>{m.reserved[0].facing='up'}),/has no facing/);
 for(const edge of MAP.roads.edges.filter(e=>e.surface==='asphalt'&&e.level==='rural'&&e.id!=='county-road'))assert(edge.width>=9||edge.id.startsWith('alder-')&&edge.width>=9||edge.id==='oak-east'&&edge.width>=12,`${edge.id} is wide enough for two lanes of vehicles (${edge.width} m)`);
 assert.equal(MAP.roads.edges.find(e=>e.id==='cedar-loop').width,9,'Cedar Heights loop: two 3.5 m lanes and a 1 m shoulder each side');
 // Plots face the street they front: the residential plots sit on the loop's south arc facing south, within 14 m of the loop road's inner edge.
-{const loop=MAP.roads.edges.find(e=>e.id==='cedar-loop');for(const plot of MAP.reserved.filter(p=>p.kind==='residential')){assert.equal(plot.facing,'south');assert(plot.z1<-70&&plot.z0>-100,'inside the loop on its south side: '+plot.id)}}
+{const loop=MAP.roads.edges.find(e=>e.id==='cedar-loop');for(const plot of MAP.reserved.filter(p=>['R1','R2','R3'].includes(p.id))){assert.equal(plot.facing,'south');assert(plot.z1<-70&&plot.z0>-100,'inside the loop on its south side: '+plot.id)}
+// The ring: R4-R6 north of the loop face south, R7-R8 south of it face north, and each is outside the loop road.
+for(const id of ['R4','R5','R6','R7','R8']){const plot=MAP.reserved.find(p=>p.id===id);assert.equal(plot.facing,['R7','R8'].includes(id)?'north':'south',id)}}
 // Doorway and interior rules.
 has(broken(m=>{m.shops.market.doorway.enterHalfWidth=1.2}),/too narrow to reach its entry trigger/);
 has(broken(m=>{m.shops.cafe.doorway.approach.halfWidth=1}),/approach zone is narrower than the doorway/);
