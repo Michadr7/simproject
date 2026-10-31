@@ -43,6 +43,8 @@ let tris=0;for(const car of parked){tris+=propInfo(car.prop).triangles;const inB
  for(const r of crossingRects())assert(!(car.x+half[0]>r.x0&&car.x-half[0]<r.x1&&car.z+half[1]>r.z0&&car.z-half[1]<r.z1),`${car.id} does not stand on a crosswalk`)}
 assert(tris<=50000,'parked cars cost '+tris+' triangles in all, and only the near ones are drawn');
 {const used=new Set();for(const car of parked.filter(c=>!/^park-oak/.test(c.id))){const bay=bays.find(b=>Math.abs(b.x-car.x)<.4&&Math.abs(b.z-car.z)<.5);assert(!used.has(bay.id),'one car to a bay');used.add(bay.id)}}
+// The spawn stays clear: a step into a blocked point is refused, so a car parked over it leaves a new player unable to move at all.
+assert(!world.blocked(MAP.spawn.x,MAP.spawn.z),'nothing stands on the spawn point');for(const [dx,dz] of [[1,0],[-1,0],[0,1],[0,-1]])for(let d=.1;d<=3;d+=.1)assert(!world.blocked(MAP.spawn.x+dx*d,MAP.spawn.z+dz*d),`3 m of clear ground from the spawn toward ${dx},${dz}`);
 // ── Street furniture: on the pavement, clear of buildings and crossings, spaced out, each kind plentiful enough ───────────────────────────────────
 const spots=townSpots(),minimum={lamp:12,hydrant:6,bin:8,meter:5,bench:9,tree:10,planter:4,bollard:8};
 for(const [kind,n] of Object.entries(minimum))assert(spots[kind].length>=n,`${kind}: ${spots[kind].length} (at least ${n})`);

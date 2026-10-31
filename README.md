@@ -857,3 +857,9 @@ The land, the river, the bridge and the zones, rebuilt in `map-definition.js` an
 - **The town square:** a fountain (a basin, still water, a pedestal, a bowl and a jet that breathes), a stone ring path, four planters with shrubs, four trees, seven benches and a row of bollards on the street side. And a **bus stop** with a glass-backed shelter and a sign on Alder Street's east sidewalk.
 - Tests: new `town.mjs` (the street wall, the sidewalk in front of every shop, every marking on a road, a crosswalk on each arm of the junction, every parked car in its own bay and clear of crosswalks, every piece of furniture on the pavement and clear of buildings, crosswalks and each other, the fountain solid with the square walkable around it); the others updated.
 - **Performance:** props drawn from any one spot are now up to about 82,000 triangles (the parked cars are about 3,000 each), on top of 50,000-100,000 of trees in town; the forest's trees (up to 620,000) are unchanged. Everything new is instanced or culled by distance.
+
+## 0.31.1 the car on the spawn point
+
+- **The bug:** 0.31 parked `park-oak-3` at (-6, 13.9), so the spawn at (-5, 15) was inside its collision box and the character could not move: a step into a blocked point is refused, and a blocked saved position falls back to the same spawn, so R and reloading did not help.
+- **The fix:** the car now parks at (6, 13.9), in the same kerb lane. The spawn is unchanged, and saves that were stuck load normally.
+- Tests: `town.mjs` checks that the spawn is clear, with 3 m of open ground in each direction. `startup.mjs` walked from (-5, 12), so it had not caught this.
