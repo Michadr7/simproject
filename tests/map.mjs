@@ -7,6 +7,7 @@ import {EXIT,BED,ENTRY} from '../dist/apartment.js';
 import {shopOpen,hoursText} from '../dist/routine.js';
 import {STUDIO} from '../dist/housing.js';
 import {MARKET} from '../dist/jobs.js';
+import {propInfo} from '../dist/props.js';
 
 // ── The shipped map is sound, and frozen ───────────────────────────────────────
 assert.deepEqual(validateMap(MAP),[]);
@@ -27,7 +28,9 @@ assert.deepEqual(FIELDS.map(f=>[f.id,f.surface,f.x0,f.x1,f.z0,f.z1]),[['field-wh
 for(const f of FIELDS)assert((f.x1-f.x0)>=50&&(f.z1-f.z0)>=36,'big enough for a tractor to turn in: '+f.id);
 assert.equal(fenceSegments().length,240);
 const layout=worldLayout();let hash=0;for(const t of layout.cuttable)hash=(hash*31+Math.round(t.x*100)*7919+Math.round(t.z*100)*104729)%2147483647;for(const d of layout.decor)hash=(hash*31+Math.round(d.x*100)*7919+Math.round(d.z*100)*104729)%2147483647;
-assert.deepEqual([layout.cuttable.length,layout.decor.length,hash],[395,549,-1403809518],'the generated forest and scenery are unchanged (a deliberate change to the map means updating these numbers)');
+assert.deepEqual([layout.cuttable.length,layout.decor.length,hash],[393,547,-1950003464],'the generated forest and scenery are unchanged (a deliberate change to the map means updating these numbers; 0.32.0 took 2 pines and 2 decor trees out of the way of the truck, the small barn and the windmill)');
+// No tree stands in or against a placed prop: the yard's truck had two pines growing through it.
+{const keep=2.5-1e-6;for(const l of MAP.landmarks){const f=propInfo(l.prop).footprint,c=Math.round(Math.cos(l.yaw)),s=Math.round(Math.sin(l.yaw));for(const t of [...layout.cuttable,...layout.decor]){const dx=t.x-l.x,dz=t.z-l.z,lx=dx*c-dz*s,lz=dx*s+dz*c;assert(!(lx>f.x0-keep&&lx<f.x1+keep&&lz>f.z0-keep&&lz<f.z1+keep),`a tree at ${t.x.toFixed(1)}, ${t.z.toFixed(1)} is within 2.5 m of ${l.id}`)}}}
 const forestTrees=layout.cuttable.length+layout.decor.filter(t=>zoneAtPoint(t.x,t.z)?.id==='forest').length;assert(forestTrees>=400&&forestTrees<=500,'Pine Ridge has '+forestTrees+' trees');
 for(const c of MAP.scenery.forest.clearings)assert(![...layout.cuttable,...layout.decor].some(t=>((t.x-c.x)/c.rx)**2+((t.z-c.z)/c.rz)**2<1),'nothing grows in a clearing');
 assert(MAP.scenery.forest.clearings.some(c=>c.x===106&&c.z===-282&&c.rx===30&&c.rz===24),'the north-east Sawmill clearing is kept (60 x 48 m)');

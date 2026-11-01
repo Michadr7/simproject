@@ -1,10 +1,12 @@
 {
   "name": "city-life-local-multiplayer",
-  "version": "0.31.1",
+  "version": "0.32.0",
   "private": true,
   "type": "module",
   "scripts": {
+    "dev": "node scripts/dev-server.mjs",
     "server": "node server.js",
+    "server:lan": "node server.js --lan",
     "release": "node scripts/package-release.mjs",
     "test": "node scripts/run-tests.mjs"
   },

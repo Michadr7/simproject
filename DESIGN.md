@@ -216,7 +216,8 @@ Everything below builds on how the game already works, so each feature is a smal
 |---|---|---|
 | 0.29 (done) | Asset import pass: converter (GLB, glTF, FBX, vertex colours, simplify), farm buildings and a Kenney farmhouse, Alder Center's buildings, five more Cedar Heights houses, the timber yard, parked vehicles, street lamps and benches, the distant hills, the Credits screen, the `assets-src` archive. Moved to later builds: TGA textures and skinned animals (farming), river rocks and bushes (map fill) | Sonnet 5.5 |
 | 0.31 (done) | A living town (not in the first build order): Alder Center's street wall, sidewalks, the town square with a fountain, a marked parking lot, crosswalks and markings, street furniture, 15 parked cars, a bus stop, the Store recoloured | Sonnet 5.5 |
-| 0.32 (next) | Eastbank Works from the Kenney Industrial kit (warehouse, workshop, supplier, a gas station with a canopy and pumps, truck yards, containers), then the carry and sawmill chain (Opus 5.5 designs it first) | Sonnet 5.5 |
+| 0.32 (done) | Main menu (Play, Multiplayer host/join, Settings, Credits), dev mode behind one flag with a dev panel, and the reset safety net (nearest clear spot); see "Menu, dev mode and reset" below | Sonnet 5.5 |
+| next (was 0.32; that number went to the menu release) | Eastbank Works from the Kenney Industrial kit (warehouse, workshop, supplier, a gas station with a canopy and pumps, truck yards, containers), then the carry and sawmill chain (Opus 5.5 designs it first) | Sonnet 5.5 |
 | 0.30 (done) | Interiors v1 and ownership: nine house rooms (generated from each model's size and door, not three fixed templates), renting and buying in the Homes app, a starter set of furniture, sleep and cook. Built with plain wall boxes, not the Kenney wall pieces; rooms are kept after the first visit, not disposed; sink, fridge, sofa and TV uses and mortgages move to 0.31 | Sonnet 5.5 |
 | 0.31 | Furniture edit mode, storage and the Furnish app | Sonnet 5.5 |
 | 0.32 | Tools: the axe and chainsaw ladder, wear, fuel, repairs, the schema 3 migration, the bucking step and the sawmill blade | Sonnet 5.5 |
@@ -224,6 +225,14 @@ Everything below builds on how the game already works, so each feature is a smal
 | 0.34 | Farming and animals | Opus 5.5 checks the numbers, Sonnet 5.5 builds |
 | 0.35+ | Vehicles | Opus 5.5 architecture pass, then Sonnet 5.5 |
 After each build, **Haiku 5.5** for number tuning (prices, wages, durability, growth times). Every build keeps the rules that have worked: data first, pure transactions with tests, `validateMap` for anything placed, and the performance budget checked before shipping.
+
+## Menu, dev mode and reset (0.32.0, done)
+Models: **Sonnet 5.5** built all of it (menu, host/join screen and address parsing, dev panel, `safe-spot.js`); **Opus 5.5** is for the part not built: a deployed relay with room codes and authentication (the hosted HTTPS page needs `wss://`, and `npm run server:lan` has no login);
+**Haiku 5.5** for later number tweaks (the 30 m search radius, the 300 m2 pocket size, the 1 second stuck time, the 8 second connect timeout).
+- **Dev mode is one removable flag.** `dev-flag.js` holds `DEV_MODE`; `dev.js` builds its own button, panel and CSS at runtime and talks to the game only through an `api` object, so nothing of it is in `index.html` or `style.css` (a test checks this). Deleting `dev-flag.js`, `dev.js` and the two places in `game.js` removes it.
+  The older development tools in the phone's Settings (stat drain multiplier, add a test item) and the `?debug` hook are not behind the flag yet; fold them in when the flag is next touched.
+- **Every placement goes through `placeSafely`.** Reset, teleport, unstick, loading a saved position and the stuck rescue share one search, so a new way to move the player gets the guarantee for free. It is event-driven, never per frame.
+- **Play is offline; multiplayer is a choice** made on the menu before the world starts. If a later design wants drop-in/drop-out multiplayer, the connect logic is already one function (`createMainMenu`'s `start`) and `MultiplayerClient` can connect at any time.
 
 ## Open country and vehicles
 - Walkable ground is "the playable rectangle minus water", not "the zones". Zones are names and rules (grid, labels); keep new districts as zones, never as fences. Solid things get colliders.
@@ -367,3 +376,28 @@ version has no log or stump model. Follow-ups, in order of value:
 - Should the river be crossable only at bridges for NPCs and vehicles too (yes, planned)?
 - Hunger, thirst and energy drain while chopping: none today.
 - How fast should regrowth be once oaks and giants exist?
+
+## Interior editor, ground layers and prop clearance (0.32.0 round two, done)
+Models: **Sonnet 5.5** built all of it. **Opus 5.5** for the next interiors step (the shell: windows, doors, ceilings, lighting, and whether furniture should become player-editable with saves: the furniture edit mode in the 0.31 row above); **Haiku 5.5** for later nudges (sign wording, the 2.5 m prop clearance, the editor's step sizes).
+- **Layouts are data now.** `houseLayout()` generates; `interior-layouts.js` may replace the furniture per house model; the editor writes it. This is also the first piece of the player furniture edit mode (the list of pieces with x, z, yaw and y is the same shape `progress.properties[id].furniture` would hold).
+- **A write-back path exists** (`scripts/dev-server.mjs`): one validated write, localhost only. If more dev tools need to write to the code, add them there, not as new servers.
+- **Ground layering is a rule:** any new flat ground mesh goes through `groundLayer()` in `world.js` (a rank in `GROUND_LAYERS`). Do not stack planes without it.
+- **Generated trees keep 2.5 m off every landmark** (`nearProp`). A new landmark needs no change; a pinned test shows the numbers.
+## Interior shell (decided requirements, to design next: Opus 5.5 designs, Sonnet 5.5 builds)
+The user's answers (also in `context.md`): windows show the outside from inside and the inside from outside; swinging doors with open/close animations; ceilings (and roofs) that fade so they do not hide the room; stairs you can walk up, and an entry spot on every floor (upper floors had none); switchable lights; style to be looked at (some Blender work expected).
+**What exists to build on:** shop interiors already sit *in the world* behind real glass (`shops.js`, `storefronts.mjs` proves the sightlines) and `doors.js` has a sliding door; walls fade between the camera and the player (`indoor-camera.js`); a floor's height under the feet comes from `world.floorAt` (the sawmill deck), so ramp footing has a precedent; houses are separate scenes built by `buildHouseRoom` and stairs are a "go upstairs" fade (`changeFloor` in `game.js`).
+**Questions the design pass must answer, with the cost of each:**
+1. *In-world house interiors.* Glass both ways needs the room to be in the world, not a separate scene. Build one interior at a time, only for the house you are at or inside (like shops), drop it when you leave. How far away may you see in (windows are about 1.2 x 1.5 m, so a few metres)? Budget: a house interior is 20-30 furniture models (about 10,000 triangles) plus walls; one at a time is fine, nine at once is not. The Kenney houses' windows are opaque textures on the outside model, so real glass means cutting the window openings in the shell (Blender) or drawing glass panes over them.
+2. *Doors.* A swinging leaf for the front door (split the door recess from the fused house mesh, or draw a leaf over it); animation 0.4-0.6 s; the door blocks the doorway until open (the shop doorway blocker pattern); inner doors (the bathroom) later.
+3. *Ceilings.* One ceiling slab per floor that fades (the dither used for trees, or opacity) when the camera is above it or the player is under it; the roof the same. Not drawn at all from outside when the shell shows the inside through windows? Decide.
+4. *Stairs.* Walkable: a ramp in the footing (`floorAt`-style), collision on the sides, a landing; replaces the fade. Every floor gets an `entry` (where you appear arriving from below) and the editor's `layoutProblems` must check you can walk from each entry to what matters.
+5. *Lights.* Per-lamp or per-room switch (E), state saved per house, default by time of day. Real lights are expensive: use emissive materials plus at most one point light per room.
+6. *Style.* Flat Kenney versus something warmer; whatever is chosen, one set for the shell and the furniture. If a house shell kit is made in Blender, the converter (`scripts/build-props.mjs`) already reads glTF/FBX.
+**Frame-rate flags to raise before building:** interiors in the world (draw calls and shadows for one more room), real glass (transparency sorting, overdraw), more than one point light, ceilings that cast shadows.
+**Order suggested:** shell and stairs and entries first (they change the data the editor and the saved layouts use), then doors, then ceilings, then lights, then style passes.
+
+## Furniture for players, later (decided direction)
+Buy furniture in a shop -> **order it and pick it up at the store** -> a **box labelled with the furniture's name** -> carry it home -> **placing the box shows the real prop** (the user's reference is ContractVille's flow). Placing must be easy: a snapping ghost (green or red), one key to rotate, pick up again. The editor's functions in `interior-edit.js` and the checks in `layoutProblems` are the rules to reuse; the saved shape is a list of `{id, x, z, yaw, y}` per floor under `progress.properties[id].furniture`. Opus 5.5 for the save format and the ordering/delivery rules; Sonnet 5.5 for the UI.
+
+## Multiplayer, later (decided direction)
+Hosted for real (a deployed `wss://` relay with login and room codes), not only on a local network. Needs Opus 5.5 to design authentication and what becomes server-authoritative (`DESIGN.md`, "Multiplayer today"). Not before the interiors and furniture, by the user's choice.

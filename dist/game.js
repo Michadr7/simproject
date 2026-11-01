@@ -9,7 +9,8 @@ import {levelOf,swingTime,hitsNeeded,perkText} from './skills.js';
 import {createMinimap} from './minimap.js';
 import {createHeldItem,disposeHeldItem} from './item-models.js';
 import {createConsumptionAnimation} from './consumption.js';
-import {itemById} from './items.js';
+import {itemById,ITEMS} from './items.js';
+import {DEV_MODE} from './dev-flag.js';
 import {createInventoryUI} from './inventory-ui.js';
 import {addItem,useItem,unequipItem,hasItem,hotbarItems,equipTool,sellLogs} from './inventory.js';
 import {createPhone} from './phone.js';
@@ -17,6 +18,10 @@ import {acceptContract,completeContract,tickContract,gigTarget,atGigPoint,refres
 import {GameState,initializeState,setMePosition,tickLife,setStatDrainMultiplier} from './state.js';
 import {loadProfile,saveProfile} from './profile.js';
 import {MultiplayerClient} from './multiplayer.js';
+import {createMainMenu} from './main-menu.js';
+import {findNearestClearSpot,MAX_SEARCH,OPEN_AREA} from './safe-spot.js';
+import {createHouseSigns} from './house-signs.js';
+import {terrain,SURFACE} from './terrain.js';
 import {createRemotePlayer,updateRemotePlayer,disposeRemotePlayer} from './remote-player.js';
 import {chooseInteraction,screenAnchor} from './interactions.js';
 import {createLookControls} from './look-controls.js';
@@ -69,27 +74,21 @@ function building(x,z,w,d,h,c,name,kind=null){const before=scene.children.length
 for(const b of MAP.buildings)building(b.x,b.z,b.w,b.d,b.h,b.color,b.name,b.shop);
 // Entrance is a distinct replaceable asset; interaction data is separate from scenery.
 const entrance={x:MAP.studio.x,z:MAP.studio.doorZ,radius:3.3};{const sx=MAP.studio.x,sz=MAP.studio.doorZ;box(2.2,2.7,.18,sx,1.35,sz-.11,'#213a3c');box(.08,2.3,.05,sx,1.3,sz+.02,'#aebeb5');box(.12,.25,.08,sx+.6,1.3,sz+.07,'#e3cf93');box(3.6,.18,1.8,sx,3.05,sz+.45,'#374e46');label('18',sx,2.83,sz+.09,.45,0,'#213a3c','#e3cf93',.16)} // the studio's door, placed by the map
-const trees=[],lampMeshes=[];
-function tree(x,z){
-  const trunk=box(.3,3.8,.3,x,1.9,z,'#726452',true);
-  // Trunks still block walking; their view fades instead of pushing the camera.
-  cameraSolids.splice(cameraSolids.indexOf(trunk),1);
-  trunk.material=trunk.material.clone();trunk.material.transparent=true;trunk.material.depthWrite=false;
-  const canopy=new THREE.Mesh(new THREE.IcosahedronGeometry(1.35,1),mat('#617e58').clone());
-  canopy.material.transparent=true;canopy.material.depthWrite=false;
-  canopy.position.set(x,4.7,z);canopy.scale.y=1.1;canopy.castShadow=true;scene.add(canopy);
-  trees.push({x,z,trunk,canopy});
-}
-// Keep tree crowns clear of shop signs, doorways and the crosswalk approach.
-for(const [x,z]of[[-9,-4.5],[10,-4.5],[28,-4.5],[47,-4.5],[-14,19],[7,19],[32,19],[49,19],[-18,-31],[-18,-43],[-43,10]])tree(x,z);
+const trees=[],lampMeshes=[]; // trees: the camera's list of fading hand-built trees. Empty now: every tree is a Quaternius model that dissolves with the sightline shader (world.js).
+// Oak Street's trees. Kept clear of shop signs, doorways and the crosswalk approach. They are placed as models once the world exists (below).
+const OAK_TREES=[[-9,-4.5],[10,-4.5],[28,-4.5],[47,-4.5],[-14,19],[7,19],[32,19],[49,19],[-18,-31],[-18,-43],[-43,10]];
 function lamp(x,z){const post=box(.12,5,.12,x,2.5,z,'#354342');post.material=post.material.clone();post.material.transparent=true;lampMeshes.push(post);box(1,.15,.55,x+.35,5,z,'#394644');box(.75,.04,.4,x+.35,4.9,z,'#f2e4b7')}[-10,15,42].forEach(x=>{lamp(x,-4.6);lamp(x,17)});
-const vehicles=createVehicles(scene,colliders);const pedestrians=createPedestrians(scene);
+const pedestrians=createPedestrians(scene);
 for(let x of[9,27]){box(2,.18,.7,x,.65,17.5,'#876e50');box(2,.55,.13,x,1,17.85,'#876e50');box(.12,.7,.55,x-.8,.3,17.5,'#394a42');box(.12,.7,.55,x+.8,.3,17.5,'#394a42')}box(.8,1.2,.8,11,.6,-4.5,'#435c4f',true);
 polishWorld(scene,box,label,trees);for(const [x,title] of Object.values(MAP.shops).map(shop=>[shop.x,shop.sign]))label(title,x,2.95,-8.08,2.1,0,'#24483f','#f1ebd9',.25);
 for(const x of [3.8,-10.2]){box(.85,.8,.55,x,.55,-7,'#637f70',true);label('DELIVERIES',x,1.06,-6.7,.8,0,'#29473b','#e9e3c7',.16)}
 // Farm and forest zones, plot grid and cuttable trees (world.js). Built after polishWorld so its
 // texture pass only touches city meshes.
 const world=createWorld(scene,{label});
+const vehicles=createVehicles(scene,colliders,world.fade); // the parked cars are converted models; they need the world's sightline fade
+for(const t of world.addBroadleaves(OAK_TREES.map(([x,z])=>({x,z,y:footingAt(x,z)}))))colliders.push({x:t.x,z:t.z,hx:t.radius,hz:t.radius}); // trunks block walking
+// 'For rent or sale' signs on the lawns of the houses you can rent or buy; each disappears while you hold the house (synced from the ownership state in frame()).
+const houseSigns=createHouseSigns({scene,properties:MAP.properties,doorOf,surfaceAt:(x,z)=>terrain().surfaceAt(x,z),GRASS:SURFACE.GRASS,blocked:(x,z)=>!isWalkable(x,z)||world.blocked(x,z)||colliders.some(b=>Math.abs(x-b.x)<b.hx+.33&&Math.abs(z-b.z)<b.hz+.33),solids:colliders});let signsFor=null; // blocked: the outdoor test only, because the game's blocked() reads state that is set up further down
 sun.target.position.set(0,0,0);scene.add(sun.target);
 initializeState(loadProfile());
 for(const key of felledTrees(GameState.progress))world.setFelled(key);
@@ -128,15 +127,29 @@ function getMeWorldPosition(target){
 }
 
 setMePosition(MAP.spawn.x,MAP.spawn.y,MAP.spawn.z);let yaw=0,pitch=.38,zoom=7,zoomTarget=7,active=false,modal=false,discovered=false,phase=0,busy=null,worldPanel=null,selectedInteraction=null;const keys=createMovementInput(window,document,()=>active&&!modal&&!creatorOpen&&!actionBusy());const updateCamera=createCameraController(camera,cameraSolids,trees,lampMeshes);
-function reset(){if(active)look.resetMotion();if(shop){setMePosition(SHOP_ENTRY.x,.02,SHOP_ENTRY.z);return}if(inside){setMePosition(home.ENTRY.x,.02,home.ENTRY.z);return}setMePosition(MAP.spawn.x,MAP.spawn.y,MAP.spawn.z);yaw=0;pitch=.38;camera.position.set(-5,4,22)}reset();
-if(GameState.progress.position&&!blocked(GameState.progress.position.x,GameState.progress.position.z)){me.position.x=GameState.progress.position.x;me.position.z=GameState.progress.position.z;camera.position.set(me.position.x,4,me.position.z+7)}
+// Reset safety net (safe-spot.js). Every reset, teleport and rescue goes through placeSafely: a destination that is blocked (a car parked on the spawn, a
+// closed shop door's blocker) becomes the nearest clear spot instead, never a place you cannot walk out of. Runs when asked, never per frame.
+function placeSafely(x,y,z,{keepIfNone=false}={}){
+ const indoors=inside||shop,spot=findNearestClearSpot(blocked,x,z,{maxRadius:indoors?6:MAX_SEARCH,openArea:indoors?0:OPEN_AREA})||{x,z,distance:Infinity};
+ if(spot.distance===Infinity&&keepIfNone)return {x:me.position.x,z:me.position.z,moved:false,found:false}; // a teleport that finds nothing clear stays where it is
+ setMePosition(spot.x,y,spot.z);if(!indoors)camera.position.set(spot.x,4,spot.z+7);
+ return {x:spot.x,z:spot.z,moved:spot.distance>.0001,found:spot.distance!==Infinity};
+}
+function reset(){if(active)look.resetMotion();if(shop)return placeSafely(SHOP_ENTRY.x,.02,SHOP_ENTRY.z);if(inside)return placeSafely(home.ENTRY.x,.02,home.ENTRY.z);const r=placeSafely(MAP.spawn.x,MAP.spawn.y,MAP.spawn.z);yaw=0;pitch=.38;return r}reset();
+// Moves you to the nearest clear spot from where you stand (the dev panel's Unstick, and the automatic rescue in the frame loop).
+function unstick(){const r=placeSafely(me.position.x,me.position.y,me.position.z);if(r.moved){persist();toast('You were stuck, so you were moved to the nearest clear spot.')}return r}
+if(GameState.progress.position){const p=GameState.progress.position;if(!blocked(p.x,p.z)){me.position.x=p.x;me.position.z=p.z;camera.position.set(p.x,4,p.z+7)}else{const spot=findNearestClearSpot(blocked,p.x,p.z,{openArea:OPEN_AREA}); // a blocked saved position (the 0.31 parked car) no longer sends you back to the spawn
+ if(spot){me.position.x=spot.x;me.position.z=spot.z;camera.position.set(spot.x,4,spot.z+7)}}}
 function blocked(x,z){if(shop)return shops[shop].blocked(x,z);if(inside)return home.room.blocked(x,z);if(!isWalkable(x,z)||world.blocked(x,z))return true;return colliders.some(b=>Math.abs(x-b.x)<b.hx+.33&&Math.abs(z-b.z)<b.hz+.33)}
 function clearWorldPanel(){if(worldPanel?.actor){const pa=getMeWorldPosition(new THREE.Vector3()),pb=worldPanel.actor.getWorldPosition(new THREE.Vector3());yaw=Math.atan2(pa.x-pb.x,pa.z-pb.z)+.45;pitch=.32;zoom=zoomTarget=5.8;}worldPanel=null;look.resetMotion()}
 function pause(show){if(sleepElapsed!==null)return;if(show){phone?.close();inventoryUI?.close();storeUI?.close();}if(show){$('dialog').hidden=true;clearWorldPanel();}$('controls').hidden=!show;modal=show;keys.clear();if(show)look.release()}
-$('start').onclick=()=>{if(currentAppearance.name){$('welcome').hidden=true;active=true}else openCreator()};$('help').onclick=()=>pause(true);
+function startGame(){if(currentAppearance.name){$('welcome').hidden=true;active=true}else openCreator()}$('start').onclick=startGame;$('help').onclick=()=>pause(true);
 // Credits (credits.js): built from the data the first time they are opened from the Controls panel.
-{let built=false;function buildCredits(){const list=$('creditsList');for(const c of CREDITS){const row=document.createElement('div');row.className='credit';const who=document.createElement('b');who.textContent=c.who;const what=document.createElement('span');what.textContent=c.what;const lic=document.createElement('small');lic.textContent=c.licence+' · ';const a=document.createElement('a');a.href=c.url;a.target='_blank';a.rel='noopener noreferrer';a.textContent=c.url.replace(/^https?:\/\//,'');lic.appendChild(a);row.append(who,what,lic);list.appendChild(row)}built=true}
- $('showCredits').onclick=()=>{if(!built)buildCredits();$('controls').hidden=true;$('credits').hidden=false};$('closeCredits').onclick=()=>{$('credits').hidden=true;$('controls').hidden=false}}$('resume').onclick=()=>{pause(false);look.capture()};$('closeDialog').onclick=()=>{$('dialog').hidden=true;clearWorldPanel();modal=false;keys.clear();look.capture()};
+let openCredits=()=>{};{let built=false,from='controls';function buildCredits(){const list=$('creditsList');for(const c of CREDITS){const row=document.createElement('div');row.className='credit';const who=document.createElement('b');who.textContent=c.who;const what=document.createElement('span');what.textContent=c.what;const lic=document.createElement('small');lic.textContent=c.licence+' · ';const a=document.createElement('a');a.href=c.url;a.target='_blank';a.rel='noopener noreferrer';a.textContent=c.url.replace(/^https?:\/\//,'');lic.appendChild(a);row.append(who,what,lic);list.appendChild(row)}built=true}
+ openCredits=source=>{from=source;if(!built)buildCredits();if(source==='menu')$('welcome').hidden=true;else $('controls').hidden=true;$('credits').hidden=false};
+ $('showCredits').onclick=()=>openCredits('controls');$('closeCredits').onclick=()=>{$('credits').hidden=true;if(from==='menu')$('welcome').hidden=false;else $('controls').hidden=false}}$('resume').onclick=()=>{pause(false);look.capture()};
+// Back to the main menu: save, leave any multiplayer server, and reload the page. The reload is the cleanest reset (scenes, timers, sockets, held input), and the save has just been written.
+$('mainMenu').onclick=()=>{persist();multiplayer.disconnect();if(typeof location!=='undefined')location.reload()};$('closeDialog').onclick=()=>{$('dialog').hidden=true;clearWorldPanel();modal=false;keys.clear();look.capture()};
 function updateHomeNotices(){const n=GameState.progress.homeNotices;if(n?.length){toast(n.join(' '));GameState.progress.homeNotices=[];persist()}} function persist(){refreshHotbar();refreshSkillHud();if(!inside&&!shop)GameState.progress.position={x:me.position.x,z:me.position.z};const ok=saveProfile({playerId:me.id,name:me.name,progress:GameState.progress});$('progressStatus').textContent=ok?'Saved on this browser':'Saving unavailable · session only';return ok}
 function toast(text){$('jobToast').textContent=text;$('jobToast').hidden=false;clearTimeout(toast.timer);toast.timer=setTimeout(()=>$('jobToast').hidden=true,4500)}
 function showDialog(kicker,title,text,tag,action,label){
@@ -322,7 +335,8 @@ $('retryCapture').onclick=()=>{pause(false);look.retry()};
 $('lookLeft').onclick=()=>{yaw+=Math.PI/8};$('lookRight').onclick=()=>{yaw-=Math.PI/8};
 canvas.addEventListener('wheel',e=>{e.preventDefault();if(active&&!modal&&!creatorOpen){const delta=e.deltaY*(e.deltaMode===1?16:e.deltaMode===2?innerHeight:1);zoomTarget=THREE.MathUtils.clamp(zoomTarget+delta*.008,3,12)}},{passive:false});
 document.querySelectorAll('[data-key]').forEach(b=>{b.onpointerdown=e=>{e.preventDefault();keys.pressPointer(e.pointerId,b.dataset.key);b.setPointerCapture(e.pointerId)};b.onpointerup=b.onpointercancel=b.onlostpointercapture=e=>keys.releasePointer(e.pointerId)});$('touchE').onclick=interact;
-$('quality').onchange=()=>{const high=$('quality').value==='high';renderer.setPixelRatio(Math.min(devicePixelRatio,high?1.6:1));renderer.shadowMap.enabled=high;scene.traverse(m=>{if(m.material)m.material.needsUpdate=true});renderer.setSize(innerWidth,innerHeight)};
+function applyQuality(value){const high=value==='high';renderer.setPixelRatio(Math.min(devicePixelRatio,high?1.6:1));renderer.shadowMap.enabled=high;scene.traverse(m=>{if(m.material)m.material.needsUpdate=true});renderer.setSize(innerWidth,innerHeight)}
+$('quality').onchange=()=>{$('menuQuality').value=$('quality').value;$('menuQuality').onchange()}; // the main menu's setting saves and applies it
 window.addEventListener('resize',()=>{camera.aspect=innerWidth/innerHeight;camera.updateProjectionMatrix();renderer.setSize(innerWidth,innerHeight)});
 
 let creatorOpen=false,draft={...(savedCharacter||defaults)},previewTurn=.25;
@@ -360,7 +374,7 @@ function renderOptions(){
 renderOptions();
 function openCreator(){if(consuming)return;phone?.close();inventoryUI?.close();storeUI?.close();clearWorldPanel();$('dialog').hidden=true;draft={...currentAppearance};$('characterName').value=draft.name;creatorOpen=true;modal=true;look.release();keys.clear();$('welcome').hidden=true;$('controls').hidden=true;$('creator').hidden=false;document.body.classList.add('creating');renderOptions();updateDraft();$('characterName').focus()}
 let currentAppearance={...(savedCharacter||defaults)};
-if(savedCharacter){$('start').innerHTML='Continue to the neighborhood <span>↗</span>';$('customizeSaved').hidden=false}
+if(savedCharacter)$('customizeSaved').hidden=false;
 $('customizeSaved').onclick=openCreator;$('editCharacter').onclick=openCreator;
 $('characterName').oninput=updateDraft;
 $('rotateLeft').onclick=()=>previewTurn-=Math.PI/4;$('rotateRight').onclick=()=>previewTurn+=Math.PI/4;
@@ -369,7 +383,7 @@ $('cancelCreator').onclick=()=>{closeCreator();if(!active)$('welcome').hidden=fa
 $('creatorForm').onsubmit=e=>{e.preventDefault();if(!$('characterName').value.trim()){$('characterName').setCustomValidity('Enter a name to begin.');$('characterName').reportValidity();return}
  $('characterName').setCustomValidity('');updateDraft();currentAppearance={...draft};avatar.apply(draft);me.name=draft.name;persist();
  const saved=saveAppearance({setItem:(key,value)=>localStorage.setItem(key,value)},draft);
- closeCreator();active=true;$('customizeSaved').hidden=false;$('start').innerHTML='Continue to the neighborhood <span>↗</span>';
+ closeCreator();active=true;$('customizeSaved').hidden=false;
  if(!saved){$('objective').querySelector('p').textContent='Browser saving is unavailable. Your character will last for this session.'}
 };
 $('characterName').addEventListener('input',()=>$('characterName').setCustomValidity(''));
@@ -722,7 +736,9 @@ function sendLocalPosition(){
  lastSent={...me.position,room};networkTimer=0;return true;
 }
 multiplayer.onConnected(()=>{lastSent=null;sendLocalPosition()});
-multiplayer.connect('ws://localhost:8080');
+// Main menu (main-menu.js). Play is offline; Host and Join open a connection first and start the game once the server has answered.
+const mainMenu=createMainMenu({$,storage:{getItem:k=>localStorage.getItem(k),setItem:(k,v)=>localStorage.setItem(k,v)},connect:url=>multiplayer.connect(url),disconnect:()=>multiplayer.disconnect(),onConnected:cb=>multiplayer.onConnected(cb),onDisconnected:cb=>multiplayer.onDisconnected(cb),play:startGame,applyQuality,openCredits:()=>openCredits('menu')});
+$('quality').value=mainMenu.settings.quality;
 function updateMultiplayer(now,moving,dt){
  networkTimer+=lastNetworkTime===null?0:Math.max(0,now-lastNetworkTime);
  lastNetworkTime=now;
@@ -733,7 +749,7 @@ function updateMultiplayer(now,moving,dt){
  for(const mesh of Object.values(remoteMeshes))updateRemotePlayer(mesh,dt);
 }
 
-let prev=performance.now(),frames=0,elapsed=0;
+let prev=performance.now(),frames=0,elapsed=0,menuDrawn=false,stuckTime=0;
 // One slice of simulated time (see timestep.js). Everything that has to advance with real time runs here, once per slice.
 // Returns whether a movement key was pressed during the slice.
 function stepWorld(step){
@@ -752,11 +768,16 @@ function frame(now){
  requestAnimationFrame(frame);
  const real=Math.max(0,Math.min((now-prev)/1000,MAX_FRAME)),view=Math.min(real,.1); // real time drives the simulation; visuals smooth over at most 0.1 s
  prev=now;
+ if(GameState.progress.properties!==signsFor){signsFor=GameState.progress.properties;houseSigns.sync(heldIds(GameState.progress))} // rent, buy, move out, eviction: the sign follows
  if(creatorOpen){previewAvatar.update(view);drawCreator();return}
+ // Before the game starts only the main menu is visible: draw the world once (this warms the shaders and textures), then stop until Play.
+ if(!active){if(menuDrawn)return;menuDrawn=true}else menuDrawn=false;
  frames++;elapsed+=real;if(elapsed> .75){$('fps').textContent=Math.round(frames/elapsed)+' FPS';frames=0;elapsed=0}
  const frameX=me.position.x,frameZ=me.position.z;
  let pressed=false;{const {count,step}=substeps(real);for(let i=0;i<count;i++)if(stepWorld(step))pressed=true}
  const movedDistance=Math.hypot(me.position.x-frameX,me.position.z-frameZ),moving=pressed&&movedDistance>.000001;
+ // Safety net: holding a move key for a second without moving, while standing inside something solid, moves you to the nearest clear spot. The search only runs then.
+ if(pressed&&!moving){stuckTime+=real;if(stuckTime>1){stuckTime=0;if(blocked(me.position.x,me.position.z))unstick()}}else stuckTime=0;
  const running=moving&&(keys.has('ShiftLeft')||keys.has('ShiftRight'));
 const poseBlend=1-Math.exp(-view*18);
 avatar.setMotion(moving?(running?8.2:4.5):0);
@@ -778,3 +799,71 @@ if(typeof location!=='undefined'&&new URLSearchParams(location.search).has('debu
  view(newYaw,newPitch,newZoom){yaw=newYaw??yaw;pitch=newPitch??pitch;zoom=zoomTarget=newZoom??zoom},
  give(id){return commitInventory(addItem(GameState.progress,id))},equip:id=>toggleEquip(id,{silent:true}),hotbarUse,eHold(on){eHeld=on},place(x,z){setMePosition(x,me.position.y,z)},get shop(){return shop},get beacon(){return {visible:marker.visible,x:+marker.position.x.toFixed(2),y:+marker.position.y.toFixed(2),z:+marker.position.z.toFixed(2),diamondY:+diamond.position.y.toFixed(2)}},doors(){return {modal,active,busy:!!busy,fade:!!doorFade,cooldown:+doorCooldown.toFixed(2),fronts:shopDoors.map(f=>({kind:f.kind,amount:+f.door.amount.toFixed(2),open:shopOpen(f.kind,GameState.progress.routine),blocked:colliders.includes(f.blocker),dx:+(me.position.x-f.x).toFixed(2),z:+me.position.z.toFixed(2)}))}},get pos(){return {x:+me.position.x.toFixed(2),z:+me.position.z.toFixed(2),ry:+me.rotation.y.toFixed(2)}},get doorCooldown(){return +doorCooldown.toFixed(2)},get inside(){return inside},get hidden(){return $('objectiveDetails').hidden},tickRegrowth,
  use(index){return beginConsumption(index)},chop:startChop,get acting(){return !!(chopping||consuming||armRecovery)},fps:()=>$("fps").textContent};
+
+// Dev mode (dev.js): one flag, dev-flag.js. With it off, dev.js is never fetched. To remove it for good, delete dev-flag.js, dev.js, the DEV_MODE import and this block.
+// Everything the panel can do goes through the object below.
+if(DEV_MODE){try{
+ const edit=await import('./interior-edit.js'),rooms=await import('./interiors.js'),currentRoom2=()=>inside&&home.kind==='house'?home.room:null;let problemsKey='',problemsNow=[];
+ const {installDevMode}=await import('./dev.js'),centre=id=>{const b=MAP.zones.find(zone=>zone.id===id).bounds;return {x:(b.x0+b.x1)/2,z:(b.z0+b.z1)/2}},at=(id,label,x,z)=>({id,label,x,z}),street=kind=>({x:MAP.shops[kind].x,z:MAP.shops[kind].doorZ+4});
+ installDevMode({
+  $,items:ITEMS,
+  places:[at('spawn','Spawn · Oak Street',MAP.spawn.x,MAP.spawn.z),at('market','Corner Market (street)',street('market').x,street('market').z),at('cafe','Alder Coffee (street)',street('cafe').x,street('cafe').z),
+   ...['alder','cedar','eastbank','farm','forest'].map(id=>at(id,MAP.zones.find(zone=>zone.id===id).name,centre(id).x,centre(id).z)),
+   ...MAP.water.bridges.map(b=>at(b.id,b.id==='county-bridge'?'County Bridge':'Freight Bridge',(b.x0+b.x1)/2,(b.z0+b.z1)/2))],
+  position(){const p=me.position;return {x:p.x,z:p.z,where:shop?'Inside a shop':inside?'Inside a home':(zoneAt(p.x,p.z)?.label||'Open Country')}},
+  snapshot:()=>({minutes:GameState.progress.routine.minutes,cash:GameState.progress.cash}),
+  setShadows(on){renderer.shadowMap.enabled=!!on;scene.traverse(m=>{if(m.material)m.material.needsUpdate=true})}, // for finding what causes a glitch on your GPU
+  setTreeFade(on){world.fade.uniforms.uFadeEnabled.value=on?1:0},
+  // The interior editor: move the furniture of any house about (you do not have to rent it), see what is wrong with the layout, and save it into the code (needs `npm run dev`).
+  interior:{
+   houses:MAP.properties.filter(p=>p.landmark&&rooms.FLOORS[MAP.landmarks.find(l=>l.id===p.landmark)?.prop]!==undefined).map(p=>({id:p.id,name:p.name})),
+   catalogue:edit.FURNITURE.map(id=>({id,label:id.replace(/^f-/,'').replace(/-/g,' ')})),
+   steps:edit.STEPS,
+   visit(id){if(shop)return {ok:false,message:'Leave the shop first.'};if(!this.houses.some(h=>h.id===id))return {ok:false,message:'Unknown house.'};if(inside&&home.id===id)return {ok:true};if(inside)leaveHome();enterHouse(id);return {ok:true}},
+   info(){
+    const r=inside&&home.kind==='house'?home.room:null;if(!r)return null;
+    const L=r.layout,key=JSON.stringify(L.items);if(key!==problemsKey){problemsKey=key;problemsNow=rooms.layoutProblems(L)}
+    return {prop:L.prop,id:home.id,name:home.name,floor:r.floor,floors:L.floors,problems:problemsNow,items:L.items[r.floor].map((item,index)=>({index,id:item.id,text:edit.describe(item),locked:rooms.LOCKED.has(item.id)}))};
+   },
+   move(i,dx,dz){const r=currentRoom2();return !!r&&edit.moveItem(r.layout,r.floor,i,dx,dz)&&(r.refresh(),r.highlight(r.floor,i),true)},
+   rotate(i,dir){const r=currentRoom2();return !!r&&edit.rotateItem(r.layout,r.floor,i,dir)&&(r.refresh(),r.highlight(r.floor,i),true)},
+   remove(i){const r=currentRoom2();if(!r||!edit.removeItem(r.layout,r.floor,i))return false;r.refresh();r.highlight(null);return true},
+   duplicate(i){const r=currentRoom2();const n=r?edit.duplicateItem(r.layout,r.floor,i):-1;if(n>=0){r.refresh();r.highlight(r.floor,n)}return n},
+   add(id){const r=currentRoom2();const n=r?edit.addItem(r.layout,r.floor,id):-1;if(n>=0){r.refresh();r.highlight(r.floor,n)}return n},
+   select(i){const r=currentRoom2();r?.highlight(i==null?null:r.floor,i)},
+   reset(){const r=currentRoom2();if(!r)return false;edit.restoreItems(r.layout,rooms.houseLayout(r.layout.prop,{saved:false}));r.refresh();r.highlight(null);return true},
+   async save(){
+    const r=currentRoom2();if(!r)return {ok:false,message:'Go inside a house first.'};
+    const body=JSON.stringify({prop:r.layout.prop,layout:edit.toSaved(r.layout)});
+    try{const response=await fetch('/__dev/save-interior',{method:'POST',headers:{'content-type':'application/json','x-city-dev':'1'},body}),result=await response.json().catch(()=>({}));
+     if(response.ok&&result.ok)return {ok:true,message:`Saved ${result.pieces} pieces of ${result.prop} into ${result.files.join(' and ')}.`};
+     if(response.status!==404&&response.status!==501)return {ok:false,message:result.error||`The dev server refused it (${response.status}).`};
+    }catch{}
+    try{await navigator.clipboard.writeText(body);return {ok:false,copied:true,message:'No dev server here, so the layout is copied to your clipboard. Run npm run dev (instead of another server) to save straight into the code.'}}catch{return {ok:false,message:'No dev server here (run npm run dev), and the clipboard is not available.'}}
+   }
+  },
+  start:startGame,active:()=>active,releaseCursor:()=>look.release(),reset,unstick,
+  teleport(x,z){
+   if(inside||shop)return {ok:false,message:'Go outside first: teleporting works on the street.'};
+   if(!Number.isFinite(x)||!Number.isFinite(z))return {ok:false,message:'That is not a place.'};
+   const r=placeSafely(x,me.position.y,z,{keepIfNone:true});
+   if(!r.found)return {ok:false,message:'No clear ground within 30 m of that point.'};
+   persist();return {ok:true,snapped:r.moved,x:r.x,z:r.z};
+  },
+  setTime(minutes){ // time of day only: the day, week and bills are untouched
+   const m=Number.isFinite(minutes)?Math.max(0,Math.min(1439,Math.floor(minutes))):GameState.progress.routine.minutes;
+   GameState.progress={...GameState.progress,routine:{...GameState.progress.routine,minutes:m}};persist();return m;
+  },
+  addMoney(cents){
+   if(!Number.isSafeInteger(cents)||cents<=0||cents>1e9)return {error:'Money is added in whole cents, from 1 to 1,000,000,000.'};
+   const cash=Math.min(1e10,GameState.progress.cash+cents);GameState.progress={...GameState.progress,cash};persist();return {cash};
+  },
+  giveItem(id,quantity){
+   const item=itemById(id);if(!item)return {added:0,error:'Unknown item.'};
+   const count=Math.max(1,Math.min(20,Math.floor(Number(quantity))||1));let progress=GameState.progress,added=0,error=null;
+   for(let i=0;i<count;i++){const r=addItem(progress,id);if(r.error){error=r.error;break}progress=r.state;added++}
+   if(added){GameState.progress=progress;persist()}
+   return {added,error,name:item.name};
+  }
+ });
+}catch(error){console.warn('Dev mode could not start:',error)}}

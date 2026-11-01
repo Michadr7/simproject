@@ -1,0 +1,30 @@
+{
+    "steps":  [
+                  {
+                      "wait":  5000,
+                      "minutes":  780,
+                      "pitch":  0.3,
+                      "z":  15,
+                      "x":  -5,
+                      "name":  "spawn",
+                      "zoom":  8,
+                      "yaw":  0
+                  },
+                  {
+                      "patch":  [
+                                    500,
+                                    520,
+                                    400,
+                                    150
+                                ],
+                      "x":  114,
+                      "wait":  5000,
+                      "name":  "pine-ridge-night",
+                      "minutes":  1420,
+                      "measure":  4,
+                      "pitch":  1.2,
+                      "zoom":  9,
+                      "z":  -268
+                  }
+              ]
+}

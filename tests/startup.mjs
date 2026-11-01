@@ -16,7 +16,7 @@ for(const saved of [false,true]){
  const release=html.match(/import\('\.\/(releases\/[^/]+)\/game\.js'/)[1];
  await cp('dist/'+release,dir,{recursive:true});
  const threeURL=pathToFileURL(resolve('dist/vendor/three.module.js')).href;
- await writeFile(join(dir,'vendor/three.module.js'),`export * from '${threeURL}';export class WebGLRenderer{constructor(){this.shadowMap={}}setPixelRatio(){}setSize(){}setViewport(){}clear(){}render(scene,camera){globalThis.__renderScene=scene;globalThis.__renderCamera=camera}}`);
+ await writeFile(join(dir,'vendor/three.module.js'),`export * from '${threeURL}';export class WebGLRenderer{constructor(){this.shadowMap={}}setPixelRatio(){}setSize(){}setViewport(){}clear(){}render(scene,camera){globalThis.__renders=(globalThis.__renders||0)+1;globalThis.__renderScene=scene;globalThis.__renderCamera=camera}}`);
  const ids=new Map([...html.matchAll(/id="([^"]+)"/g)].map(m=>[m[1],new El(m[1]==='characterName'?'input':'div')]));
  const doc=new EventTarget();doc.getElementById=id=>ids.get(id)||null;doc.createElement=tag=>new El(tag);doc.body=new El();doc.querySelectorAll=()=>[];doc.hidden=false;
  const win=new EventTarget();win.matches=()=>false;const store=new Map();if(saved){store.set('citylife.character.v1',JSON.stringify({version:1,appearance:{name:'Michadr'}}));store.set('citylife.progress.v1',JSON.stringify({version:1,progress:{cash:11200,completed:5,phase:'available',position:{x:1,z:-6.3}}}))}
@@ -28,12 +28,24 @@ for(const saved of [false,true]){
   close(){this.readyState=3}
   receive(message){const e=new Event('message');e.data=JSON.stringify(message);this.dispatchEvent(e)}
  }
- globalThis.WebSocket=FakeSocket;
+ globalThis.WebSocket=FakeSocket;globalThis.__testSocket=undefined;globalThis.__renders=0;
  await import(pathToFileURL(join(dir,'game.js')).href);
- globalThis.WebSocket=originalSocket;
- __testSocket.receive({type:'welcome',id:'test-self'});
  assert(nextFrame,'startup reaches animation loop');nextFrame(performance.now()+16);
- ids.get('start').click();
+ // Main menu: nothing connects at load, and the world is drawn once and then left alone until Play.
+ assert.equal(globalThis.__testSocket,undefined,'no connection is opened before you choose multiplayer');
+ assert(!ids.get('welcome').hidden,'the main menu is showing');assert(!ids.get('menuHome').hidden);assert(ids.get('menuMultiplayerPanel').hidden&&ids.get('menuSettingsPanel').hidden);
+ {const drawn=globalThis.__renders;assert(drawn>0,'the world is drawn once behind the menu');nextFrame(performance.now()+32);nextFrame(performance.now()+48);assert.equal(globalThis.__renders,drawn,'the world is not redrawn while the main menu is open')}
+ if(!saved){ // Play is offline: with no character it opens the creator, and Back returns to the menu with no connection made.
+  ids.get('start').click();assert(!ids.get('creator').hidden,'Play with no character opens the creator');assert.equal(globalThis.__testSocket,undefined,'Play is offline');
+  ids.get('cancelCreator').click();assert(!ids.get('welcome').hidden,'Back from the creator returns to the main menu');
+ }
+ // Multiplayer > Join (an empty address means this computer) starts the game once the server has said welcome.
+ ids.get('menuMultiplayer').click();assert(!ids.get('menuMultiplayerPanel').hidden&&ids.get('menuHome').hidden);
+ ids.get('menuAddress').value='';ids.get('menuJoin').click();
+ assert(globalThis.__testSocket,'Join opens a connection');assert(!ids.get('welcome').hidden,'the menu stays up until the server answers');
+ __testSocket.receive({type:'welcome',id:'test-self'});
+ globalThis.WebSocket=originalSocket;
+ assert(ids.get('menuHome').hidden===false,'the menu is back on its home panel for next time');
  if(saved){
  const pressE=()=>{const e=new Event('keydown');e.code='KeyE';win.dispatchEvent(e)};let simTime=performance.now()+100;const pump=seconds=>{for(let i=0;i<seconds*25;i++){simTime+=40;nextFrame(simTime)}};
  assert(ids.get('welcome').hidden);assert.equal(ids.get('cash').textContent,'$112.00');pressE();assert(ids.get('dialogText').textContent.includes('Furnished studio'));ids.get('jobAction').click();pump(.1);assert.equal(ids.get('cash').textContent,'$22.00');

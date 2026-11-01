@@ -156,3 +156,26 @@ body.creating #clockChip{display:none}
 #credits .dialog{max-height:86vh;overflow:auto}#credits h2{font-size:28px;margin-top:8px}.credits-note{color:#c8d6c2;margin:6px 0 14px}#creditsList .credit{border-bottom:1px solid #ffffff14;padding:10px 0}#creditsList b{display:block;font-size:15px}#creditsList span{display:block;color:#cfdcc9;font-size:13px;margin-top:3px}#creditsList small{display:block;color:#9fb59a;font-size:11px;letter-spacing:.4px;margin-top:3px}#creditsList a{color:#d4e7b3}
 
 .homes-icon{background:#cfe0b8;color:#2c4a31}.phone-home .phone-home-actions{display:flex;gap:8px;flex-wrap:wrap;margin-top:10px}.phone-home .phone-home-status{color:#d4e7b3;font-size:12px;margin:6px 0 0}.phone-home button[hidden]{display:none}
+
+/* Main menu (0.32.0). Opaque image, no backdrop blur: the world behind it is not drawn while the menu is open. */
+.main-menu{background-color:#15301f;background-size:cover;background-position:center right;backdrop-filter:none;align-items:center;padding:0 clamp(20px,8vw,120px);overflow:auto}
+.menu-column{width:min(420px,100%);padding:32px 0}
+.menu-kicker{font-size:11px;letter-spacing:3px;color:#cae0ad;font-weight:bold}
+.menu-title h1{font-size:clamp(48px,8vw,88px);margin:6px 0 4px;line-height:1;letter-spacing:1px;text-shadow:0 3px 0 #0006}
+.menu-title p{margin:0 0 26px;color:#d5e5d9;font-size:16px}
+.menu-panel{display:flex;flex-direction:column;gap:10px}
+.menu-panel[hidden],.menu-button[hidden]{display:none}
+.menu-panel h2{margin:0 0 2px;font-size:26px}
+.menu-panel label{font-size:11px;letter-spacing:2px;color:#cae0ad;font-weight:bold;text-transform:uppercase;margin-top:8px}
+.menu-button{display:block;width:100%;text-align:left;padding:15px 20px;border-radius:8px;border:1px solid #ffffff3a;background:#0f2325d9;color:#eef6e6;font:inherit;font-size:15px;font-weight:600;cursor:pointer;transition:background .12s}
+.menu-button:hover,.menu-button:focus-visible{background:#1d3d3af0;border-color:#d4e7b3;outline:none}
+.menu-button:disabled{opacity:.5;cursor:default}
+.menu-play{background:#d4e7b3;color:#1d342c;border-color:#d4e7b3;font-size:18px;padding:18px 22px}
+.menu-play:hover,.menu-play:focus-visible{background:#e8f5cf;color:#1d342c}
+.menu-back{background:transparent;margin-top:6px}
+.menu-panel input,.menu-panel select{width:100%;box-sizing:border-box;padding:12px 14px;border-radius:8px;border:1px solid #ffffff3a;background:#0b191bf2;color:#eef6e6;font:inherit;font-size:14px}
+.menu-row{display:flex;gap:8px}.menu-row input{flex:1;min-width:0}.menu-row .menu-button{width:auto;padding:12px 20px}
+.menu-help{margin:4px 0;font-size:12px;line-height:1.6;color:#c4d6cb}.menu-help code{background:#ffffff1c;padding:1px 5px;border-radius:4px}
+.menu-status{min-height:1.5em;margin:4px 0;font-size:12px;line-height:1.5;color:#c4d6cb}
+.menu-status[data-kind=error]{color:#ffb4a8}.menu-status[data-kind=ok]{color:#cfe8a8}/* The HUD sits above the veils; on the main menu and credits screens it only covers the picture. */
+body:has(#welcome:not([hidden])) :is(#minimap,#vitals,#clockChip),body:has(#credits:not([hidden])) :is(#minimap,#vitals,#clockChip){display:none}

@@ -4,6 +4,7 @@ import * as THREE from './vendor/three.module.js';
 import {PROPS} from './props-assets.js';
 import {decode} from './nature.js';
 import {PLACEHOLDERS} from './placeholders.js';
+import {addWheels} from './vehicle-parts.js';
 
 // A prop is a converted model (PROPS) or a placeholder (placeholders.js); both have width, depth, height, footprint, colliders and floor.
 export const propInfo=id=>{const p=PROPS[id]||PLACEHOLDERS[id];if(!p)throw new Error('Unknown prop '+id);return p};
@@ -27,5 +28,5 @@ export function createProp(id,fade){
  else{const map=new THREE.Texture();map.colorSpace=THREE.SRGBColorSpace;map.flipY=false;map.anisotropy=4;
   if(typeof Image!=='undefined'){const image=new Image();image.onload=()=>{map.image=image;map.needsUpdate=true};image.src=propInfo(id).texture} // browsers only
   material=fade.apply(new THREE.MeshStandardMaterial({map,roughness:.9,side:THREE.DoubleSide}))}
- const mesh=new THREE.Mesh(propGeometry(id),material);mesh.name='prop-'+id;mesh.castShadow=mesh.receiveShadow=true;return mesh;
+ const mesh=new THREE.Mesh(propGeometry(id),material);mesh.name='prop-'+id;mesh.castShadow=mesh.receiveShadow=true;addWheels(id,mesh,fade);return mesh;
 }

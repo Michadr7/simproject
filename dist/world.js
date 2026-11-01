@@ -53,6 +53,9 @@ export const nearAsphalt=(x,z,margin=0)=>{const t=terrain(),step=Math.max(.75,ma
 // Within `margin` metres of the water itself (not counting its muddy banks).
 export const inRiver=(x,z,margin=0)=>MAP.water.rivers.some(r=>riverDistance(x,z,r)<=r.width/2+margin);
 const nearBuilding=(x,z,margin=0)=>MAP.buildings.some(b=>Math.abs(x-b.x)<b.w/2+margin&&Math.abs(z-b.z)<b.d/2+margin);
+// Props placed from the map (barns, the sawmill, the yard's truck, the houses): nothing grows within margin metres of their footprint, so no tree stands in a truck or a barn wall.
+const nearProp=(x,z,margin=0)=>MAP.landmarks.some(l=>{const f=propInfo(l.prop).footprint,c=Math.round(Math.cos(l.yaw)),s=Math.round(Math.sin(l.yaw)),dx=x-l.x,dz=z-l.z,lx=dx*c-dz*s,lz=dx*s+dz*c;return lx>f.x0-margin&&lx<f.x1+margin&&lz>f.z0-margin&&lz<f.z1+margin});
+const PROP_CLEARANCE=2.5;
 // Pine Ridge's side of the world: decor trees here are pines, everywhere else broadleaf.
 export const forestSide=(x,z)=>x>-24&&z<-200;
 
@@ -91,21 +94,21 @@ export function worldLayout(){
   const r=random(blockSeed(bx,bz,WORLD_SEED));
   const density=forestRules.density+forestRules.wobble*Math.sin(bx*.71)*Math.cos(bz*.93);
   const ix=bx*4+1+Math.floor(r()*2),iz=bz*4+1+Math.floor(r()*2),c=cellCenter(ix,iz);
-  const open=inClearing(c.x,c.z)||nearDirtRoad(c.x,c.z,forestRules.roadMargin)||nearAsphalt(c.x,c.z,forestRules.roadMargin);
+  const open=inClearing(c.x,c.z)||nearProp(c.x,c.z,PROP_CLEARANCE)||nearDirtRoad(c.x,c.z,forestRules.roadMargin)||nearAsphalt(c.x,c.z,forestRules.roadMargin);
   if(!open&&r()<density){cuttable.push(Object.freeze({key:cellKey(ix,iz),ix,iz,x:c.x,z:c.z,kind:'pine',scale:.85+r()*.35,rot:r()*Math.PI*2}));continue}
   // Blocks without a pine sometimes get a decor pine between cell centres.
   const x=bx*4+.5+r()*3,z=bz*4+.5+r()*3;
-  if(!inClearing(x,z)&&!nearDirtRoad(x,z,forestRules.roadMargin+.2)&&!nearAsphalt(x,z,forestRules.roadMargin+.2)&&r()<forestRules.decorChance)decor.push({x,z,scale:.8+r()*.45,rot:r()*Math.PI*2,tone:Math.floor(r()*4)});
+  if(!inClearing(x,z)&&!nearProp(x,z,PROP_CLEARANCE)&&!nearDirtRoad(x,z,forestRules.roadMargin+.2)&&!nearAsphalt(x,z,forestRules.roadMargin+.2)&&r()<forestRules.decorChance)decor.push({x,z,scale:.8+r()*.45,rot:r()*Math.PI*2,tone:Math.floor(r()*4)});
  }
  // Dense scenery outside the walkable zones hides the end of the world (never on roads, in the river or on a building).
  const belt=(x0,x1,z0,z1,spacing,chance,salt)=>{for(let x=x0;x<x1;x+=spacing)for(let z=z0;z<z1;z+=spacing){
   const r=random(blockSeed(Math.round(x*10),Math.round(z*10),salt));if(r()>chance)continue;
-  const tx=x+r()*spacing*.8,tz=z+r()*spacing*.8;if(claimed(tx,tz)||nearDirtRoad(tx,tz,1.5)||nearAsphalt(tx,tz,3.5)||inRiver(tx,tz,4)||nearBuilding(tx,tz,3))continue;
+  const tx=x+r()*spacing*.8,tz=z+r()*spacing*.8;if(claimed(tx,tz)||nearDirtRoad(tx,tz,1.5)||nearAsphalt(tx,tz,3.5)||inRiver(tx,tz,4)||nearBuilding(tx,tz,3)||nearProp(tx,tz,PROP_CLEARANCE))continue;
   decor.push({x:tx,z:tz,scale:.9+r()*.5,rot:r()*Math.PI*2,tone:Math.floor(r()*4)})}};
  for(const spec of scenery.belts)belt(...spec);
  // A few shade trees between the farm fields.
  for(let i=0;i<scenery.farmShade.count;i++){const r=random(blockSeed(i,7,WORLD_SEED+1)),x=farm.x0+4+r()*(farm.x1-farm.x0-10),z=farm.z0+3+r()*(farm.z1-farm.z0-6),c=cellOf(x,z);
-  if(nearDirtRoad(x,z,2.5)||FIELDS.some(f=>x>f.x0-2&&x<f.x1+2&&z>f.z0-2&&z<f.z1+2)||x>farm.x1-scenery.farmShade.clearOfRoad)continue;
+  if(nearDirtRoad(x,z,2.5)||nearProp(x,z,PROP_CLEARANCE)||FIELDS.some(f=>x>f.x0-2&&x<f.x1+2&&z>f.z0-2&&z<f.z1+2)||x>farm.x1-scenery.farmShade.clearOfRoad)continue;
   decor.push({x:c.ix+.5,z:c.iz+.5,scale:.9+r()*.4,rot:r()*Math.PI*2,tone:Math.floor(r()*4)})}
  cachedLayout=Object.freeze({cuttable:Object.freeze(cuttable),decor:Object.freeze(decor.map(Object.freeze)),
   cuttableByKey:new Map(cuttable.map(t=>[t.key,t]))});
@@ -190,14 +193,19 @@ export function createWorld(scene,{label,cullRadius}={}){
 
  // Ground: one base plane for the whole map, the farm's and forest's own ground over their zones, then dirt roads, field interiors, the river and the bridge.
  const textures={paving:groundTexture('paving'),plaza:groundTexture('plaza'),farm:groundTexture('farm'),forest:groundTexture('forest'),dirt:groundTexture('dirt'),field:groundTexture('field'),plowed:groundTexture('plowed'),wheat:groundTexture('wheat'),green:groundTexture('green')};
- function plane(x0,x1,z0,z1,y,material,name){
-  const mesh=new THREE.Mesh(new THREE.PlaneGeometry(x1-x0,z1-z0),material);mesh.rotation.x=-Math.PI/2;
+ // Ground layers lie millimetres apart, and a depth buffer cannot tell planes 1-2 mm apart at a distance: the far ground, the base ground and the forest's own ground (all within
+  // 3 mm) flickered pale and dark when you looked down. Every flat ground mesh gets a depth bias by its rank in this list (a clone of its material), so the order of the layers
+  // never depends on how far away they are. The gaps in the list are also real centimetres now.
+  const GROUND_LAYERS=[-.09,-.082,-.074,-.069,-.068,-.066,-.058,-.05,-.049,-.045];
+  function groundLayer(material,y){const rank=GROUND_LAYERS.filter(l=>l<y-1e-9).length,m=material.clone();m.polygonOffset=true;m.polygonOffsetFactor=-rank;m.polygonOffsetUnits=-rank*2;return m}
+  function plane(x0,x1,z0,z1,y,material,name){
+  const mesh=new THREE.Mesh(new THREE.PlaneGeometry(x1-x0,z1-z0),groundLayer(material,y));mesh.rotation.x=-Math.PI/2;
   mesh.position.set((x0+x1)/2,y,(z0+z1)/2);mesh.receiveShadow=true;mesh.name=name;group.add(mesh);return mesh;
  }
  function textured(tex,w,h,scale,color='#ffffff'){const map=tex.clone();map.needsUpdate=true;map.repeat.set(w/scale,h/scale);return new THREE.MeshStandardMaterial({map,color,roughness:1})}
  const farmZone=zoneById('farm').bounds,forestZone=zoneById('forest').bounds;
- plane(GROUND.x0-700,GROUND.x1+700,GROUND.z0-700,GROUND.z1+700,-.077,new THREE.MeshStandardMaterial({color:'#8a9a7c',roughness:.95}),'ground-far'); // far beyond the fog, so the world never seems to end at the map's edge
- plane(GROUND.x0,GROUND.x1,GROUND.z0,GROUND.z1,-.075,new THREE.MeshStandardMaterial({color:'#8a9a7c',roughness:.95}),'ground-base');
+ plane(GROUND.x0-700,GROUND.x1+700,GROUND.z0-700,GROUND.z1+700,-.09,new THREE.MeshStandardMaterial({color:'#8a9a7c',roughness:.95}),'ground-far'); // far beyond the fog, so the world never seems to end at the map's edge
+ plane(GROUND.x0,GROUND.x1,GROUND.z0,GROUND.z1,-.082,new THREE.MeshStandardMaterial({color:'#8a9a7c',roughness:.95}),'ground-base');
  {const f={x0:farmZone.x0-14,x1:farmZone.x1,z0:farmZone.z0-14,z1:farmZone.z1+7};plane(f.x0,f.x1,f.z0,f.z1,-.074,textured(textures.farm,f.x1-f.x0,f.z1-f.z0,7),'ground-farm')}
  {const f={x0:forestZone.x0,x1:forestZone.x1+14,z0:forestZone.z0-14,z1:forestZone.z1+7};plane(f.x0,f.x1,f.z0,f.z1,-.074,textured(textures.forest,f.x1-f.x0,f.z1-f.z0,6),'ground-forest')}
  for(const r of DIRT_ROADS)plane(r.x0,r.x1,r.z0,r.z1,-.066,textured(textures.dirt,r.x1-r.x0,r.z1-r.z0,5),'dirt-road');
@@ -206,7 +214,7 @@ export function createWorld(scene,{label,cullRadius}={}){
 
  // Every rural asphalt road (the County Road, Alder Center's streets, Oak Street East, Cedar Heights' loop, the Freight Road) is a ribbon along its centreline with a dashed
  // line down the middle. The city's own streets are built in game.js.
- const asphalt=new THREE.MeshStandardMaterial({color:'#585d60',roughness:.95}),lineMaterial=new THREE.MeshStandardMaterial({color:'#e8e2c8',roughness:.9}),upAxis=new THREE.Vector3(0,1,0);
+ const asphalt=new THREE.MeshStandardMaterial({color:'#585d60',roughness:.95}),lineMaterial=new THREE.MeshStandardMaterial({color:'#e8e2c8',roughness:.9,polygonOffset:true,polygonOffsetFactor:-12,polygonOffsetUnits:-24}),upAxis=new THREE.Vector3(0,1,0);
  const densify=(points,max=6)=>{const out=[points[0]];for(let i=1;i<points.length;i++){const [ax,az]=points[i-1],[bx,bz]=points[i],k=Math.max(1,Math.ceil(Math.hypot(bx-ax,bz-az)/max));for(let s=1;s<=k;s++)out.push([ax+(bx-ax)*s/k,az+(bz-az)*s/k])}return out};
  const toPath=points=>points.map((p,i)=>{const a=points[Math.max(0,i-1)],b=points[Math.min(points.length-1,i+1)],l=Math.hypot(b[0]-a[0],b[1]-a[1])||1;return {x:p[0],z:p[1],tx:(b[0]-a[0])/l,tz:(b[1]-a[1])/l}});
  for(const edge of MAP.roads.edges){
@@ -227,7 +235,7 @@ export function createWorld(scene,{label,cullRadius}={}){
    position.push(p.x-p.tz*half,y,p.z+p.tx*half,p.x+p.tz*half,y,p.z-p.tx*half);uv.push(0,along/12,1,along/12);
    if(i){const a=(i-1)*2;index.push(a,a+2,a+1,a+1,a+2,a+3)}});
   const geometry=new THREE.BufferGeometry();geometry.setAttribute('position',new THREE.Float32BufferAttribute(position,3));geometry.setAttribute('uv',new THREE.Float32BufferAttribute(uv,2));geometry.setIndex(index);geometry.computeVertexNormals();
-  const mesh=new THREE.Mesh(geometry,material);mesh.name=name;mesh.receiveShadow=true;group.add(mesh);return mesh;
+  const mesh=new THREE.Mesh(geometry,groundLayer(material,y));mesh.name=name;mesh.receiveShadow=true;group.add(mesh);return mesh;
  }
  for(const r of MAP.water.rivers){const path=riverPath(r,3);ribbon(path,r.width/2+r.bank,-.068,mud,'river-bank');ribbon(path,r.width/2,-.058,water,'river')}
  const stone=new THREE.MeshStandardMaterial({color:'#8b8f8c',roughness:1}),timber=new THREE.MeshStandardMaterial({color:'#6f5b43',roughness:1});
@@ -283,6 +291,19 @@ export function createWorld(scene,{label,cullRadius}={}){
  const decorModels=layout.decor.map(t=>pick(forestSide(t.x,t.z)?PINES:BROADLEAVES,t.x,t.z));
  const decorGroups=new Map([...new Set(decorModels)].map(id=>[id,treeGroup(id,decorModels.filter(m=>m===id).length,'decor',false)]));
  layout.decor.forEach((t,i)=>{const g=decorGroups.get(decorModels[i]);addEntry(g,t,tints[t.tone]);colliders.circle(t.x,t.z,g.info.trunkRadius*t.scale*.85)});
+  // Street trees (the town's and Oak Street's, a couple of dozen): the same two broadleaf models as the farm, one small instanced pair per model (bark and leaves).
+  // They cast shadows, are frustum-culled as a group and dissolve with the sightline fade like every other tree. list: [{x, z, y}]. Returns each trunk's collision radius.
+  function addBroadleaves(list,name='street-tree',scale=.85){
+   const models=list.map(t=>pick(BROADLEAVES,t.x,t.z)),solid=[];
+   for(const id of BROADLEAVES){
+    const mine=list.filter((t,i)=>models[i]===id);if(!mine.length)continue;
+    const bark=new THREE.InstancedMesh(modelGeometry(id,'bark'),nature.bark,mine.length),leaves=new THREE.InstancedMesh(modelGeometry(id,'leaves'),nature.broadleafLeaves,mine.length);
+    mine.forEach((t,i)=>{m4.compose(v.set(t.x,t.y??0,t.z),q.setFromAxisAngle(yAxis,variantHash(t.z,t.x)*Math.PI*2),s.setScalar(scale));bark.setMatrixAt(i,m4);leaves.setMatrixAt(i,m4);leaves.setColorAt(i,tints[i%4]);solid.push({x:t.x,z:t.z,radius:modelInfo(id).trunkRadius*scale*.85})});
+    bark.name=`${name}-${id}-bark`;leaves.name=`${name}-${id}-leaves`;
+    for(const mesh of [bark,leaves]){mesh.castShadow=mesh.receiveShadow=true;mesh.computeBoundingSphere();group.add(mesh)}
+   }
+   return solid;
+  }
 
  // Cuttable trees: pines on cell centres, plus hidden stumps.
  const n=layout.cuttable.length,cutModels=layout.cuttable.map(t=>pick(PINES,t.x,t.z));
@@ -371,7 +392,7 @@ export function createWorld(scene,{label,cullRadius}={}){
   place('bin',[[cyl(.28,.25,.8),'#41564c',[0,.4,0]],[cyl(.31,.31,.07),'#2f3f37',[0,.83,0]]],spots.bin,s=>colliders.circle(s.x,s.z,.3));
   place('parking-meter',[[cyl(.035,.035,1.05,6),'#6b7076',[0,.525,0]],[box(.2,.32,.12),'#4a5258',[0,1.2,0]]],spots.meter,s=>colliders.circle(s.x,s.z,.15));
   place('bench',[[box(1.7,.08,.5),'#8a6a47',[0,.46,0]],[box(1.7,.45,.06),'#8a6a47',[0,.75,-.22]],[box(.06,.46,.46),'#3b4247',[-.75,.23,0]],[box(.06,.46,.46),'#3b4247',[.75,.23,0]]],spots.bench,s=>{const c=Math.round(Math.cos(s.yaw)),n=Math.round(Math.sin(s.yaw));colliders.box(s.x,s.z,Math.abs(c)*.85+Math.abs(n)*.3,Math.abs(c)*.3+Math.abs(n)*.85)});
-  place('tree',[[cyl(.12,.16,2.4,6),'#6b4a2f',[0,1.2,0]],[ico(1.5),'#4f7f45',[0,3.4,0],.95],[ico(1,1),'#5e8f4f',[.55,4.1,.2],.95]],spots.tree,s=>colliders.circle(s.x,s.z,.3));
+  for(const c of addBroadleaves(spots.tree.map(s=>({x:s.x,z:s.z,y:PAVED}))))colliders.circle(c.x,c.z,c.radius); // street trees are the broadleaf models, not cylinders and blobs
   place('planter',[[box(1.6,.5,1.6),'#9a8f7a',[0,.25,0]],[ico(.62),'#4c7a46',[0,.85,0],.95],[ico(.45),'#5d8c50',[.38,.8,.3],.95]],spots.planter,s=>colliders.box(s.x,s.z,1.6,1.6));
   place('bollard',[[cyl(.11,.11,.85,8),'#5b6368',[0,.425,0]],[cyl(.115,.115,.1,8),'#d6b64c',[0,.7,0]]],spots.bollard,s=>colliders.circle(s.x,s.z,.14));
   // the town square: a stone ring path and the fountain (a basin, still water, a pedestal, a bowl and a jet that breathes)
@@ -439,7 +460,7 @@ export function createWorld(scene,{label,cullRadius}={}){
  logMesh.count=0;logMesh.castShadow=logMesh.receiveShadow=true;logMesh.frustumCulled=false;logMesh.name='ground-logs';group.add(logMesh);
  let clock=0;
  return {
-  group,layout,trees,fade,
+  group,layout,trees,fade,addBroadleaves,
   blocked:(x,z)=>colliders.blocked(x,z),
   // The height of a deck or platform under the point (a building's raised floor), or null on open ground.
   floorAt(x,z){for(const l of landmarks){if(!l.floor)continue;const cos=Math.round(Math.cos(l.yaw)),sin=Math.round(Math.sin(l.yaw)),dx=x-l.x,dz=z-l.z,lx=dx*cos-dz*sin,lz=dx*sin+dz*cos,f=l.floor;if(lx>=f.x0&&lx<=f.x1&&lz>=f.z0&&lz<=f.z1)return f.y}return null},

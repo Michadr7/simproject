@@ -55,7 +55,11 @@ for(const kind of ['lamp','hydrant','bin','meter','bench','tree','planter','boll
  if(kind!=='bench'&&kind!=='bollard'&&kind!=='planter')assert(!buildings.some(b=>s.x>b.x0&&s.x<b.x1&&s.z>b.z0&&s.z<b.z1),`${kind} at ${s.x},${s.z} is not inside a building`);
  for(const o of all)assert(Math.hypot(o.x-s.x,o.z-s.z)>=.9,`${kind} at ${s.x},${s.z} is clear of a ${o.kind} at ${o.x},${o.z}`);all.push({kind,...s})}
 assert(spots.bin.concat(spots.hydrant).concat(spots.meter).every(s=>world.blocked(s.x,s.z)),'bins, hydrants and meters are solid');
-for(const [kind,name] of [['hydrant','hydrant'],['bin','bin'],['meter','parking-meter'],['bench','bench'],['tree','tree'],['planter','planter'],['bollard','bollard']])assert.equal(scene.getObjectByName(name).count,spots[kind].length,`${name}s are drawn, one instance each`);
+for(const [kind,name] of [['hydrant','hydrant'],['bin','bin'],['meter','parking-meter'],['bench','bench'],['planter','planter'],['bollard','bollard']])assert.equal(scene.getObjectByName(name).count,spots[kind].length,`${name}s are drawn, one instance each`);
+// Street trees are the Quaternius broadleaf models (bark and leaves, one pair per model), not cylinders and blobs.
+{const bark=[];scene.traverse(o=>{if(/^street-tree-broadleaf\.\d-bark$/.test(o.name))bark.push(o)});assert.equal(bark.reduce((n,m)=>n+m.count,0),spots.tree.length,'street trees are drawn, one instance each');assert(bark.every(m=>m.castShadow&&m.geometry.attributes.uv),'as textured models that cast shadows');assert.equal(scene.getObjectByName('tree'),undefined,'and none of the old cylinder-and-blob trees remain');
+ assert(spots.tree.every(s=>world.blocked(s.x,s.z)),'every trunk is solid');
+ const solid=world.addBroadleaves([{x:-30,z:-20,y:0},{x:-31,z:-22,y:0}],'test-tree');assert.equal(solid.length,2);assert(solid.every(c=>c.radius>.2&&c.radius<.5),'a trunk radius from the model');}
 // ── The town square ───────────────────────────────────────────────────────────────────────────
 const square=MAP.plazas[0];assert(near(FOUNTAIN.x,(square.x0+square.x1)/2,1.5)&&FOUNTAIN.z>square.z0+FOUNTAIN.r&&FOUNTAIN.z<square.z1-FOUNTAIN.r,'the fountain is in the middle of the square');
 assert.equal(T.surfaceAt(FOUNTAIN.x,FOUNTAIN.z+FOUNTAIN.r+1),SURFACE.PAVEMENT);assert(world.blocked(FOUNTAIN.x,FOUNTAIN.z)&&world.blocked(FOUNTAIN.x+FOUNTAIN.r-.5,FOUNTAIN.z),'the fountain is solid');assert(!world.blocked(FOUNTAIN.x+FOUNTAIN.r+2,FOUNTAIN.z),'but you can walk around it');

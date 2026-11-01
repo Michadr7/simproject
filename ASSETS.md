@@ -103,3 +103,10 @@ Bathroom Sink, Lamp Round Floor, Rug Rectangle, Potted Plant, Stairs, Side Table
 ## Added in 0.31.0
 Shipped: six more Kenney commercial buildings (a, c, d, f, g, h), the Store recoloured (slate, teal and warmer greys), and three more Quaternius cars (Taxi, Car-unqq, a second Sports Car). Received and kept in `assets-src/kenney-industrial/`, not yet used (for Eastbank Works, 0.32): Kenney City Kit (Industrial), CC0 (its License.txt is in the folder): 20 buildings
 (700-2,400 triangles, 7-20 m wide at 8 m per model unit), 4 chimneys, 2 tanks, 3 shipping containers, 5 solar panels, a water tower and 2 windmills.
+
+## Added in 0.32.0
+`dist/assets/menu-background.jpg` (1672 x 941, 153 KB, JPEG quality 82) is the main menu's background: a low-poly lumberjack carrying a log along a dirt road to a sawmill, supplied by the user. The original PNG (1.6 MB) is `assets-src/menu/menu-background.png`. **Source and licence: not stated**; the user supplied it for this project. Confirm before any public release. It is a plain CSS background on `#welcome` (an inline style in `index.html`, so the path does not depend on the release folder); it is not a model, so `credits.js` has no entry for it.
+## Changed after 0.32.0's first playtest
+- **Street trees** now use the Stylized Nature MegaKit broadleaf models (`broadleaf.1`, `broadleaf.2`, CC0, already credited), at 0.85 scale: the town's 13 and Oak Street's 11.
+- **Parked cars on Oak Street** are the converted `taxi`, `sports-car-2` and `suv` models (Quaternius cars, public domain, already credited).
+- **Flatbed truck wheels** are plain generated cylinders (`vehicle-parts.js`), not from any asset: the converted truck has none. Nothing to credit; replace them if the truck is converted again with its wheels.
