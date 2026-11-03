@@ -1,403 +1,203 @@
-# City Life — design plan
+# City Life — design (current spec)
 
-Living document. "Model" lines say which Claude model to use for each task: **Haiku 5.5** (tiny edits), **Sonnet 5.5**
-(the default for building and refactoring against tests), **Opus 5.5** (design-heavy or save-format / multiplayer work).
+> Single source of truth for the plan: what is built, what is next, decisions, numbers. Superseded text and build narratives are in `DESIGN-history.md` (the previous full DESIGN.md). If the two disagree, this file wins. Read this file only; open the history only for old detail on a specific topic.
+> How to work, commands, environment gotchas and the file map are in `context.md` (not repeated here). Asset list and licences: `ASSETS.md`.
+> Visual reference for logging: `docs/concept-logging.jpg` (log on the shoulder, sawmill with blade, plank stacks).
+> Models: **Haiku 5.5** = tiny edits and number tuning; **Sonnet 5.5** = default building/refactoring against tests; **Opus 5.5** = architecture, economy, save format, multiplayer.
+> All prices and rates marked *(placeholder)* are first guesses; tune later in a Haiku pass.
 
-## Principles
-- **Flat world.** No elevation in version 1; ridges and the river are scenery and barriers. Characters, camera, plots and
-  collisions all assume flat ground.
-- **Data first.** The world lives in `dist/map-definition.js` (zones, road graph, fields, buildings, shops, reserved plots,
-  scenery parameters) and is checked by `validateMap`. New districts are data plus scenery code that reads it.
-- **Lightweight by design.** Instanced trees, load nearby detail only, limited interiors / NPCs / traffic, assets embedded.
-- **Every enterable building has a real interior behind a door**, and buildings can have levels. Shop doors have no E;
-  the studio keeps E.
+## 1. Game pitch
+A low-poly, three.js life-and-work sim across six districts (Oak Street / Westside city, Alder Center, Cedar Heights, Eastbank Works, Willow Fields, Pine Ridge). The player meets needs (food, thirst, energy), earns money through gigs and trades (delivery, logging and milling, store jobs, farming), rents or buys a home, furnishes it, and climbs skill ladders toward owning a shop or running logistics. Offline play first; multiplayer is an opt-in relay.
 
-## Foundation fixes before Alder Center (done)
-A review of v0.19.3 raised six issues; five were real and one was partly fixed already. All are now fixed and tested:
-| # | Issue | Fixed in | How |
+## 2. Current build
+- **Latest done: 0.32.0** (menu, dev mode, reset safety net, interior editor, ground layers, prop clearance).
+- **Next: 0.33 Eastbank Works** from the Kenney Industrial kit (warehouse, workshop, supplier, gas station with canopy and pumps as props, truck yards, containers), and the **vehicle driving system** (kinematic arcade driving, enter/exit, collisions for the pickup and flatbed), plus the **`heightAt(x,z)` elevation prep** (section 3). Driving moved up so roads, bridges and collisions are tested before the heavy logging and carrying work. Opus 5.5 designs first; Sonnet 5.5 builds in steps (design pass, `heightAt`, Eastbank data, Eastbank assets, driving, tuning), stopping at passing tests after each.
+- **After that: 0.34 The Logging Chain** (carry system, bucking with the Hand Saw, sawmill producing planks).
+- **Out of scope for 0.33:** logging chain, carry system, bucking, tool wear, chainsaws, cargo loading, selling planks, fuel system, farming, furniture edit mode, cashier/POS, multiplayer authority, the in-world interior shell, actual elevation.
+- **Version rule:** each build gets one number, used once, in the roadmap (section 6). Schema bumps are listed there too.
+
+## 3. Architecture rules
+- **Coordinates:** 1 unit = 1 m, +Y up, **north is −z**, player 1.95 m, spawn (−5, 15).
+- **Flat world in v1, elevation later.** No elevation yet; ridges and river are scenery/barriers. To avoid a rewrite later: all ground height goes through one function `heightAt(x, z)` (returns 0 today) and the player, vehicles, trees, plots and props read it instead of assuming y = 0; a test fails if gameplay code hardcodes ground height; saves store x and z only and recompute y on load (interior floors keep their own heights); plots and building footprints carry a flat-pad flag in data so terrain can be carved around them later. Vehicles (kinematic) follow `heightAt` and tilt to the slope; walking and driving get a maximum slope when elevation arrives. `heightAt` and its test ship with 0.33.
+- **Data first.** World lives in `dist/map-definition.js` (zones, road graph, fields, buildings, shops, plots, scenery params), checked by `validateMap`. New districts = data + scenery code that reads it.
+- **Terrain mask** (`terrain.js`, 0.25.0): 0.5 m cells from zone shapes, road ribbons along centrelines and water; used for walking, footing, scenery exclusion, minimap. `validateTerrain` proves every district is reachable on foot from spawn.
+- **Saves.** One plain object `citylife.progress.v1` (localStorage), rebuilt by `normalizeProgress` (jobs.js). `progress.schema` (missing = 1). Adding fields needs no bump; changing a field's meaning bumps the schema with one migration step (`if (schema < N)`), each with a fixture test (`tests/fixtures/save-schema-N.json`). Schema 2 (adds `properties`) is done; schema 3 (tree `hits` → `damage` = hits x 8; tools get a condition) ships with 0.37.
+- **Changes** go through pure transaction functions (`transactJob`, `housingTransaction`, `lifeTransaction`): state + action in, new state or error out. Money is integer cents.
+- **Every placement** goes through `placeSafely` (reset, teleport, unstick, load, stuck rescue). New flat ground meshes go through `groundLayer()` (`GROUND_LAYERS`). Generated trees stay 2.5 m off landmarks (`nearProp`).
+- **Registry rule:** everything new is enterable unless `MAP.properties` says otherwise (a test, not a convention).
+- **Dev mode** is one removable flag (`dev-flag.js`, `dev.js`); nothing of it in `index.html` or `style.css`.
+- **Anti-exploit rule:** every job or gig gets its own anti-exploit tuning when built (daily cap, falling price, cooldown or similar). Not designed in advance.
+- **Assets.** 1 unit = 1 m, character 1.95 m, +Z forward, Y up, pivot at base centre, flat-shaded look; `ASSETS.md` + manifest (maps reference ids like `vehicle.pickup`, not filenames). Scales: Kenney Furniture Kit 2 m/unit, Quaternius interior pack 0.5 m/unit, Kenney houses/commercial 8 m/unit. Check each pack's licence. Real assets over fake ones; say what is missing instead of faking it.
+- **Physics:** no rigid-body engine. Vehicles are kinematic arcade (decided): acceleration and braking ramps, speed-based turning, visual body tilt, heavier loaded trucks; tested for collisions and road footing, not simulated suspension or skidding. Scripted animation only; if tumbling objects are ever wanted, cap ~20 active bodies near the player that freeze when still.
+- **River crossings (decided):** the river is crossable only at bridges (County Bridge, the second bridge at x 190..200 on the Freight Road) for players, NPCs and vehicles.
+- **Multiplayer today:** relay (`server.js`) forwarding positions and a `room` (`street`, `market`, `cafe`, `home`, plus `^house:[a-z0-9-]{1,40}$`). Nothing is server-authoritative; no new feature may assume shared persistent state until that changes.
+
+### Performance budget (flag with a number and a cheaper alternative before building anything that would exceed)
+- More than ~1,000 tree-sized instances (1,000 trees ≈ 1.2 M triangles; choppable ones cost double for shadows) or large grass/rock/flower scatter (a few thousand within 30 m, chunked).
+- Crops one mesh per cell (use chunked low-poly instances, within 90 m, cap 150,000 crop triangles).
+- More than ~15 skinned characters or ~10 cars on screen (vehicle design cap: 15 drawn).
+- Bulk shadow casters, textures above 512 px per asset, more than ~300 draw calls.
+- Measured: all trees 0.89 M triangles; culling draws 5-60% depending on where you stand; ~45-100 draw calls. Claude cannot measure real FPS (software renderer, ~4 FPS); use triangle/draw-call counts plus the user's reports (about 165 FPS on a real GPU; 105 at the bridge before culling).
+- Levers in place: fog and cull distance, no-shadow scenery, instancing. Next: chunked far versions, lower-poly LODs.
+
+## 4. Systems
+
+### 4.1 World and map — Status: skeleton done, population ongoing
+- Map 540 x 480 m. Ground to x 300; forest to x 190; river and north bank moved 70 m north (one shift constant); second bridge x 190..200; Freight Road (10 m corridor, Eastbank Works to Pine Ridge woods road); County Road keeps its bridge.
+- Zones (north is −z): Westside city (x −61..58, z −48..48), Alder Center (x −20..58, z −125..−48), Cedar Heights (x 70..170, z −135..−40, curved closed loop), Eastbank Works (x 70..190, z −20..75), Willow Fields (x −170..−35, z −286..−178), Pine Ridge forest (x −25..190, z −316..−216); the river and two bridges lie between the city and the north.
+- Roads designed for vehicles: lanes 3.5 m, shoulder 1 m (9 m road), curve radius ≥ 17 m, 12 m streets where trucks turn.
+- Plots as data: C1-C2 commercial, R1-R3 residential (R4-R9 planned), I1-I2 industrial; minimap and ground overlay (O).
+- Done: Kenney houses in Cedar Heights, Alder Center buildings, farm buildings, timber yard, parked vehicles, lamps, benches, hills, living town (street wall, sidewalks, square with fountain, parking lot, crosswalks, 15 parked cars, bus stop).
+- Planned fill (data first, Sonnet 5.5): R4-R9 with driveways/paths/parking (registry entries locked); pavements, crossings, ~60 instanced lamps, bus shelters; Eastbank plots (warehouse, workshop, supplier, gas station: pumps, forecourt, 8 m truck yards, bays, plank dock) and Alder Center plots as data; Quaternius scenery (rocks, reeds, bushes, flowers, ferns; budget ≈ +150,000 triangles, check culling first); Pine Ridge timber yard as data.
+- Known leftovers: pavement/road height bands in the frame loop and interior room geometry are literals; minimap strips and `zoneAt(x)` fallback still assume zones laid out west to east; the flatbed's wheels are generated cylinders (`vehicle-parts.js`) because the converted model has none and the original FBX is not in the repo.
+- Travel targets: city to farm 45-60 s, city to sawmill ~90 s, corner to corner 2-3 min by early vehicles. **Do not enlarge the map for now**; wind long roads (+30-50%), use speeds, fuel and loading time instead. Eastbank to sawmill by the Freight Road is about 440 m.
+- Checks: `validateMap`, `validateTerrain`, plots never on roads, trees never on roads or in river, bridge/road alignment test.
+
+#### Elevation plan (later, its own build, Opus designs; all values placeholders)
+- **Datum:** the town and every existing build stay at y = 0, so nothing moves. The river is carved below: water level −1.5 m, bed −3 m, banks sloping about 1:2 up to 0 with rock edges.
+- **Slopes:** walking capped at about 30° (slower uphill); roads at most 8%; bridge decks level. Flat pads blend into the terrain over about 10 m.
+- **Terrain mesh:** a 2-4 m grid (about 16,000-32,000 vertices) in 32 m chunks for culling; the 0.5 m terrain mask stays separate for walkability and slope. Relief described as data (e.g. `MAP.relief`: hills with centre, radius, height, falloff; valley along the river centreline; pads and road corridors that flatten) or a painted grayscale heightmap. Trees, crops, props, fences, lamps and parked vehicles place with `heightAt`.
+
+| ID | Area | Bounds | Height | Notes |
+|---|---|---|---|---|
+| P1 | Alder Center | x −20..58, z −125..−48 | 0, flat | Square, parking, plots C1-C2 |
+| P2 | Cedar Heights ring | x 70..170, z −135..−40 | 0, flat road and plots | Loop road and plots stay flat |
+| H1 | Cedar knoll | centre about (120, −88), radius about 28 m | +5 m peak | Inside the loop, slopes about 10°, no plots |
+| P3 | Eastbank Works | x 70..190, z −20..75 | 0, flat | Warehouse, workshop, supplier, gas station, truck yards, plank dock |
+| P4 | Willow Fields and farmstead | x −170..−35, z −286..−178 | 0, flat | Fields flat, farmstead pad flat |
+| V1 | River valley | along the river centreline (confirm from `map-definition.js`) | water −1.5, bed −3 | About 14 m wide at the water; bridges at deck level (about +0.3) |
+| H2 | Pine Ridge rise | within x −25..190, z −316..−216; peak toward the north-east | +18 m peak | Slopes mostly 8-15°, forest walkable |
+| P5 | Sawmill terrace | confirm from data | +6 to +8 m, flat | Flat pad with timber yard; truck bays on the woods road |
+| R1 | Woods road and Freight Road | existing ribbons | rise 0 to about +7 | Grade at most 8% (about 440 m long) |
+| E1 | Edge hills | beyond the fog | +25 to +40 m | Scenery only |
+
+- **Gameplay effects:** carrying uphill is slower than on the flat, so carrying downhill from Pine Ridge to the sawmill terrace is the easy direction; loaded trucks slow slightly on grades; vehicles tilt to the slope.
+- **Order:** river valley and bridges, then Pine Ridge and the sawmill terrace, then the Cedar knoll, then the edge hills. Frame-rate flag: test the forest on slopes before adding scatter.
+
+### 4.2 Player needs and controls — Status: done (basic)
+Food, thirst, energy (`life.js`) plus `groceries` for home cooking. Controls menu freezes doors/fades while `modal`; only `pause()` owns `modal`; `actions.js` makes every action block every other. `objective.js`: one resolver, one drawer. `timestep.js`: slices of ≤ 1/30 s; the game clock runs 30 game minutes per real minute. Run speed 8.2 m/s.
+
+### 4.3 Housing and interiors — Status: v1 done (separate scenes); in-world shell planned
+- Done: `MAP.properties` registry (id, type, name, `access` public|tenant|owner, `owner` null|npc|city|landlord, or `enterable:false` with reason); `properties.js` doors and `doorState`; nine house rooms generated from each model's size and door (`houseLayout()`, `interior-layouts.js`, editor write-back via `scripts/dev-server.mjs`); plain wall boxes; stairs = "go upstairs" fade (`changeFloor`). Shops and studio keep their own systems (shops.js, apartment.js; shops already sit in the world behind real glass, `storefronts.mjs` proves sightlines). House interiors are still crude (flat window panes, thin bathroom boards, plain door slab).
+- **Decision: in-world interiors with real glass** for every enterable building, so windows show the outside from inside and the inside from outside. The current separate-scene house rooms (`buildHouseRoom`) are replaced by the shell build. Saved layouts (`house-c` has one) apply to the generated shell and need revisiting when the shell changes.
+- Rules: build one interior at a time, only for the building the player is at or inside, and drop it on leaving; see-in distance a few metres (windows ~1.2 x 1.5 m); 20-30 furniture models, ~10,000 triangles per interior; ≤ 80 furniture pieces in a home. Furniture save format unchanged. Pilot with one house before all nine.
+- Glass: start with semi-transparent panes over the Kenney windows (their windows are opaque textures); cut real openings in Blender only if panes look wrong. Lights: emissive materials plus at most one point light per room; ceilings cast no shadows.
+- Shell build order (Opus designs, Sonnet builds): shell + walkable stairs + an `entry` on every floor (checked by `layoutProblems`), then swinging door leaf (0.4-0.6 s, blocks doorway until open; `doors.js` has the sliding shop door), then fading ceiling slab per floor (and roof), then switchable lights (E on a switch or lamp; state saved per house, default by time of day), then one style pass for shell and furniture. Stairs use `floorAt`-style ramp footing with side collision and a landing.
+- Frame-rate flags to raise before building: draw calls and shadows for one more room, glass transparency sorting/overdraw, more than one point light, ceiling shadows.
+- Interior art: Kenney Furniture Kit is the base; Quaternius pieces sparingly (lamps, rugs, plants, couches) or a later "luxury" tier. Do not mix the flat Kenney look with smoother Quaternius pieces by accident. Some Blender work expected later (a house shell kit, one consistent look).
+
+### 4.4 Ownership, rent, mortgages — Status: rent/buy done; mortgages planned (0.36)
+- Homes app on phone (estate agent in Alder Center later). Multiple homes allowed; one is **home** (sleep/wake).
+- Save: `progress.properties = {[id]: {tenure:'rent'|'own', since, nextBillDay, rentDue, home, furniture, storage, containers}}`. Studio stays in `housing` and counts via `ownedIds`; merge later.
+- Rent reuses studio weekly billing (`advanceHousingDays`): one missed week = warning, two = door locked and furniture to storage (collect within 7 days).
+- Numbers *(placeholder)*: studio $60/week; Cedar Heights house rent $180/week + $360 deposit; buy $14,000 or $2,800 down + $175/week for 64 weeks.
+- New homes come furnished (bed, fridge, table, two chairs, couch, lamp). NPC homes and vacant ones stay locked (NPC burglary: probably never).
+
+### 4.5 Furniture and storage — Status: planned (0.36; Sonnet builds, Opus for save/delivery rules)
+- `furniture.js` catalogue: `{id, name, model, price, size:{w,d,h}, layer:'floor'|'surface'|'wall'|'rug'|'ceiling', surface?, uses, container?}`. Placed: `{uid, item, x, z, yaw (0-3), on?}`; saved per floor as `{id,x,z,yaw,y}` under `properties[id].furniture`. Fixtures (walls, doors, windows, stairs, kitchen run, bathroom) are not movable.
+- Edit mode (B, inside owned/rented home): ghost snaps to 0.25 m grid, R rotates, green/red validity (inside room, no overlap, 1 m clearance at doors/stairs, surface items need a surface). Reuse `interior-edit.js` and `layoutProblems`.
+- Buying (ContractVille-style flow): Furnish app first; delivered boxed to home storage; later order at the store, pick up a box labelled with the furniture's name, carry it home (uses the carry system), place the box to reveal the real prop. Sell back at 50%.
+- Uses: bed (sleep), fridge (20-slot container), stove (1 grocery → meal), sink (+25 thirst), seats (energy ×1.5), computer, TV (time ×4), drawers/shelves (4-12 slots), closet (outfit), lamps (switch); washer/bath/toilet etc. are placeholders. Sink, fridge, sofa, TV uses and mortgages are in 0.36.
+
+### 4.6 Jobs, shops and POS — Status: gigs done; cashier planned (0.38)
+- Ladder: cashier → stocker → shift lead/manager → owner (buy C1/C2 or rent Corner Market; stock from Eastbank supplier). Scale: ≤ 8 shelves, 1-2 registers, ~40 products, ≤ 6 customers, ~200 instanced products.
+- Cashier shift: `progress.work.shift = {shop, role, startedAt, served, mistakes, tipsCents}`; customers enter, browse 2-3 shelves (1-6 products), queue, pay, leave, using the pedestrian walking code driven by a script. POS is a UI overlay (E at register): scan, total, card tap or cash change. Pay = base per customer + tips by speed/accuracy; mistakes cost tips, not wages.
+- Data: `products {id,name,category,costCents,retailCents,size}`, `shelves`, `registers`; per player-owned shop save `{stock, prices, drawerCents, openHours}`. NPC-shop shelves refill daily and are not saved. Server-owned for multiplayer.
+- Assets: J-Toastie POS (FBX→GLB), Kenney Furniture Kit shelves/counter/boxes, plain instanced products; Quaternius Ultimate Food Pack (CC0) optional.
+- Models: Opus (economy, customer flow, transactions); Sonnet (interior, POS screen, NPC scripts); Haiku (prices, wages).
+
+### 4.7 Carry system — Status: Planned (0.34)
+- **Items:** a log is carried **one at a time on the shoulder**; planks are carried **3-4 at a time** the same way (reference image: `docs/concept-logging.jpg`). Carrying animations and rules ship in 0.34.
+- **Movement:** slower walking while carrying, no sprint: about 70% of walk speed with a log, about 60% with planks *(placeholder)*.
+- **Rules:** carrying blocks every other action (`actions.js`); doors prompt "put it down first"; a drop key puts the item on the ground as a world item so the player is never stuck.
+- **Save:** `progress.carrying = {item, count}`, restored on load. Loose world items are saved as counts or positions per the existing plot pattern; never one record per plank in a pile.
+- Also used later for furniture boxes and stock boxes.
+
+### 4.8 Tools, logging, sawmill, fuel, repairs — Status: one axe today; bucking, carry and sawmill 0.34; fuel 0.35; tool ladder, wear, chainsaws and repairs 0.37
+**The chain (logs and planks are not sold; the sawmill adds the value):**
+fell tree (axe or chainsaw) → the **trunk** stays on the ground → **buck** it into logs (Hand Saw or chainsaw, one log per cut) → carry each log to the sawmill → sawmill turns 1 log into 4 planks *(placeholder)* over the blade's cut time → planks pile beside the sawmill (instanced, capped draw; count saved) → load a vehicle (0.35) → haul to Eastbank Works → sell planks (0.35). In 0.34 planks can be milled and piled but not sold; use a dev-mode grant or sale to test the economy.
+- **Bucking (required).** Axes fell only; they cannot buck. A tree takes 3-4 cuts (logs: a third log at lumberjack L3, a fourth at L8, plus the Lumberjack Axe's occasional bonus log). **Hand Saw** (in 0.34): 4 s per cut (12-16 s a tree), $15, unlock level 1, sold at the hardware counter *(placeholder)*; it wears like other tools once wear ships in 0.37 (~$0.20 per tree, placeholder). **Chainsaw** (0.37): 1 s per cut, with a small fuel use per cut. An unbucked trunk disappears after about 1 game day *(placeholder)* and adds no regrowth block beyond the existing stump rule.
+- **Tree plot save:** `{tree, damage, felledAt, plantedAt, trunkLogs}` where `trunkLogs` is the count of logs left to cut from the trunk. Logs on the ground are world items.
+- **Plank price: $1.00 each** *(placeholder)*, so a tree of 12-16 planks is worth $12-16. Eastbank buys at this price; later players may work at or own Eastbank and set prices. The Reforestation premium (below) applies to the plank price.
+- **Saw blades** (spin at the bench and wear; wear counts planks cut; spares sold at the Eastbank supplier) *(placeholders)*:
+
+| Blade | Price | Lasts | Cost per plank | Cut time per log |
+|---|---|---|---|---|
+| Standard | $25 | 300 planks | ~$0.083 | 6 s |
+| Upgraded | $40 | 600 planks | ~$0.067 | 4.5 s |
+| High-End | $100 | 1,800 planks | ~$0.056 | 3 s |
+
+- **Sawmill build needs (0.34):** a split blade mesh or overlay disc that spins, an audio system (none yet: Web Audio or CC0 files), the plank item and stack save format (Opus designs).
+- **Tools model (0.37):** `tools.js` table `{id, model, damage, swingSeconds, durabilityHits, unlockLevel, price, fuel?:{tankMl,mlPerSecond}}`. Swing damage = tool damage × (1 + 0.04 × (level − 1)); hits = ceil(toughness / damage); pine toughness 24. `chopTree` reads only the equipped hotbar tool.
+- **Ladder** (hits for a pine L1 / L20): Axe L1 $20 dmg 3 (8/5); Steel Axe L5 $120 dmg 4 (6/4); Lumberjack Axe L10 $350 dmg 6 (4/3, two-handed, bonus log). **Chainsaws (low and high):** low chainsaw $600, lumberjack L15, cheap, ~2× fuel, wears fast *(placeholder)*; high chainsaw (SKU0374) $1,500, lumberjack L20, ~1.8 s per pine, half the fuel, wears slowly *(placeholder)*. Hold E to cut.
+- **Wear (decided: yes; 0.37).** Condition 0-1000 per tool instance (bag slot `{id, quantity:1, cond, fuel?}`); falls by 1000/durabilityHits per hit; dull tool damage × (0.6 + 0.4 × condition); at 0 it is broken, not destroyed. Repairs: whetstone (+25%, cheap) and workshop (100% for ~40% of price), sold at the Eastbank supplier. Per-tree wear: Axe $0.50, Steel $0.30, Lumberjack $0.25, low chainsaw ~$1.00 + $0.40 fuel, high ~$0.50 + $0.20 fuel.
+- **Wear tax per tree** (tool wear + fuel + blade, against $12-16 of planks; targets 15-30% low end, 5-10% high end), before adding Hand Saw wear and chainsaw bucking fuel: Axe + Standard blade ~$1.50-1.85 (~11-13%); low chainsaw + Standard blade ~$2.40-2.75 (~17-20%); high chainsaw + High-End blade ~$1.40-1.60 (~9-11%). Retune once bucking costs are in.
+- **Fuel (0.35):** priced at the gas station, **$2.00/L** *(placeholder)*; a 5 L Gas Can (stack item, `fuel` 0-5,000 ml) costs $10 full. Low chainsaw ~0.2 L/tree, high ~0.1 L/tree (felling; bucking extra). The fuel system (pump, tank, can) ships with 0.35 for vehicles; chainsaws reuse it in 0.37. In 0.33 the pumps are props only. Stations: one by the woods road, one on the Freight Road. Low-fuel warning, jerry can, paid tow as last resort. Later, an owned station may set its own price.
+- **Power Drill:** Handyman skill tool (props first, then jobs).
+- **Regrowth:** today stump → sapling after 3 game days → pine after 7 (1 game day = 48 real minutes); forest empties in ~90 min of nonstop chopping. Proposed: sapling 1 day, pine 2.5 days, stump blocks until cleared (3 swings) or 4 days; pine cones (~1 in 3) plant saplings (mature in 2 days) with a Reforestation plank-price premium while forest > 70%; target: replanters stay > 60%. Add oak and giant tree later. XP: 2 per swing, fall XP scales with toughness; retune so L15 ≈ 150 pines (~40 min). Today: XP 40 to L2, +20 per level, cap 20.
+- **Lumberjack contracts** (lumber yard) reuse the gig system: deliver N planks.
+- **Models:** Opus (carry rules, bucking and trunk save, plank item, stack save, numbers); Sonnet (`tools.js`, wear, fuel, HUD bar, sawmill, bucking, carry animation); Haiku (prices, durability).
+
+### 4.9 Farming and animals — Status: designed (0.39)
+- Allotments: Willow Fields split into 10 × 10 m, leased weekly; 1 m cells tilled, planted, watered, harvested. Save `progress.farm = {allotments:{[id]:{leasedUntil, cells:{"x,z":{crop, plantedAt, wateredAt}}}}}`; growth stage computed from time, faster if watered within a game day.
+- Assets: Quaternius barn set (replaces placeholder farmstead; no farmhouse: use a Kenney house), 7 animated animals (~20 animated in view cap, far ones frozen), Ultimate Crops (102 FBX, 20 kinds, stages 1-4; needs FBX→GLB conversion). Missing: hoe/shovel, watering can, seed packets, chicken.
+- Animals wander in pens (steering only). Opus checks numbers; Sonnet builds.
+
+### 4.10 Vehicles — Status: Planned next (0.33); cargo and fuel 0.35; traffic later
+- **0.33 scope: driving mechanics only.** Kinematic arcade driving `{x,z,yaw,speed,steer}` for the pickup and flatbed (acceleration and braking ramps, speed-based turning, visual body tilt, heavier loaded trucks), enter/exit, collisions with existing colliders, camera, parking spots as data, vehicle height from `heightAt`. No cargo, no selling, no fuel. Opus architecture pass first, then Sonnet.
+- **0.33 acceptance checks:** drive across both bridges; drive the Cedar Heights loop, Oak Street East and the Freight Road; never enters water, buildings or trees; the river is crossed only at bridges; grass at half speed; travel times meet the doc targets (city to farm 45-60 s, city to sawmill ~90 s); collision and reset-safety (`placeSafely`) tests pass; the `heightAt` test passes.
+- **0.35 adds cargo:** each vehicle model has `cargoSlots` in its data; instanced plank meshes fill the slots as the count rises (a full flatbed of 120 planks ≈ 1,440 triangles); the same system shows other loads later. Save only counts: `cargo: {planks: n}`. Loading: walk to the bed carrying planks and press E (animation, count goes up); unload at the Eastbank dock. Capacities *(placeholder)*: pickup 40, flatbed 120. Cap how many cargo pieces are drawn. Also 0.35: selling planks at Eastbank and the basic fuel system (vehicle tank, pumps).
+- Driving rules: grass at half speed; never water/buildings/trees. Speeds (m/s): bike 6, van 10, loaded truck 8, everyday car 11 (14 would cross the map in ~39 s: too fast), premium 16.
+- Save `progress.vehicles = [{uid, model, x, z, yaw, fuel?, cond?, cargo?, parkedAt?}]` (fuel, cond and cargo added from 0.35); y is never saved.
+- Triangle budget (revised 0.30.1): cars 2,800-3,100, pickup 4,400 (cannot be simplified without losing wheels). Traffic needs a lighter car (few hundred triangles) or distance version.
+- In hand: Cars Bundle (7), Jeep (CC-BY), Van, Pickup, Flatbed. Missing: Bus.
+- Later: ambient traffic (≤ ~10 visible, never runs you over at first), premium cars.
+
+### 4.11 NPCs and schedules — Status: planned (Opus first pass, Sonnet iterates)
+Home → work/shop/park → home by time of day, on sidewalks, using the same doors as the player and hidden while inside; far NPCs are data only; they cross the river only at bridges. Needs road graph and door data. Hired workers (late game, Opus): contract with wage/day, output/day, site, reliability; needs NPC homes, plot ownership, storage first. Eastbank Works may later be staffed or owned by players.
+
+### 4.12 Multiplayer — Status: relay only
+Offline play; multiplayer chosen on the menu before the world starts (`createMainMenu`'s `start`). Later: hosted for real (deployed `wss://` relay with login and room codes; local `npm run server` stays for development); Opus designs authentication and server-authoritative state (`doorState`, transactions). Not before interiors and furniture.
+
+## 5. Economy progression (existing numbers; placeholders marked)
+| Stage | Player can do | Money in | Money out | Core loop |
+|---|---|---|---|---|
+| Start | Delivery gigs, buy food, rent studio | Gig pay | Studio $60/week, food | Earn → survive |
+| Early | Buy Axe ($20) and Hand Saw ($15); fell, buck, carry logs, mill planks (0.34); haul and sell at Eastbank (0.35); cashier shifts (0.38) | Planks $1.00 each, wages + tips | Tool wear, blades ($25), fuel ($2/L), rent | Fell → buck → carry → mill → haul → sell |
+| Mid | Rent Cedar Heights house, furnish, lease allotment, Steel/Lumberjack Axe ($120/$350), better blades ($40/$100) | Planks, crops, shift pay | House $180/week + $360 deposit, furniture, seeds, fuel, repairs | Home + routine |
+| Late | Buy house ($14,000) or shop (C1/C2), chainsaws ($600/$1,500), more vehicles, hired workers, own Eastbank | Shop profit, contracts, plank premiums | Stock, wages, mortgage $175/week, fuel | Ownership and logistics |
+
+Income check (rough estimate): logging at $1.00 per plank may pay about $400-600 per hour once carry, bucking and mill time are counted, against rent of $60-$180/week and a $14,000 house. Housing prices or plank price may need retuning; each job gets its own tuning (section 3).
+Gaps: no wage figures for cashier or gigs; crop and shop prices undefined; no income-per-hour target across jobs; no income from logging until 0.35.
+
+## 6. Roadmap (one number per build; never reuse)
+| Version | Scope | Status | Model |
 |---|---|---|---|
-| 5 | Obsolete `waist.mjs` | 0.19.6 | Overwritten with a real test of the skeletal waist |
-| 3 | Controls menu unpaused a door fade | 0.19.6 | The fade and doors freeze while `modal`; only `pause()` owns `modal` |
-| 1 | Eating and chopping overlapped | 0.19.6 | `actions.js`: every action blocks every other, both ways |
-| 2 | Gig arrow overwritten by the beacon | 0.20.0 | `objective.js`: one resolver, one drawer |
-| 4 | Two timesteps | 0.20.0 | `timestep.js`: real time cut into slices of at most 1/30 s |
-| 6 | Hard-coded doorway and interior data | 0.20.0 | `doorway` and `interior` per shop (and the studio) in `map-definition.js`, validated |
+| ≤ 0.32.0 | Skeleton, houses, registry, assets, interiors v1 + ownership (schema 2), living town, menu/dev mode, interior editor | Done | Sonnet |
+| 0.33 | Eastbank Works (Kenney Industrial) + Vehicle Driving (kinematic driving, enter/exit, collisions for pickup and flatbed) + `heightAt` prep | Next | Opus design, Sonnet build |
+| 0.34 | Logging Chain: carry system and animations, bucking (Hand Saw, trunks), sawmill chain (planks pile) | Planned | Opus design, Sonnet build |
+| 0.35 | Cargo loading, selling planks at Eastbank, basic fuel system (gas stations) | Planned | Opus architecture, Sonnet build |
+| 0.36 | Furniture edit mode, storage, Furnish app, sink/fridge/sofa/TV uses, mortgages | Planned | Sonnet (Opus for save/delivery) |
+| 0.37 | Tools: axe/chainsaw ladder, wear (incl. Hand Saw wear), chainsaw bucking fuel, repairs, blade tiers; schema 3 | Planned | Opus numbers, Sonnet build |
+| 0.38 | Cashier shift and POS | Planned | Opus economy, Sonnet build |
+| 0.39 | Farming and animals | Planned | Opus numbers, Sonnet build |
+| Later | Elevation (own build, Pine Ridge and river banks first), ambient traffic, in-world interior shell (may be pulled ahead of 0.36 if windows are wanted sooner), NPC schedules, hired workers, hosted multiplayer | Deferred | Opus |
+After each build: Haiku tunes prices, wages, durability, growth times. Every build keeps: data first, pure transactions with tests, `validateMap` for anything placed, performance budget checked before shipping.
 
-Remaining literals worth moving later: the pavement and road height bands in the frame loop, and the interior room geometry. The minimap
-strips and the `zoneAt(x)` fallback still assume zones laid out west to east.
+## 7. Open questions
+- **Engine:** stay on three.js/JavaScript, or move to a native engine such as Godot? A one-day spike (hilly terrain, a few houses, a river and bridge, a kinematic truck) after 0.33 would inform this. — decision needed (after 0.33)
+- **Map size:** a much larger map (about 3× per side) is being explored; this doc says do not enlarge until a district needs it. — decision needed
+- Multiplayer room names (`house:<id>`) once interiors are in-world. — decision needed (before the shell build)
+- Retune wear tax per tree and income per hour with the bucking step added; plank price, blade, fuel, Hand Saw and chainsaw prices are placeholders. — needs playtesting
+- Income per hour for logging vs housing prices and other jobs. — needs playtesting
+- Carry speeds (70% / 60%), drop behaviour, trunk despawn time. — needs playtesting
+- Hunger/thirst/energy drain while chopping, bucking and carrying. — needs playtesting
+- Regrowth speed once oaks and giants exist. — needs playtesting
+- Maximum walking and driving slope, and terrain chunk size, for the elevation build. — deferred
+- Move the old dev tools (stat drain, add test item) from the phone's Settings into the dev panel behind the dev flag; fold in the `?debug` hook. — deferred
+- Remaining literals (height bands, room geometry, west-to-east zone assumption). — deferred
 
-## Completing the map before the assets (the six areas of concept 03A)
-| Area | Status |
-|---|---|
-| 01 Oak Street | built (the city: Starter apartments, Corner Market, Alder Coffee, Laundry) |
-| 02 Alder Center (town square, police station, plots C1-C2) | roads, a paved square and plots C1-C2; no buildings |
-| 03 Cedar Heights (a loop road, plots R1-R3) | the curved loop road, its links and plots R1-R3; no houses |
-| 04 Eastbank Works (warehouse, vehicle workshop, building supplier, plots I1-I2, Freight Road) | Oak Street East, the Freight Road and a second bridge, plots I1-I2; no buildings |
-| 05 Willow Fields | land, three fields, fence and a placeholder farmstead |
-| 06 Pine Ridge | forest, clearings and the sawmill |
-Order (the user's plan, with one prerequisite):
-1. **Walkable areas stop being rectangles: done in 0.25.0** (`terrain.js`, the terrain mask; see the README). Build a walkability and ground-type mask at load (about 1 m cells, 0.2 M cells, a few tens of ms) from zone shapes, road ribbons along
-   centrelines (so roads can curve) and water. It replaces the rectangle tests for walking, footing height, scenery exclusion and the minimap, and reachability stays validated. Needed for Cedar Heights' loop and the winding timber road.
-2. **Re-lay the world for six districts** (decisions below), then build Alder Center, Cedar Heights and Eastbank Works as **placeholder** boxes with the reserved plots as data, parking lots, a police station and a gas station (Sonnet 5.5).
-3. Then replace placeholders with assets, district by district.
-Decisions to confirm first: the river and the north bank move about 70 m north (so the south bank holds Alder Center, Cedar Heights and Eastbank Works) and the map grows east to x about 200; a second bridge for the
-Freight Road at the east edge (the concept's cargo route crosses the river there); the County Road keeps its bridge.
-
-## Next step: re-lay the world for six districts, in two builds (skeleton first)
-Confirmed: the river and the north bank move north, the map widens east, the Freight Road gets a second bridge, and **no placeholder buildings**: finish the map as roads, ground, plots and signposts, then add real assets.
-**Build 1, the skeleton (done in 0.26.0, nothing is populated):**
-1. Everything on the north bank (river, County Bridge, farm, fields, farmstead, forest, clearings, sawmill, fork signpost) moves 70 m north by one shift constant, not retyped coordinates.
-2. The map widens east (ground to x 300; the forest to x 190).
-3. A second bridge at x 190..200 and the Freight Road: a rural road up a 10 m corridor from Eastbank Works to Pine Ridge's woods road.
-4. Roads for the three districts as walkable ribbons: **Alder Center** (x -20..58, z -125..-48: a main street and a cross street, a paved square), **Cedar Heights** (x 70..170, z -135..-40: a closed, curved loop road with links to Alder Center and
-   to Oak Street East), **Eastbank Works** (x 70..190, z -20..75: Oak Street East, the Freight Road along its south side). The backdrop buildings along z -61 go (Alder Center replaces them).
-5. Reserved plots as data (C1-C2 commercial, R1-R3 residential, I1-I2 industrial), drawn on the minimap and as a ground overlay toggled with O.
-6. A signpost for each district.
-Checks: `validateMap` (zones, water, bridges, plots), `validateTerrain` (every district reachable on foot from the spawn, over the new bridges), plots never on a road, trees never on a road or in the river, and an alignment test
-(each bridge's deck spans its river and meets its road; the roads meet their zones).
-**Build 2 (done in 0.27.0 for Cedar Heights; Alder Center and Eastbank Works follow as assets arrive):** the real Kenney houses in Cedar Heights (house slots sized from their real footprints, scaled about x8), then Alder Center and Eastbank Works as their asset packs arrive.
-
-## Enterable buildings: what exists and what Step 2 (Opus) must design
-**Exists (0.28.0).** `MAP.properties` is the registry (id, type, name, `access` public | tenant | owner, `owner` null | npc | city | landlord, or `enterable: false` with a reason); `properties.js` turns it into doors in the world and `doorState`;
-`validateMap` and `tests/properties.mjs` make sure nothing enterable is left out. Houses carry their door in the model data; shops and the studio keep their own door systems (shops.js, apartment.js) and are only registered.
-**Step 2 to design (Opus 5.5): done, see "The design pass" below.**
-1. **Interior templates:** built on demand, sized to the house's footprint (10.4 x 7.3-8.2 m), one room per floor with stairs as a fade (the two-storey type has two), furniture stored as a list of `{item, x, z, yaw}` so the player can edit it; the outside world is hidden while inside.
-   Reuse the shop-room and studio builders where they fit; the Kenney houses have no inside, so windows stay opaque.
-2. **Ownership in the save:** `progress.properties = {id: {owner, since, furniture}}`, migrating old saves (none own anything). Server-authoritative for multiplayer: the client asks, the server answers `doorState`.
-3. **Getting a key:** buying or renting a vacant house (an estate agent, the phone's bank screen), price and rent per type, what happens when rent is missed (the studio's billing is the model).
-4. **NPC owners:** residents with schedules, who are home when; knocking, being invited in; whether an NPC house can be burgled (probably never).
-5. **A swinging door leaf:** split the door recess from the fused mesh in the converter, or draw a leaf over it; a door sound.
-Everything new must be enterable unless it says otherwise in the registry: that rule is a test, not a convention.
-
-## Filling the map while the assets are on their way (no assets needed)
-Every item is data first, so nothing is thrown away when the real buildings arrive. Models: **Sonnet 5.5** for all of it; **Haiku 5.5** for the number tweaks.
-1. **Cedar Heights, the outer ring** (Kenney houses already in hand): plots R4-R9 around the outside of the loop with their driveways, front paths and parking spots (more houses from the 18 unused types); the registry gets entries, all locked.
-2. **Street furniture** (plain geometry): pavements along Alder Street and the cross street, crossings where they meet Oak Street, street lamps on the loops (instanced, about 60 posts), benches and bins on the town square, bus-stop shelters.
-3. **Eastbank Works as data**: reserved plots for the warehouse, vehicle workshop, building supplier and gas station (pump island positions, a forecourt, truck yards 8 m wide, parking bays), their driveways and the registry entries; no models.
-   Alder Center the same: the police station, shop fronts and a parking lot as plots with facings, driveways and registry entries.
-4. **Scenery from the Quaternius pack** (in hand, CC0): river-bank rocks, reeds and grass, bushes and flowers on the meadows, ferns and mushrooms in Pine Ridge; all instanced and culled like the trees. Performance budget: about +150,000 triangles drawn at most, checked with the same culling stats before it ships.
-5. **The edge of the world**: a low ring of hills (a few large low-poly meshes, drawn beyond the fog) so the map edge reads as a horizon, not a stop.
-6. **Pine Ridge's timber yard**: a reserved loading area beside the sawmill with truck bays on the woods road, a log-pile area and the Freight Road junction as data, for the sawmill chain.
-
-## Store jobs and the POS (supermarket-sim lite)
-Idea: the Corner Market, Alder Coffee and later your own shop become small working retail, in the spirit of a supermarket sim but kept to a corner shop: at most 8 shelves, 1-2 registers, about 40 products, and no more than 6 customers in the shop at once.
-**The ladder (each rung is a skill level and a wage step):**
-1. **Cashier** (first job, next to today's delivery gigs): customers queue at the counter with a basket; the player scans each item at the POS (hold E on the basket, or click items across the scanner), takes payment (cash: count the change on the POS screen; card: tap) and bags it. Wage plus tips by speed and accuracy; energy and hunger drain as for other work.
-2. **Stocker:** take a box from the stockroom or the delivery van (a Furniture Kit cardboard box), carry it to a shelf and fill slots; empty shelves lose sales.
-3. **Shift lead, then manager:** open and close the shop, count the drawer, hire NPC cashiers (hired workers are already a planned feature), set the day's prices.
-4. **Owner:** buy a shop plot (C1 or C2 in Alder Center) or rent the Corner Market, order stock from a supplier (the Eastbank Works warehouse and building supplier), set prices, pay wages and rent. Profit depends on price against the going rate, stock on the shelf, time of day and reputation.
-**Data (all server-owned for multiplayer, money in integer cents like the rest of the game):**
-- `products`: `{id, name, category, costCents, retailCents, size}`; `shelves`: slots by category in a shop's interior; `registers`: a POS entity on the counter with a counter zone and a queue line.
-- Saved per shop: `{stock: {productId: n}, prices: {productId: cents}, drawerCents, openHours}`. A customer is an NPC state machine: enter, browse (picks 1-6 products by price and need), queue, pay, leave; the same pedestrian walking code, driven from a script, not a new AI.
-- The POS screen is a UI overlay opened at the register (its 3D screen is only a prop): item list, total, payment buttons, change counter.
-**Assets:** the POS machine (J-Toastie, an FBX that needs one-time conversion to GLB), the Kenney Furniture Kit for shelves (Bookcase Open), the counter (Kitchen Bar), cardboard boxes, and the Store model or a Kenney commercial building for the shop front. Products can be plain coloured boxes and cans, instanced; Quaternius's Ultimate Food Pack (CC0) would give real food shapes if you want them.
-**Performance:** all of it happens inside the shop's interior (built on demand, dropped on leaving), with at most 6 customers and about 200 product instances drawn as instances.
-**Models:** Opus 5.5 for the economy, the customer flow and the server-side transaction model; Sonnet 5.5 for the interior, POS screen and NPC scripts; Haiku 5.5 for price and wage numbers afterwards.
-
-## Interior art direction
-Two interior sets are in hand: the **Kenney Furniture Kit** (117 pieces, flat colours like the Kenney houses and commercial buildings, modular walls with doorway and window pieces, stairs in four kinds, a complete kitchen set, TV, computer, shower, washer) and the **Quaternius house interior pack** (about 40 detailed pieces in a smoother style). Mixed in one room they clash, so: **the Kenney kit is the base** for every house, flat and shop; the Quaternius pieces are used sparingly (lamps, rugs, plants, couches) or kept for a later "luxury" tier. Scales: the Kenney kit is 2 m per model unit, the Quaternius pack 0.5 m per unit, the Kenney houses and commercial buildings 8 m per unit.
-Fixed fixtures (walls, doorways, windows, stairs, kitchen runs) are not movable; everything else is a furniture item with uses (see the furniture design in the interiors brief).
-
-## Tools, wear, and the logging chain (decisions after the tool uploads)
-**Which model is which tool** (the hit counts and unlock levels are in the table under "Decided model"):
-| Tool | Model | Level | Notes |
-|---|---|---|---|
-| Axe | CreativeTrio axe (a plain wooden-handled axe) | 1 | the first axe, 8 hits |
-| Steel Axe | Quaternius axe, head recoloured to steel | 5 | 6 hits |
-| Lumberjack Axe | the high-end axe (AXE.fbx with normal, specular and displacement maps; 128 triangles, so it relies on the maps: checked after import) | 10 | 4 hits; two-handed, a bonus log now and then |
-| Chainsaw (low end) | the green mini chainsaw from Sketchfab (not uploaded yet) | lumberjack 15 | cheap, thirsty (about twice the fuel per tree), wears fast |
-| Chainsaw (high end) | SKU0374 Petrol Chainsaw (2,647 triangles, TGA textures) | lumberjack 20 | dearer, half the fuel, wears slowly, cuts a pine in about 1.8 s |
-**Wear (the economy's tool sink).** Every tool has a condition from 100% to 0%, shown as a bar on its hotbar slot. Each hit (or second of cutting) takes a little off; a dull tool deals less: damage x (0.6 + 0.4 x condition). At 0% a tool is *broken*, not
-destroyed: it cannot be used until it is repaired. Repairs: a whetstone (cheap, restores 25%, at the hardware counter and the workshop) and a repair at the workshop (about 40% of the price, restores 100%). The Eastbank building supplier sells both.
-Targets to tune: a felled pine should sell for 3-6 times the wear and fuel it cost, so wear is a visible tax of 15-30% at the low end and 5-10% at the high end. Cost per tree in tool wear: Axe $0.50 (durability about 320 hits), Steel Axe $0.30 (2,400 hits),
-Lumberjack Axe $0.25 (5,600 hits), low chainsaw about $1.00 plus $0.40 of fuel, high chainsaw about $0.50 plus $0.20 of fuel. Upfront prices rise in the same order, so a better tool is cheaper per tree but dearer to start with, and the chainsaws win on time, not on money.
-**Fuel.** A Gas Can (a 5-litre stack item, Quaternius model) fuels chainsaws now and vehicles later; a gas station fills it. The chainsaw uses a fixed amount per cut, so the low-end one burns twice what the high-end one does.
-**The logging chain (each step has its own tool and can be skipped by a better one):** fell (axe or chainsaw) -> buck the trunk into logs (the **Hand Saw**, 4 s a cut; with a chainsaw 1 s; an optional step that rewards the lumberjack ladder) -> haul (carry, then a pickup or truck) -> mill (the sawmill's circular
-**Saw Blade** spins at the bench and wears: a spare blade is a supply item bought at the supplier, replaced every few hundred planks) -> planks -> sell or build. The saw blade model also decorates the logging camp's sign and the sawmill shed.
-**Power Drill:** the **Handyman** skill's tool, a prop at the vehicle workshop and the building supplier first, then jobs: assemble delivered furniture, install shelves, fix an NPC's door or fence; a higher Repairs level lowers the cost of tool repairs.
-Models: **Opus 5.5** to finalise the numbers with the save format (condition per tool instance, fuel in cans); **Sonnet 5.5** for `tools.js`, the wear and fuel code and the HUD bar; **Haiku 5.5** for prices and durability afterwards.
-
-## The farm: buildings, animals, crops (what arrived and what it costs)
-- **Buildings (Quaternius, red barn set):** Barn 2,910 triangles, Big Barn 4,220, Small Barn 2,176, Open Barn 1,612, Silo 1,592, Silo House 2,880, Chicken Coop 948, Tower Windmill 7,827 (simplify to about 3,000), two fences (5.9 m panels of 188 and 324 triangles). They replace the placeholder
-  farmstead (barn, shed, silo). **There is no farmhouse in the set**: use one of the unused Kenney suburban houses (it will be enterable like the others) or ask for one.
-- **Animals (Quaternius, 7 skinned and animated models):** Cow 796 triangles, Horse 690, Pig 562, Sheep 610, Llama 661, Pug 644, Zebra 1,354, with 2-6 clips each; a chicken is missing for the coop. Skinned meshes cannot be instanced: cap at about 20 animated animals in view, freeze the far ones in their pose.
-- **Crops (Quaternius Ultimate Crops, 102 FBX, 61,600 triangles in all, average 604, largest 2,896):** 20 kinds (wheat, corn, tomato, carrot, pumpkin, lettuce, apple, beet, rice, watermelon, berries, mushroom, ...), each with growth stages 1-4, a field "Crop" patch and a "Harvested" pile. They need a one-time FBX-to-GLB conversion.
-  **Performance rule for fields:** Willow Fields has three fields of about 2,800 m2; filling them with one mesh per plant would cost millions of triangles. Crops are drawn as instanced patches (the lowest-poly stage 1 meshes are 40-130 triangles), only within 90 m of the player, with a hard cap of 150,000 crop triangles on screen; the growth stage is a per-patch choice.
-- **Other farm uses:** the Hand Saw and Saw Blade on the logging side; the Gas Can for the farm's tractor later.
-
-## Vehicles in hand (and not yet)
-Cars Bundle (7 cars), Jeep (CC-BY, 8,022 triangles: simplify to about 2,500), Van (952 triangles, one texture; the delivery and restock job) and the late-game City Pack cars. The **Pickup** (FBX, 8,655 triangles: simplify to about 2,800) and the **Flatbed truck** (FBX, 13,024 triangles, 12 materials, SpawnCamp Games on itch.io: simplify to about 3,500; the timber haul) have arrived.
-**Not uploaded yet:** the Bus (send FBX, OBJ, glTF or GLB with textures; I can also unpack ZIP and RAR). Budget (revised in 0.30.1): these flat-shaded low-poly cars cannot be simplified without losing their wheels, so a car is 2,800-3,100 triangles and the pickup 4,400; fine for the few parked ones, but traffic (15 vehicles drawn at once) needs either a lighter car model (a few hundred triangles), or a distance version with the wheels as separate small parts.
-
-## The design pass (Opus 5.5, before 0.29): interiors, ownership, furniture, tools, shops, farming, vehicles
-Everything below builds on how the game already works, so each feature is a small step, not a rewrite:
-- **Saves** are one plain object (`citylife.progress.v1` in localStorage) rebuilt on load by `normalizeProgress` (jobs.js): unknown fields are dropped, bad values get defaults. **Changes** go through pure transaction functions (`transactJob`, `housingTransaction`, `lifeTransaction`): state and an action in, new state or an error out.
-  Keep that rule for everything new: it is what lets the same functions move to a server later.
-- **Interiors** are separate three.js scenes (the studio: apartment.js; the shops: shops.js). Entering swaps the scene, so the outside world costs nothing while you are inside.
-- **Multiplayer** today is a relay (server.js) that forwards positions and a `room` name from a fixed list ('street', 'market', 'cafe', 'home'); players only see others in the same room. Nothing is server-authoritative yet.
-- **Needs** are food, thirst and energy (life.js), with a `groceries` count for cooking at home. Money is integer cents everywhere.
-
-### 1. Save format: a schema number and migrations
-- Add `progress.schema` (missing means 1). A build that only **adds** fields needs no bump: the normaliser fills defaults. A build that **changes the meaning** of a field bumps the schema and adds one migration step in `normalizeProgress` (`if (schema < 3) ...`). Steps run in order, so a very old save walks forward.
-- Every migration gets a test fed with a saved fixture of the old shape (tests/fixtures/save-schema-N.json).
-- Planned bumps: **schema 2** (0.30) adds `properties`; **schema 3** (0.32) turns tree plot `hits` into `damage` (chop points: hits x 8) and gives every tool in the bag a condition.
-
-### 2. Interiors
-- **Rooms.** A house interior is a scene built on demand from a **template** when you go in, kept while you are inside and for the next one other house, then disposed. Its room name is `house:<propertyId>` (server.js accepts the pattern `^house:[a-z0-9-]{1,40}$` besides the fixed rooms).
-  In multiplayer each owner gets their own copy of a house's interior (the room name becomes `house:<propertyId>:<ownerId>`), so two players never fight over one sofa; visiting comes later.
-- **Templates are data** (`interiors.js`): `{id, size: {w, d}, floors: [{y, walls, doors, windows, fixtures, spawn}], exit, starter: [...furniture]}`. Walls are built from the Kenney Furniture Kit's 2 m wall pieces (Wall, Wall Doorway, Wall Window) on a 2 m grid, so a template is a few dozen pieces.
-  Three templates match the three Kenney houses: **cottage** (house-a, one storey, 10 x 8 m inside), **two-storey** (house-e, 10 x 8 m on two floors) and **small cottage** (house-h, 10 x 7 m). Ceilings are 2.8 m (taller than the outside storey; nobody sees both at once).
-- **Stairs** in v1 are a fixture with a "Go upstairs / downstairs" prompt and a fade (the second floor is the same scene at y 3.2). Walkable stairs come later with ramp footing.
-- **Fixtures** do not move: walls, doors, windows, stairs, the kitchen run (cabinets, stove, sink) and the bathroom (toilet, shower or bath, sink). **Everything else is furniture** (section 4).
-- **Look:** a hemisphere light and one directional light, no shadows indoors; windows are flat panes tinted by the time of day; the front door is the exit (back outside 1.2 m in front of the door, facing away from the house).
-- **Budget:** at most 80 furniture pieces in a home; about 20,000-40,000 triangles; and the world is not drawn while you are inside, so indoor frames are cheaper than outdoor ones.
-
-### 3. Ownership: renting and buying
-- **Where:** a **Homes** app on the phone (list, photo, address, rooms, rent or price), later also an estate agent's office in Alder Center. Requirements: cash for the deposit or price; renting a second home ends nothing (you can hold several), and you choose which one is **home** (where you sleep and wake up).
-- **Save:** `progress.properties = {[propertyId]: {tenure: 'rent' | 'own', since: day, nextBillDay, rentDue, home: true|false, furniture: [...], storage: [...], containers: {...}}}`. The studio stays in `housing` (its billing works) and counts as an owned id for door rules (`ownedIds` = the keys of `properties`, plus 'studio' when rented). They merge later.
-- **Rent** reuses the studio's weekly billing (`advanceHousingDays`), generalised to a list of tenancies: rent and utilities due weekly; one missed week is a warning, two missed weeks lock the door (eviction), and the furniture goes to storage you can collect within 7 days.
-- **Buying** is the long goal: a deposit of 20% and weekly mortgage payments, or the full price. **Numbers to tune (Haiku 5.5):** studio rent $60 a week (today); a Cedar Heights house to rent $180 a week plus a $360 deposit; to buy $14,000, or $2,800 down and $175 a week for 64 weeks.
-- **Doors** come from `doorState(property, ownedIds)` (properties.js, already written): owned or rented opens the template interior; NPC homes and vacant ones stay locked.
-- **New homes come furnished** with a starter set (bed, fridge, table and two chairs, couch, lamp), so a new home works the moment you move in.
-
-### 4. Furniture: placing it and using it
-- **Catalogue** (`furniture.js`, separate from ITEMS because furniture never goes in the bag): `{id, name, model, price, size: {w, d, h}, layer: 'floor' | 'surface' | 'wall' | 'rug' | 'ceiling', surface?: height it offers, uses: [...], container?: {slots, accepts}}`.
-- **Buying** furniture (the phone's **Furnish** app first, a furniture shop later) delivers it **boxed to the home's storage** (later: a delivery job). Selling back pays 50%.
-- **Edit mode** (B, only inside a home you own or rent): choose a boxed item or pick up a placed one (E). A ghost follows the floor point under the cursor, snapping to a 0.25 m grid; R turns it a quarter turn. It is valid (green) when it is inside the room, does not overlap a wall, fixture or other floor piece, keeps a 1 m clearance in front of doors and stairs, and, for a surface item (a lamp, a plant, the TV), stands on something that offers a surface. Click places it; Esc leaves edit mode.
-- **Placed pieces** are `{uid, item, x, z, yaw (quarter turns 0-3), on?: uid}` in room coordinates; collision boxes come from the size and the quarter turn (axis-aligned, like the studio's colliders).
-- **Uses** (each an E prompt in the existing interaction list):
-
-| Piece | Use | Effect (existing systems first) |
-|---|---|---|
-| Bed (single, double, bunk) | Sleep | the studio's sleep (energy, the clock jumps); a bed in your home sets where you wake |
-| Fridge | Open | a container of 20 food and drink slots; eat from it as from the bag |
-| Stove or oven | Cook | turns 1 grocery into a meal (`life.groceries`): more food restored than raw groceries |
-| Sink | Drink | +25 thirst, free (the tap); wash later |
-| Couch, chair, stool, bench | Sit | energy recovers 1.5 times faster while seated |
-| Desk with a computer | Use | opens the phone's apps on a big screen; work-from-home gigs later |
-| TV | Watch | sit and pass time 4 times faster (a mood need later) |
-| Drawers, night stand, bookcase, shelf | Open | containers of 4-12 slots for any item |
-| Closet | Change | opens the character creator (outfit only) |
-| Lamp, ceiling light | Switch | light on or off |
-| Washer, dryer, bath, shower, toilet | (none yet) | placeholders for a hygiene need, if we ever add one |
-| Plants, rugs, coat rack, pictures | Decor | none |
-- **Containers** live in `properties[id].containers[uid] = [slots]`, with the bag's slot rules (stacking, item types the container accepts).
-
-### 5. Tools, wear and fuel: the save details (the rules are in "Tools, wear, and the logging chain")
-- **A tool's numbers** live in one table (`tools.js`): `{id, model, damage, swingSeconds, durabilityHits, unlockLevel, price, fuel?: {tankMl, mlPerSecond}}`; the chainsaw's damage is per second of holding.
-- **Each tool in the bag** carries its own condition: a bag slot for a tool becomes `{id, quantity: 1, cond: 0-1000, fuel?: ml}`. `normalizeInventory` keeps `cond` and `fuel` for tools and drops them for anything else. Condition falls by `1000 / durabilityHits` per hit (rounded so it always reaches 0).
-- **Gas Can** is an item with its own `fuel` (0-5,000 ml): refuelling moves fuel from the can to the saw. A can is bought full at the supplier and refilled at a gas station later.
-- **Tree plots** store `damage` (chop points taken) instead of `hits`; a pine has toughness 24. Migration in schema 3: `damage = hits x 8`.
-- **Repairs:** a whetstone item (+250, consumed) and the workshop (to 1,000 for 40% of the price) are transactions like the rest.
-
-### 6. Store jobs: the cashier shift (the first rung of "Store jobs and the POS")
-- **Starting:** the Corner Market's clerk offers a shift (as delivery work is offered today). A shift is `progress.work.shift = {shop, role: 'cashier', startedAt, served, mistakes, tipsCents}`; it ends at closing time or when you clock out.
-- **Customers** are NPCs spawned inside the shop's scene (at most 6 at once): enter, browse 2-3 shelves (each picks 1-6 products), queue at the counter, pay, leave. They reuse the pedestrian walking code, steered by a short script.
-- **The POS** (the 3D model is a prop): press E at the register to open the POS overlay. Scan each item (click it, or hold E to scan the next), the total builds up; the customer pays by card (tap) or cash (enter the change; the overlay checks it). Pay: a base per customer plus tips for speed and accuracy; mistakes cost tips, not wages.
-- **Products** are the existing food and drink ITEMS plus new ones from the Food Pack (bread, eggs, cheese, steak, vegetables), with prices in the item table. Shelves in an NPC-run shop are not saved (they refill each day); saved stock begins with player-owned shops.
-- **Budget:** at most 6 customers and about 200 product instances (drawn as instances) inside the shop scene.
-
-### 7. Farming and animals (designed now, built after the tools)
-- **Allotments:** Willow Fields' fields are split into 10 x 10 m allotments you lease weekly from the farmstead (like rent). Each 1 m cell in a leased allotment can be tilled, planted, watered and harvested.
-- **Save:** `progress.farm = {allotments: {[id]: {leasedUntil, cells: {"x,z": {crop, plantedAt, wateredAt}}}}}`. The growth stage is never saved: it is computed from the time since planting, faster when watered within the last game day.
-- **Crops** come from Ultimate Crops (stages 1-4, then harvest); harvested produce becomes Food Pack items you can eat, cook or sell.
-- **Drawing:** instanced, one instanced mesh per crop and stage; only cells within 90 m; at most 150,000 crop triangles on screen.
-- **Animals** live in pens by the barns and wander inside them (steering only, no path-finding). They are skinned (no instancing): at most 20 animated in view, the rest frozen in a pose; products and feeding come later.
-- **Assets still missing for farming:** a hoe or shovel, a watering can, seed packets and a chicken.
-
-### 8. Vehicles: the basics (a fuller Opus pass before the vehicle build)
-- **Driving** is arcade and kinematic, not a physics engine: `{x, z, yaw, speed, steer}`, with acceleration, braking, top speed and turning radius per vehicle class. A vehicle stays on drivable ground (roads, driveways, dirt, grass at half speed; never water, buildings or trees, which use the existing colliders).
-- **Speeds (metres a second):** a bike 6, an everyday car 11, the van 10, a loaded truck 8, premium cars 16. With the map's size (540 x 480 m) that keeps a corner-to-corner drive at about 1-2 minutes.
-- **Save:** `progress.vehicles = [{uid, model, x, z, yaw, fuel, cond, parkedAt?: propertyId}]`; a vehicle parks on a plot's `park` spot. Multiplayer: the relay forwards each player's vehicle model and pose with their position.
-- **Budget:** at most 15 vehicles drawn, each simplified (about 1,200 triangles for cars, up to 3,000 for trucks).
-
-### 9. Build order and models
-| Version | What | Model |
-|---|---|---|
-| 0.29 (done) | Asset import pass: converter (GLB, glTF, FBX, vertex colours, simplify), farm buildings and a Kenney farmhouse, Alder Center's buildings, five more Cedar Heights houses, the timber yard, parked vehicles, street lamps and benches, the distant hills, the Credits screen, the `assets-src` archive. Moved to later builds: TGA textures and skinned animals (farming), river rocks and bushes (map fill) | Sonnet 5.5 |
-| 0.31 (done) | A living town (not in the first build order): Alder Center's street wall, sidewalks, the town square with a fountain, a marked parking lot, crosswalks and markings, street furniture, 15 parked cars, a bus stop, the Store recoloured | Sonnet 5.5 |
-| 0.32 (done) | Main menu (Play, Multiplayer host/join, Settings, Credits), dev mode behind one flag with a dev panel, and the reset safety net (nearest clear spot); see "Menu, dev mode and reset" below | Sonnet 5.5 |
-| next (was 0.32; that number went to the menu release) | Eastbank Works from the Kenney Industrial kit (warehouse, workshop, supplier, a gas station with a canopy and pumps, truck yards, containers), then the carry and sawmill chain (Opus 5.5 designs it first) | Sonnet 5.5 |
-| 0.30 (done) | Interiors v1 and ownership: nine house rooms (generated from each model's size and door, not three fixed templates), renting and buying in the Homes app, a starter set of furniture, sleep and cook. Built with plain wall boxes, not the Kenney wall pieces; rooms are kept after the first visit, not disposed; sink, fridge, sofa and TV uses and mortgages move to 0.31 | Sonnet 5.5 |
-| 0.31 | Furniture edit mode, storage and the Furnish app | Sonnet 5.5 |
-| 0.32 | Tools: the axe and chainsaw ladder, wear, fuel, repairs, the schema 3 migration, the bucking step and the sawmill blade | Sonnet 5.5 |
-| 0.33 | Store jobs: the cashier shift and the POS | Sonnet 5.5 |
-| 0.34 | Farming and animals | Opus 5.5 checks the numbers, Sonnet 5.5 builds |
-| 0.35+ | Vehicles | Opus 5.5 architecture pass, then Sonnet 5.5 |
-After each build, **Haiku 5.5** for number tuning (prices, wages, durability, growth times). Every build keeps the rules that have worked: data first, pure transactions with tests, `validateMap` for anything placed, and the performance budget checked before shipping.
-
-## Menu, dev mode and reset (0.32.0, done)
-Models: **Sonnet 5.5** built all of it (menu, host/join screen and address parsing, dev panel, `safe-spot.js`); **Opus 5.5** is for the part not built: a deployed relay with room codes and authentication (the hosted HTTPS page needs `wss://`, and `npm run server:lan` has no login);
-**Haiku 5.5** for later number tweaks (the 30 m search radius, the 300 m2 pocket size, the 1 second stuck time, the 8 second connect timeout).
-- **Dev mode is one removable flag.** `dev-flag.js` holds `DEV_MODE`; `dev.js` builds its own button, panel and CSS at runtime and talks to the game only through an `api` object, so nothing of it is in `index.html` or `style.css` (a test checks this). Deleting `dev-flag.js`, `dev.js` and the two places in `game.js` removes it.
-  The older development tools in the phone's Settings (stat drain multiplier, add a test item) and the `?debug` hook are not behind the flag yet; fold them in when the flag is next touched.
-- **Every placement goes through `placeSafely`.** Reset, teleport, unstick, loading a saved position and the stuck rescue share one search, so a new way to move the player gets the guarantee for free. It is event-driven, never per frame.
-- **Play is offline; multiplayer is a choice** made on the menu before the world starts. If a later design wants drop-in/drop-out multiplayer, the connect logic is already one function (`createMainMenu`'s `start`) and `MultiplayerClient` can connect at any time.
-
-## Open country and vehicles
-- Walkable ground is "the playable rectangle minus water", not "the zones". Zones are names and rules (grid, labels); keep new districts as zones, never as fences. Solid things get colliders.
-- Roads are designed for vehicles from the start: lanes 3.5 m, shoulder 1 m (a 9 m road), curve radius at least 17 m, 12 m streets where trucks turn. When vehicles arrive they follow road edges (`roadCenterline`) and the plots' `facing`.
-- Tree regrowth exists (stump, a sapling after 3 game days, a full pine after 7; one game day is 48 real minutes of play). That is about 70 trees an hour across Pine Ridge's 395, far less than one player can fell (about 4 a minute),
-  so the forest empties in a couple of hours; the lumberjack rebalance (shorter maturity of about 2 game days, replanting saplings with a tool, wood prices) belongs to the tool-tier work.
-
-## Map size and vehicles
-The playable area is 540 x 480 m. On foot (run 8.2 m/s) that is about 66 s across; a car at 14 m/s (50 km/h) would cross in about 39 s, which is too soon. Real routes: Eastbank Works to the sawmill by the Freight Road is about 440 m (31 s at 14 m/s); the city to Willow Fields about 260 m (19 s).
-- **Recommendation: do not enlarge the map for now.** The levers that cost nothing: early vehicle speeds of 9-11 m/s (a bike 6, a delivery van 10, a loaded truck 8, a fast car later), speed limits, fuel and loading time, and winding the long roads (the terrain mask lays curved ribbons; the Freight Road and the County Road can snake and lengthen their routes by 30-50%).
-  Targets: city to farm 45-60 s, city to sawmill about 90 s, corner to corner 2-3 minutes by the early vehicles.
-- Enlarge when a district needs it, not before. The mask is 0.5 m cells (1,120 x 1,000 = 1.1 M cells, about 3 MB, built in 100 ms): a map twice as long is still cheap; the costs are trees, props and the roads to author. The east edge (beyond x = 300) and the far north have room for a highway or harbour district later.
-- Vehicles follow `roadCenterline`, use the plots' `facing` for driveways and park on the lots reserved in the zones. **Model: Opus 5.5** for the vehicle architecture (physics model, networking, saves); **Sonnet 5.5** for the district roads and parking lots.
-
-## The sawmill chain and physics (planned)
-Loop: bring logs to the sawmill, they become planks over a few seconds, the blade spins with a sound, and planks pile up beside it (an instanced pile with a cap on how many are drawn; the count is saved, not each plank).
-Needs: a spinning blade (the model is one fused mesh, so either split the blade out of it or lay a spinning disc over it), an audio system (none yet: synthesised with Web Audio or CC0 sound files), item and economy
-rules. Sonnet 5.5 builds it; Opus 5.5 designs the plank item and the stack save format.
-**Physics:** no general rigid-body engine. Scripted animation (logs slide along the rails, planks drop and settle into precomputed pile slots) costs almost nothing and behaves the same on every client. A real engine
-(cannon-es, Rapier) costs CPU for every active body (dozens are fine on a desktop, hundreds are not), needs colliders for the terrain, buildings and trees, must save every body's position, and cannot be kept
-identical between players in multiplayer. If loose objects that tumble are wanted later, cap them at about 20 active bodies near the player that freeze into static props when they stop (Opus 5.5 to design).
-
-## Performance budget (the rule: say so before building anything that would hurt)
-Measured on the current world: all trees together are 0.89 M triangles; with culling a view draws 8% (city) to about 60% (inside Pine Ridge) of them; the
-world has about 45 draw calls. Claude cannot measure real frame rates (the test renderer is software-only), so estimates come from triangle and draw-call counts
-plus your reports (165 FPS in the forest and 105 at the bridge before culling). Flag it, with a number and a cheaper alternative, when a request would:
-- add more than about 1,000 tree-sized instances (1,000 trees is about 1.2 M triangles; choppable ones cost double because of shadows), or any large scatter of
-  grass, rocks or flowers (alpha cards overdraw; keep within a few thousand within 30 m, chunked);
-- plant crops one per cell (each of the three fields is thousands of cells): needs chunked, low-poly instances;
-- put more than about 15 skinned characters on screen, or more than about 10 cars;
-- add shadow-casting objects in bulk, textures above 512 px per asset, or more than about 300 draw calls;
-- Cheaper levers already in place: fog and culling distance, scenery casting no shadows, instancing. Next: chunked far versions and lower-poly LODs.
-
-## Map (concept 03A: Town & Outskirts), chunk by chunk
-The world is being terraformed to the concept, flat (no elevation). The river curves; every zone is still an axis-aligned rectangle and the roads are straight.
-**Before Cedar Heights, the Sawmill road and any curved street:** walkable areas need to stop being rectangles (a walkable polygon or ribbons along road centrelines), because the concept's loop road and winding timber road cannot be walked on a rectangle. Opus 5.5 to design, then Sonnet 5.5.
-| Phase | Content | Status / model |
-|---|---|---|
-| 1 | The land, a curving river, the County Bridge and road, the zones (city, County Road, Willow Fields, Pine Ridge), a thinned forest with clearings, three open tractor-ready fields | **Done in 0.22.0 and 0.23.0** |
-| 2 | Farmyard (barn, farmhouse, silos) in the farm's north-east strip and the Sawmill in Pine Ridge's clearing, both placed from the map; the fork signpost | **Done in 0.24.0**. Still to do: timber loading props, river-bank rocks and grass, farm animals and crops (Sonnet 5.5) |
-| 3 | Alder Center in the city's northern half (town square, police station, plots C1-C2); parking lots | Sonnet 5.5 |
-| 4 | Eastbank Works and its cargo route (the first gas station); Cedar Heights and plots R1-R3 | Sonnet 5.5 |
-| 5 | Ambient traffic on the road graph, then drivable vehicles | Opus 5.5 for the vehicle architecture, Sonnet 5.5 to build |
-
-Target: under 60-90 seconds on foot between main hubs (the city to Pine Ridge's first clearing is about 150 m, about 35 s walking).
-
-## NPCs
-- Homes and schedules: home → work / shop / park → home by time of day, walking the sidewalks, entering and leaving through
-  the same doors as the player and hidden while inside. Needs the road graph and door data. **Model: Opus 5.5** for the
-  design and first pass (schedules, pathing, saves), then Sonnet 5.5 to iterate.
-- Far-away NPCs are data only (position along a schedule), not meshes.
-
-## Lumberjack: tools and levels (planned)
-**Today.** One axe ($20). A pine takes 3 hits (2 from level 6); 2 XP per swing, 12 per fall; 40 XP to level 2 and 20 more
-for each level after that, capped at 20 (about 4,180 XP, roughly 260 pines). Perks: faster swings every level, a third log
-at level 3, a fourth at level 8. Logs sell for $1.00.
-
-**Decided model: the equipped tool sets the hits; levels refine it a little.**
-- A tree has `toughness` in chop points (pine 24, a bigger tree later 36 or 48). A swing deals `damage` = tool damage x (1 + 0.04 x (level - 1)); hits = ceil(toughness / damage).
-  `chopTree` reads the tool in the equipped hotbar slot (`progress.equipped`) and nothing else, so an axe in the bag but not equipped does nothing, and a tool without a `chop` entry cannot chop.
-- Tools (numbers to tune in play), hits for a pine at level 1 and at level 20:
-
-| Tool | Unlock | Price | Damage | Hits (L1 / L20) | Notes |
-|---|---|---|---|---|---|
-| Axe (today's, not called "starter") | level 1 | $20 | 3 | 8 / 5 | one-handed carry; about 6.4 s a tree |
-| Steel Axe | level 5 | $120 | 4 | 6 / 4 | |
-| Lumberjack Axe | level 10 | $350 | 6 | 4 / 3 | two-handed swing, a bonus log now and then |
-| Chainsaw | **lumberjack level 15 and the Steel Axe** | $1,200 + fuel | 24 per 2.5 s hold | one cut, about 2.5 s | hold E to cut; uses fuel; loud; needs a gas station; locked until level 15 |
-| Harvester (optional, late) | level 20 | job-site | n/a | n/a | industrial, tied to the sawmill |
-
-- The hotbar already shows the equipped tool, so the chop code and the HUD "N hits" hint both read the same tool table (one place: `tools.js`). Level perks no longer reduce hits directly (they raise damage 4% a level), and swing time still shrinks from 0.8 s to 0.5 s.
-- XP: 2 per swing, and the XP for a fall scales with toughness so a level-15 chainsaw user is not out-levelled by the axe grind. Retune so level 15 takes about 150 pines (about 40 minutes of play), not 85.
-- Old saves: plots store `hits` as whole numbers; switch to `damage` (chop points taken) and migrate by hits x 8 (the old three-hit pine becomes 3/8 chopped).
-
-### Regrowth and replanting
-- **Today:** a felled pine is a stump, a sapling after 3 game days and a pine again after 7 (one game day is 48 real minutes of play: about 5.6 hours). Pine Ridge's 395 pines regrow about 70 an hour; one player fells about 260 an hour with the Axe, so the forest runs out in roughly 90 minutes of nonstop chopping.
-- **Proposed:** natural regrowth is faster (sapling after 1 game day, a full pine after 2.5, about 2 real hours) but a stump blocks it: the tree only comes back after the stump is cleared (3 swings) or on its own after 4 game days.
-  **Replanting** speeds it up: pine cones drop from felled trees (about 1 in 3), a cone plants a sapling in a cleared forest cell (hold E with the cone, about 3 s) and that sapling matures in 2 game days; each replant also earns forestry XP.
-  A tree you plant counts for a **Reforestation** bonus the sawmill pays (a small price premium) while the forest holds more than 70% of its trees, so replanting is the sustainable choice, not a chore.
-  Targets: a player who replants every tree they fell keeps the forest above 60%; one who does not empties it.
-- **Plots, saves and multiplayer:** a plot stores `{tree, damage, felledAt, plantedAt}`; maturity is derived from the game clock, as today. **Model: Opus 5.5** to design the save migration and the balance numbers; **Sonnet 5.5** to build `tools.js`, the chop path, cones, planting and the HUD; **Haiku 5.5** for price and number tweaks afterwards.
-- Tool durability and sharpening are optional extras; skip until the economy needs a money sink.
-- Species: pine now; add oak and a giant tree in the deeper forest so tools matter. XP per fell scales with toughness, which
-  also fixes the grind at high levels.
-- Sell price rises with log grade (tool and level), and the sawmill and building supplier turn logs into planks and parts
-  for building later.
-- **Save impact:** `progress.equipped` already holds a tool id; plots store `hits` as whole numbers, so switch them to
-  accumulated damage and migrate old saves. **Model: Opus 5.5** to design the migration and balance; **Sonnet 5.5** to build the items,
-  chainsaw behaviour and UI; **Haiku 5.5** for price and number tweaks afterwards.
-- Lumberjack as a job (contracts at the lumber yard: "deliver 10 logs") reuses the gig system. **Model: Sonnet 5.5.**
-
-## Fuel, gas stations, farm, hired workers, vehicles (planned)
-- **Fuel.** One fuel resource at first. Each tool or vehicle has a tank size and a burn rate (the chainsaw burns it per second of
-  cutting). Low-fuel warning, a **jerry can** item, and a paid tow as a last resort so nobody is stranded. Two stations: one by
-  the woods road for loggers, one on the freight road near Eastbank Works for trucks. A station is a small template interior plus
-  outdoor pumps used with E. Model: **Sonnet 5.5** for the station and pumps; **Opus 5.5** to design fuel in the save format.
-- **Farm slice.** Farmhouse (facade only at first), barn (storage and equipment, template interior), and the existing eight
-  fields as plots. Loop: till, plant, grow over game days, harvest, sell; a Farming skill on the same skills table. The farmer sells
-  seeds and rents you a field for a daily fee (a stepping stone to plot ownership). Fields are about 230 cells, so add area
-  tools (a 3x3 hoe, later a tractor with fuel) and draw crops as instances. Model: **Sonnet 5.5**; **Opus 5.5** for rent and ownership.
-- **Hired NPC workers (late game).** Treat each as a contract: a wage per day, an output per day, a site and a reliability, settled as
-  game time passes, with a visible worker only when you are nearby. Wages become recurring bills. Needs NPC homes, plot ownership
-  and storage first. Model: **Opus 5.5**.
-- **Parking, driving, traffic, in this order.** (1) Parking lots as map data (spaces with position and heading) filled with parked
-  cars: **Sonnet 5.5**, with Alder Center and Eastbank. (2) Driving: a new mode with its own controls, camera, entering and
-  leaving, collisions, fuel and a saved position; recheck the 60-90 second travel targets. **Opus 5.5** for the architecture, Sonnet to
-  build. (3) Traffic: ambient cars on the road graph, capped at about 10 visible, never running you over at first: **Sonnet 5.5**.
-
-## First pack: Quaternius Stylized Nature MegaKit (done in 0.21.0)
-Three pines for the woods, two broadleaf trees for the farm and the edges, converted and instanced (see `ASSETS.md` and the README). The Standard
-version has no log or stump model. Follow-ups, in order of value:
-1. **Performance check in the forest** on your machine (worst case 1.64 M triangles in view; instanced meshes are culled whole). If it is slow: split
-   the instances into 32 m chunks so distant chunks are culled, or add a lower-poly far version. Sonnet 5.5.
-2. **A log and stump model** from a fuller pack (or the Source version) to replace the textured cylinders. Sonnet 5.5.
-3. **More of the pack:** bushes, ferns, flowers, grass, rocks and pebbles for the farm and the forest floor, the dead and twisted trees for variety. Sonnet 5.5.
-
-## Asset foundation (Step 0, before adding more art)
-- **Contract:** 1 unit = 1 m, the character is 1.95 m, +Z forward, Y up, pivot at the base centre, sizes snapping to the 1-unit grid,
-  a polygon budget per category, one flat-shaded look.
-- **Manifest:** `ASSETS.md` plus a data file of id, category, size, pivot, tags, source, licence. Maps and items reference ids
-  (`vehicle.pickup`), never file names.
-- **Converter and loader:** the character converter generalised to static models (weld, flat shading, byte-packed, embedded),
-  instancing for repeated props, and a preview page that shows any asset beside the character for scale.
-- **Storage:** release folders copy the 3 MB of character data every version; keep assets in a shared, unversioned location
-  (test that file:// loading allows it first).
-- Collect in this order: town buildings, street props and parked cars (Alder Center); warehouse, workshop, trucks, crates, fuel
-  pumps (Eastbank); farmhouse, barn, silo, fences, crop stages, tractor (farm); axe tiers, chainsaw, jerry can, oak, giant tree,
-  stump, sapling, logs (tools); sounds later. Check each pack's licence. Model: **Sonnet 5.5**.
-
-## Other near-term items
-| Item | Model |
-|---|---|
-| Logs as models (Quaternius nature kit; check the licence on the pack first), regrowth tuning | Sonnet 5.5 |
-| Farming: tilling, planting, harvest on the plot grid; reuses skills and stats | Sonnet 5.5 |
-| Base building: modular pieces snapping to the 1-unit grid, plot ownership | Opus 5.5 (design), Sonnet 5.5 (build) |
-| Better axe grip / further animation polish | Sonnet 5.5 |
-| Multiplayer beyond positions (appearance, shared plots, authority) | Opus 5.5 |
-| Copy, constants, CSS, README | Haiku 5.5 or Sonnet 5.5 |
-
-## Open questions
-- Should the river be crossable only at bridges for NPCs and vehicles too (yes, planned)?
-- Hunger, thirst and energy drain while chopping: none today.
-- How fast should regrowth be once oaks and giants exist?
-
-## Interior editor, ground layers and prop clearance (0.32.0 round two, done)
-Models: **Sonnet 5.5** built all of it. **Opus 5.5** for the next interiors step (the shell: windows, doors, ceilings, lighting, and whether furniture should become player-editable with saves: the furniture edit mode in the 0.31 row above); **Haiku 5.5** for later nudges (sign wording, the 2.5 m prop clearance, the editor's step sizes).
-- **Layouts are data now.** `houseLayout()` generates; `interior-layouts.js` may replace the furniture per house model; the editor writes it. This is also the first piece of the player furniture edit mode (the list of pieces with x, z, yaw and y is the same shape `progress.properties[id].furniture` would hold).
-- **A write-back path exists** (`scripts/dev-server.mjs`): one validated write, localhost only. If more dev tools need to write to the code, add them there, not as new servers.
-- **Ground layering is a rule:** any new flat ground mesh goes through `groundLayer()` in `world.js` (a rank in `GROUND_LAYERS`). Do not stack planes without it.
-- **Generated trees keep 2.5 m off every landmark** (`nearProp`). A new landmark needs no change; a pinned test shows the numbers.
-## Interior shell (decided requirements, to design next: Opus 5.5 designs, Sonnet 5.5 builds)
-The user's answers (also in `context.md`): windows show the outside from inside and the inside from outside; swinging doors with open/close animations; ceilings (and roofs) that fade so they do not hide the room; stairs you can walk up, and an entry spot on every floor (upper floors had none); switchable lights; style to be looked at (some Blender work expected).
-**What exists to build on:** shop interiors already sit *in the world* behind real glass (`shops.js`, `storefronts.mjs` proves the sightlines) and `doors.js` has a sliding door; walls fade between the camera and the player (`indoor-camera.js`); a floor's height under the feet comes from `world.floorAt` (the sawmill deck), so ramp footing has a precedent; houses are separate scenes built by `buildHouseRoom` and stairs are a "go upstairs" fade (`changeFloor` in `game.js`).
-**Questions the design pass must answer, with the cost of each:**
-1. *In-world house interiors.* Glass both ways needs the room to be in the world, not a separate scene. Build one interior at a time, only for the house you are at or inside (like shops), drop it when you leave. How far away may you see in (windows are about 1.2 x 1.5 m, so a few metres)? Budget: a house interior is 20-30 furniture models (about 10,000 triangles) plus walls; one at a time is fine, nine at once is not. The Kenney houses' windows are opaque textures on the outside model, so real glass means cutting the window openings in the shell (Blender) or drawing glass panes over them.
-2. *Doors.* A swinging leaf for the front door (split the door recess from the fused house mesh, or draw a leaf over it); animation 0.4-0.6 s; the door blocks the doorway until open (the shop doorway blocker pattern); inner doors (the bathroom) later.
-3. *Ceilings.* One ceiling slab per floor that fades (the dither used for trees, or opacity) when the camera is above it or the player is under it; the roof the same. Not drawn at all from outside when the shell shows the inside through windows? Decide.
-4. *Stairs.* Walkable: a ramp in the footing (`floorAt`-style), collision on the sides, a landing; replaces the fade. Every floor gets an `entry` (where you appear arriving from below) and the editor's `layoutProblems` must check you can walk from each entry to what matters.
-5. *Lights.* Per-lamp or per-room switch (E), state saved per house, default by time of day. Real lights are expensive: use emissive materials plus at most one point light per room.
-6. *Style.* Flat Kenney versus something warmer; whatever is chosen, one set for the shell and the furniture. If a house shell kit is made in Blender, the converter (`scripts/build-props.mjs`) already reads glTF/FBX.
-**Frame-rate flags to raise before building:** interiors in the world (draw calls and shadows for one more room), real glass (transparency sorting, overdraw), more than one point light, ceilings that cast shadows.
-**Order suggested:** shell and stairs and entries first (they change the data the editor and the saved layouts use), then doors, then ceilings, then lights, then style passes.
-
-## Furniture for players, later (decided direction)
-Buy furniture in a shop -> **order it and pick it up at the store** -> a **box labelled with the furniture's name** -> carry it home -> **placing the box shows the real prop** (the user's reference is ContractVille's flow). Placing must be easy: a snapping ghost (green or red), one key to rotate, pick up again. The editor's functions in `interior-edit.js` and the checks in `layoutProblems` are the rules to reuse; the saved shape is a list of `{id, x, z, yaw, y}` per floor under `progress.properties[id].furniture`. Opus 5.5 for the save format and the ordering/delivery rules; Sonnet 5.5 for the UI.
-
-## Multiplayer, later (decided direction)
-Hosted for real (a deployed `wss://` relay with login and room codes), not only on a local network. Needs Opus 5.5 to design authentication and what becomes server-authoritative (`DESIGN.md`, "Multiplayer today"). Not before the interiors and furniture, by the user's choice.
+## 8. Non-goals for v1
+- Actual elevation or hills (prep only: `heightAt`); general rigid-body physics and simulated vehicle physics (suspension, skidding); drop-in/drop-out multiplayer and server authority.
+- NPC burglary; a hygiene need (placeholders only); large-scale traffic in 0.33.
+- Selling raw logs; enlarging the map before a district needs it; per-cell crop meshes; bulk shadow-casting scenery; all interiors built at once.

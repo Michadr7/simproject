@@ -5,7 +5,7 @@
 //           {type:'forest', tree:null, hits:0, felledAt:gameMinutes|null}  felled: stump, then sapling, then a pine again
 // Felling a pine leaves logs on the ground (progress.logs) that the player picks up.
 import {gridZoneAt,parseCellKey,cuttableTreeAt,cellCenter,isWalkable} from './world.js';
-import {addItem,hasItem} from './inventory.js';
+import {hasItem} from './inventory.js';
 import {addXp,levelOf,hitsNeeded,logsPerTree,XP,freshStats} from './skills.js';
 
 export const TREE_HITS=3; // hits for a level 1 lumberjack (skills.js has the perks)
@@ -66,13 +66,6 @@ export const nextLogIdFor=(value,logs)=>Math.max(Number.isSafeInteger(value)&&va
 export function expireLogs(progress,now){
  const logs=(progress.logs||[]).filter(l=>now-l.t<LOG_LIFETIME);
  return logs.length===(progress.logs||[]).length?progress:{...progress,logs};
-}
-export function collectLog(progress,id){
- if(!(progress.logs||[]).some(l=>l.id===id))return {error:'That log is gone.'};
- const added=addItem(progress,'wood-log');
- if(added.error)return {error:'Your bag is full.'};
- const stats={...(added.state.stats||freshStats()),logsCollected:(added.state.stats?.logsCollected||0)+1};
- return {state:{...added.state,stats,logs:progress.logs.filter(l=>l.id!==id)},message:'Picked up a wood log.'};
 }
 
 // ── Chopping ──────────────────────────────────────────────────────────────────

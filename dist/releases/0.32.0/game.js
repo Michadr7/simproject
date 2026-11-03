@@ -4,7 +4,10 @@ import {worldDoors,doorOf,propertyById} from './properties.js';
 import {buildHouseRoom} from './interiors.js';
 import {propertyTransaction,heldIds,listingOf} from './ownership.js';
 import {CREDITS} from './credits.js';
-import {chopTree,felledTrees,plotAt,collectLog,expireLogs,regrowTrees,felledStages,CHOP_RANGE} from './grid.js';
+import {createSawmillController,freshSawmill,switchSawmill,switchLabel,BELT_SLOTS,PLANK_TINT,PLANK_THIN} from './sawmill.js';
+import {createAudio} from './audio.js';
+import {shoulderLog,putDownLog,feedLog,takePlanks,putDownPlanks,pickUpPlanks} from './carry.js';
+import {chopTree,felledTrees,plotAt,expireLogs,regrowTrees,felledStages,CHOP_RANGE} from './grid.js';
 import {levelOf,swingTime,hitsNeeded,perkText} from './skills.js';
 import {createMinimap} from './minimap.js';
 import {createHeldItem,disposeHeldItem} from './item-models.js';
@@ -85,6 +88,12 @@ for(const x of [3.8,-10.2]){box(.85,.8,.55,x,.55,-7,'#637f70',true);label('DELIV
 // Farm and forest zones, plot grid and cuttable trees (world.js). Built after polishWorld so its
 // texture pass only touches city meshes.
 const world=createWorld(scene,{label});
+const sawmillCtl=createSawmillController(scene.getObjectByName('prop-sawmill-v4'),MAP.landmarks.find(l=>l.id==='sawmill'),{belt:()=>GameState.progress.belt}); // the sawmill's switch, blade, cut and belt (sawmill.js)
+let sawmillState=freshSawmill();
+// Sound (audio.js): generated with Web Audio, started by the first click or key press (browsers need one), silent beyond 40 m; volume and mute are saved and set in the main menu's Settings.
+const audio=createAudio({AudioContextClass:globalThis.AudioContext||globalThis.webkitAudioContext,storage:{getItem:k=>localStorage.getItem(k),setItem:(k,v)=>localStorage.setItem(k,v)}});
+for(const type of ['pointerdown','keydown'])window.addEventListener(type,()=>audio.unlock(),{capture:true});
+document.addEventListener('visibilitychange',()=>audio.setActive(!document.hidden));
 const vehicles=createVehicles(scene,colliders,world.fade); // the parked cars are converted models; they need the world's sightline fade
 for(const t of world.addBroadleaves(OAK_TREES.map(([x,z])=>({x,z,y:footingAt(x,z)}))))colliders.push({x:t.x,z:t.z,hx:t.radius,hz:t.radius}); // trunks block walking
 // 'For rent or sale' signs on the lawns of the houses you can rent or buy; each disappears while you hold the house (synced from the ownership state in frame()).
@@ -116,6 +125,17 @@ function houseHome(id){let h=houseHomes.get(id);if(h)return h;const property=pro
  h={kind:'house',id,name:property.name,room,BED:room.BED,BED_FLOOR:room.BED_FLOOR,ENTRY:room.ENTRY,EXIT:room.EXIT,KITCHEN:room.KITCHEN,STAIRS:room.STAIRS,outside:{x:door.x+door.faceX*1.8,z:door.z+door.faceZ*1.8,yaw:Math.atan2(-door.faceX,-door.faceZ)},camera:createIndoorCamera(camera,room.occluders)};houseHomes.set(id,h);return h}
 const savedCharacter=loadAppearance({getItem:key=>localStorage.getItem(key)});
 const avatar=createCharacter(savedCharacter||defaults),player=avatar.group;player.name='player';scene.add(player);
+// Carried things (carry.js): a log on the right shoulder (the ground logs' own mesh), or a stack of planks (the model's own plank mesh, about half size so it fits the avatar).
+const groundLogs=scene.getObjectByName('ground-logs'),carryLog=new THREE.Group(),carryLogMesh=new THREE.Mesh(groundLogs.geometry,groundLogs.material);carryLogMesh.rotation.y=Math.PI/2;carryLog.add(carryLogMesh);carryLog.position.set(-.2,1.5,.05);carryLog.rotation.x=-.12;carryLog.visible=false;carryLog.name='carried-log';player.add(carryLog);
+let carryPlanks=null,dropsFor=null;
+function syncSawmill(){
+ const p=GameState.progress,c=sawmillCtl,hands=!inside&&!shop;carryLog.visible=hands&&p.carry?.kind==='log';
+ if(!c?.ready)return;
+ if(!carryPlanks){carryPlanks=new THREE.Group();carryPlanks.name='carried-planks';for(let k=0;k<4;k++){const plain=c.plank.material.clone();plain.color.multiplyScalar(PLANK_TINT[k]);const m=new THREE.Mesh(c.plank.geometry,plain);m.scale.set(.55,.55*PLANK_THIN,.55);m.rotation.y=Math.PI/2;m.position.y=k*.07;carryPlanks.add(m)}carryPlanks.position.set(-.2,1.4,.05);carryPlanks.rotation.x=-.12;player.add(carryPlanks)}
+ const n=p.carry?.kind==='planks'?p.carry.count:0;carryPlanks.visible=hands&&n>0;carryPlanks.children.forEach((m,i)=>m.visible=i<n);
+ if(dropsFor!==p.plankDrops){dropsFor=p.plankDrops;c.setDrops(dropsFor)}
+ if(!c.cutting&&c.count()!==p.belt)c.setBelt(p.belt); // a new game or a loaded save: the belt shows what is saved
+}
 // Rendering consumes the simulation state; gameplay never reads mesh transforms.
 function syncPlayerMesh(){
  player.position.set(me.position.x,me.position.y,me.position.z);
@@ -145,7 +165,7 @@ function clearWorldPanel(){if(worldPanel?.actor){const pa=getMeWorldPosition(new
 function pause(show){if(sleepElapsed!==null)return;if(show){phone?.close();inventoryUI?.close();storeUI?.close();}if(show){$('dialog').hidden=true;clearWorldPanel();}$('controls').hidden=!show;modal=show;keys.clear();if(show)look.release()}
 function startGame(){if(currentAppearance.name){$('welcome').hidden=true;active=true}else openCreator()}$('start').onclick=startGame;$('help').onclick=()=>pause(true);
 // Credits (credits.js): built from the data the first time they are opened from the Controls panel.
-let openCredits=()=>{};{let built=false,from='controls';function buildCredits(){const list=$('creditsList');for(const c of CREDITS){const row=document.createElement('div');row.className='credit';const who=document.createElement('b');who.textContent=c.who;const what=document.createElement('span');what.textContent=c.what;const lic=document.createElement('small');lic.textContent=c.licence+' · ';const a=document.createElement('a');a.href=c.url;a.target='_blank';a.rel='noopener noreferrer';a.textContent=c.url.replace(/^https?:\/\//,'');lic.appendChild(a);row.append(who,what,lic);list.appendChild(row)}built=true}
+let openCredits=()=>{};{let built=false,from='controls';function buildCredits(){const list=$('creditsList');for(const c of CREDITS){const row=document.createElement('div');row.className='credit';const who=document.createElement('b');who.textContent=c.who;const what=document.createElement('span');what.textContent=c.what;const lic=document.createElement('small');lic.textContent=c.licence+' · ';if(c.url){const a=document.createElement('a');a.href=c.url;a.target='_blank';a.rel='noopener noreferrer';a.textContent=c.url.replace(/^https?:\/\//,'');lic.appendChild(a)}else lic.textContent=c.licence;row.append(who,what,lic);list.appendChild(row)}built=true}
  openCredits=source=>{from=source;if(!built)buildCredits();if(source==='menu')$('welcome').hidden=true;else $('controls').hidden=true;$('credits').hidden=false};
  $('showCredits').onclick=()=>openCredits('controls');$('closeCredits').onclick=()=>{$('credits').hidden=true;if(from==='menu')$('welcome').hidden=false;else $('controls').hidden=false}}$('resume').onclick=()=>{pause(false);look.capture()};
 // Back to the main menu: save, leave any multiplayer server, and reload the page. The reload is the cleanest reset (scenes, timers, sockets, held input), and the save has just been written.
@@ -239,6 +259,11 @@ function candidates(){const all=[],add=(id,point,anchor,label,run,range=1.5)=>al
  if(GameState.progress.phase==='carrying'&&GameState.progress.completed%3!==1){const r=routeFor(GameState.progress);add('delivery',r,()=>new THREE.Vector3(r.x,1.3,r.z),'Leave delivery · '+money(r.pay),()=>station(r,'Delivery collection box','Order for '+r.name+'. Payment: '+money(r.pay)+'.',[{label:'Place order & collect payment',run:()=>finishJob('deliver')}]),1.4)}
  for(const person of pedestrians.people)add('person-'+person.name,person.group.position,()=>entityPoint(person.group),'Talk to '+person.name,()=>speak(person.group,person.name,'Hey! How’s your day going?',[{label:'Any advice for someone new?',run:()=>speak(person.group,person.name,person.line)},{label:'Nice to meet you.',run:()=>speak(person.group,person.name,'You too. See you around the neighborhood!')}]),1.5);
  if(!inside&&!shop){
+  if(sawmillCtl?.ready){const pr=GameState.progress; // the switch, the bench (a carried log goes in), the belt's end (planks come off) and planks put down on the ground
+   add('sawmill-switch',sawmillCtl.switchPoint,sawmillCtl.promptPoint,switchLabel(sawmillState),toggleSawmill,2.2);
+   if(pr.carry?.kind==='log')add('sawmill-feed',sawmillCtl.logPoint,sawmillCtl.logPrompt,'Put the log on the bench',feedSawmill,2.4);
+   if(pr.belt>0)add('sawmill-belt',sawmillCtl.clearPoint,sawmillCtl.clearPrompt,pr.carry?'Planks on the belt · your hands are full':'Take 4 planks · '+pr.belt+(pr.belt===1?' stack':' stacks')+' on the belt',takeBeltPlanks,2.4);
+   for(const d of pr.plankDrops)if(Math.hypot(d.x-me.position.x,d.z-me.position.z)<2.6)add('planks-'+d.id,{x:d.x,z:d.z},()=>new THREE.Vector3(d.x,.8,d.z),'Pick up '+d.count+' planks',()=>pickPlanks(d.id),1.8)}
   // Doors of houses (properties.js): every one is locked until its owner is you, and the inside does not exist yet.
   for(const door of doorsNow())add('door-'+door.id,door,()=>new THREE.Vector3(door.x,1.4,door.z),door.label,door.open?()=>enterHouse(door.id):()=>showWorld(()=>new THREE.Vector3(door.x,1.7,door.z),door.title,door.message),2.2);
   const progress=GameState.progress,axe=hasItem(progress,'axe'),equipped=progress.equipped==='axe',need=hitsNeeded(levelOf(progress.skills.lumberjack.xp).level);
@@ -250,6 +275,15 @@ function candidates(){const all=[],add=(id,point,anchor,label,run,range=1.5)=>al
  }
  for(const car of vehicles)add(car.id,car,()=>new THREE.Vector3(car.x,1.3,car.z),'Inspect '+car.name,()=>showWorld(()=>new THREE.Vector3(car.x,1.4,car.z),car.name,'Parked · not owned. Driving will be available in a future update.'),1.6);return all;
 }
+function toggleSawmill(){if(sawmillCtl.cutting){toast('Wait for the cut to finish.');return}const r=switchSawmill(sawmillState,undefined,GameState.progress.belt);if(r.error){toast(r.error);return}sawmillState=r.state;sawmillCtl.setOn(sawmillState.on);audio.click(sawmillCtl.switchPoint,{x:me.position.x,z:me.position.z})}
+// A log goes into the saw only while it is on and the belt has room; the stack is counted at once and the Cut clip shows it (carry.js).
+function feedSawmill(){if(sawmillCtl.cutting){toast('The saw is still cutting the last log.');return}const r=feedLog(GameState.progress,sawmillState.on);if(r.error){toast(r.error);return}if(!sawmillCtl.startCut(onCutDone)){toast('Switch the saw on first.');return}GameState.progress=r.state;persist();toast(r.message)}
+function onCutDone(){if(GameState.progress.belt>=BELT_SLOTS&&sawmillState.on){sawmillState=freshSawmill();sawmillCtl.setOn(false);toast('The belt is full. The saw switches itself off until planks are taken away.')}}
+function takeBeltPlanks(){const r=takePlanks(GameState.progress);if(r.error){toast(r.error);return}if(!sawmillCtl.frontArrived()){toast('The planks are still riding down the belt.');return}sawmillCtl.take();GameState.progress=r.state;persist();stowTool();toast(r.message)}
+function pickPlanks(id){const r=pickUpPlanks(GameState.progress,id);if(r.error){toast(r.error);return}GameState.progress=r.state;persist();stowTool();toast(r.message)}
+// X puts down what you carry, a little way in front of you on open ground (not on a deck, not inside a wall).
+function putDownCarried(){const p=GameState.progress;if(!p.carry||inside||shop)return;let x=me.position.x+Math.sin(me.rotation.y)*1.1,z=me.position.z+Math.cos(me.rotation.y)*1.1;const bad=(a,b)=>blocked(a,b)||world.floorAt(a,b)!==null;if(bad(x,z)){x=me.position.x;z=me.position.z;if(bad(x,z)){toast('Find some clear ground to put it down.');return}}
+ const log=p.carry.kind==='log',r=log?putDownLog(p,{x,z,rot:me.rotation.y+Math.PI/2}):putDownPlanks(p,{x,z});if(r.error){toast(r.error);return}GameState.progress=r.state;persist();if(log)world.setLogs(GameState.progress.logs);toast(r.message)}
 let doorsFor=null,doorList=[];const doorsNow=()=>{const p=GameState.progress.properties;if(p!==doorsFor){doorsFor=p;doorList=worldDoors(heldIds(GameState.progress))}return doorList}; // a door opens for every home you rent or own (ownership.js)
 // One thing at a time (actions.js): the flags come straight from the game's own state, so nothing can stay "held" by mistake.
 const actionFlags=()=>({chop:!!chopping,consume:!!consuming,work:!!busy,sleep:sleepElapsed!==null,door:!!doorFade});
@@ -312,6 +346,7 @@ window.addEventListener('keydown',e=>{
  if(consuming){if(e.code==='Escape'){pause(!modal);if(!modal)look.capture()}return}
  if(e.code==='KeyO'&&active&&!modal&&!creatorOpen&&!e.ctrlKey&&!e.metaKey&&!e.altKey){e.preventDefault();if(!e.repeat){world.setPlotOverlay(!world.plotOverlayVisible());toast(world.plotOverlayVisible()?'Reserved plots shown (C commercial, R residential, I industrial).':'Reserved plots hidden.')}return}
  if(e.code==='KeyG'&&active&&!modal&&!creatorOpen&&!e.ctrlKey&&!e.metaKey&&!e.altKey){e.preventDefault();if(!e.repeat){gridOn=!gridOn;toast(gridOn?'Plot grid shown in the farm and woods.':'Plot grid hidden.')}return}
+ if(e.code==='KeyX'&&active&&!modal&&!creatorOpen&&!e.ctrlKey&&!e.metaKey&&!e.altKey){e.preventDefault();if(!e.repeat)putDownCarried();return}
  if(/^Digit[1-6]$/.test(e.code)&&active&&!modal&&!creatorOpen&&!e.ctrlKey&&!e.metaKey&&!e.altKey){if(!e.repeat)hotbarUse(Number(e.code.slice(-1))-1);return}
  if((e.code==='Tab'||e.code==='KeyP')&&!e.ctrlKey&&!e.metaKey&&!e.altKey&&active){
    e.preventDefault();if(!e.repeat){inventoryUI?.close();storeUI?.close();phone.toggle()}return;
@@ -458,14 +493,17 @@ function chopNext(){
  const next=world.cuttableNear(me.position.x,me.position.z,CHOP_RANGE).sort((a,b)=>Math.hypot(a.x-me.position.x,a.z-me.position.z)-Math.hypot(b.x-me.position.x,b.z-me.position.z))[0];
  if(next)startChop(next,{quiet:true});
 }
+// Whatever is picked up goes in the hands or on the shoulder, so the tool in the hand is put away first (it stays in the bag and on the hotbar).
+function stowTool(){const id=GameState.progress.equipped;if(id)toggleEquip(id,{silent:true})}
 function pickUpLog(id){
- const result=collectLog(GameState.progress,id);
+ const result=shoulderLog(GameState.progress,id);
  if(result.error){toast(result.error);return}
- GameState.progress=result.state;persist();world.setLogs(GameState.progress.logs);toast(result.message);
+ GameState.progress=result.state;persist();stowTool();world.setLogs(GameState.progress.logs);toast(result.message);
 }
 // Equipped tool: shown in the hand and carried at the ready (the arm blends back in after chopping or eating).
 function toggleEquip(id,{silent=false}={}){
  if(!canAct('equip'))return {error:refusal()};
+ if(GameState.progress.carry&&GameState.progress.equipped!==id)return {error:'Your hands are full. Put it down first (X).'};
  const result=equipTool(GameState.progress,id);
  if(result.error)return result;
  GameState.progress=result.state;persist();if(!silent)toast(result.message);
@@ -536,7 +574,7 @@ function updateZones(dt){
  world.targetCell=world.updateGrid(me.position,me.rotation.y,gridOn&&outdoors&&active&&!modal&&zone!=='city');
  world.fade.uniforms.uFadeEnabled.value=outdoors?1:0;
  fadeTarget.set(me.position.x,me.position.y+1.5,me.position.z);
- world.update(dt,camera,fadeTarget);
+ world.update(dt,camera,fadeTarget);sawmillCtl?.update(dt);syncSawmill();if(sawmillCtl?.ready)audio.update({listener:{x:me.position.x,z:me.position.z},blade:{at:sawmillCtl.bladePoint,level:sawmillCtl.speed,sawing:sawmillCtl.sawing},belt:{at:sawmillCtl.beltPoint,level:sawmillCtl.beltLevel}});
  if(outdoors){sun.position.set(me.position.x-24,30,me.position.z+22);sun.target.position.set(me.position.x,0,me.position.z);sun.target.updateMatrixWorld()}
  const markers=[];
  if(outdoors){const job=GameState.progress.activeJob;if(job&&gigMarker.visible)markers.push({x:gigMarker.position.x,z:gigMarker.position.z,color:'#f2ca79'});if(marker.visible)markers.push({x:marker.position.x,z:marker.position.z,color:'#d4e7b3'})}
@@ -739,6 +777,7 @@ multiplayer.onConnected(()=>{lastSent=null;sendLocalPosition()});
 // Main menu (main-menu.js). Play is offline; Host and Join open a connection first and start the game once the server has answered.
 const mainMenu=createMainMenu({$,storage:{getItem:k=>localStorage.getItem(k),setItem:(k,v)=>localStorage.setItem(k,v)},connect:url=>multiplayer.connect(url),disconnect:()=>multiplayer.disconnect(),onConnected:cb=>multiplayer.onConnected(cb),onDisconnected:cb=>multiplayer.onDisconnected(cb),play:startGame,applyQuality,openCredits:()=>openCredits('menu')});
 $('quality').value=mainMenu.settings.quality;
+$('menuVolume').value=Math.round(audio.settings.volume*100);$('menuMute').checked=audio.settings.muted;$('menuVolume').oninput=()=>audio.setVolume($('menuVolume').value/100);$('menuMute').onchange=()=>audio.setMuted($('menuMute').checked);
 function updateMultiplayer(now,moving,dt){
  networkTimer+=lastNetworkTime===null?0:Math.max(0,now-lastNetworkTime);
  lastNetworkTime=now;
@@ -794,7 +833,7 @@ const daylight=Math.max(.12,Math.sin((GameState.progress.routine.minutes-360)/14
 updateEquipped(modal?0:view);avatar.update(modal?0:view);if(shop)shops[shop].clerk.update(modal?0:view);updateZones(view);updateSleep(real);updateWork(view);updateGig(view);updateObjective(view);updateWorldUI();updateHomeNotices();updateRing();updateMultiplayer(now,moving,view);syncPlayerMesh();renderer.render(inside?home.room.scene:scene,camera)}requestAnimationFrame(frame);
 
 // Development hook: open the game with ?debug to inspect state from the console (window.__city).
-if(typeof location!=='undefined'&&new URLSearchParams(location.search).has('debug'))window.__city={GameState,world,scene,camera,avatar,pedestrians,
+if(typeof location!=='undefined'&&new URLSearchParams(location.search).has('debug'))window.__city={GameState,world,scene,camera,avatar,pedestrians,audio,sawmillCtl,
  teleport(x,z){if(inside||shop)return false;setMePosition(x,me.position.y,z);return true},
  view(newYaw,newPitch,newZoom){yaw=newYaw??yaw;pitch=newPitch??pitch;zoom=zoomTarget=newZoom??zoom},
  give(id){return commitInventory(addItem(GameState.progress,id))},equip:id=>toggleEquip(id,{silent:true}),hotbarUse,eHold(on){eHeld=on},place(x,z){setMePosition(x,me.position.y,z)},get shop(){return shop},get beacon(){return {visible:marker.visible,x:+marker.position.x.toFixed(2),y:+marker.position.y.toFixed(2),z:+marker.position.z.toFixed(2),diamondY:+diamond.position.y.toFixed(2)}},doors(){return {modal,active,busy:!!busy,fade:!!doorFade,cooldown:+doorCooldown.toFixed(2),fronts:shopDoors.map(f=>({kind:f.kind,amount:+f.door.amount.toFixed(2),open:shopOpen(f.kind,GameState.progress.routine),blocked:colliders.includes(f.blocker),dx:+(me.position.x-f.x).toFixed(2),z:+me.position.z.toFixed(2)}))}},get pos(){return {x:+me.position.x.toFixed(2),z:+me.position.z.toFixed(2),ry:+me.rotation.y.toFixed(2)}},get doorCooldown(){return +doorCooldown.toFixed(2)},get inside(){return inside},get hidden(){return $('objectiveDetails').hidden},tickRegrowth,

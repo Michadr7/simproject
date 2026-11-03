@@ -228,7 +228,7 @@ export const MAP=deepFreeze({
  // a farmhouse, a silo and a shed; a placeholder for now) fills the free north-east strip of Willow Fields and faces the farm road; the sawmill stands in Pine Ridge's empty clearing.
  landmarks:[
   // The timber yard: the sawmill, a hut for lumber, logs and a flatbed truck.
-  {id:'sawmill',prop:'sawmill',zone:'forest',x:104,z:n(-208),yaw:0},
+  {id:'sawmill',prop:'sawmill-v4',zone:'forest',x:104,z:n(-208),yaw:-Math.PI/2}, // the rigged Blender model (rigged-props.js); its root is the main deck's centre. Turned -90 degrees: its front (switch, player) faces the woods lane to the west, the belt-clearing end faces the yard to the east, the log pile and log feed are on the open north side
   {id:'yard-hut',prop:'hut',zone:'forest',x:124,z:-280,yaw:0,decor:true},{id:'yard-log-1',prop:'log',zone:'forest',x:131,z:-278.2,yaw:0,decor:true},{id:'yard-log-2',prop:'log',zone:'forest',x:131,z:-279.8,yaw:0,decor:true},{id:'yard-log-3',prop:'log',zone:'forest',x:131,z:-281.4,yaw:0,decor:true},
   {id:'yard-flatbed',prop:'flatbed',zone:'forest',x:122,z:-260,yaw:Math.PI/2,decor:true},
   // Willow Farmstead (Quaternius barns, 1.55 times their size): the barn, the small barn, the open barn, the silo, the coop and the windmill, with a Kenney house as the farmhouse and a pickup.

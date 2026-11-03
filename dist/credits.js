@@ -6,7 +6,7 @@ export const CREDITS=Object.freeze([
  {who:'Poly Pizza',what:'The Store and the Wood Log (authors not recorded; both published for free use on Poly Pizza).',licence:'as published on Poly Pizza',url:'https://poly.pizza',covers:['polypizza/Store.glb','polypizza/Wood_Log.glb']},
  {who:'SpawnCamp Games',what:'Low-poly flatbed truck.',licence:'free to use, credit given',url:'https://spawncampgames.itch.io/lowpoly-flatbed-truck',covers:['vehicles/Flatbed.fbx']},
  {who:'CGTrader free model',what:'Pickup truck (author not recorded).',licence:'CGTrader royalty-free licence',url:'https://www.cgtrader.com',covers:['vehicles/Pickup.fbx']},
- {who:'Tripo',what:'The sawmill: a Tripo v1 model, edited in Blender.',licence:'generated model, personal project',url:'https://www.tripo3d.ai',covers:['tripo/sawmill.glb']},
+ {who:'The project owner',what:'The new sawmill (Sawmillv4): modelled and animated in Blender by the project owner. Own work, not a third-party asset.',licence:'own work',url:null,covers:['assets/Sawmillv4.glb']},
  {who:'three.js',what:'The 3D engine (r160).',licence:'MIT',url:'https://threejs.org',covers:[]},
  {who:'meshoptimizer',what:'Mesh simplification used while converting models.',licence:'MIT',url:'https://github.com/zeux/meshoptimizer',covers:[]}
 ]);

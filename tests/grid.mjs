@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import {worldLayout,FIELDS} from '../dist/world.js';
-import {TREE_HITS,CHOP_RANGE,SAPLING_AFTER,MATURE_AFTER,MAX_LOGS,LOG_LIFETIME,defaultPlot,normalizePlots,plotAt,setPlot,chopTree,felledTrees,normalizeLogs,nextLogIdFor,collectLog,expireLogs,treeStage,felledStages,regrowTrees} from '../dist/grid.js';
+import {TREE_HITS,CHOP_RANGE,SAPLING_AFTER,MATURE_AFTER,MAX_LOGS,LOG_LIFETIME,defaultPlot,normalizePlots,plotAt,setPlot,chopTree,felledTrees,normalizeLogs,nextLogIdFor,expireLogs,treeStage,felledStages,regrowTrees} from '../dist/grid.js';
+import {shoulderLog} from '../dist/carry.js';
 import {freshProgress,normalizeProgress,saveProgress,loadProgress} from '../dist/jobs.js';
 import {addItem,countItem,inventoryCapacity,equipTool} from '../dist/inventory.js';
 import {xpForNext} from '../dist/skills.js';
@@ -44,10 +45,8 @@ assert.equal(chopTree({...withAxe(),skills:{lumberjack:{xp:levelXp(6)}}},second,
 // A tree left at 2 hits from before the perk needs only one more swing at level 6.
 assert(chopTree({...swift,plots:{[pine.key]:{type:'forest',tree:'pine',hits:2}}},pine.key,near).felled);
 // ── Logs ──────────────────────────────────────────────────────────────────────
-let c=collectLog(fell.state,1);assert.equal(countItem(c.state,'wood-log'),1);assert.deepEqual(c.state.stats,{treesFelled:1,logsCollected:1});assert.deepEqual(c.state.logs.map(l=>l.id),[2]);assert.match(c.message,/log/);
-assert.match(collectLog(c.state,1).error,/gone/);
-let full=fell.state;while(full.inventory.slots.length<inventoryCapacity(full.inventory))full=addItem(full,'axe').state;
-const refused=collectLog(full,1);assert.match(refused.error,/bag is full/);assert.equal(refused.state,undefined);
+let c=shoulderLog(fell.state,1);assert.equal(countItem(c.state,'wood-log'),0,'a picked-up log is on the shoulder, not in the bag');assert.deepEqual(c.state.carry,{kind:'log'});assert.deepEqual(c.state.stats,{treesFelled:1,logsCollected:1});assert.deepEqual(c.state.logs.map(l=>l.id),[2]);assert.match(c.message,/shoulder/);
+assert.match(shoulderLog({...c.state,carry:null},1).error,/gone/);assert.match(shoulderLog(c.state,2).error,/hands are full/,'one thing at a time');
 let logs=fresh;for(let i=0;i<12;i++)logs=addItem(logs,'wood-log').state;assert.deepEqual(logs.inventory.slots.map(x=>x.quantity),[10,2]);
 assert.deepEqual(normalizeLogs([{id:1,x:100,z:-250,rot:1,t:30},{id:1,x:101,z:-250},{id:2,x:900,z:0},{id:3,x:NaN,z:0},{id:0,x:100,z:-250},{id:4,x:101,z:-249,rot:'x',t:-1},null,'x']),[{id:1,x:100,z:-250,rot:1,t:30},{id:4,x:101,z:-249,rot:0,t:0}]);
 assert.equal(normalizeLogs(Array.from({length:200},(_,i)=>({id:i+1,x:100,z:-250}))).length,MAX_LOGS);assert.deepEqual(normalizeLogs('nope'),[]);

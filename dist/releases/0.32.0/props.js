@@ -5,9 +5,10 @@ import {PROPS} from './props-assets.js';
 import {decode} from './nature.js';
 import {PLACEHOLDERS} from './placeholders.js';
 import {addWheels} from './vehicle-parts.js';
+import {isRigged,riggedInfo,createRigged} from './rigged-props.js';
 
 // A prop is a converted model (PROPS) or a placeholder (placeholders.js); both have width, depth, height, footprint, colliders and floor.
-export const propInfo=id=>{const p=PROPS[id]||PLACEHOLDERS[id];if(!p)throw new Error('Unknown prop '+id);return p};
+export const propInfo=id=>{const p=PROPS[id]||PLACEHOLDERS[id]||(isRigged(id)?riggedInfo(id):null);if(!p)throw new Error('Unknown prop '+id);return p}; // rigged props (rigged-props.js) answer from data too
 const geometries=new Map(),LINEAR=Float32Array.from({length:256},(_,i)=>{const c=i/255;return c<=.04045?c/12.92:Math.pow((c+.055)/1.055,2.4)});
 export function propGeometry(id){
  if(geometries.has(id))return geometries.get(id);
@@ -23,6 +24,7 @@ export function propGeometry(id){
 // fade: the sightline fade (world.js), so a building between the camera and the player dissolves like the trees do.
 export function createProp(id,fade){
  if(PLACEHOLDERS[id])return PLACEHOLDERS[id].build(fade);
+ if(isRigged(id))return createRigged(id,fade); // a group, filled when the model has decoded (userData.ready)
  let material;
  if(propInfo(id).col)material=fade.apply(new THREE.MeshStandardMaterial({vertexColors:true,roughness:.85,side:THREE.DoubleSide}));
  else{const map=new THREE.Texture();map.colorSpace=THREE.SRGBColorSpace;map.flipY=false;map.anisotropy=4;

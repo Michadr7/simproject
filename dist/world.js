@@ -356,7 +356,7 @@ export function createWorld(scene,{label,cullRadius}={}){
   const info=propInfo(l.prop),mesh=createProp(l.prop,fade);mesh.position.set(l.x,0,l.z);mesh.rotation.y=l.yaw;group.add(mesh);
   const cos=Math.round(Math.cos(l.yaw)),sin=Math.round(Math.sin(l.yaw)),turned=sin!==0;
   for(const b of info.colliders)colliders.box(l.x+b.x*cos+b.z*sin,l.z-b.x*sin+b.z*cos,turned?b.hz:b.hx,turned?b.hx:b.hz);
-  return {id:l.id,mesh,x:l.x,z:l.z,yaw:l.yaw,floor:info.floor||null,radius:Math.hypot(info.width,info.depth)/2};
+  return {id:l.id,mesh,x:l.x,z:l.z,yaw:l.yaw,floor:info.floors||info.floor||null,radius:Math.hypot(info.width,info.depth)/2};
  });
  for(const sign of MAP.signs){
   const post=new THREE.Mesh(new THREE.BoxGeometry(.18,3.4,.18),timber);post.position.set(sign.x,1.7,sign.z);post.castShadow=true;post.name='sign-post';group.add(post);colliders.circle(sign.x,sign.z,.16);
@@ -463,7 +463,7 @@ export function createWorld(scene,{label,cullRadius}={}){
   group,layout,trees,fade,addBroadleaves,
   blocked:(x,z)=>colliders.blocked(x,z),
   // The height of a deck or platform under the point (a building's raised floor), or null on open ground.
-  floorAt(x,z){for(const l of landmarks){if(!l.floor)continue;const cos=Math.round(Math.cos(l.yaw)),sin=Math.round(Math.sin(l.yaw)),dx=x-l.x,dz=z-l.z,lx=dx*cos-dz*sin,lz=dx*sin+dz*cos,f=l.floor;if(lx>=f.x0&&lx<=f.x1&&lz>=f.z0&&lz<=f.z1)return f.y}return null},
+  floorAt(x,z){for(const l of landmarks){if(!l.floor)continue;const cos=Math.round(Math.cos(l.yaw)),sin=Math.round(Math.sin(l.yaw)),dx=x-l.x,dz=z-l.z,lx=dx*cos-dz*sin,lz=dx*sin+dz*cos;for(const f of [].concat(l.floor))if(lx>=f.x0&&lx<=f.x1&&lz>=f.z0&&lz<=f.z1)return f.y}return null},
   // What is drawn: trees in the draw lists and the triangles they cost (for tests and the debug hook). setViewer places the view without a camera.
   cullStats(){let drawn=0,total=0,triangles=0,all=0;for(const g of groups){const per=g.info.triangles;for(const e of g.entries){if(!e.off)total++;if(e.slot>=0)drawn++}triangles+=g.meshes[0].count*per;all+=g.entries.filter(e=>!e.off).length*per}return {radius:viewDistance,drawn,total,triangles,allTriangles:all}},
   setPlotOverlay(on){plotOverlay.visible=!!on},plotOverlayVisible(){return plotOverlay.visible},
