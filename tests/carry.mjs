@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import {BELT_SLOTS,PLANKS_PER_STACK,MAX_PLANK_DROPS,normalizeCarry,normalizeBelt,normalizePlankDrops,beltFull,shoulderLog,putDownLog,feedLog,takePlanks,putDownPlanks,pickUpPlanks} from '../dist/carry.js';
+import {carryEffects,restHeight,bendLean,BEND_LEAN,BEND_TIME,BEND_RELEASE,LOG_REST,PLANK_REST,BELT_SLOTS,PLANKS_PER_STACK,MAX_PLANK_DROPS,normalizeCarry,normalizeBelt,normalizePlankDrops,beltFull,shoulderLog,putDownLog,feedLog,takePlanks,putDownPlanks,pickUpPlanks} from '../dist/carry.js';
 import {freshProgress,normalizeProgress,saveProgress,loadProgress} from '../dist/jobs.js';
 import {countItem} from '../dist/inventory.js';
 
@@ -24,7 +24,7 @@ assert.match(takePlanks(t.state).error,/hands are full/,'cannot take a second st
 // 5. Planks put down and picked up again; at most 8 stacks.
 let p=putDownPlanks(t.state,{x:104,z:-260});assert.equal(p.state.carry,null);assert.deepEqual(p.state.plankDrops,[{id:1,x:104,z:-260,count:4}]);assert.match(putDownPlanks(p.state,{x:0,z:0}).error,/not carrying/);
 let back=pickUpPlanks(p.state,1);assert.deepEqual(back.state.carry,{kind:'planks',count:4});assert.deepEqual(back.state.plankDrops,[]);assert.match(pickUpPlanks(p.state,5).error,/gone/);assert.match(pickUpPlanks(t.state,1).error,/hands are full/);
-let many=freshProgress();for(let i=0;i<MAX_PLANK_DROPS;i++)many=putDownPlanks({...many,carry:{kind:'planks',count:4}},{x:100+i,z:-260}).state;assert.equal(many.plankDrops.length,MAX_PLANK_DROPS);assert.deepEqual(many.plankDrops.map(d=>d.id),[1,2,3,4,5,6,7,8]);
+let many=freshProgress();for(let i=0;i<MAX_PLANK_DROPS;i++)many=putDownPlanks({...many,carry:{kind:'planks',count:4}},{x:100+i,z:-260}).state;assert.equal(MAX_PLANK_DROPS,12);assert.equal(many.plankDrops.length,MAX_PLANK_DROPS);assert.deepEqual(many.plankDrops.map(d=>d.id),[1,2,3,4,5,6,7,8,9,10,11,12]);
 assert.match(putDownPlanks({...many,carry:{kind:'planks',count:4}},{x:0,z:0}).error,/no room/);
 // 6. The belt loop: four logs fill it, the fifth is refused, one stack out makes room.
 {const log1=x=>({...x,carry:{kind:'log'}});let g=freshProgress();for(let i=0;i<BELT_SLOTS;i++)g=feedLog(log1(g),true).state;assert.equal(g.belt,BELT_SLOTS,'four logs fill the belt');assert.match(feedLog(log1(g),true).error,/belt is full/,'the fifth is refused');
@@ -39,4 +39,10 @@ assert.match(putDownPlanks({...many,carry:{kind:'planks',count:4}},{x:0,z:0}).er
  assert.deepEqual(normalizePlankDrops('nope'),[]);assert.equal(normalizePlankDrops(Array.from({length:20},(_,i)=>({id:i+1,x:100+i*.5,z:-260,count:1}))).length,MAX_PLANK_DROPS);
  let raw;const storage={getItem:()=>raw,setItem:(k,v)=>raw=v};saveProgress(storage,{...freshProgress(),carry:{kind:'log'},belt:4,plankDrops:p.state.plankDrops});const loaded=loadProgress(storage);assert.deepEqual([loaded.carry,loaded.belt,loaded.plankDrops],[{kind:'log'},4,[{id:1,x:104,z:-260,count:4}]],'survives a save and load');
  assert.equal(normalizeBelt(0),0)}
+// 8. Carrying changes the body: slower, no sprint, more stamina cost; items lie at the deck height; the put-down is a bend that returns upright.
+{assert.deepEqual(carryEffects(null),{speed:1,sprint:true,load:1});assert.deepEqual(carryEffects({kind:'log'}),{speed:.8,sprint:false,load:1.5});assert.deepEqual(carryEffects({kind:'planks',count:2}),{speed:.85,sprint:false,load:1.25});
+ assert.equal(restHeight(null,LOG_REST),LOG_REST);assert.ok(Math.abs(restHeight(.9,LOG_REST)-1.02)<1e-9);assert.equal(restHeight(undefined,PLANK_REST),PLANK_REST);
+ assert.equal(bendLean(0),0);assert(Math.abs(bendLean(.5)-BEND_LEAN)<1e-9);assert(Math.abs(bendLean(1))<1e-9);assert.equal(bendLean(-3),0);assert(Math.abs(bendLean(9))<1e-9);assert(BEND_RELEASE>0&&BEND_RELEASE<1&&BEND_TIME<1);
+ const big=Array.from({length:20},(_,i)=>({id:i+1,x:100+i*.5,z:-260,count:1}));assert.equal(normalizePlankDrops(big).length,12,'cap of 12 on a load'); // no expiry field exists: dropped stacks stay until picked up
+ assert.deepEqual(Object.keys(normalizePlankDrops(big)[0]).sort(),['count','id','x','z'])}
 console.log('Carry: a log on the shoulder (not the bag), planks in the hands, one thing at a time; the saw takes a log only while on and with room; four stacks fill the belt and one taken makes room; planks can be put down (8 stacks); the three fields save additively and old saves load.');

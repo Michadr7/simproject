@@ -7,7 +7,15 @@ import {MAX_LOGS,nextLogIdFor} from './grid.js';
 import {isWalkable} from './world.js';
 import {freshStats} from './skills.js';
 
-export const BELT_SLOTS=4,PLANKS_PER_STACK=4,MAX_PLANK_DROPS=8;
+export const BELT_SLOTS=4,PLANKS_PER_STACK=4,MAX_PLANK_DROPS=12;
+// What carrying does to the body: a log slows you to 80%, planks to 85%; no sprinting while carrying; stamina drains 1.5x (log) or 1.25x (planks). Dropped stacks never expire.
+export const carryEffects=carry=>carry?.kind==='log'?{speed:.8,sprint:false,load:1.5}:carry?.kind==='planks'?{speed:.85,sprint:false,load:1.25}:{speed:1,sprint:true,load:1};
+// Items lie on whatever they were put down on: the deck height under them (null on open ground) plus the item's own rest height.
+export const restHeight=(floor,base)=>(Number.isFinite(floor)?floor:0)+base;
+export const LOG_REST=.12,PLANK_REST=.06;
+// Putting down is a short bend: the body leans forward to BEND_LEAN radians and back over BEND_TIME seconds; the item is released at the bottom (BEND_RELEASE of the way through).
+export const BEND_TIME=.6,BEND_LEAN=.5,BEND_RELEASE=.5;
+export const bendLean=t=>Math.sin(Math.PI*Math.max(0,Math.min(1,t)))*BEND_LEAN;
 const minutesOf=p=>((p.housing?.day||1)-1)*1440+(p.routine?.minutes||0);
 
 export const normalizeCarry=v=>v?.kind==='log'?{kind:'log'}:v?.kind==='planks'&&Number.isSafeInteger(v.count)&&v.count>=1&&v.count<=PLANKS_PER_STACK?{kind:'planks',count:v.count}:null;

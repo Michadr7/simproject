@@ -492,7 +492,7 @@ export function createWorld(scene,{label,cullRadius}={}){
   // Logs lying on the ground: [{x,z,rot}], drawn as instances.
   setLogs(list){
    const n=Math.min(list.length,MAX_LOG_INSTANCES);
-   for(let i=0;i<n;i++)logMesh.setMatrixAt(i,m4.compose(v.set(list[i].x,.12,list[i].z),q.setFromAxisAngle(yAxis,list[i].rot),s.set(1,1,1)));
+   for(let i=0;i<n;i++)logMesh.setMatrixAt(i,m4.compose(v.set(list[i].x,.12+(this.floorAt(list[i].x,list[i].z)??0),list[i].z),q.setFromAxisAngle(yAxis,list[i].rot),s.set(1,1,1)));
    logMesh.count=n;logMesh.instanceMatrix.needsUpdate=true;
   },
   // Grid overlay: show only in farm/forest. Returns the targeted cell (or null).

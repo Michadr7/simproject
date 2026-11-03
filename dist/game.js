@@ -4,9 +4,9 @@ import {worldDoors,doorOf,propertyById} from './properties.js';
 import {buildHouseRoom} from './interiors.js';
 import {propertyTransaction,heldIds,listingOf} from './ownership.js';
 import {CREDITS} from './credits.js';
-import {createSawmillController,freshSawmill,switchSawmill,switchLabel,BELT_SLOTS,PLANK_TINT,PLANK_THIN} from './sawmill.js';
+import {createSawmillController,freshSawmill,switchSawmill,switchLabel,BELT_SLOTS,PLANK_TINT} from './sawmill.js';
 import {createAudio} from './audio.js';
-import {shoulderLog,putDownLog,feedLog,takePlanks,putDownPlanks,pickUpPlanks} from './carry.js';
+import {carryEffects,bendLean,BEND_TIME,BEND_RELEASE,shoulderLog,putDownLog,feedLog,takePlanks,putDownPlanks,pickUpPlanks} from './carry.js';
 import {chopTree,felledTrees,plotAt,expireLogs,regrowTrees,felledStages,CHOP_RANGE} from './grid.js';
 import {levelOf,swingTime,hitsNeeded,perkText} from './skills.js';
 import {createMinimap} from './minimap.js';
@@ -131,9 +131,9 @@ let carryPlanks=null,dropsFor=null;
 function syncSawmill(){
  const p=GameState.progress,c=sawmillCtl,hands=!inside&&!shop;carryLog.visible=hands&&p.carry?.kind==='log';
  if(!c?.ready)return;
- if(!carryPlanks){carryPlanks=new THREE.Group();carryPlanks.name='carried-planks';for(let k=0;k<4;k++){const plain=c.plank.material.clone();plain.color.multiplyScalar(PLANK_TINT[k]);const m=new THREE.Mesh(c.plank.geometry,plain);m.scale.set(.55,.55*PLANK_THIN,.55);m.rotation.y=Math.PI/2;m.position.y=k*.07;carryPlanks.add(m)}carryPlanks.position.set(-.2,1.4,.05);carryPlanks.rotation.x=-.12;player.add(carryPlanks)}
+ if(!carryPlanks){carryPlanks=new THREE.Group();carryPlanks.name='carried-planks';for(let k=0;k<4;k++){const plain=c.plank.material.clone();plain.color.multiplyScalar(PLANK_TINT[k]);const m=new THREE.Mesh(c.plank.geometry,plain);m.scale.setScalar(.55);m.rotation.y=Math.PI/2;m.position.y=k*.07;carryPlanks.add(m)}carryPlanks.position.set(-.2,1.4,.05);carryPlanks.rotation.x=-.12;player.add(carryPlanks)}
  const n=p.carry?.kind==='planks'?p.carry.count:0;carryPlanks.visible=hands&&n>0;carryPlanks.children.forEach((m,i)=>m.visible=i<n);
- if(dropsFor!==p.plankDrops){dropsFor=p.plankDrops;c.setDrops(dropsFor)}
+ if(dropsFor!==p.plankDrops){dropsFor=p.plankDrops;c.setDrops(dropsFor.map(d=>({...d,floor:world.floorAt(d.x,d.z)})))}
  if(!c.cutting&&c.count()!==p.belt)c.setBelt(p.belt); // a new game or a loaded save: the belt shows what is saved
 }
 // Rendering consumes the simulation state; gameplay never reads mesh transforms.
@@ -263,7 +263,7 @@ function candidates(){const all=[],add=(id,point,anchor,label,run,range=1.5)=>al
    add('sawmill-switch',sawmillCtl.switchPoint,sawmillCtl.promptPoint,switchLabel(sawmillState),toggleSawmill,2.2);
    if(pr.carry?.kind==='log')add('sawmill-feed',sawmillCtl.logPoint,sawmillCtl.logPrompt,'Put the log on the bench',feedSawmill,2.4);
    if(pr.belt>0)add('sawmill-belt',sawmillCtl.clearPoint,sawmillCtl.clearPrompt,pr.carry?'Planks on the belt · your hands are full':'Take 4 planks · '+pr.belt+(pr.belt===1?' stack':' stacks')+' on the belt',takeBeltPlanks,2.4);
-   for(const d of pr.plankDrops)if(Math.hypot(d.x-me.position.x,d.z-me.position.z)<2.6)add('planks-'+d.id,{x:d.x,z:d.z},()=>new THREE.Vector3(d.x,.8,d.z),'Pick up '+d.count+' planks',()=>pickPlanks(d.id),1.8)}
+   for(const d of pr.plankDrops)if(Math.hypot(d.x-me.position.x,d.z-me.position.z)<2.6)add('planks-'+d.id,{x:d.x,z:d.z},()=>new THREE.Vector3(d.x,.8+(world.floorAt(d.x,d.z)??0),d.z),'Pick up '+d.count+' planks',()=>pickPlanks(d.id),1.8)}
   // Doors of houses (properties.js): every one is locked until its owner is you, and the inside does not exist yet.
   for(const door of doorsNow())add('door-'+door.id,door,()=>new THREE.Vector3(door.x,1.4,door.z),door.label,door.open?()=>enterHouse(door.id):()=>showWorld(()=>new THREE.Vector3(door.x,1.7,door.z),door.title,door.message),2.2);
   const progress=GameState.progress,axe=hasItem(progress,'axe'),equipped=progress.equipped==='axe',need=hitsNeeded(levelOf(progress.skills.lumberjack.xp).level);
@@ -271,7 +271,7 @@ function candidates(){const all=[],add=(id,point,anchor,label,run,range=1.5)=>al
    const hits=plotAt(progress,tree.key).hits;
    add('tree-'+tree.key,tree,()=>new THREE.Vector3(tree.x,2.2,tree.z),equipped?(hits?`Chop pine · ${hits} / ${need}`:'Chop pine · hold E to keep going'):axe?'Pine · equip your axe (hotbar)':'Pine · needs an axe',()=>startChop(tree),CHOP_RANGE);
   }
-  for(const log of progress.logs)if(!pendingLogs.has(log.id)&&Math.hypot(log.x-me.position.x,log.z-me.position.z)<2.4)add('log-'+log.id,{x:log.x,z:log.z},()=>new THREE.Vector3(log.x,.5,log.z),'Pick up wood log',()=>pickUpLog(log.id),1.8);
+  for(const log of progress.logs)if(!pendingLogs.has(log.id)&&Math.hypot(log.x-me.position.x,log.z-me.position.z)<2.4)add('log-'+log.id,{x:log.x,z:log.z},()=>new THREE.Vector3(log.x,.5+(world.floorAt(log.x,log.z)??0),log.z),'Pick up wood log',()=>pickUpLog(log.id),1.8);
  }
  for(const car of vehicles)add(car.id,car,()=>new THREE.Vector3(car.x,1.3,car.z),'Inspect '+car.name,()=>showWorld(()=>new THREE.Vector3(car.x,1.4,car.z),car.name,'Parked · not owned. Driving will be available in a future update.'),1.6);return all;
 }
@@ -282,8 +282,14 @@ function onCutDone(){if(GameState.progress.belt>=BELT_SLOTS&&sawmillState.on){sa
 function takeBeltPlanks(){const r=takePlanks(GameState.progress);if(r.error){toast(r.error);return}if(!sawmillCtl.frontArrived()){toast('The planks are still riding down the belt.');return}sawmillCtl.take();GameState.progress=r.state;persist();stowTool();toast(r.message)}
 function pickPlanks(id){const r=pickUpPlanks(GameState.progress,id);if(r.error){toast(r.error);return}GameState.progress=r.state;persist();stowTool();toast(r.message)}
 // X puts down what you carry, a little way in front of you on open ground (not on a deck, not inside a wall).
-function putDownCarried(){const p=GameState.progress;if(!p.carry||inside||shop)return;let x=me.position.x+Math.sin(me.rotation.y)*1.1,z=me.position.z+Math.cos(me.rotation.y)*1.1;const bad=(a,b)=>blocked(a,b)||world.floorAt(a,b)!==null;if(bad(x,z)){x=me.position.x;z=me.position.z;if(bad(x,z)){toast('Find some clear ground to put it down.');return}}
- const log=p.carry.kind==='log',r=log?putDownLog(p,{x,z,rot:me.rotation.y+Math.PI/2}):putDownPlanks(p,{x,z});if(r.error){toast(r.error);return}GameState.progress=r.state;persist();if(log)world.setLogs(GameState.progress.logs);toast(r.message)}
+let putting=null; // {elapsed,x,z,rot,done}: the bend; the item is released at the bottom of it
+function putDownCarried(){const p=GameState.progress;if(!p.carry||inside||shop||putting||actionBusy())return;let x=me.position.x+Math.sin(me.rotation.y)*1.1,z=me.position.z+Math.cos(me.rotation.y)*1.1;const bad=(a,b)=>blocked(a,b);if(bad(x,z)){x=me.position.x;z=me.position.z;if(bad(x,z)){toast('Find some clear ground to put it down.');return}}
+ keys.clear();putting={elapsed:0,x,z,rot:me.rotation.y+Math.PI/2,done:false}}
+function updatePutting(dt){
+ if(!putting)return;const u=putting;u.elapsed+=dt;avatar.setLean(bendLean(u.elapsed/BEND_TIME));
+ if(!u.done&&u.elapsed>=BEND_TIME*BEND_RELEASE){u.done=true;const p=GameState.progress,log=p.carry?.kind==='log',r=!p.carry?{error:'Nothing to put down.'}:log?putDownLog(p,{x:u.x,z:u.z,rot:u.rot}):putDownPlanks(p,{x:u.x,z:u.z});if(r.error)toast(r.error);else{GameState.progress=r.state;persist();if(log)world.setLogs(GameState.progress.logs);toast(r.message)}}
+ if(u.elapsed>=BEND_TIME){avatar.setLean(0);putting=null}
+}
 let doorsFor=null,doorList=[];const doorsNow=()=>{const p=GameState.progress.properties;if(p!==doorsFor){doorsFor=p;doorList=worldDoors(heldIds(GameState.progress))}return doorList}; // a door opens for every home you rent or own (ownership.js)
 // One thing at a time (actions.js): the flags come straight from the game's own state, so nothing can stay "held" by mistake.
 const actionFlags=()=>({chop:!!chopping,consume:!!consuming,work:!!busy,sleep:sleepElapsed!==null,door:!!doorFade});
@@ -793,14 +799,14 @@ let prev=performance.now(),frames=0,elapsed=0,menuDrawn=false,stuckTime=0;
 // Returns whether a movement key was pressed during the slice.
 function stepWorld(step){
  const startX=me.position.x,startZ=me.position.z;
- let pressed=false;if(active&&!modal&&!actionBusy()){let f=Number(keys.has('KeyW')||keys.has('ArrowUp'))-Number(keys.has('KeyS')||keys.has('ArrowDown')),s=Number(keys.has('KeyD')||keys.has('ArrowRight'))-Number(keys.has('KeyA')||keys.has('ArrowLeft'));let len=Math.hypot(f,s);if(len){f/=len;s/=len;const speed=keys.has('ShiftLeft')||keys.has('ShiftRight')?8.2:4.5,dx=(-Math.sin(yaw)*f+Math.cos(yaw)*s)*speed*step,dz=(-Math.cos(yaw)*f-Math.sin(yaw)*s)*speed*step;if(!blocked(me.position.x+dx,me.position.z))me.position.x+=dx;if(!blocked(me.position.x,me.position.z+dz))me.position.z+=dz;const angle=Math.atan2(dx,dz);me.rotation.y+=Math.atan2(Math.sin(angle-me.rotation.y),Math.cos(angle-me.rotation.y))*(1-Math.exp(-step*24));phase+=step*speed*2.0;pressed=true}}
- const movedStep=Math.hypot(me.position.x-startX,me.position.z-startZ),moving=pressed&&movedStep>.000001,running=moving&&(keys.has('ShiftLeft')||keys.has('ShiftRight'));
+ let pressed=false;if(active&&!modal&&!actionBusy()&&!putting){let f=Number(keys.has('KeyW')||keys.has('ArrowUp'))-Number(keys.has('KeyS')||keys.has('ArrowDown')),s=Number(keys.has('KeyD')||keys.has('ArrowRight'))-Number(keys.has('KeyA')||keys.has('ArrowLeft'));let len=Math.hypot(f,s);if(len){f/=len;s/=len;const fx=carryEffects(GameState.progress.carry),speed=(fx.sprint&&(keys.has('ShiftLeft')||keys.has('ShiftRight'))?8.2:4.5)*fx.speed,dx=(-Math.sin(yaw)*f+Math.cos(yaw)*s)*speed*step,dz=(-Math.cos(yaw)*f-Math.sin(yaw)*s)*speed*step;if(!blocked(me.position.x+dx,me.position.z))me.position.x+=dx;if(!blocked(me.position.x,me.position.z+dz))me.position.z+=dz;const angle=Math.atan2(dx,dz);me.rotation.y+=Math.atan2(Math.sin(angle-me.rotation.y),Math.cos(angle-me.rotation.y))*(1-Math.exp(-step*24));phase+=step*speed*2.0;pressed=true}}
+ const movedStep=Math.hypot(me.position.x-startX,me.position.z-startZ),moving=pressed&&movedStep>.000001,running=moving&&carryEffects(GameState.progress.carry).sprint&&(keys.has('ShiftLeft')||keys.has('ShiftRight'));
  if(active&&!modal&&!document.hidden){GameState.progress=expireCafe(advanceTime(GameState.progress,step*.5));const oldStage=GameState.progress.activeJob?.stage;
-const load=GameState.progress.activeJob?.id==='heavy-delivery'&&oldStage==='task'?2:1;
+const load=Math.max(GameState.progress.activeJob?.id==='heavy-delivery'&&oldStage==='task'?2:1,carryEffects(GameState.progress.carry).load);
 tickLife(step,moving,running,load);
 GameState.progress=tickContract(GameState.progress,{position:me.position,room:currentRoom(),dt:step,moving,paused:!!consuming,running,distance:movedStep});
 if(oldStage!==GameState.progress.activeJob?.stage)persist();if(!inside&&!shop)pedestrians.update(step,me.position);regrowClock+=step;if(regrowClock>=5){regrowClock=0;tickRegrowth()}if(inside||shop){saveElapsed+=step;if(saveElapsed>=4){saveElapsed=0;persist()}}}
- if(active&&!modal&&!document.hidden)updateCafeVisuals(step);updateConsumption(step);updateDoors(step);updateChop(step);
+ if(active&&!modal&&!document.hidden)updateCafeVisuals(step);updateConsumption(step);updateDoors(step);updateChop(step);updatePutting(step);
  return pressed;
 }
 function frame(now){
@@ -817,9 +823,9 @@ function frame(now){
  const movedDistance=Math.hypot(me.position.x-frameX,me.position.z-frameZ),moving=pressed&&movedDistance>.000001;
  // Safety net: holding a move key for a second without moving, while standing inside something solid, moves you to the nearest clear spot. The search only runs then.
  if(pressed&&!moving){stuckTime+=real;if(stuckTime>1){stuckTime=0;if(blocked(me.position.x,me.position.z))unstick()}}else stuckTime=0;
- const running=moving&&(keys.has('ShiftLeft')||keys.has('ShiftRight'));
+ const running=moving&&carryEffects(GameState.progress.carry).sprint&&(keys.has('ShiftLeft')||keys.has('ShiftRight'));
 const poseBlend=1-Math.exp(-view*18);
-avatar.setMotion(moving?(running?8.2:4.5):0);
+avatar.setMotion(moving?(running?8.2:4.5)*carryEffects(GameState.progress.carry).speed:0);
 // Match foot height to the road, pavement, or grass rather than hovering.
 const px=me.position.x,pz=me.position.z;
  const deck=world.floorAt(px,pz);
