@@ -17,9 +17,9 @@ export const STEER_ANGLE=.5; // radians of wheel turn at full lock (visual)
 export function createDriving({scene,surface,footing,baseBlocked,saved=[]}){
  const fleet=MAP.vehicles.map(spec=>{
   const cls=CLASSES[spec.model],mesh=createProp(spec.model,SOLID);mesh.name='vehicle-'+spec.id;mesh.rotation.order='YXZ';scene.add(mesh);
-  return {spec,cls,mesh,wheels:mesh.userData.wheels||[],state:freshVehicle(spec.home),y:footing(spec.home.x,spec.home.z),pitch:0,roll:0,spin:0,lastSpeed:0};
+  return {spec,cls,mesh,wheels:mesh.userData.wheels||[],state:freshVehicle(spec.home),y:footing(spec.home.x,spec.home.z),pitch:0,roll:0,spin:0,lastSpeed:0,present:true};
  });
- const byId=new Map(fleet.map(f=>[f.spec.id,f])),others=skip=>fleet.filter(f=>f!==skip).map(f=>({state:f.state,cls:f.cls}));
+ const byId=new Map(fleet.map(f=>[f.spec.id,f])),others=skip=>fleet.filter(f=>f!==skip&&f.present).map(f=>({state:f.state,cls:f.cls}));
  const envFor=(f,people)=>({blocked:baseBlocked,surface,others:others(f),people});
  let driven=null,side='driver',lastHit=false;
  // Saved poses: a pose that has become blocked (a prop placed later, a rule change) moves to the nearest clear one, else the vehicle goes home (never stuck, never lost).
@@ -43,7 +43,7 @@ export function createDriving({scene,surface,footing,baseBlocked,saved=[]}){
   cameraZoom(f=driven){return f?Math.hypot(f.cls.camera.back,f.cls.camera.up):7},
   cameraPitch(f=driven){return f?Math.atan2(f.cls.camera.up,f.cls.camera.back):.38},
   // The doors that can be used (none while you sit in a vehicle): [{id, seat: 'driver'|'passenger', name, x, z}]
-  doors(){return driven?[]:fleet.flatMap(f=>['driver','passenger'].map(seat=>({id:f.spec.id,seat,name:f.spec.name,...doorPoint(f.state,f.cls,seat)})))},
+  doors(){return driven?[]:fleet.filter(f=>f.present).flatMap(f=>['driver','passenger'].map(seat=>({id:f.spec.id,seat,name:f.spec.name,...doorPoint(f.state,f.cls,seat)})))},
   seat(){return driven?seatPoint(driven.state,driven.cls,side):null},
   door(){return driven?doorPoint(driven.state,driven.cls,side):null},
   enter(id,seat='driver'){const f=byId.get(id);if(!f||driven)return false;driven=f;side=seat;f.lastSpeed=f.state.speed=0;f.state.steer=0;return true},
@@ -52,17 +52,20 @@ export function createDriving({scene,surface,footing,baseBlocked,saved=[]}){
   // One slice of driving (dt <= 1/30 s). input: {throttle, steer, brake}; people: [{x, z, r}] pedestrians. A passenger does not steer: the vehicle stands still.
   step(dt,input,people=[]){if(!driven||side!=='driver')return null;const r=stepVehicle(driven.state,input,dt,driven.cls,envFor(driven,people));driven.state=r.state;lastHit=r.hit;return r},
   // Meshes follow the states (every frame; a parked vehicle just stays where it is).
-  update(dt){for(const f of fleet){
+  update(dt){for(const f of fleet){f.mesh.visible=f.present;
    const s=f.state,accel=dt>0?(s.speed-f.lastSpeed)/dt:0,lateral=s.speed*(Math.abs(s.speed)<.01?0:s.steer*s.speed/Math.max(f.cls.rMin,s.speed*s.speed/f.cls.aLat));f.lastSpeed=s.speed;
    const k=1-Math.exp(-dt*8);f.pitch+=(clamp(-.01*accel,-.04,.04)-f.pitch)*k;f.roll+=(clamp(.012*lateral,-.05,.05)-f.roll)*k;
    f.y+=(footing(s.x,s.z)-f.y)*(1-Math.exp(-dt*10));place(f);
    // wheels: roll with the distance travelled (angle = distance / radius, forward is +z so a positive turn about x), the front pair steers
    f.spin+=s.speed*dt;for(const w of f.wheels){w.spin.rotation.x=f.spin/w.radius;if(w.front)w.pivot.rotation.y=s.steer*STEER_ANGLE}}},
   // Can a walker stand here? false inside any vehicle's hull inflated by the player radius (blocked() adds this).
-  blocksWalker(x,z){for(const f of fleet){if(Math.abs(x-f.state.x)>f.cls.hz+PLAYER_RADIUS+.1||Math.abs(z-f.state.z)>f.cls.hz+PLAYER_RADIUS+.1)continue;if(insideHull(f.state,f.cls,x,z,PLAYER_RADIUS))return true}return false},
+  blocksWalker(x,z){for(const f of fleet){if(!f.present)continue;if(Math.abs(x-f.state.x)>f.cls.hz+PLAYER_RADIUS+.1||Math.abs(z-f.state.z)>f.cls.hz+PLAYER_RADIUS+.1)continue;if(insideHull(f.state,f.cls,x,z,PLAYER_RADIUS))return true}return false},
   // The poses to save (vehicles away from home).
-  save(){return vehiclesToSave(MAP.vehicles,Object.fromEntries(fleet.map(f=>[f.spec.id,f.state])))},
-  // Put a vehicle back in its bay (a debug aid and the last resort).
+  save(){return vehiclesToSave(MAP.vehicles,Object.fromEntries(fleet.filter(f=>f.present).map(f=>[f.spec.id,f.state])))},
+  // Dev tools: bring a vehicle to a pose (the nearest free one if that is blocked) and show it, or take it out of the world (not while you are in it). A removed vehicle is not saved and comes back at its saved pose or its bay next time the game loads.
+  place(id,pose){const f=byId.get(id);if(!f||f===driven)return null;f.present=false;const env=envFor(f),ok=poseFree(pose,f.cls,env)?pose:findSafePose(pose,f.cls,env);if(!ok){f.present=true;return null}f.state=freshVehicle(ok);f.present=true;f.mesh.visible=true;f.lastSpeed=0;f.spin=0;return ok},
+  setPresent(id,present){const f=byId.get(id);if(!f||f===driven)return false;f.present=!!present;f.mesh.visible=f.present;return true},
+  present(id){return !!byId.get(id)?.present},  // Put a vehicle back in its bay (a debug aid and the last resort).
   sendHome(id){const f=byId.get(id);if(f&&f!==driven)f.state=freshVehicle(f.spec.home)}
  };
 }

@@ -15,12 +15,14 @@ export const SAMPLE_GAP=.5; // metres between hull sample points (a 0.16 m sign 
 function makeClass(c){const L=c.hz*2;return {...c,door:{x:+(c.hx+.6).toFixed(3),z:c.doorZ},passengerDoor:{x:-+(c.hx+.6).toFixed(3),z:c.doorZ},seat:{x:.45,z:c.doorZ},passengerSeat:{x:-.45,z:c.doorZ},camera:{back:+(3*L/2).toFixed(2),up:+(1.2*L/2).toFixed(2)}}}
 export const CLASSES=Object.freeze({
  pickup:makeClass({id:'pickup',name:'Pickup',hx:1.135,hz:2.65,top:11,reverse:4,accel:2.8,brake:7,drag:1,rMin:6,aLat:5,doorZ:.5}),
- worktruck:makeClass({id:'worktruck',name:'Worktruck',hx:1.09,hz:3,top:10,reverse:3.5,accel:2.4,brake:6,drag:.9,rMin:7,aLat:4.5,doorZ:.5})
+ worktruck:makeClass({id:'worktruck',name:'Worktruck',hx:1.09,hz:3,top:10,reverse:3.5,accel:2.4,brake:6,drag:.9,rMin:7,aLat:4.5,doorZ:.5}),
+ offroad:makeClass({id:'offroad',name:'Pevrolet Off Road Pickup',hx:1.255,hz:2.8,top:8.5,reverse:3.5,accel:2.2,brake:6.5,drag:1,rMin:6.5,aLat:5,doorZ:.5,rough:.35}) // slower on the road, but grass, fields, paths and dirt cost it 35 points less speed (rough)
 });
 
 // Top speed and acceleration multiplier by terrain surface. Water, banks and everything off the map are never driven on (blocked() refuses them as well).
 export const SURFACE_SPEED=Object.freeze({[SURFACE.GRASS]:.5,[SURFACE.STREET]:1,[SURFACE.ROAD]:1,[SURFACE.DIRT]:.8,[SURFACE.PAVEMENT]:.5,[SURFACE.WATER]:0,[SURFACE.BANK]:0,[SURFACE.BRIDGE]:1,[SURFACE.WHEAT]:.5,[SURFACE.PLOWED]:.5,[SURFACE.GREEN]:.5,[SURFACE.DRIVEWAY]:1,[SURFACE.PATH]:.5});
-export const surfaceSpeed=surface=>SURFACE_SPEED[surface]??0;
+// cls.rough (an off-road vehicle) lifts the rough-ground multipliers (grass 0.5, dirt 0.8 ...) by that much, never above 1; water and banks stay 0.
+export const surfaceSpeed=(surface,cls)=>{const base=SURFACE_SPEED[surface]??0;return base>0&&base<1&&cls?.rough?Math.min(1,base+cls.rough):base};
 
 export const freshVehicle=(home)=>({x:home.x,z:home.z,yaw:home.yaw,speed:0,steer:0});
 const clamp=(v,lo,hi)=>Math.max(lo,Math.min(hi,v));
@@ -65,7 +67,7 @@ export function poseFree(pose,cls,env){
 // The input: {throttle: -1..1 (W = 1, S = -1), steer: -1..1 (A = 1 left, D = -1 right), brake: bool (Space), }. dt must be small (the game's slices are at most 1/30 s).
 // Returns {state, hit} (a new state; hit is true when the hull met something and the pose was refused or slid).
 export function stepVehicle(s,input,dt,cls,env){
- const surface=surfaceSpeed(env.surface(s.x,s.z));
+ const surface=surfaceSpeed(env.surface(s.x,s.z),cls);
  const top=cls.top*surface,rev=cls.reverse*surface,accel=cls.accel*Math.max(.35,surface);
  let v=s.speed;
  const throttle=clamp(input.throttle||0,-1,1);

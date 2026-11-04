@@ -62,6 +62,9 @@ export function installDevMode(api){
  for(const it of api.items)item.append(make('option',{value:it.id,textContent:`${it.icon} ${it.name}`}));
  const spawn=make('button',{id:'devSpawn',textContent:'Spawn',onclick:()=>{const r=api.giveItem(item.value,Number(qty.value));say(r.added?`Added ${r.added} × ${r.name}.${r.error?' '+r.error:''}`:r.error,r.added?'':'error');refresh()}});
 
+ // Vehicles (api.vehicles): bring a drivable vehicle to the spot in front of you, or remove it from the world (not the one you are sitting in)
+ const vsel=make('select',{id:'devVehicle'}),vSpawn=make('button',{id:'devVehicleSpawn',textContent:'Spawn',onclick:()=>{const r=api.vehicles.spawn(vsel.value);say(r.error||r.message,r.error?'error':'');refresh()}}),vRemove=make('button',{id:'devVehicleRemove',textContent:'Remove',onclick:()=>{const r=api.vehicles.remove(vsel.value);say(r.error||r.message,r.error?'error':'');refresh()}});
+ for(const v of api.vehicles.list())vsel.append(make('option',{value:v.id,textContent:v.name}));
  // Rendering: switches for finding what causes a visual glitch on your GPU (shadows, the dissolve of trees between the camera and you)
  const renderSwitch=(id,label,apply)=>{let on=true;const b=make('button',{id,textContent:label+': on',onclick:()=>{on=!on;apply(on);b.textContent=label+(on?': on':': off');say(label+(on?' on.':' off.'))}});return b};
  const shadows=renderSwitch('devShadows','Shadows',on=>api.setShadows(on)),fade=renderSwitch('devFade','Tree dissolve',on=>api.setTreeFade(on));
@@ -113,6 +116,7 @@ export function installDevMode(api){
   make('h3',{},'Time of day'),make('div',{className:'dev-row'},slider,timeLabel,make('button',{id:'devSetTime',textContent:'Set',onclick:()=>setTime(Number(slider.value))})),make('div',{className:'dev-row'},...quick),
   make('h3',{},'Money'),make('div',{className:'dev-row'},...money),
   make('h3',{},'Spawn items'),make('div',{className:'dev-row'},item,qty,spawn),
+  make('h3',{},'Drivable vehicles'),make('div',{className:'dev-row'},vsel,vSpawn,vRemove),make('p',{className:'dev-note'},'Spawn puts the vehicle a few metres in front of you (or the nearest free spot). Remove takes it out of the world; neither works while you are in it.'),
   make('h3',{},'Rendering'),make('div',{className:'dev-row'},shadows,fade),
   make('h3',{},'Furniture'),interiorToggle,
   make('h3',{},'Safety'),make('div',{className:'dev-row'},unstick,home),

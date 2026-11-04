@@ -128,9 +128,9 @@ const savedCharacter=loadAppearance({getItem:key=>localStorage.getItem(key)});
 const avatar=createCharacter(savedCharacter||defaults),player=avatar.group;player.name='player';scene.add(player);
 // Carried things (carry.js): a log on the right shoulder (the ground logs' own mesh), or a stack of planks (the model's own plank mesh, about half size so it fits the avatar).
 const groundLogs=scene.getObjectByName('ground-logs'),carryLog=new THREE.Group(),carryLogMesh=new THREE.Mesh(groundLogs.geometry,groundLogs.material);carryLogMesh.rotation.y=Math.PI/2;carryLog.add(carryLogMesh);carryLog.position.set(-.2,1.5,.05);carryLog.rotation.x=-.12;carryLog.visible=false;carryLog.name='carried-log';player.add(carryLog);
+let carryPlanks=null,dropsFor=null,plankBoxes=[],planksPose=0; // plankBoxes: a put-down stack is a solid box (carry.js plankBox); planksPose: how far the two-handed carry pose has blended in
 // The two drivable Eastbank vehicles (driving.js, vehicle.js): their poses come from the save. worldBlocked is blocked() without them, so a vehicle never collides with itself.
 const driving=createDriving({scene,fade:world.fade,surface:(x,z)=>terrain().surfaceAt(x,z),footing:footingAt,baseBlocked:(x,z)=>worldBlocked(x,z),saved:GameState.progress.vehicles});let driveIdle=9,driveSave=0;
-let carryPlanks=null,dropsFor=null,plankBoxes=[],planksPose=0; // plankBoxes: a put-down stack is a solid box (carry.js plankBox); planksPose: how far the two-handed carry pose has blended in
 function syncSawmill(){
  const p=GameState.progress,c=sawmillCtl,hands=!inside&&!shop;carryLog.visible=hands&&p.carry?.kind==='log';
  if(!c?.ready)return;
@@ -905,6 +905,11 @@ if(DEV_MODE){try{
   snapshot:()=>({minutes:GameState.progress.routine.minutes,cash:GameState.progress.cash}),
   setShadows(on){renderer.shadowMap.enabled=!!on;scene.traverse(m=>{if(m.material)m.material.needsUpdate=true})}, // for finding what causes a glitch on your GPU
   setTreeFade(on){world.fade.uniforms.uFadeEnabled.value=on?1:0},
+  vehicles:{ // the drivable vehicles: spawn one in front of the player (or the nearest free spot), or take it out of the world; never the one the player is in
+   list:()=>MAP.vehicles.map(v=>({id:v.id,name:v.name,present:driving.present(v.id)})),
+   spawn(id){const f=driving.byId.get(id);if(!f)return {error:'Unknown vehicle.'};if(driving.active===f)return {error:'You are in it.'};if(inside||shop)return {error:'Go outdoors first.'};
+    const d=f.cls.hz+3.2,pose=driving.place(id,{x:me.position.x+Math.sin(me.rotation.y)*d,z:me.position.z+Math.cos(me.rotation.y)*d,yaw:me.rotation.y});if(!pose)return {error:'No free spot near you.'};persist();return {message:`${f.spec.name} is ${Math.hypot(pose.x-me.position.x,pose.z-me.position.z).toFixed(1)} m away.`}},
+   remove(id){const f=driving.byId.get(id);if(!f)return {error:'Unknown vehicle.'};if(driving.active===f)return {error:'You are in it. Get out first.'};if(!driving.present(id))return {error:'It is not in the world.'};driving.setPresent(id,false);persist();return {message:`${f.spec.name} removed. Spawn brings it back.`}}},
   // The interior editor: move the furniture of any house about (you do not have to rent it), see what is wrong with the layout, and save it into the code (needs `npm run dev`).
   interior:{
    houses:MAP.properties.filter(p=>p.landmark&&rooms.FLOORS[MAP.landmarks.find(l=>l.id===p.landmark)?.prop]!==undefined).map(p=>({id:p.id,name:p.name})),

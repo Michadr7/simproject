@@ -245,10 +245,11 @@ const properties=[
 ];
 // Drivable vehicles (0.33, DESIGN 4.13 D): the two depot vehicles, parked nose to the back wall (north, so yaw pi: a model's front is +z) in the depot's first truck and car bays. Anyone can drive them (no keys yet). `model` is a converted
 // prop and a vehicle class (vehicle.js CLASSES); the id is the save key (`progress.vehicles`). The parked scenery cars and trucks elsewhere are not drivable.
-export const DRIVABLE_MODELS=Object.freeze(['pickup','worktruck']);
+export const DRIVABLE_MODELS=Object.freeze(['pickup','worktruck','offroad']);
 const vehicles=[
  {id:'eastbank-pickup',model:'pickup',name:'Eastbank pickup',home:{x:94.35,z:-15.5,yaw:PI}},
- {id:'eastbank-worktruck',model:'worktruck',name:'Worktruck',home:{x:84.25,z:-13,yaw:PI}}
+ {id:'eastbank-worktruck',model:'worktruck',name:'Worktruck',home:{x:84.25,z:-13,yaw:PI}},
+ {id:'eastbank-offroad',model:'offroad',name:'Pevrolet Off Road Pickup',home:{x:88.75,z:-13,yaw:PI}}
 ];
 export const MAP=deepFreeze({
  id:'oak-and-alder',version:1,
