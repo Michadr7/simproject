@@ -4,6 +4,7 @@
 // A vehicle's state is {x, z, yaw, speed, steer} (y is never stored). Forward is the model's +z: (sin yaw, cos yaw). Yaw grows toward +x, which is the vehicle's LEFT when it faces +z,
 // so steer > 0 turns left. The hull is an oriented box from the converted model's footprint; a pose is free when every hull sample point passes the game's own `blocked()`.
 import {SURFACE} from './terrain.js';
+import {normalizeFuelMl} from './fuel.js';
 
 export const PLAYER_RADIUS=.33; // what blocked() adds around every solid box: the hull points are inset by it, so the inflation lands exactly on the hull edge
 export const SAMPLE_GAP=.5; // metres between hull sample points (a 0.16 m sign post cannot slip between two: the gap must stay under 2 x 0.49 m)
@@ -14,8 +15,8 @@ export const SAMPLE_GAP=.5; // metres between hull sample points (a 0.16 m sign 
 // 3 x its length behind, 1.2 x its length up (worktruck 6 m: 9 m back, 3.6 m up).
 function makeClass(c){const L=c.hz*2;return {...c,door:{x:+(c.hx+.6).toFixed(3),z:c.doorZ},passengerDoor:{x:-+(c.hx+.6).toFixed(3),z:c.doorZ},seat:{x:.45,z:c.doorZ},passengerSeat:{x:-.45,z:c.doorZ},camera:{back:+(3*L/2).toFixed(2),up:+(1.2*L/2).toFixed(2)}}}
 export const CLASSES=Object.freeze({
- worktruck:makeClass({id:'worktruck',name:'Worktruck',hx:1.09,hz:3,top:10,reverse:3.5,accel:2.4,brake:6,drag:.9,rMin:7,aLat:4.5,doorZ:.5}),
- offroad:makeClass({id:'offroad',name:'Pevrolet Off Road Pickup',hx:1.255,hz:2.8,top:8.5,reverse:3.5,accel:2.2,brake:6.5,drag:1,rMin:6.5,aLat:5,doorZ:.5,rough:.35}) // slower on the road, but grass, fields, paths and dirt cost it 35 points less speed (rough)
+ worktruck:makeClass({id:'worktruck',litresPer100m:1.0,name:'Worktruck',hx:1.09,hz:3,top:10,reverse:3.5,accel:2.4,brake:6,drag:.9,rMin:7,aLat:4.5,doorZ:.5}),
+ offroad:makeClass({id:'offroad',litresPer100m:1.2,name:'Pevrolet Off Road Pickup',hx:1.255,hz:2.8,top:8.5,reverse:3.5,accel:2.2,brake:6.5,drag:1,rMin:6.5,aLat:5,doorZ:.5,rough:.35}) // slower on the road, but grass, fields, paths and dirt cost it 35 points less speed (rough)
 });
 
 // Top speed and acceleration multiplier by terrain surface. Water, banks and everything off the map are never driven on (blocked() refuses them as well).
@@ -110,6 +111,7 @@ export function exitPoint(s,cls,free,side='driver'){
 }
 
 // The saved list: one entry per MAP.vehicles id that has left its home bay. Unknown ids, unknown models and bad numbers are dropped; positions must be inside the playable rectangle.
+// Fuel: normalizeFuelMl (fuel.js) keeps a saved amount inside the tank; a missing one is a full tank.
 export function normalizeVehicles(value,known,playable){
  if(!Array.isArray(value))return [];
  const out=[],seen=new Set();
@@ -118,14 +120,22 @@ export function normalizeVehicles(value,known,playable){
   const spec=known.find(k=>k.id===v.uid);if(!spec||v.model!==spec.model||!CLASSES[v.model])continue;
   if(![v.x,v.z,v.yaw].every(Number.isFinite))continue;
   if(playable&&(v.x<playable.x0||v.x>playable.x1||v.z<playable.z0||v.z>playable.z1))continue;
-  seen.add(v.uid);out.push({uid:v.uid,model:v.model,x:+v.x.toFixed(2),z:+v.z.toFixed(2),yaw:+v.yaw.toFixed(3)});
+  seen.add(v.uid);
+  const entry={uid:v.uid,model:v.model,x:+v.x.toFixed(2),z:+v.z.toFixed(2),yaw:+v.yaw.toFixed(3)};
+  if(spec.fuel)entry.fuelMl=normalizeFuelMl(v.fuelMl,spec.fuel.tankMl);
+  out.push(entry);
  }
  return out;
 }
-// What to save: vehicles that are not at home (a vehicle back in its exact home pose has no entry).
+// What to save: vehicles that are not at home (a vehicle back in its exact home pose has no entry), or that have lost fuel from a full tank.
+// states[id] = {x, z, yaw, fuelMl?}. A full vehicle at home is not saved at all.
 export function vehiclesToSave(specs,states){
  const out=[];for(const spec of specs){const s=states[spec.id];if(!s)continue;
-  if(Math.hypot(s.x-spec.home.x,s.z-spec.home.z)<.05&&Math.abs(Math.atan2(sin(s.yaw-spec.home.yaw),cos(s.yaw-spec.home.yaw)))<.01)continue;
-  out.push({uid:spec.id,model:spec.model,x:+s.x.toFixed(2),z:+s.z.toFixed(2),yaw:+s.yaw.toFixed(3)})}
+  const atHome=Math.hypot(s.x-spec.home.x,s.z-spec.home.z)<.05&&Math.abs(Math.atan2(sin(s.yaw-spec.home.yaw),cos(s.yaw-spec.home.yaw)))<.01;
+  const fuelled=spec.fuel?normalizeFuelMl(s.fuelMl,spec.fuel.tankMl):null,full=fuelled===null||fuelled===spec.fuel.tankMl;
+  if(atHome&&full)continue;
+  const entry={uid:spec.id,model:spec.model,x:+s.x.toFixed(2),z:+s.z.toFixed(2),yaw:+s.yaw.toFixed(3)};
+  if(fuelled!==null)entry.fuelMl=fuelled;
+  out.push(entry)}
  return out;
 }

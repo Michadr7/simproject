@@ -48,10 +48,10 @@ for(const id of ['eastbank-warehouse','eastbank-workshop','eastbank-supply','eas
  const supply=rotated(L('eastbank-supply'));assert(supply.z0-MAP.paving.find(p=>p.id==='supply-apron').z0>=12,'the supplier has a 12 m forecourt')}
 
 // Yards: the caps hold, every item is inside its yard and the yards are clear of each other and of the buildings; a truck can drive straight through every cut and across every yard.
-assert.equal(MAP.yards.length,5);const counts=MAP.yards.map(y=>y.items.length),total=counts.reduce((a,b)=>a+b,0);assert(total<=YARD_CAPS.total,`${total} props in all yards`);assert.deepEqual(counts,[18,52,13,14,4]);
+assert.equal(MAP.yards.length,5);const counts=MAP.yards.map(y=>y.items.length),total=counts.reduce((a,b)=>a+b,0);assert(total<=YARD_CAPS.total,`${total} props in all yards`);assert.deepEqual(counts,[18,52,13,14,6]);
 for(const y of MAP.yards){const per={};for(const i of y.items)per[i.prop]=(per[i.prop]||0)+1;for(const [prop,n] of Object.entries(per))assert(n<=YARD_CAPS.perModel,`${y.id}: ${n} ${prop}`)}
 {const footprints=[];for(const y of MAP.yards)for(const i of y.items){if(i.y>0)continue;const f=propInfo(i.prop).footprint,s=Math.round(Math.sin(i.yaw)),c=Math.round(Math.cos(i.yaw)),pts=[[f.x0,f.z0],[f.x1,f.z1]].map(([x,z])=>[i.x+x*c+z*s,i.z-x*s+z*c]);
-  footprints.push({id:y.id+':'+i.prop,x0:Math.min(pts[0][0],pts[1][0]),x1:Math.max(pts[0][0],pts[1][0]),z0:Math.min(pts[0][1],pts[1][1]),z1:Math.max(pts[0][1],pts[1][1]),plate:i.prop==='prop.dock-plate'})}
+  footprints.push({id:y.id+':'+i.prop,x0:Math.min(pts[0][0],pts[1][0]),x1:Math.max(pts[0][0],pts[1][0]),z0:Math.min(pts[0][1],pts[1][1]),z1:Math.max(pts[0][1],pts[1][1]),plate:i.prop==='prop.dock-plate'||i.prop==='prop.forecourt-canopy'})} // a canopy is a roof on four columns (its bollards and the island stand under it): not a solid footprint
  for(let a=0;a<footprints.length;a++){for(const l of MAP.landmarks.filter(l=>l.id.startsWith('eastbank')))assert(!overlaps(footprints[a],rotated(l)),`${footprints[a].id} is clear of ${l.id}`);
   for(let b=a+1;b<footprints.length;b++)if(!footprints[a].plate&&!footprints[b].plate)assert(!overlaps(footprints[a],footprints[b]),`${footprints[a].id} and ${footprints[b].id} do not overlap`)}}
 { // a truck (4.2 m wide) can drive along the middle of every cut and every yard's lane: nothing solid in a 3.6 m strip down the cut's centre (blocked() adds the player's 0.33 m)
@@ -70,10 +70,10 @@ assert(!world.blocked(161.8,30.4),'the dock plate is walked over (its ramp end; 
  assert(!at(-30,-100)['warehouse-yard'],'and not from Alder Center');
  const s=at(163,25)&&eb.stats(163,25),far=eb.stats(-5,15);assert.equal(far.chunksOn,0);assert.equal(far.instances,0);
  // one InstancedMesh per model per yard, never one per prop: warehouse 7 models (dock plate, sign, bollard, three loaded pallets, empty pallet), freight yard 9 (three containers, empty and three loaded pallets, crate, bollard), timber yard 4, workshop 4, gas station 1
- assert.deepEqual(eb.chunks.map(c=>c.meshes.length),[7,9,4,4,1]);
- assert(s.instances===101&&s.triangles<=30000&&s.drawCalls<=30,`worst case, standing among all five yards: ${s.instances} instances, ${s.triangles} triangles, ${s.drawCalls} draw calls`);
+ assert.deepEqual(eb.chunks.map(c=>c.meshes.length),[7,9,4,4,3]); // the gas station: its bollards, the pump island and the canopy (0.35)
+ assert(s.instances===103&&s.triangles<=30000&&s.drawCalls<=30,`worst case, standing among all five yards: ${s.instances} instances, ${s.triangles} triangles, ${s.drawCalls} draw calls`);
  // Eastbank is compact (about 120 x 95 m): from the depot all five yards are within 80 m, so standing anywhere in it you pay for all 107 props. The city and Alder Center pay nothing.
- const depot=eb.stats(95,-10);assert.equal(depot.chunksOn,5);assert.equal(depot.instances,101);for(const [x,z] of [[0,0],[20,-100],[-30,60]])assert.equal(eb.stats(x,z).chunksOn,0,`no yard is drawn from ${x}, ${z}`);console.log(`Eastbank cost: from the depot ${JSON.stringify(depot)}; from the spawn ${JSON.stringify(far)}`)}
+ const depot=eb.stats(95,-10);assert.equal(depot.chunksOn,5);assert.equal(depot.instances,103);for(const [x,z] of [[0,0],[20,-100],[-30,60]])assert.equal(eb.stats(x,z).chunksOn,0,`no yard is drawn from ${x}, ${z}`);console.log(`Eastbank cost: from the depot ${JSON.stringify(depot)}; from the spawn ${JSON.stringify(far)}`)}
 // The validator catches a bad yard.
 {const broken=edit=>{const map=structuredClone(MAP);edit(map);return validateMap(map)},has=(problems,pattern)=>assert(problems.some(p=>pattern.test(p)),`expected ${pattern}, got ${JSON.stringify(problems)}`);
  has(broken(m=>{const y=m.yards.find(q=>q.id==='freight-yard');for(let i=0;i<20;i++)y.items.push({prop:'prop.pallet',x:112+i*.5,z:49,yaw:0,y:0})}),/the cap is 32 of one model per yard/);

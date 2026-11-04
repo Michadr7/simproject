@@ -4,7 +4,7 @@
 //  - each yard as a CHUNK: one InstancedMesh per prop model in it (props.js createPropInstances), shown only while the player is within `cull` metres of the yard's rectangle. The solid
 //    boxes of every prop are added to the world's colliders once and stay (they are cheap; the meshes are what costs). Caps on the numbers live in validateMap (YARD_CAPS).
 import * as THREE from './vendor/three.module.js';
-import {MAP} from './map-definition.js';
+import {MAP,CANOPY_COLUMNS} from './map-definition.js';
 import {propInfo,createPropInstances} from './props.js';
 
 const quads=(rects,y)=>{const position=[],index=[];
@@ -33,6 +33,7 @@ export function createEastbank({group,fade,groundLayer,asphalt,colliders}){
    const info=propInfo(prop),mesh=createPropInstances(prop,items.map(it=>({x:it.x,z:it.z,y:it.y,yaw:it.yaw})),fade,{shadows:info.height>=2});
    holder.add(mesh);meshes.push(mesh);triangles+=info.triangles*items.length;
    for(const it of items){if(it.y>0)continue; // a stacked pallet rests on the one below: only the bottom of a stack is solid
+    if(prop==='prop.forecourt-canopy'){for(const [dx,dz] of CANOPY_COLUMNS)colliders.box(it.x+dx,it.z+dz,.4,.4); continue} // a roof on four columns: the columns block, the space under the roof does not (the converted canopy has no box)
     const cos=Math.round(Math.cos(it.yaw)),sin=Math.round(Math.sin(it.yaw)),turned=sin!==0;
     for(const b of info.colliders)colliders.box(it.x+b.x*cos+b.z*sin,it.z-b.x*sin+b.z*cos,turned?b.hz:b.hx,turned?b.hx:b.hz)}}
   return {id:yard.id,holder,bounds:yard.bounds,cull:yard.cull,meshes,instances:yard.items.length,triangles};

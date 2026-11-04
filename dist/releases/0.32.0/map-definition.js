@@ -195,7 +195,7 @@ const yards=[
   ...rowOf('prop.box-small',113,26.8,.6,6),...rowOf('prop.box-medium',118,26.8,.8,4),...rowOf('prop.crate-large',136.5,26.5,1.4,2),
   {prop:'prop.pallet',x:140,z:26,yaw:0,y:0},{prop:'prop.pallet',x:140,z:24.9,yaw:0,y:0}]},
  // The gas station: bollards at the ends of the pump island (the pumps and the canopy come with the user's models).
- {id:'gas-station',bounds:{x0:150,x1:161.5,z0:-18,z1:0},cull:80,items:[[152,-9.3],[152,-7.2],[161,-9.3],[161,-7.2]].map(([x,z])=>({prop:'prop.zone-bollard',x,z,yaw:0,y:0}))}
+ {id:'gas-station',bounds:{x0:150,x1:161.5,z0:-18,z1:0},cull:80,items:[...[[152,-9.3],[152,-7.2],[161,-9.3],[161,-7.2]].map(([x,z])=>({prop:'prop.zone-bollard',x,z,yaw:0,y:0})),{prop:'prop.pump-island',x:156.5,z:-8.25,yaw:0,y:0},{prop:'prop.forecourt-canopy',x:155.5,z:-8.25,yaw:0,y:0}]}
 ];
 
 function deepFreeze(value){if(value&&typeof value==='object'&&!Object.isFrozen(value)){Object.freeze(value);for(const key of Object.keys(value))deepFreeze(value[key])}return value}
@@ -246,9 +246,13 @@ const properties=[
 // Drivable vehicles (0.33, DESIGN 4.13 D): the two depot vehicles, parked nose to the back wall (north, so yaw pi: a model's front is +z) in the depot's first truck and car bays. Anyone can drive them (no keys yet). `model` is a converted
 // prop and a vehicle class (vehicle.js CLASSES); the id is the save key (`progress.vehicles`). The parked scenery cars and trucks elsewhere are not drivable.
 export const DRIVABLE_MODELS=Object.freeze(['worktruck','offroad']);
+// The forecourt canopy's four steel columns, from the canopy's origin (the 0.8 m column boxes the map adds, see eastbank.js): x and z offsets in metres.
+export const CANOPY_COLUMNS=Object.freeze([[5,3.2],[-5,3.2],[5,-3.2],[-5,-3.2]]);
+// The Eastbank gas station (0.35, fuel.js): one pump island (two pumps: N=0 petrol at its x -0.8 side, N=1 diesel at +0.8, the island's own anchors read from the model). Its nozzles hang on the +Y (-z) face.
+export const FUEL_STATIONS=Object.freeze([{id:'eastbank-gas',island:{prop:'prop.pump-island',x:156.5,z:-8.25,yaw:0},pumps:[{n:0,fuel:'petrol'},{n:1,fuel:'diesel'}]}]);
 const vehicles=[
- {id:'eastbank-worktruck',model:'worktruck',name:'Worktruck',home:{x:84.25,z:-13,yaw:PI}},
- {id:'eastbank-offroad',model:'offroad',name:'Pevrolet Off Road Pickup',home:{x:88.75,z:-13,yaw:PI}}
+ {id:'eastbank-worktruck',model:'worktruck',name:'Worktruck',home:{x:84.25,z:-13,yaw:PI},fuel:{type:'diesel',tankMl:80000,port:{x:1.2,z:-2.2}}},
+ {id:'eastbank-offroad',model:'offroad',name:'Pevrolet Off Road Pickup',home:{x:88.75,z:-13,yaw:PI},fuel:{type:'diesel',tankMl:70000,port:{x:1.4,z:-2.2}}}
 ];
 export const MAP=deepFreeze({
  id:'oak-and-alder',version:1,
