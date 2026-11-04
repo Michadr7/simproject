@@ -29,8 +29,11 @@ export function createAudio({AudioContextClass,storage,random=Math.random}){
   // The belt: a low rumble of filtered noise with a soft 50 Hz hum under it.
   const beltRumble=looping(buffer),beltLow=filtered('lowpass',240,.5),beltRumbleGain=gain(),beltHum=ctx.createOscillator();beltHum.type='sine';beltHum.frequency.value=50;const beltHumGain=gain();
   beltRumble.connect(beltLow);beltLow.connect(beltRumbleGain);beltRumbleGain.connect(master);beltHum.connect(beltHumGain);beltHumGain.connect(master);
-  for(const node of [bladeTone,bladeHiss,beltRumble,beltHum])node.start();
-  v={bladeTone,bladeLow,bladeToneGain,bladeBand,bladeHissGain,beltRumbleGain,beltHumGain,buffer};
+  // Fuel flowing: a filtered rush of noise whose pitch climbs as the tank fills (the cavity gets smaller), over a low pump hum.
+  const fuelRush=looping(buffer),fuelBand=filtered('bandpass',600,.9),fuelRushGain=gain(),fuelHum=ctx.createOscillator();fuelHum.type='triangle';fuelHum.frequency.value=92;const fuelHumGain=gain();
+  fuelRush.connect(fuelBand);fuelBand.connect(fuelRushGain);fuelRushGain.connect(master);fuelHum.connect(fuelHumGain);fuelHumGain.connect(master);
+  for(const node of [bladeTone,bladeHiss,beltRumble,beltHum,fuelRush,fuelHum])node.start();
+  v={bladeTone,bladeLow,bladeToneGain,bladeBand,bladeHissGain,beltRumbleGain,beltHumGain,fuelBand,fuelRushGain,fuelHumGain,buffer};
  }
  return {
   settings,
@@ -52,6 +55,21 @@ export function createAudio({AudioContextClass,storage,random=Math.random}){
    ease(v.bladeToneGain.gain,.13*b*(1-.25*load));ease(v.bladeHissGain.gain,(.04*b)+(.3*load*b));ease(v.bladeBand.frequency,2000+1800*blade.level);
    const r=attenuate(distance(listener,belt.at))*belt.level;
    ease(v.beltRumbleGain.gain,.22*r);ease(v.beltHumGain.gain,.07*r);
+  },
+  // Fuel flowing (every frame while a nozzle is out): at: {x,z} of the pump, level 0..1 (1 while it is flowing), fullness 0..1 (how full the tank is: the pitch rises).
+  fuel({listener,at,level,fullness=0}){
+   if(!ctx)return;
+   const a=at?attenuate(distance(listener,at))*level:0;
+   ease(v.fuelRushGain.gain,.22*a,.04);ease(v.fuelHumGain.gain,.05*a,.04);ease(v.fuelBand.frequency,550+950*Math.max(0,Math.min(1,fullness)));
+  },
+  // A chime when the tank is full (or you cannot pay): two short notes. `at`: {x,z}. Shares the click limit.
+  chime(at,listener,{ok=true}={}){
+   if(!ctx||settings.muted||clicks>=MAX_CLICKS)return false;
+   const a=attenuate(distance(listener,at));if(a<.02)return false;
+   const t=ctx.currentTime,notes=ok?[880,1320]:[330,247];clicks++;let last=null;
+   notes.forEach((freq,i)=>{const o=ctx.createOscillator(),env=gain(0);o.type=ok?'sine':'square';o.frequency.value=freq;const s=t+i*.14;env.gain.setValueAtTime(0,s);env.gain.linearRampToValueAtTime(.22*a,s+.01);env.gain.setTargetAtTime(.0001,s+.05,.07);o.connect(env);env.connect(master);o.start(s);o.stop(s+.3);last=o});
+   last.onended=()=>{clicks--};
+   return true;
   },
   // The lever: a short click (a tick of noise and a falling blip). `at`: {x,z}. False if it was too far, muted or there are already three clicks playing.
   click(at,listener){

@@ -42,7 +42,7 @@ import {createPedestrians,createVehicles} from './neighborhood.js';
 import {createDriving} from './driving.js';
 import {createVehicleHud,vehicleHudModel} from './vehicle-hud.js';
 import {createFuelStation} from './fuel-station.js';
-import {sell,STEP_ML,FLOW_ML_PER_S,REACH_M,USE_RANGE_M,fuelText} from './fuel.js';
+import {sell,STEP_MGAL,FLOW_MGAL_PER_S,REACH_M,USE_RANGE_M,fuelText,fuelTitle,fuelName,gallons} from './fuel.js';
 import * as THREE from './vendor/three.module.js';
 import { createCameraController } from './camera.js';
 import {MARKET,routeFor,targetFor,nearby,money,transactJob} from './jobs.js';
@@ -248,7 +248,7 @@ function showCafe(){const c=GameState.progress.cafe,o=ORDERS[c.customer];if(c.st
  if(c.stage==='order'){speak(shops.cafe.customer.group,o.name,'Could I have one '+o.drink.toLowerCase()+', please?',[{label:'Of course. Coming right up.',run:()=>commitCafe('order')}]);return}
  if(c.stage==='brew'){station({x:-1.25,y:1.5,z:-3.2},'Coffee machine','Ticket: '+o.drink,[{label:'Make espresso',run:()=>beginCafe('brew','Espresso')},{label:'Make latte',run:()=>beginCafe('brew','Latte')}]);return}beginCafe(c.stage);
 }
-function candidates(){const all=[],add=(id,point,anchor,label,run,range=1.5)=>all.push({id,point,anchor,label,run,range});
+function candidates(){const all=[],add=(id,point,anchor,label,run,range=1.5,key)=>all.push({id,point,anchor,label,run,range,key}); // key: the key shown on the prompt (E when missing; '' shows none)
  if(driving.active){add('exit-vehicle',{x:me.position.x,z:me.position.z},()=>new THREE.Vector3(me.position.x,me.position.y+2.4,me.position.z),driving.speed<1?'Get out':'Stop to get out',exitVehicle,9);return all} // driving: E gets you out (and nothing else is on offer)
  if(shop){add('clerk',COUNTER,()=>entityPoint(shops[shop].clerk.group),shop==='market'?'Talk to Noah':'Talk to Elena',shop==='market'?marketMenu:managerMenu,1.6);
  if(shop==='cafe'&&!['off','clockout'].includes(GameState.progress.cafe.stage)){const task=cafeTask(GameState.progress);add('cafe-task',task,()=>GameState.progress.cafe.stage==='order'||GameState.progress.cafe.stage==='serve'?entityPoint(shops.cafe.customer.group):worldPoint({...task,y:1.2}),task.title,showCafe,1.35)}return all}
@@ -271,8 +271,14 @@ function candidates(){const all=[],add=(id,point,anchor,label,run,range=1.5)=>al
  if(!inside&&!shop){
   const pump=fuel.pumpAt(me.position.x,me.position.z,USE_RANGE_M);
   if(pump){const at=()=>new THREE.Vector3(pump.use.x,1.2,pump.use.z);
-   if(fuel.held===pump)add('fuel-hang-'+pump.id,pump.use,at,'Hang the nozzle back',()=>hangNozzle(),USE_RANGE_M);
+   if(fuel.held===pump)add('fuel-hang-'+pump.id,{x:pump.holster.x,z:pump.holster.z},()=>new THREE.Vector3(pump.holster.x,1.4,pump.holster.z),'Hang the nozzle back',()=>hangNozzle(),2.2); // at the holster, so a tank cap you stand at (the fill prompt) wins over it
    else if(!fuel.held)add('fuel-take-'+pump.id,pump.use,at,`Take the ${pump.label} nozzle · ${pump.price}`,()=>takeNozzle(pump),USE_RANGE_M)}
+  {const near=driving.fillerNear(me.position.x,me.position.z,REACH_M);
+   if(near){const info=driving.fuelOf(near),pt=driving.fillerPoint(near),spec=driving.byId.get(near).spec,cap=()=>new THREE.Vector3(pt.x,.95,pt.z),text=`${spec.name} · takes ${fuelName(info.type)} · ${fuelText(info.mgal,info.capacityMgal)}`;
+    if(fuel.held){const right=fuel.held.fuel===info.type,full=info.mgal>=info.capacityMgal,say=full?'The tank is full.':right?'Hold F to fill.':`Wrong fuel: this one takes ${fuelName(info.type)}.`;
+     add('fuel-fill',pt,cap,full?'Tank full':right?`Hold to fill · ${text}`:`Wrong fuel · takes ${fuelName(info.type)}`,()=>toast(say),REACH_M,right&&!full?'F':'')}
+    else add('fuel-info',pt,cap,text,()=>toast(`${text}. Take a ${fuelName(info.type)} nozzle at a pump first.`),REACH_M,'')}}
+  if(!fuel.held)
   for(const d of driving.doors())add('drive-'+d.id+'-'+d.seat,{x:d.x,z:d.z},()=>new THREE.Vector3(d.x,1.3,d.z),(d.seat==='driver'?'Drive the ':'Ride in the ')+d.name.replace(/^Eastbank /,''),()=>enterVehicle(d.id,d.seat),2);
   if(sawmillCtl?.ready){const pr=GameState.progress; // the switch, the bench (a carried log goes in), the belt's end (planks come off) and planks put down on the ground
    add('sawmill-switch',sawmillCtl.switchPoint,sawmillCtl.promptPoint,switchLabel(sawmillState),toggleSawmill,2.2);
@@ -323,40 +329,51 @@ let doorsFor=null,doorList=[];const doorsNow=()=>{const p=GameState.progress.pro
 // One thing at a time (actions.js): the flags come straight from the game's own state, so nothing can stay "held" by mistake.
 const actionFlags=()=>({chop:!!chopping,consume:!!consuming,work:!!busy,sleep:sleepElapsed!==null,door:!!doorFade});
 const canAct=kind=>canStart(kind,actionFlags()),actionBusy=()=>!!activeAction(actionFlags());
-// Fuel (0.35): taking and hanging up a nozzle, filling a stopped vehicle while you hold E, and the hose limit. Rules: fuel.js. The station: fuel-station.js.
-let fillBlocked=false,fillAcc=0,fillSave=0,fillToast=0;
+// Fuel (0.35): taking and hanging up a nozzle (E), filling a stopped vehicle while you HOLD F (E stays for doors), and the hose limit. Rules: fuel.js. The station: fuel-station.js.
+let fillBlocked=false,fillAcc=0,fillSave=0,fillToast=0,fHeld=false,fuelFlow=0,fuelFull=0,fillSale=null,nozzlePose=0;
+const NOZZLE_HAND=new THREE.Vector3(-.26,1.08,.5),NOZZLE_POLE=new THREE.Vector3(-.5,-.4,-.1),nozzleHandAt=new THREE.Vector3(),listenerAt=()=>({x:me.position.x,z:me.position.z});
 function takeNozzle(pump){
  if(inside||shop||driving.active||actionBusy()||putting)return;
  if(GameState.progress.carry){toast('Your hands are full. Put it down first (X).');return}
  if(fuel.held){toast('You already have a nozzle out.');return}
- fuel.take(pump);fillBlocked=false;toast(`${pump.label} nozzle in your hand. Stand by a tank cap and hold E to fill.`);
+ stowTool();fuel.take(pump);fillBlocked=false;fillSale={mgal:0,cents:0};fuel.setReadout(pump,fillSale);audio.click(pump.use,listenerAt());
+ toast(`${fuelTitle(pump.fuel)} nozzle in your hand. Go to the glowing tank cap and hold F to fill.`);
 }
-function hangNozzle(quiet=false){const p=fuel.putBack();fillAcc=0;if(p&&!quiet){toast('Nozzle back in its holster.');persist()}return p}
-// The hose is at most HOSE_MAX_M long: past that the nozzle goes back by itself. Inside a building or in a vehicle it always does.
+function hangNozzle(quiet=false){const p=fuel.putBack();fillAcc=0;fillSale=null;if(p){audio.click(p.use,listenerAt());if(!quiet){toast('Nozzle back in its holster.');persist()}}return p}
+// The hose is at most HOSE_MAX_M long: past that the nozzle goes back by itself. Inside a building or in a vehicle it always does. The tank caps glow while a nozzle is in your hand.
 function fuelHose(){
+ driving.showFillers(!!fuel.held&&!inside&&!shop&&!driving.active,fuel.held?fuel.held.fuel:null);
  if(!fuel.held)return;
  if(inside||shop||driving.active){hangNozzle(true);return}
- const r=fuel.update({x:me.position.x,z:me.position.z,yaw:me.rotation.y});
+ avatar.hand.getWorldPosition(nozzleHandAt);
+ const r=fuel.update({x:me.position.x,z:me.position.z,yaw:me.rotation.y,hand:nozzlePose>.5?nozzleHandAt:null});
  if(r&&r.limit){hangNozzle();toast('The hose is at its limit, so the nozzle went back.')}
 }
-// Filling: while you hold E with a nozzle out and a stopped vehicle's filler cap within reach, fuel flows at FLOW_ML_PER_S, in whole steps, paid as it goes.
+// The right arm holds the nozzle out in front while it is in your hand (blended in and out like the carry poses).
+function updateNozzlePose(dt){
+ const want=!!fuel.held&&!inside&&!shop&&!driving.active,was=nozzlePose>0;nozzlePose=poseBlend(nozzlePose,want,dt);
+ if(nozzlePose>0){avatar.reach('R',NOZZLE_HAND,nozzlePose,NOZZLE_POLE);avatar.setHandCurl('R',nozzlePose*.85)}else if(was&&!GameState.progress.equipped)avatar.reach('R',null,0);
+}
+// Filling: while you HOLD F with a nozzle out and a stopped vehicle's filler cap within reach, fuel flows at FLOW_MGAL_PER_S, in whole steps, paid as it goes.
 function fuelTick(dt){
- if(!eHeld){fillBlocked=false;fillAcc=0;if(fillSave>0){persist();fillSave=0}return}
+ if(!fHeld){fillBlocked=false;fillAcc=0;if(fillSave>0){persist();fillSave=0}return}
  if(!fuel.held||inside||shop||driving.active||!active||modal)return;
  const id=driving.fillerNear(me.position.x,me.position.z,REACH_M);
  if(!id){fillAcc=0;return}
  if(fillBlocked)return;
  const info=driving.fuelOf(id);
- fillAcc+=FLOW_ML_PER_S*dt;
- const want=Math.floor(fillAcc/STEP_ML)*STEP_ML;if(want<=0)return;
- const r=sell({cash:GameState.progress.cash,target:{fuel:info.type,ml:info.ml,capacityMl:info.capacityMl}},{pump:{fuel:fuel.held.fuel},ml:want});
- if(r.error){fillBlocked=true;fillAcc=0;toast(r.error);return}
+ fillAcc+=FLOW_MGAL_PER_S*dt;
+ const want=Math.floor(fillAcc/STEP_MGAL)*STEP_MGAL;if(want<=0)return;
+ const r=sell({cash:GameState.progress.cash,target:{fuel:info.type,mgal:info.mgal,capacityMgal:info.capacityMgal}},{pump:{fuel:fuel.held.fuel},mgal:want});
+ if(r.error){fillBlocked=true;fillAcc=0;toast(r.error);audio.chime(fuel.held.use,listenerAt(),{ok:r.code==='full'});return}
  fillAcc-=want;
- driving.setFuel(id,r.target.ml);
+ driving.setFuel(id,r.target.mgal);
  GameState.progress={...GameState.progress,cash:r.cash};
+ fillSale=fillSale||{mgal:0,cents:0};fillSale={mgal:fillSale.mgal+r.soldMgal,cents:fillSale.cents+r.cents};fuel.setReadout(fuel.held,fillSale);
+ fuelFlow=1;fuelFull=r.target.mgal/info.capacityMgal;
  fillSave+=dt;if(fillSave>=1){persist();fillSave=0}
- fillToast+=dt;if(fillToast>=.5){fillToast=0;toast(`Filling ${fuel.held.label} · ${fuelText(r.target.ml,info.capacityMl)} · ${money(r.cash)}`)}
- if(r.soldMl<want){fillBlocked=true;fillAcc=0;toast(r.target.ml>=info.capacityMl?'The tank is full.':'You cannot pay for any more fuel.')}
+ fillToast+=dt;if(fillToast>=.5){fillToast=0;toast(`Filling ${fuelName(fuel.held.fuel)} · ${fuelText(r.target.mgal,info.capacityMgal)} · ${money(r.cash)}`)}
+ if(r.soldMgal<want){fillBlocked=true;fillAcc=0;fuelFlow=0;toast(r.target.mgal>=info.capacityMgal?`The tank is full. ${gallons(fillSale.mgal)} gal for ${money(fillSale.cents)}.`:'You cannot pay for any more fuel.');audio.chime(fuel.held.use,listenerAt(),{ok:r.target.mgal>=info.capacityMgal})}
 }function interact(){if(!active||modal||actionBusy()||putting)return;const hit=chooseInteraction(candidates(),me.position,me.rotation.y);if(hit)hit.run()}
 // Driving (driving.js, vehicle.js): E at a vehicle's driver door gets in (refused while carrying), E while driving gets out once you are below 1 m/s, at the door (else the other side, behind, in front).
 function enterVehicle(id,seat='driver'){
@@ -379,7 +396,7 @@ function updateWorldUI(){
  camera.updateMatrixWorld(true);const hit=chooseInteraction(candidates(),me.position,me.rotation.y);selectedInteraction=hit;
  { const target=chopping?chopping.tree:hit?.id?.startsWith('tree-')?hit.point:null;world.setTarget(active&&!modal?target:null); }
  const p=hit?screenAnchor(hit.anchor(),camera,innerWidth,innerHeight,THREE.Vector3):null;$('prompt').hidden=!active||modal||!!busy||!!chopping||!p||!!driving.active;
- if(p){$('prompt').style.left=p.x+'px';$('prompt').style.top=p.y+'px';$('prompt').querySelector('span').textContent=hit.label}
+ if(p){$('prompt').style.left=p.x+'px';$('prompt').style.top=p.y+'px';$('prompt').querySelector('span').textContent=hit.label;const kbd=$('prompt').querySelector('kbd');if(kbd){kbd.hidden=hit.key==='';kbd.textContent=hit.key||'E'}}
  if(worldPanel&&!$('dialog').hidden){const anchor=screenAnchor(worldPanel.anchor(),camera,innerWidth,innerHeight,THREE.Vector3);if(anchor){const width=Math.min(320,innerWidth-24),height=$('dialog').offsetHeight||260;$('dialog').style.left=Math.max(12,Math.min(innerWidth-width-12,anchor.x+26))+'px';$('dialog').style.top=Math.max(12,Math.min(innerHeight-height-12,anchor.y-height*.55))+'px';}else{$('dialog').style.left='12px';$('dialog').style.top='100px'}}
  
 }
@@ -445,9 +462,9 @@ window.addEventListener('keydown',e=>{
   return;
  }
  if((e.code==='KeyI'||e.code==='KeyQ')&&!e.ctrlKey&&!e.metaKey&&!e.altKey&&active){e.preventDefault();if(!e.repeat)inventoryUI.open(e.code==='KeyI'?'grid':'wheel');return}
-if(['ArrowUp','ArrowDown','ArrowLeft','ArrowRight','Space'].includes(e.code))e.preventDefault();if(e.code==='Escape'&&active){if(!$('dialog').hidden){$('dialog').hidden=true;clearWorldPanel();modal=false;keys.clear();look.capture()}else {pause(!modal);if(!modal)look.capture()}}if(e.code==='KeyE'&&!e.repeat){eHeld=!modal;interact()}if(e.code==='KeyR'&&active&&!modal)reset()});
-window.addEventListener('blur',()=>{eHeld=false;if(active&&!modal&&!creatorOpen)pause(true)});
-window.addEventListener('keyup',e=>{if(e.code==='KeyE')eHeld=false});
+if(['ArrowUp','ArrowDown','ArrowLeft','ArrowRight','Space'].includes(e.code))e.preventDefault();if(e.code==='Escape'&&active){if(!$('dialog').hidden){$('dialog').hidden=true;clearWorldPanel();modal=false;keys.clear();look.capture()}else {pause(!modal);if(!modal)look.capture()}}if(e.code==='KeyE'&&!e.repeat){eHeld=!modal;interact()}if(e.code==='KeyF'&&!e.repeat)fHeld=!modal;if(e.code==='KeyR'&&active&&!modal)reset()});
+window.addEventListener('blur',()=>{eHeld=false;fHeld=false;if(active&&!modal&&!creatorOpen)pause(true)});
+window.addEventListener('keyup',e=>{if(e.code==='KeyE')eHeld=false;if(e.code==='KeyF')fHeld=false});
 // Left click acts like E once the mouse is captured (the click that captures it only captures); hold to keep chopping.
 window.addEventListener('mousedown',e=>{if(e.button!==0||!active||modal||creatorOpen||!look.locked())return;e.preventDefault();eHeld=true;interact()});
 window.addEventListener('mouseup',e=>{if(e.button===0)eHeld=false});
@@ -589,7 +606,7 @@ function pickUpLog(id){
  });
 }
 // Equipped tool: shown in the hand and carried at the ready (the arm blends back in after chopping or eating).
-function toggleEquip(id,{silent=false}={}){
+function toggleEquip(id,{silent=false}={}){if(fuel.held)return {error:'Hang up the nozzle first.'};
  if(!canAct('equip'))return {error:refusal()};
  if(GameState.progress.carry&&GameState.progress.equipped!==id)return {error:'Your hands are full. Put it down first (X).'};
  const result=equipTool(GameState.progress,id);
@@ -924,7 +941,7 @@ look.tick(view);
 if(worldPanel?.actor&&!$('dialog').hidden){const actor=worldPanel.actor,pa=getMeWorldPosition(new THREE.Vector3()),pb=actor.getWorldPosition(new THREE.Vector3()),mid=pa.clone().add(pb).multiplyScalar(.5);const angle=Math.atan2(pa.x-pb.x,pa.z-pb.z);actor.rotation.y=angle;me.rotation.y=angle+Math.PI;worldPlayer.position.copy(mid);if(shop)shops[shop].camera(worldPlayer,angle+.45,.32,5.8,view);else updateCamera(worldPlayer,angle+.45,.32,5.8,view)}else if(shop){getMeWorldPosition(worldPlayer.position);shops[shop].camera(worldPlayer,yaw,pitch,zoom,view);}else if(inside)(home.camera||indoorCamera)(me,yaw,pitch,zoom,view);else updateCamera(me,yaw,pitch,zoom,view);
 const daylight=Math.max(.12,Math.sin((GameState.progress.routine.minutes-360)/1440*Math.PI*2));sun.intensity=.2+daylight*2.9;scene.background.setRGB(.08+daylight*.65,.12+daylight*.67,.2+daylight*.62);scene.fog.color.copy(scene.background);
 
-fuelHose();updateEquipped(modal?0:view);updateCarryPose(view);avatar.update(modal?0:view);if(shop)shops[shop].clerk.update(modal?0:view);updateZones(view);updateSleep(real);updateWork(view);updateGig(view);updateObjective(view);updateWorldUI();updateHomeNotices();updateRing();updateMultiplayer(now,moving,view);syncPlayerMesh();renderer.render(inside?home.room.scene:scene,camera)}requestAnimationFrame(frame);
+updateEquipped(modal?0:view);updateCarryPose(view);updateNozzlePose(view);avatar.update(modal?0:view);if(shop)shops[shop].clerk.update(modal?0:view);updateZones(view);updateSleep(real);updateWork(view);updateGig(view);updateObjective(view);updateWorldUI();updateHomeNotices();updateRing();updateMultiplayer(now,moving,view);syncPlayerMesh();fuelHose();audio.fuel({listener:listenerAt(),at:fuel.held?fuel.held.use:null,level:fuelFlow,fullness:fuelFull});fuelFlow=0;renderer.render(inside?home.room.scene:scene,camera)}requestAnimationFrame(frame);
 
 // Development hook: open the game with ?debug to inspect state from the console (window.__city).
 if(typeof location!=='undefined'&&new URLSearchParams(location.search).has('debug'))window.__city={GameState,world,scene,camera,avatar,pedestrians,audio,sawmillCtl,holdBend:a=>{bendNow=a;avatar.setLean(a*.87);avatar.setCrouch(a*.22)},

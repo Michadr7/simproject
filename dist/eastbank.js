@@ -10,6 +10,7 @@ import {propInfo,createPropInstances} from './props.js';
 const quads=(rects,y)=>{const position=[],index=[];
  for(const r of rects){const n=position.length/3;position.push(r.x0,y,r.z0,r.x0,y,r.z1,r.x1,y,r.z0,r.x1,y,r.z1);index.push(n,n+1,n+2,n+1,n+3,n+2)} // counter-clockwise seen from above: the normal is +y
  const g=new THREE.BufferGeometry();g.setAttribute('position',new THREE.Float32BufferAttribute(position,3));g.setAttribute('normal',new THREE.Float32BufferAttribute(position.map((_,i)=>i%3===1?1:0),3));g.setIndex(index);return g};
+const NO_FADE=new Set(['prop.pump-island','prop.forecourt-canopy']); // the gas station never dissolves when the camera looks through it (a half-faded pump looks broken)
 const distanceToRect=(x,z,b)=>Math.hypot(Math.max(b.x0-x,0,x-b.x1),Math.max(b.z0-z,0,z-b.z1));
 
 // group: the world's group; groundLayer(material, y): the world's depth-biased ground material; asphalt: the road material; colliders: the world's collider set (box(x, z, hx, hz)).
@@ -30,10 +31,10 @@ export function createEastbank({group,fade,groundLayer,asphalt,colliders}){
   const byModel=new Map();for(const it of yard.items){if(!byModel.has(it.prop))byModel.set(it.prop,[]);byModel.get(it.prop).push(it)}
   const meshes=[];let triangles=0;
   for(const [prop,items] of byModel){
-   const info=propInfo(prop),mesh=createPropInstances(prop,items.map(it=>({x:it.x,z:it.z,y:it.y,yaw:it.yaw})),fade,{shadows:info.height>=2});
+   const info=propInfo(prop),mesh=createPropInstances(prop,items.map(it=>({x:it.x,z:it.z,y:it.y,yaw:it.yaw})),NO_FADE.has(prop)?{apply:m=>m}:fade,{shadows:info.height>=2});
    holder.add(mesh);meshes.push(mesh);triangles+=info.triangles*items.length;
    for(const it of items){if(it.y>0)continue; // a stacked pallet rests on the one below: only the bottom of a stack is solid
-    if(prop==='prop.forecourt-canopy'){for(const [dx,dz] of CANOPY_COLUMNS)colliders.box(it.x+dx,it.z+dz,.4,.4); continue} // a roof on four columns: the columns block, the space under the roof does not (the converted canopy has no box)
+    if(prop==='prop.forecourt-canopy'){const c=Math.round(Math.cos(it.yaw)),s=Math.round(Math.sin(it.yaw));for(const [dx,dz] of CANOPY_COLUMNS)colliders.box(it.x+dx*c+dz*s,it.z-dx*s+dz*c,.4,.4); continue} // a roof on four columns: the columns block, the space under the roof does not (the converted canopy has no box)
     const cos=Math.round(Math.cos(it.yaw)),sin=Math.round(Math.sin(it.yaw)),turned=sin!==0;
     for(const b of info.colliders)colliders.box(it.x+b.x*cos+b.z*sin,it.z-b.x*sin+b.z*cos,turned?b.hz:b.hx,turned?b.hx:b.hz)}}
   return {id:yard.id,holder,bounds:yard.bounds,cull:yard.cull,meshes,instances:yard.items.length,triangles};

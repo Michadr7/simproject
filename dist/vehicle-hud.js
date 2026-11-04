@@ -1,19 +1,20 @@
 // The vehicle panel in the bottom-right dock (0.33, index.html #vehiclePanel). vehicleHudModel is pure (tested in tests/vehicle-hud.mjs): it turns the driving state into what the
-// panel shows. createVehicleHud writes that to the page, and only when something changed. Fuel is a placeholder until the fuel system (0.35).
-import {fuelText} from './fuel.js';
+// panel shows (imperial: miles an hour, gallons). createVehicleHud writes that to the page, and only when something changed.
+import {fuelText,fuelTitle,mph} from './fuel.js';
 export const STOP_SPEED=1; // m/s: below this you may get out (the same rule as game.js exitVehicle)
 
+// fuel: {mgal, capacityMgal, type} of the vehicle you are in, or null.
 export function vehicleHudModel({driving=null,seat=null,name=null,speed=0,fuel=null}={}){
- const fuelShown=fuel?fuelText(fuel.ml,fuel.capacityMl):'—',empty=!!fuel&&fuel.ml<=0;
+ const fuelShown=fuel?`${fuelTitle(fuel.type)} · ${fuelText(fuel.mgal,fuel.capacityMgal)}`:'—',empty=!!fuel&&fuel.mgal<=0;
  if(!driving)return {state:'off',name:'Not in a vehicle',speed:'—',fuel:'—',
   keys:[],note:'Walk up to a vehicle’s door and press E to get in.'};
- const kmh=`${Math.round(Math.abs(speed)*3.6)} km/h`;
+ const speedShown=`${mph(speed)} mph`;
  if(seat==='passenger')return {state:'riding',name:name||'Vehicle',speed:'—',fuel:fuelShown,
   keys:[{kbd:'E',text:'Get out'}],note:'You are riding as a passenger. Nobody is driving.'};
  const stopped=Math.abs(speed)<STOP_SPEED;
- return {state:'driving',name:name||'Vehicle',speed:kmh,fuel:fuelShown,
+ return {state:'driving',name:name||'Vehicle',speed:speedShown,fuel:fuelShown,
   keys:[{kbd:'E',text:stopped?'Get out':'Stop to get out',muted:!stopped}],
-  note:empty?'Out of fuel. Fill up at the Eastbank gas station.':'W S accelerate and brake · A D steer · Space brakes'};
+  note:empty?`Out of fuel. Fill up at the Eastbank gas station: this one takes ${fuel.type}.`:'W S accelerate and brake · A D steer · Space brakes'};
 }
 
 // Writes a model into the panel. `$` is the page's getElementById helper. Returns update(model), which skips the DOM work when nothing changed.

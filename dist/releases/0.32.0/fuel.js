@@ -1,42 +1,48 @@
-// Fuel (0.35, DESIGN 4.13 I): the pure rules. No THREE, no DOM, no game state, so a relay can run the same sale later.
-// Money is integer cents; fuel is integer millilitres. A step is 100 ml, and prices are multiples of 10 cents per litre, so every step costs a whole number of cents.
-// Placeholders, tuned later: the prices, the flow, the burn rate, the tank sizes (tank sizes are in map-definition.js).
-export const PRICE_CENTS_PER_L=Object.freeze({petrol:200,diesel:210});
-export const FLOW_ML_PER_S=2000; // a nozzle fills 2 L a second
-export const STEP_ML=100;
-export const HOSE_MAX_M=3.5; // past this the nozzle goes back to its holster
-export const REACH_M=1.5; // the nozzle must be this close to the filler (ground distance)
+// Fuel (0.35, DESIGN 4.13 I): the pure rules. No THREE, no DOM, no game state, so a relay can run the same sale later. Imperial: gallons, dollars a gallon, miles an hour.
+// Money is integer cents; fuel is integer milli-gallons (1 gallon = 1000). A step is 50 milli-gallons (0.05 gal), and prices are multiples of 20 cents a gallon, so every step costs a whole
+// number of cents. Placeholders, tuned later: the prices, the flow, the burn rate (tank sizes are in map-definition.js).
+export const GALLON=1000;
+export const PRICE_CENTS_PER_GAL=Object.freeze({gas:400,diesel:420}); // $4.00 and $4.20 a gallon
+export const FLOW_MGAL_PER_S=500; // a nozzle fills half a gallon a second
+export const STEP_MGAL=50;
+export const HOSE_MAX_M=3.5; // the hose is 3.5 m (11.5 ft); past this the nozzle goes back to its holster
+export const REACH_M=1.5; // the nozzle must be this close to the filler cap (ground distance)
 export const USE_RANGE_M=1.2; // how close to a pump's use spot you must stand to take its nozzle
+export const FUEL_TYPES=Object.freeze(['gas','diesel']);
+const METRES_PER_MILE=1609.344,MPH_PER_MS=2.2369363;
 
-export const costPerStep=fuel=>PRICE_CENTS_PER_L[fuel]*STEP_ML/1000; // whole cents, given the price rule above
-export const priceLabel=fuel=>`$${(PRICE_CENTS_PER_L[fuel]/100).toFixed(2)}/L`;
-export const fuelName=fuel=>fuel==='diesel'?'diesel':'petrol';
+export const costPerStep=fuel=>PRICE_CENTS_PER_GAL[fuel]*STEP_MGAL/GALLON; // whole cents, given the price rule above
+export const priceLabel=fuel=>`$${(PRICE_CENTS_PER_GAL[fuel]/100).toFixed(2)}/gal`;
+export const fuelName=fuel=>fuel==='diesel'?'diesel':'gas';
+export const fuelTitle=fuel=>fuel==='diesel'?'Diesel':'Gas';
+export const mph=metresPerSecond=>Math.round(Math.abs(metresPerSecond)*MPH_PER_MS);
 
-// How much a vehicle burns for the distance it travels (litres per 100 m, a placeholder).
-export const burnMl=(metres,litresPer100m)=>Math.max(0,metres)*litresPer100m*10; // 1 L per 100 m = 10 ml per metre
+// How much a vehicle burns for the distance it travels (gallons per mile: an arcade placeholder, far thirstier than a real truck so that a tank matters on this small map).
+export const burnMgal=(metres,gallonsPerMile)=>Math.max(0,metres)/METRES_PER_MILE*gallonsPerMile*GALLON;
 
 // Sell fuel from a pump into a target.
-//   state:  {cash, target: {fuel, ml, capacityMl}}  (cash in cents)
-//   action: {pump: {fuel}, ml}                       (ml asked for, in whole steps)
-// Returns {cash, target, soldMl, cents} with the request clipped to what fits and what can be paid (a request is never refused partway),
+//   state:  {cash, target: {fuel, mgal, capacityMgal}}  (cash in cents)
+//   action: {pump: {fuel}, mgal}                         (milli-gallons asked for, in whole steps)
+// Returns {cash, target, soldMgal, cents} with the request clipped to what fits and what can be paid (a request is never refused partway),
 // or {error, code} where code is 'invalid', 'wrong-fuel', 'full' or 'broke'.
 export function sell(state,action){
- const cash=state?.cash,target=state?.target,pump=action?.pump,ml=action?.ml;
- if(!Number.isSafeInteger(cash)||cash<0||!target||!Number.isSafeInteger(target.ml)||!Number.isSafeInteger(target.capacityMl)||target.ml<0||target.capacityMl<0)return {error:'Bad sale.',code:'invalid'};
- if(!pump||PRICE_CENTS_PER_L[pump.fuel]===undefined||!Number.isSafeInteger(ml)||ml<=0||ml%STEP_ML!==0)return {error:'Bad sale.',code:'invalid'};
- if(target.fuel!==pump.fuel)return {error:`This one takes ${target.fuel==='diesel'?'diesel':'petrol'}, not ${fuelName(pump.fuel)}.`,code:'wrong-fuel'};
- const room=target.capacityMl-target.ml;
- if(room<STEP_ML)return {error:'The tank is full.',code:'full'};
+ const cash=state?.cash,target=state?.target,pump=action?.pump,mgal=action?.mgal;
+ if(!Number.isSafeInteger(cash)||cash<0||!target||!Number.isSafeInteger(target.mgal)||!Number.isSafeInteger(target.capacityMgal)||target.mgal<0||target.capacityMgal<0)return {error:'Bad sale.',code:'invalid'};
+ if(!pump||PRICE_CENTS_PER_GAL[pump.fuel]===undefined||!Number.isSafeInteger(mgal)||mgal<=0||mgal%STEP_MGAL!==0)return {error:'Bad sale.',code:'invalid'};
+ if(target.fuel!==pump.fuel)return {error:`This one takes ${fuelName(target.fuel)}, not ${fuelName(pump.fuel)}.`,code:'wrong-fuel'};
+ const room=target.capacityMgal-target.mgal;
+ if(room<STEP_MGAL)return {error:'The tank is full.',code:'full'};
  const perStep=costPerStep(pump.fuel);
  if(cash<perStep)return {error:'You cannot pay for any more fuel.',code:'broke'};
- const steps=Math.min(ml/STEP_ML,Math.floor(room/STEP_ML),Math.floor(cash/perStep));
- const soldMl=steps*STEP_ML,cents=steps*perStep;
- return {cash:cash-cents,target:{...target,ml:target.ml+soldMl},soldMl,cents};
+ const steps=Math.min(mgal/STEP_MGAL,Math.floor(room/STEP_MGAL),Math.floor(cash/perStep));
+ const soldMgal=steps*STEP_MGAL,cents=steps*perStep;
+ return {cash:cash-cents,target:{...target,mgal:target.mgal+soldMgal},soldMgal,cents};
 }
 
 // The fuel in a saved vehicle: an integer between 0 and its tank. A missing or bad value is a full tank (so old saves start full).
-export function normalizeFuelMl(value,tankMl){
- if(!Number.isSafeInteger(value)||value<0||value>tankMl)return tankMl;
+export function normalizeFuelMgal(value,tankMgal){
+ if(!Number.isSafeInteger(value)||value<0||value>tankMgal)return tankMgal;
  return value;
 }
-export const fuelText=(ml,capacityMl)=>ml<=0?'Empty':`${(ml/1000).toFixed(1)} L of ${(capacityMl/1000).toFixed(0)} L`;
+export const gallons=mgal=>(mgal/GALLON).toFixed(1);
+export const fuelText=(mgal,capacityMgal)=>mgal<=0?'Empty':`${gallons(mgal)} of ${(capacityMgal/GALLON).toFixed(0)} gal`;

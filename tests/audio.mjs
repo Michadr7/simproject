@@ -33,7 +33,7 @@ const storage=memory(),audio=createAudio({AudioContextClass:FakeContext,storage}
 assert(audio.unlock());const ctx=FakeContext.made.at(-1),gains=()=>ctx.nodes.filter(n=>n.kind==='gain'),master=()=>gains()[0];
 assert.equal(ctx.state,'running');assert(audio.ready);assert(Math.abs(master().gain.value-.36)<1e-9,'volume 0.6 squared');
 const built=ctx.nodes.length;audio.unlock();assert.equal(ctx.nodes.length,built,'unlock twice builds once');assert.equal(FakeContext.made.at(-1),ctx);
-assert.equal(ctx.nodes.filter(n=>n.kind==='osc'||n.kind==='src').filter(n=>n.started).length,4,'blade tone, blade hiss, belt rumble, belt hum are running');
+assert.equal(ctx.nodes.filter(n=>n.kind==='osc'||n.kind==='src').filter(n=>n.started).length,6,'blade tone, blade hiss, belt rumble, belt hum, fuel rush and fuel hum are running');
 audio.setMuted(true);assert.equal(master().gain.target,0);assert.equal(loadAudioSettings(storage).muted,true);audio.setMuted(false);assert(master().gain.target>0);
 audio.setVolume(.5);assert.equal(master().gain.target,.25);assert.equal(loadAudioSettings(storage).volume,.5);audio.setVolume(5);assert.equal(audio.settings.volume,1);audio.setVolume(NaN);assert.equal(audio.settings.volume,1,'not a number: unchanged');audio.setVolume(.6);
 ctx.state='running';audio.setActive(false);assert.equal(ctx.state,'suspended','a hidden tab is silent');audio.setActive(true);assert.equal(ctx.state,'running');
@@ -41,15 +41,26 @@ ctx.state='running';audio.setActive(false);assert.equal(ctx.state,'suspended','a
 // The blade and the belt follow their speed and the distance. gains(): master, blade tone, blade hiss, belt rumble, belt hum.
 const here={x:100,z:-278},mid={x:115,z:-278},far={x:150,z:-278},at={x:104,z:-278};
 const update=(listener,blade,belt)=>audio.update({listener,blade:{at,...blade},belt:{at,...belt}});
-update(here,{level:0,sawing:false},{level:0});assert.deepEqual(gains().slice(1).map(g=>g.gain.target),[0,0,0,0],'a stopped saw and belt are silent');
+update(here,{level:0,sawing:false},{level:0});assert.deepEqual(gains().slice(1,5).map(g=>g.gain.target),[0,0,0,0],'a stopped saw and belt are silent');
 update(here,{level:1,sawing:false},{level:0});const idle=gains()[1].gain.target,idleHiss=gains()[2].gain.target;assert(idle>0&&idleHiss>0&&gains()[3].gain.target===0);
 update(here,{level:1,sawing:true},{level:0});assert(gains()[2].gain.target>idleHiss*4,'a log in the blade hisses much louder');assert(gains()[1].gain.target<idle,'and the note sags under load');
 const osc=ctx.nodes.filter(n=>n.kind==='osc')[0];update(here,{level:0,sawing:false},{level:0});const low=osc.frequency.target;update(here,{level:1,sawing:false},{level:0});assert(osc.frequency.target>low*2,'the pitch rises with the blade speed');
-update(mid,{level:1,sawing:false},{level:0});assert(gains()[1].gain.target<idle&&gains()[1].gain.target>0,'quieter at 15 m');update(far,{level:1,sawing:true},{level:1});assert.deepEqual(gains().slice(1).map(g=>g.gain.target),[0,0,0,0],'silent beyond 40 m');
+update(mid,{level:1,sawing:false},{level:0});assert(gains()[1].gain.target<idle&&gains()[1].gain.target>0,'quieter at 15 m');update(far,{level:1,sawing:true},{level:1});assert.deepEqual(gains().slice(1,5).map(g=>g.gain.target),[0,0,0,0],'silent beyond 40 m');
 update(here,{level:0,sawing:false},{level:1});assert(gains()[3].gain.target>0&&gains()[4].gain.target>0&&gains()[1].gain.target===0,'the belt hums when it runs');
+// Fuel: a rush of noise and a low hum while it flows, near only, the pitch rising as the tank fills; a two-note chime when it is full (or low and flat when you cannot pay), sharing the click limit.
+{const rush=()=>gains()[5].gain.target,hum=()=>gains()[6].gain.target,band=ctx.nodes.filter(n=>n.kind==='filter').at(-1)&&ctx.nodes.filter(n=>n.kind==='filter').find(n=>n.frequency.target===600||n.frequency.value===600),pump={x:100,z:-270};
+ audio.fuel({listener:here,at:pump,level:0,fullness:0});assert.equal(rush(),0,'nothing flows: silent');
+ audio.fuel({listener:here,at:pump,level:1,fullness:0});const flowing=rush();assert(flowing>0&&hum()>0,'fuel flowing is heard close by');
+ audio.fuel({listener:{x:100,z:-240},at:pump,level:1,fullness:0});assert(rush()<flowing&&rush()>0,'quieter 30 m away');audio.fuel({listener:{x:100,z:-200},at:pump,level:1,fullness:0});assert.equal(rush(),0,'silent beyond 40 m');
+ audio.fuel({listener:here,at:null,level:1,fullness:0});assert.equal(rush(),0,'no pump, no sound');
+ const filters=ctx.nodes.filter(n=>n.kind==='filter');const fuelBand=filters.at(-1);audio.fuel({listener:here,at:pump,level:1,fullness:0});const empty=fuelBand.frequency.target;audio.fuel({listener:here,at:pump,level:1,fullness:1});assert(fuelBand.frequency.target>empty*1.5,'the pitch rises as the tank fills');
+ audio.fuel({listener:here,at:pump,level:0,fullness:1});
+ const before=ctx.nodes.length;assert.equal(audio.chime(pump,here),true,'the full chime plays near');assert(ctx.nodes.length>before);assert.equal(audio.chime(pump,far),false,'too far to hear');
+ const oscs=ctx.nodes.filter(n=>n.kind==='osc').slice(-2);assert.deepEqual(oscs.map(o=>o.frequency.value),[880,1320],'two rising notes');
+ oscs.at(-1).onended();assert.equal(audio.chime(pump,here,{ok:false}),true);const bad=ctx.nodes.filter(n=>n.kind==='osc').slice(-2);assert.deepEqual(bad.map(o=>o.frequency.value),[330,247],'two falling low notes when you cannot pay');bad.at(-1).onended()}
 // The lever click: one-shot, near only, at most three at once, never while muted.
 const nodesBefore=ctx.nodes.length;assert.equal(audio.click(at,here),true);assert(ctx.nodes.length>nodesBefore);const srcs=ctx.nodes.filter(n=>n.kind==='src'&&n.onended);assert.equal(srcs.length,1);
 assert.equal(audio.click(at,far),false,'too far to hear');assert.equal(audio.click(at,here),true);assert.equal(audio.click(at,here),true);assert.equal(audio.click(at,here),false,'three at once is the limit');assert.equal(MAX_CLICKS,3);
 srcs[0].onended();assert.equal(audio.click(at,here),true,'a finished click frees a place');
 audio.setMuted(true);assert.equal(audio.click(at,here),false,'muted');
-console.log('Audio: distance falloff (full within 2.5 m, silent beyond 40 m), saved volume and mute, one context built on the first click, blade pitch and hiss follow speed and load, the belt hums only while it runs, the lever click is limited to three at once.');
+console.log('Audio: distance falloff (full within 2.5 m, silent beyond 40 m), saved volume and mute, one context built on the first click, blade pitch and hiss follow speed and load, the belt hums only while it runs, the lever click is limited to three at once, fuel flows with a rising pitch and chimes when full.');
