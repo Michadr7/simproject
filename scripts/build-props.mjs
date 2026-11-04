@@ -42,8 +42,10 @@ const PROPS={
  log:{file:'polypizza/Wood_Log.glb',longest:2.8,cut:null,triangles:null,collide:{cell:.5,band:[.1,.8],walls:false,despeckle:false}},
  // Vehicles: simplified to about 1,200 triangles for cars, 2,800 and 3,500 for the trucks. Parked as props for now; drivable later (DESIGN.md).
  car:car('Car',4.4),suv:car('SUV',4.7),'sports-car':car('Sports Car',4.3),'police-car':car('Police Car',4.4),taxi:car('Taxi',4.4),'car-2':car('Car-unqqkULtRU',4.4),'sports-car-2':car('Sports Car-1mkmFkAz5v',4.3),
- pickup:{file:'vehicles/Pickup.fbx',longest:5.3,cut:null,triangles:2800,wheels:.35,paint:{body:'#9c2f2a',tyre:'#151515',rim:'#b9bdc2',light:'#f3e8b8'},collide:SOLID}, // the file has no colours: a farm-red pickup with black tyres and silver rims
- flatbed:{file:'vehicles/Flatbed.fbx',longest:8.6,cut:null,triangles:3500,wheels:.35,collide:SOLID},
+ pickup:{file:'vehicles/Pickup.fbx',longest:5.3,turn:180,cut:null,triangles:2800,wheels:.35,paint:{body:'#9c2f2a',tyre:'#151515',rim:'#b9bdc2',light:'#f3e8b8'},collide:SOLID}, // the file has no colours: a farm-red pickup with black tyres and silver rims
+ // The pickup's original FBX is not in the repository: its data in props-assets.js was turned 180 degrees in place (its nose was at -z; the game's vehicles face +z), so rebuilding it from the FBX needs the turn above.
+ // The Worktruck (0.33): Sketchfab "Pickup Truck" by 00amza (CC-BY-4.0), one textured mesh plus a plain-colour glass part: uvForAll draws the glass from the texture too; splitWheels takes the four wheel islands out of the body as separate meshes centred on their axles, so the game can spin and steer them.
+ worktruck:{file:'Veichles/green_pickup/scene.gltf',longest:6,cut:null,triangles:null,texture:[512,82],uvForAll:true,splitWheels:true,collide:{cell:.5,band:[.3,1.9],walls:false,despeckle:false,fit:true}},
  // Interior furniture (Kenney Furniture Kit, CC0): 2 m per model unit, plain colours baked to vertex colours, solid boxes on a 25 cm grid (a rug has none).
  ...Object.fromEntries(Object.entries({'f-bed-double':'Bed Double','f-bed-single':'Bed Single','f-sofa':'Lounge Sofa','f-coffee-table':'Table Coffee','f-table':'Table','f-chair':'Chair','f-tv':'Television','f-tv-cabinet':'Cabinet Television','f-bookcase':'Bookcase Open','f-wardrobe':'Bookcase Closed Doors',
   'f-desk':'Desk','f-desk-chair':'Chair Desk','f-cabinet':'Kitchen Cabinet','f-sink':'Kitchen Sink','f-stove':'Kitchen Stove','f-fridge':'Kitchen Fridge Large','f-toilet':'Toilet','f-bath':'Bathtub','f-bath-sink':'Bathroom Sink','f-lamp':'Lamp Round Floor','f-rug':'Rug Rectangle','f-plant':'Potted Plant','f-stairs':'Stairs','f-side-table':'Side Table'})
@@ -89,7 +91,7 @@ function readGltf(path){
    if(p.mode!==undefined&&p.mode!==4)continue;const P=acc(p.attributes.POSITION),N=p.attributes.NORMAL!==undefined?acc(p.attributes.NORMAL):null,U=p.attributes.TEXCOORD_0!==undefined?acc(p.attributes.TEXCOORD_0):null,
     idx=p.indices!==undefined?Uint32Array.from(acc(p.indices)):Uint32Array.from({length:P.length/3},(_,k)=>k),mat=json.materials?.[p.material]?.pbrMetallicRoughness||{};
    const tp=P.slice(),tn=N?N.slice():null;for(let k=0;k<P.length;k+=3){const x=P[k],y=P[k+1],z=P[k+2];tp[k]=m[0]*x+m[4]*y+m[8]*z+m[12];tp[k+1]=m[1]*x+m[5]*y+m[9]*z+m[13];tp[k+2]=m[2]*x+m[6]*y+m[10]*z+m[14];
-    if(tn){const a=N[k],b=N[k+1],c=N[k+2];tn[k]=m[0]*a+m[4]*b+m[8]*c;tn[k+1]=m[1]*a+m[5]*b+m[9]*c;tn[k+2]=m[2]*a+m[6]*b+m[10]*c}}
+    if(tn){const a=N[k],b=N[k+1],c=N[k+2];tn[k]=m[0]*a+m[4]*b+m[8]*c;tn[k+1]=m[1]*a+m[5]*b+m[9]*c;tn[k+2]=m[2]*a+m[6]*b+m[10]*c;const l=Math.hypot(tn[k],tn[k+1],tn[k+2])||1;tn[k]/=l;tn[k+1]/=l;tn[k+2]/=l}} // normals are unit length again after a scaled node transform (the Worktruck's nodes scale by 0.0006 in all: quantised to bytes they were all zero)
    const ti=mat.baseColorTexture?json.textures[mat.baseColorTexture.index].source:null;
    const gm=json.materials?.[p.material]||{},strength=gm.extensions?.KHR_materials_emissive_strength?.emissiveStrength??1,glows=gm.emissiveFactor&&gm.emissiveFactor.some(v=>v>0); // an emissive material (a lit panel): kept apart so the game can draw it glowing
    parts.push({pos:tp,nor:tn,uv:U,idx,color:(mat.baseColorFactor||[1,1,1,1]).slice(0,3),image:ti,node:n.name||'',emissive:glows?{color:gm.emissiveFactor.slice(0,3),strength}:null})}
@@ -142,6 +144,7 @@ for(const [id,spec] of Object.entries(PROPS)){
  if(spec.skip||(only&&!only.has(id)))continue;
  const path=join(root,spec.file),model=path.toLowerCase().endsWith('.fbx')?await readFbx(path):readGltf(path);
  if(spec.paint)model.parts=paintParts(model.parts,spec.paint);
+ if(spec.uvForAll){const img=model.parts.find(p=>p.image!==null)?.image;for(const p of model.parts)if(p.image===null&&p.uv)p.image=img} // a plain-colour part (glass) is drawn from the same texture, at its own texture coordinates
  // 1. merge every mesh into one: world-space positions, normals, and either uvs (one colour texture) or colours (plain materials)
  const textured=model.parts.some(p=>p.image!==null);
  if(textured&&new Set(model.parts.map(p=>p.image)).size>1)throw new Error(id+' has several textures');
@@ -243,7 +246,18 @@ for(const [id,spec] of Object.entries(PROPS)){
   door:spec.door?{x:spec.door.x,z:+wz1.toFixed(2),width:spec.door.width,height:spec.door.height}:null,...(glow?{glow}:{}),
   ...(Object.keys(model.anchors||{}).length?{anchors:Object.fromEntries(Object.entries(model.anchors).map(([name,[x,y,z]])=>[name,[+((x-cx)*k).toFixed(4),+((y-baseY)*k).toFixed(4),+((z-cz)*k).toFixed(4)]]))}:{}),pos:b64(posA),nor:b64(norQ),norQ:true,idx:b64(idxA),vertices:count};
  if(textured){record.texture=texture;record.uv=b64(Float32Array.from(U))}else record.col=b64(Uint8Array.from(C));
- out.props[id]=record;
+ if(spec.splitWheels){ // the wheel islands (tyre + rim: a round disc, thin along x, standing on the ground) leave the body: each becomes its own small mesh centred on its axle, so the game can spin and steer it
+  const key=v=>`${Math.round(P[v*3]*100)},${Math.round(P[v*3+1]*100)},${Math.round(P[v*3+2]*100)}`,ids=new Map(),par=[],find=a=>{while(par[a]!==a){par[a]=par[par[a]];a=par[a]}return a},idOf=v=>{const k=key(v);if(!ids.has(k)){ids.set(k,par.length);par.push(par.length)}return ids.get(k)};
+  const triId=[];for(let t=0;t<I.length;t+=3){const a=idOf(I[t]),b=idOf(I[t+1]),c=idOf(I[t+2]);par[find(a)]=find(b);par[find(b)]=find(c);triId.push(a)}
+  const isl=new Map();for(let t=0;t<triId.length;t++){const r=find(triId[t]);if(!isl.has(r))isl.set(r,{tris:[],lo:[1e9,1e9,1e9],hi:[-1e9,-1e9,-1e9]});const e=isl.get(r);e.tris.push(t);for(let k=0;k<3;k++)for(let d=0;d<3;d++){const v=P[I[t*3+k]*3+d];e.lo[d]=Math.min(e.lo[d],v);e.hi[d]=Math.max(e.hi[d],v)}}
+  const found=[...isl.values()].filter(e=>{const dx=e.hi[0]-e.lo[0],dy=e.hi[1]-e.lo[1],dz=e.hi[2]-e.lo[2];return e.tris.length>=100&&Math.abs(dy-dz)<=.12*Math.max(dy,dz)&&dx<.6*dy&&dy>.5&&dy<1.4&&e.lo[1]<.08});
+  if(found.length!==4)throw new Error(`${id}: expected four wheels, found ${found.length}`);
+  const zMid=(wz0+wz1)/2,subset=tris=>{const map=new Map(),pp=[],nn=[],cc=[],ii=[];for(const t of tris)for(let k=0;k<3;k++){const o=I[t*3+k];if(!map.has(o)){map.set(o,map.size);pp.push(P[o*3],P[o*3+1],P[o*3+2]);nn.push(N[o*3],N[o*3+1],N[o*3+2]);if(textured)cc.push(U[o*2],U[o*2+1]);else cc.push(C[o*3],C[o*3+1],C[o*3+2])}ii.push(map.get(o))}return {pp,nn,cc,ii,count:map.size}};
+  const pack=s=>({pos:b64(Float32Array.from(s.pp)),nor:b64(Int8Array.from(s.nn.map(v=>Math.max(-127,Math.min(127,Math.round(v*127)))))),idx:b64(Uint16Array.from(s.ii)),norQ:true,vertices:s.count,...(textured?{uv:b64(Float32Array.from(s.cc))}:{col:b64(Uint8Array.from(s.cc))})});
+  const wheelTris=new Set(found.flatMap(e=>e.tris)),body=subset([...Array(I.length/3).keys()].filter(t=>!wheelTris.has(t)));
+  record.wheels=found.map(e=>{const at=[0,1,2].map(d=>+((e.lo[d]+e.hi[d])/2).toFixed(4)),s=subset(e.tris);for(let k=0;k<s.pp.length;k+=3)for(let d=0;d<3;d++)s.pp[k+d]-=at[d];
+   return {at,radius:+((e.hi[1]-e.lo[1])/2).toFixed(3),width:+(e.hi[0]-e.lo[0]).toFixed(3),front:at[2]>zMid,triangles:e.tris.length,...pack(s)}}).sort((a,b)=>b.at[2]-a.at[2]||b.at[0]-a.at[0]);
+  Object.assign(record,pack(body),{bodyTriangles:body.ii.length/3});record.vertices=body.count} out.props[id]=record;
  report.push(`${id.padEnd(11)} ${before} -> ${I.length/3} tris, ${(wx1-wx0).toFixed(1)} x ${(wz1-wz0).toFixed(1)} m, ${sy.toFixed(1)} m tall, ${boxes.length} boxes${floor?', floor '+floor.y+' m':''}, ${textured?'texture':'colours'}, ${count} vertices`);
 }
 if(needTools){

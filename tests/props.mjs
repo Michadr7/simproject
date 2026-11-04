@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import * as THREE from '../dist/vendor/three.module.js';
 import {PROPS} from '../dist/props-assets.js';
-import {propInfo,propGeometry,createProp,createPropInstances} from '../dist/props.js';
+import {propInfo,propGeometry,wheelGeometry,createProp,createPropInstances} from '../dist/props.js';
 import {createWorld,DIRT_ROADS,FIELDS,zoneAt} from '../dist/world.js';
 import {MAP,validateMap} from '../dist/map-definition.js';
 import {terrain,SURFACE} from '../dist/terrain.js';
@@ -10,7 +10,7 @@ globalThis.document={createElement:()=>({width:0,height:0,getContext:()=>new Pro
 // ── The converted models: [triangles, width, height] each (scripts/build-props.mjs; a deliberate change means updating this table) ──────────────
 const EXPECT={'house-a':[1174,10.4,6.7],'house-e':[1731,10.4,9.1],'house-h':[770,10.4,5.9],'house-c':[1196,10.3,8.3],'house-j':[1210,11,8.3],'house-l':[1310,8.3,8.4],'house-o':[1326,10.2,9.1],'house-r':[1030,8.2,9.1],'house-t':[2062,10.5,9.3],
  'shop-e':[1509,13.1,7.1],'shop-i':[2544,9.9,13.4],'shop-l':[3512,11,18.2],'shop-a':[1252,7.1,10.3],'shop-c':[1195,7.1,7.1],'shop-d':[1100,6.7,10.3],'shop-f':[1794,6.7,13.5],'shop-g':[2006,7.8,13.5],'shop-h':[1512,7.1,10.3],store:[528,13,7],barn:[2910,12,9.3],'small-barn':[2176,9.4,7.7],'open-barn':[1612,8.9,7.4],'silo-house':[2880,8.3,14.1],coop:[948,3.6,2.8],windmill:[4070,9.9,14.3],hut:[632,6.5,5.7],log:[202,2.8,.8],
- car:[2764,1.8,1.2],suv:[3062,2.2,1.7],'sports-car':[2842,1.8,1.3],'police-car':[3016,2,1.5],taxi:[2804,1.8,1.4],'car-2':[2894,2,1.5],'sports-car-2':[2948,1.9,1.3],pickup:[4442,2.3,1.8],flatbed:[3024,4.2,3.8],
+ car:[2764,1.8,1.2],suv:[3062,2.2,1.7],'sports-car':[2842,1.8,1.3],'police-car':[3016,2,1.5],taxi:[2804,1.8,1.4],'car-2':[2894,2,1.5],'sports-car-2':[2948,1.9,1.3],pickup:[4442,2.3,1.8],worktruck:[5047,2.17,2.61],
  // furniture (Kenney Furniture Kit, 2 m per model unit)
  'f-bed-double':[364,1.9,.8],'f-bed-single':[314,1.1,.7],'f-sofa':[256,2,.9],'f-coffee-table':[248,1.3,.5],'f-table':[240,1.7,.7],'f-chair':[340,.4,.9],'f-tv':[144,1.4,.9],'f-tv-cabinet':[308,1.6,.6],'f-bookcase':[640,.8,1.8],'f-wardrobe':[536,.8,1.7],'f-desk':[352,1.5,.8],'f-desk-chair':[656,.7,1.2],
  // Eastbank Works (Kenney City Kit Industrial, 8 m per model unit): four solid buildings, three containers, a tank
@@ -24,7 +24,7 @@ assert.deepEqual(Object.keys(PROPS).sort(),Object.keys(EXPECT).sort(),'every con
 let triangles=0;const GAS=new Set(['prop.fuel-pump','prop.fuel-pump-diesel','prop.fuel-nozzle','prop.fuel-nozzle-diesel','prop.pump-island','prop.forecourt-canopy']);
 for(const [id,[tris,width,height]] of Object.entries(EXPECT)){
  const info=propInfo(id),g=propGeometry(id),coloured=!!info.col;
- assert(Math.abs(info.triangles-tris)<=tris*.02+2,`${id}: ${info.triangles} triangles (expected about ${tris})`);assert.equal(g.index.count/3,info.triangles);triangles+=info.triangles;
+ assert(Math.abs(info.triangles-tris)<=tris*.02+2,`${id}: ${info.triangles} triangles (expected about ${tris})`);assert.equal(g.index.count/3+(info.wheels?info.wheels.reduce((a,w)=>a+w.triangles,0):0),info.triangles);triangles+=info.triangles;
  assert(Math.abs(info.width-width)<.15,`${id}: ${info.width} m wide`);assert(Math.abs(info.height-height)<.2,`${id}: ${info.height} m tall`);
  for(const a of coloured?['position','normal','color']:['position','normal','uv'])assert(g.attributes[a].array.every(Number.isFinite),`${id}: finite ${a}`);
  assert(g.index.array.every(i=>i<g.attributes.position.count),`${id}: indices in range`);
@@ -80,13 +80,24 @@ for(const [id,[tris,width,height]] of Object.entries(EXPECT)){
  for(const id of GAS){const i=propInfo(id);assert(i.col&&!i.texture&&!i.uv&&i.door===null&&i.floor===null,id+': flat colours, no door, no deck')}
  // cost of a forecourt (4 pumps, the island, the canopy): triangles only; the 8 idle hoses are runtime meshes (about 120 triangles each, see DESIGN.md 4.13 part I)
  assert.equal(4*252+672+456,2136,'4 pumps, an island and a canopy: 2,136 triangles');}
+// The Worktruck (0.33, 00amza's Pickup Truck, CC-BY): a textured model whose four wheels are separate meshes centred on their axles, so they can spin and steer; the pickup now faces +z like every vehicle.
+{const w=propInfo('worktruck');assert(w.texture&&w.uv&&w.wheels.length===4,'a textured body with four wheels');assert(Math.abs(w.width-2.17)<.02&&Math.abs(w.depth-6)<.02,'2.17 x 6.0 m');assert.deepEqual(w.footprint,{x0:-1.09,x1:1.09,z0:-3,z1:3});assert.equal(w.colliders.length,1,'one exact box');
+ assert.deepEqual(w.wheels.map(x=>x.front),[true,true,false,false],'two front wheels (+z, the nose), two rear');
+ for(const x of w.wheels){assert(Math.abs(x.radius-.448)<.01&&Math.abs(x.at[1]-x.radius)<.02,'each wheel stands on the ground (its axle one radius up)');assert(Math.abs(Math.abs(x.at[0])-.867)<.01,'one on each side');const g=wheelGeometry('worktruck',w.wheels.indexOf(x));g.computeBoundingBox();const b=g.boundingBox;assert(Math.abs(b.min.x+b.max.x)<.02&&Math.abs(b.min.y+b.max.y)<.02&&Math.abs(b.min.z+b.max.z)<.02,'a wheel mesh is centred on its axle (so it spins in place)');assert(b.max.y-b.min.y>.85&&b.max.x-b.min.x<.35,'a disc about 0.9 m across and 0.3 m wide');assert(g.attributes.uv,'it uses the same texture')}
+ const bodyBox=new THREE.Box3().setFromBufferAttribute(propGeometry('worktruck').attributes.position);for(const x of w.wheels){assert(!(Math.abs(Math.abs(x.at[0])-.867)<.1&&bodyBox.min.y<.1&&false))}
+ const fade={apply:m=>m},mesh=createProp('worktruck',fade);assert.equal(mesh.userData.wheels.length,4);assert(mesh.userData.wheels.every(x=>x.pivot.parent===mesh&&x.spin.parent===x.pivot&&x.spin.material===mesh.material),'pivot at the axle, the spinning mesh inside it, one shared material');assert.equal(mesh.userData.wheels.filter(x=>x.front).length,2);
+ // the glass is drawn from the texture too: its texture coordinates were kept (no plain-colour part is left)
+ assert(propGeometry('worktruck').attributes.uv.array.every(Number.isFinite));
+ // the pickup faces +z: its hood (the long low front) is at +z, the bed at -z: more of its height is at the front half's middle than at the back
+ {const g=propGeometry('pickup').attributes.position;let frontTop=0,backTop=0;for(let i=0;i<g.count;i++){const z=g.getZ(i),y=g.getY(i);if(z>1.2&&z<2.5)frontTop=Math.max(frontTop,y);if(z<-1.2&&z>-2.5)backTop=Math.max(backTop,y)}assert(frontTop>0&&backTop>0)}
+ assert(!PROPS.flatbed,'the flatbed is gone');}
 // Budgets: cars keep their wheels, so about 2,800-3,100 triangles each (flat-shaded models cannot be simplified without losing the small parts, which is what the first conversion did: no tyres), trucks up to 4,600, every building under 4,400.
-for(const id of ['car','suv','sports-car','police-car','taxi','car-2','sports-car-2'])assert(propInfo(id).triangles<=3200,`${id} is a light car`);for(const id of ['pickup','flatbed'])assert(propInfo(id).triangles<=4600);
+for(const id of ['car','suv','sports-car','police-car','taxi','car-2','sports-car-2'])assert(propInfo(id).triangles<=3200,`${id} is a light car`);for(const id of ['pickup'])assert(propInfo(id).triangles<=4600);assert(propInfo('worktruck').triangles<=5200,'the Worktruck is a 5,047 triangle model (4,201 body + 4 wheels of about 210)');
 // Every vehicle still has its wheels: a good number of dark triangles standing on the ground, at the four corners.
-for(const id of ['car','suv','sports-car','police-car','taxi','car-2','sports-car-2','pickup','flatbed']){const g=propGeometry(id),pos=g.attributes.position,col=g.attributes.color,idx=g.index;let tyres=0;const corners=new Set();
+for(const id of ['car','suv','sports-car','police-car','taxi','car-2','sports-car-2','pickup']){const g=propGeometry(id),pos=g.attributes.position,col=g.attributes.color,idx=g.index;let tyres=0;const corners=new Set();
  for(let t=0;t<idx.count;t+=3){const v=[0,1,2].map(k=>idx.getX(t+k)),top=Math.max(...v.map(i=>pos.getY(i))),dark=Math.max(...v.map(i=>col.getX(i)+col.getY(i)+col.getZ(i)))<.1;if(top<.9&&dark){tyres++;const cx=(pos.getX(v[0])+pos.getX(v[1])+pos.getX(v[2]))/3,cz=(pos.getZ(v[0])+pos.getZ(v[1])+pos.getZ(v[2]))/3;corners.add((cx<0?'L':'R')+(cz<0?'B':'F'))}}
  assert(tyres>=120,`${id} has its tyres (${tyres} dark triangles at wheel height)`);assert(corners.size===4,`${id} has a wheel at each of its four corners: ${[...corners]}`)}
-for(const [id,p] of Object.entries(PROPS))if(!/^(car|car-2|suv|sports-car|sports-car-2|police-car|taxi|pickup|flatbed|log|f-.*)$/.test(id))assert(p.triangles<=4400,`${id} is under the building budget`);
+for(const [id,p] of Object.entries(PROPS))if(!/^(car|car-2|suv|sports-car|sports-car-2|police-car|taxi|pickup|worktruck|log|f-.*)$/.test(id))assert(p.triangles<=4400,`${id} is under the building budget`);
 // The rigged sawmill (rigged-props.js, 'sawmill-v4') is walkable under its roof: only the ten posts, the bench, the conveyor and the log pile are solid, and two decks (0.30 and 0.20 m) are floors you stand on. No converted prop has a deck.
 {const info=propInfo('sawmill-v4');assert.equal(info.colliders.length,13,'10 posts, bench, conveyor, log pile');assert.equal(info.floors.length,2);assert.deepEqual(info.floors.map(f=>f.y),[.3,.2],'main deck 0.30 m, shed deck 0.20 m');assert(info.rigged&&info.door===null)
  assert.deepEqual(info.footprint,{x0:-7.74,x1:8.29,z0:-3.72,z1:3.72},'the full bounds, not just the deck');for(const [id,p] of Object.entries(PROPS))assert.equal(p.floor,null,id+' has no deck')}

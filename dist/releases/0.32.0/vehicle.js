@@ -10,11 +10,13 @@ export const SAMPLE_GAP=.5; // metres between hull sample points (a 0.16 m sign 
 
 // Placeholders, tuned by playing. hx/hz: half the footprint (checked against the converted model by tests/vehicle.mjs). door: the driver's door point, local, +x is the vehicle's left.
 // seat: where the player's position sits while driving. camera: how far behind and above the chase camera stands, and how high it looks.
+// A class's doors and seats: the driver's side is the vehicle's left (+x when it faces +z), the passenger's the right. The chase camera scales with the vehicle's length (a bigger vehicle gets a more distant view):
+// 3 x its length behind, 1.2 x its length up (pickup 5.3 m: 8 m back, 3.2 m up).
+function makeClass(c){const L=c.hz*2;return {...c,door:{x:+(c.hx+.6).toFixed(3),z:c.doorZ},passengerDoor:{x:-+(c.hx+.6).toFixed(3),z:c.doorZ},seat:{x:.45,z:c.doorZ},passengerSeat:{x:-.45,z:c.doorZ},camera:{back:+(3*L/2).toFixed(2),up:+(1.2*L/2).toFixed(2)}}}
 export const CLASSES=Object.freeze({
- pickup:{id:'pickup',name:'Pickup',hx:1.135,hz:2.65,top:11,reverse:4,accel:2.8,brake:7,drag:1,rMin:6,aLat:5,door:{x:1.735,z:.5},seat:{x:.45,z:.5},camera:{back:8,up:3.2},loadSlow:0},
- flatbed:{id:'flatbed',name:'Flatbed',hx:2.1,hz:4.3,top:10,reverse:3,accel:1.8,brake:5,drag:.8,rMin:9,aLat:3.5,door:{x:2.7,z:2.6},seat:{x:.8,z:2.6},camera:{back:11,up:4},loadSlow:.3}
+ pickup:makeClass({id:'pickup',name:'Pickup',hx:1.135,hz:2.65,top:11,reverse:4,accel:2.8,brake:7,drag:1,rMin:6,aLat:5,doorZ:.5}),
+ worktruck:makeClass({id:'worktruck',name:'Worktruck',hx:1.09,hz:3,top:10,reverse:3.5,accel:2.4,brake:6,drag:.9,rMin:7,aLat:4.5,doorZ:.5})
 });
-export const LOADED_TOP=8; // the flatbed's top speed fully loaded (cargo arrives in 0.35: load is always 0 until then)
 
 // Top speed and acceleration multiplier by terrain surface. Water, banks and everything off the map are never driven on (blocked() refuses them as well).
 export const SURFACE_SPEED=Object.freeze({[SURFACE.GRASS]:.5,[SURFACE.STREET]:1,[SURFACE.ROAD]:1,[SURFACE.DIRT]:.8,[SURFACE.PAVEMENT]:.5,[SURFACE.WATER]:0,[SURFACE.BANK]:0,[SURFACE.BRIDGE]:1,[SURFACE.WHEAT]:.5,[SURFACE.PLOWED]:.5,[SURFACE.GREEN]:.5,[SURFACE.DRIVEWAY]:1,[SURFACE.PATH]:.5});
@@ -35,8 +37,8 @@ export function hullSamples(cls){
 // local -> world and back (the same rotation the game uses for collider boxes: x + lx cos + lz sin, z - lx sin + lz cos)
 export const toWorld=(s,lx,lz)=>({x:s.x+lx*cos(s.yaw)+lz*sin(s.yaw),z:s.z-lx*sin(s.yaw)+lz*cos(s.yaw)});
 export const toLocal=(s,x,z)=>{const dx=x-s.x,dz=z-s.z;return {x:dx*cos(s.yaw)-dz*sin(s.yaw),z:dx*sin(s.yaw)+dz*cos(s.yaw)}};
-export const doorPoint=(s,cls)=>toWorld(s,cls.door.x,cls.door.z);
-export const seatPoint=(s,cls)=>toWorld(s,cls.seat.x,cls.seat.z);
+export const doorPoint=(s,cls,side='driver')=>{const d=side==='driver'?cls.door:cls.passengerDoor;return toWorld(s,d.x,d.z)};
+export const seatPoint=(s,cls,side='driver')=>{const d=side==='driver'?cls.seat:cls.passengerSeat;return toWorld(s,d.x,d.z)};
 // Is the point inside the oriented hull, inflated by `margin` (the player's 0.33 m for a walker)?
 export const insideHull=(s,cls,x,z,margin=0)=>{const l=toLocal(s,x,z);return Math.abs(l.x)<cls.hx+margin&&Math.abs(l.z)<cls.hz+margin};
 // Two hulls overlap (separating-axis test on the full footprints).
@@ -60,18 +62,18 @@ export function poseFree(pose,cls,env){
  return true;
 }
 
-// The input: {throttle: -1..1 (W = 1, S = -1), steer: -1..1 (A = 1 left, D = -1 right), brake: bool (Space), load?: 0..1}. dt must be small (the game's slices are at most 1/30 s).
+// The input: {throttle: -1..1 (W = 1, S = -1), steer: -1..1 (A = 1 left, D = -1 right), brake: bool (Space), }. dt must be small (the game's slices are at most 1/30 s).
 // Returns {state, hit} (a new state; hit is true when the hull met something and the pose was refused or slid).
 export function stepVehicle(s,input,dt,cls,env){
- const surface=surfaceSpeed(env.surface(s.x,s.z)),load=clamp(input.load||0,0,1);
- const top=(cls.id==='flatbed'?cls.top+(LOADED_TOP-cls.top)*load:cls.top)*surface,rev=cls.reverse*surface,accel=cls.accel*(1-cls.loadSlow*load)*Math.max(.35,surface);
+ const surface=surfaceSpeed(env.surface(s.x,s.z));
+ const top=cls.top*surface,rev=cls.reverse*surface,accel=cls.accel*Math.max(.35,surface);
  let v=s.speed;
  const throttle=clamp(input.throttle||0,-1,1);
  if(input.brake)v=toward(v,0,cls.brake*1.5*dt);
  else if(throttle>0){v=v<-.3?toward(v,0,cls.brake*dt):toward(v,top,accel*dt*(v<top?1:3))}
  else if(throttle<0){v=v>.3?toward(v,0,cls.brake*dt):toward(v,-rev,accel*dt*(v>-rev?1:3))}
  else v=toward(v,0,cls.drag*dt);
- if(v>top)v=toward(v,top,6*dt); // rougher ground (or a loaded flatbed) slows you down to its own top speed
+ if(v>top)v=toward(v,top,6*dt); // rougher ground slows you down to its own top speed
  if(v<-rev)v=toward(v,-rev,6*dt);
  // steering ramps to full in 0.4 s and back to centre in 0.3 s
  const want=clamp(input.steer||0,-1,1),rate=(want===0?1/.3:1/.4)*dt;let steer=toward(s.steer,want,rate);
@@ -99,8 +101,9 @@ export function findSafePose(pose,cls,env,{maxRadius=40,step=1}={}){
 }
 
 // Where the player steps out: the driver's door point; if that is blocked, the passenger side, then behind, then in front. `free(x, z)` is the game's blocked() inverted (and not inside any hull).
-export function exitPoint(s,cls,free){
- const tries=[[cls.door.x,cls.door.z],[-cls.door.x,cls.door.z],[0,-(cls.hz+.9)],[0,cls.hz+.9],[cls.door.x+.8,cls.door.z],[-cls.door.x-.8,cls.door.z]];
+export function exitPoint(s,cls,free,side='driver'){
+ const own=side==='driver'?1:-1,x=cls.door.x,z=cls.door.z; // your own door first, then the other side, behind, in front, then a little further out on each side
+ const tries=[[own*x,z],[-own*x,z],[0,-(cls.hz+.9)],[0,cls.hz+.9],[own*(x+.8),z],[-own*(x+.8),z]];
  for(const [lx,lz] of tries){const w=toWorld(s,lx,lz);if(free(w.x,w.z))return w}
  return null;
 }

@@ -266,7 +266,7 @@ function candidates(){const all=[],add=(id,point,anchor,label,run,range=1.5)=>al
  if(GameState.progress.phase==='carrying'&&GameState.progress.completed%3!==1){const r=routeFor(GameState.progress);add('delivery',r,()=>new THREE.Vector3(r.x,1.3,r.z),'Leave delivery · '+money(r.pay),()=>station(r,'Delivery collection box','Order for '+r.name+'. Payment: '+money(r.pay)+'.',[{label:'Place order & collect payment',run:()=>finishJob('deliver')}]),1.4)}
  for(const person of pedestrians.people)add('person-'+person.name,person.group.position,()=>entityPoint(person.group),'Talk to '+person.name,()=>speak(person.group,person.name,'Hey! How’s your day going?',[{label:'Any advice for someone new?',run:()=>speak(person.group,person.name,person.line)},{label:'Nice to meet you.',run:()=>speak(person.group,person.name,'You too. See you around the neighborhood!')}]),1.5);
  if(!inside&&!shop){
-  for(const d of driving.doors())add('drive-'+d.id,{x:d.x,z:d.z},()=>new THREE.Vector3(d.x,1.3,d.z),'Drive the '+d.name.replace(/^Eastbank /,''),()=>enterVehicle(d.id),2);
+  for(const d of driving.doors())add('drive-'+d.id+'-'+d.seat,{x:d.x,z:d.z},()=>new THREE.Vector3(d.x,1.3,d.z),(d.seat==='driver'?'Drive the ':'Ride in the ')+d.name.replace(/^Eastbank /,''),()=>enterVehicle(d.id,d.seat),2);
   if(sawmillCtl?.ready){const pr=GameState.progress; // the switch, the bench (a carried log goes in), the belt's end (planks come off) and planks put down on the ground
    add('sawmill-switch',sawmillCtl.switchPoint,sawmillCtl.promptPoint,switchLabel(sawmillState),toggleSawmill,2.2);
    if(pr.carry?.kind==='log')add('sawmill-feed',sawmillCtl.logPoint,sawmillCtl.logPrompt,'Put the log on the bench',feedSawmill,2.4);
@@ -318,20 +318,20 @@ const actionFlags=()=>({chop:!!chopping,consume:!!consuming,work:!!busy,sleep:sl
 const canAct=kind=>canStart(kind,actionFlags()),actionBusy=()=>!!activeAction(actionFlags());
 function interact(){if(!active||modal||actionBusy()||putting)return;const hit=chooseInteraction(candidates(),me.position,me.rotation.y);if(hit)hit.run()}
 // Driving (driving.js, vehicle.js): E at a vehicle's driver door gets in (refused while carrying), E while driving gets out once you are below 1 m/s, at the door (else the other side, behind, in front).
-function enterVehicle(id){
+function enterVehicle(id,seat='driver'){
  if(driving.active||inside||shop||consuming||putting||actionBusy())return;
  if(GameState.progress.carry){toast('Your hands are full. Put it down first (X).');return}
- if(!driving.enter(id))return;
- const seat=driving.seat();me.position.x=seat.x;me.position.z=seat.z;me.rotation.y=driving.yaw;keys.clear();look.resetMotion();
+ if(!driving.enter(id,seat))return;
+ const at=driving.seat();me.position.x=at.x;me.position.z=at.z;me.rotation.y=driving.yaw;keys.clear();look.resetMotion();
  yaw=driving.yaw+Math.PI;pitch=driving.cameraPitch();zoom=zoomTarget=driving.cameraZoom();driveIdle=9;persist();
- toast(`Driving the ${driving.active.spec.name.replace(/^Eastbank /,'')} · W S accelerate and brake, A D steer, Space brakes, E gets out`);
+ toast(seat==='driver'?`Driving the ${driving.active.spec.name.replace(/^Eastbank /,'')} · W S accelerate and brake, A D steer, Space brakes, E gets out`:`Riding in the ${driving.active.spec.name.replace(/^Eastbank /,'')} · you are the passenger: nobody is driving · E gets out`);
 }
 function exitVehicle(){
  if(!driving.active)return;
  if(driving.speed>=1){toast('Stop first.');return}
- const f=driving.active,door=driving.door(),p=driving.leave((x,z)=>!blocked(x,z));
+ const f=driving.active,seatWas=driving.seatSide,door=driving.door(),p=driving.leave((x,z)=>!blocked(x,z));
  if(p){me.position.x=p.x;me.position.z=p.z}else placeSafely(door.x,me.position.y,door.z);
- me.rotation.y=f.state.yaw+Math.PI/2;keys.clear();look.resetMotion();pitch=.38;zoom=zoomTarget=7;persist();
+ me.rotation.y=f.state.yaw+(driving.seatSide==='passenger'||seatWas==='passenger'?-Math.PI/2:Math.PI/2);keys.clear();look.resetMotion();pitch=.38;zoom=zoomTarget=7;persist();
 }
 function updateWorldUI(){
  camera.updateMatrixWorld(true);const hit=chooseInteraction(candidates(),me.position,me.rotation.y);selectedInteraction=hit;
@@ -412,7 +412,7 @@ window.addEventListener('mouseup',e=>{if(e.button===0)eHeld=false});
 const canvas=$('world');const look=createLookControls(canvas,document,()=>active&&!modal&&!creatorOpen&&!document.hidden,(dx,dy)=>{yaw-=dx*.003;pitch=THREE.MathUtils.clamp(pitch+dy*.002,.08,1.05);driveIdle=0},()=>{keys.clear();if(active&&!modal&&!creatorOpen)pause(true)},info=>{$('mouseMode').textContent=info.mode==='captured'?'Mouse look: captured':info.mode==='free'?'Mouse look: free · move to screen edges to keep turning':'Click the game to look around';if(info.reason)$('mouseMode').title=info.reason});
 $('retryCapture').onclick=()=>{pause(false);look.retry()};
 $('lookLeft').onclick=()=>{yaw+=Math.PI/8};$('lookRight').onclick=()=>{yaw-=Math.PI/8};
-canvas.addEventListener('wheel',e=>{e.preventDefault();if(active&&!modal&&!creatorOpen){const delta=e.deltaY*(e.deltaMode===1?16:e.deltaMode===2?innerHeight:1);zoomTarget=THREE.MathUtils.clamp(zoomTarget+delta*.008,3,12)}},{passive:false});
+canvas.addEventListener('wheel',e=>{e.preventDefault();if(active&&!modal&&!creatorOpen){const delta=e.deltaY*(e.deltaMode===1?16:e.deltaMode===2?innerHeight:1);zoomTarget=THREE.MathUtils.clamp(zoomTarget+delta*.008,3,driving.active?Math.max(12,driving.cameraZoom()*1.4):12)}},{passive:false});
 document.querySelectorAll('[data-key]').forEach(b=>{b.onpointerdown=e=>{e.preventDefault();keys.pressPointer(e.pointerId,b.dataset.key);b.setPointerCapture(e.pointerId)};b.onpointerup=b.onpointercancel=b.onlostpointercapture=e=>keys.releasePointer(e.pointerId)});$('touchE').onclick=interact;
 function applyQuality(value){const high=value==='high';renderer.setPixelRatio(Math.min(devicePixelRatio,high?1.6:1));renderer.shadowMap.enabled=high;scene.traverse(m=>{if(m.material)m.material.needsUpdate=true});renderer.setSize(innerWidth,innerHeight)}
 $('quality').onchange=()=>{$('menuQuality').value=$('quality').value;$('menuQuality').onchange()}; // the main menu's setting saves and applies it

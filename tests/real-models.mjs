@@ -1,10 +1,9 @@
-// Real models where there were placeholders: street trees, parked cars, and the flatbed truck's tyres. Checked in the real game scene (the packaged release).
+// Real models where there were placeholders: street trees, parked cars, and the Worktruck's wheels. Checked in the real game scene (the packaged release).
 import assert from 'node:assert/strict';
 import * as THREE from '../dist/vendor/three.module.js';
 import {bootGame} from './support/boot-game.mjs';
 import {townSpots} from '../dist/town.js';
 import {createProp,propInfo} from '../dist/props.js';
-import {WHEELS,addWheels} from '../dist/vehicle-parts.js';
 import {createVehicles} from '../dist/neighborhood.js';
 const g=await bootGame({position:{x:1,z:-6.3}}),scene=g.scene(),S=g.GameState;
 const named=re=>{const out=[];scene.traverse(o=>{if(re.test(o.name))out.push(o)});return out};
@@ -29,18 +28,8 @@ const named=re=>{const out=[];scene.traverse(o=>{if(re.test(o.name))out.push(o)}
  // the old test signature still works: no world, no fade
  const blocks=[],made=createVehicles(new THREE.Scene(),blocks);assert.equal(made.length,3);assert.equal(blocks.length,3);assert(made.every(v=>!v.drivable&&v.id&&v.spawn&&v.name));}
 
-// ── The flatbed truck has its tyres
-{const tyres=named(/^wheels-tyres$/),hubs=named(/^wheels-hubs$/);
- assert.equal(tyres.length,2,'two trucks, two sets of tyres: the timber yard\'s parked flatbed and the drivable depot flatbed (0.33)');assert.deepEqual(tyres.map(x=>x.parent.name).sort(),['prop-flatbed','vehicle-eastbank-flatbed'],'each parented to its own truck so they turn and stand with it');for(const x of [...tyres,...hubs])assert.equal(x.count,6,'six wheels: a single axle and a pair, a wheel each side');tyres.sort((a,b)=>a.parent.name<b.parent.name?-1:1);
- const info=propInfo('flatbed'),spec=WHEELS.flatbed,m=new THREE.Matrix4(),p=new THREE.Vector3(),sc=new THREE.Vector3(),q=new THREE.Quaternion();
- for(let i=0;i<6;i++){tyres[0].getMatrixAt(i,m);m.decompose(p,q,sc);
-  assert(Math.abs(p.y-sc.y)<1e-6,'every tyre stands on the ground (its centre is one radius up)');assert(Math.abs(Math.abs(p.x)-spec.x)<1e-6,'one each side');assert(p.y+sc.y<1.58,'and is no taller than its arch');assert(Math.abs(p.x)+sc.x/2<info.width/2,'inside the truck\'s width');
-  assert(Math.abs(sc.x-spec.width)<1e-6&&Math.abs(sc.y-sc.z)<1e-6,'round, with the axis along x')}
- const zs=[...new Set(Array.from({length:6},(_,i)=>{tyres[0].getMatrixAt(i,m);m.decompose(p,q,sc);return +p.z.toFixed(2)}))].sort((a,b)=>a-b);
- assert.deepEqual(zs,[-2.7,1.48,3.04],'in the three axle positions');assert(zs[2]-zs[1]>=2*spec.radius,'the pair do not overlap each other');
- // another prop gets nothing
- assert.equal(addWheels('car',new THREE.Object3D(),{apply:x=>x}),null);
- // a bare prop built outside the game also gets them
- const lone=createProp('flatbed',{apply:x=>x});assert(lone.children.some(c=>c.name==='wheels-tyres'));}
-console.log('Real models: 24 street trees are the broadleaf models (no cylinder-and-blob trees left, about 29k triangles), the three Oak Street cars are converted car models and solid, and the flatbed truck has six tyres with hubs inside its arches.');
+// ── The Worktruck has four real wheel meshes (the flatbed truck was removed in 0.33): each in a pivot at its axle, parented to the truck, so they spin and steer with it
+{const trucks=named(/^vehicle-eastbank-worktruck$/);assert.equal(trucks.length,1,'one Worktruck in the game scene');const wheels=trucks[0].userData.wheels;assert.equal(wheels.length,4);for(const w of wheels){assert(w.pivot.parent===trucks[0]&&w.spin.parent===w.pivot);assert(Math.abs(w.pivot.position.y-w.radius)<.02,'each stands on the ground')}
+ assert.equal(named(/^wheels-tyres$/).length,0,'no generated tyres remain');assert.equal(named(/^prop-flatbed$/).length+named(/^vehicle-eastbank-flatbed$/).length,0,'no flatbed anywhere in the world');
+ assert.equal(createProp('car',{apply:x=>x}).userData.wheels,undefined,'a prop without split wheels gets none')}console.log('Real models: 24 street trees are the broadleaf models (no cylinder-and-blob trees left, about 29k triangles), the three Oak Street cars are converted car models and solid, and the Worktruck has four real wheel meshes.');
 await g.done();process.exit(0);

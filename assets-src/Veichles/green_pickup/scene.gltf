@@ -1,0 +1,342 @@
+{
+  "accessors": [
+    {
+      "bufferView": 2,
+      "componentType": 5126,
+      "count": 5625,
+      "max": [
+        5218.70166015625,
+        3424.973388671875,
+        3748.035400390625
+      ],
+      "min": [
+        -5206.5283203125,
+        -1134.3658447265625,
+        -3731.320556640625
+      ],
+      "type": "VEC3"
+    },
+    {
+      "bufferView": 2,
+      "byteOffset": 67500,
+      "componentType": 5126,
+      "count": 5625,
+      "max": [
+        0.9993097186088562,
+        1.0,
+        0.9989103674888611
+      ],
+      "min": [
+        -0.9998772144317627,
+        -1.0,
+        -0.9993331432342529
+      ],
+      "type": "VEC3"
+    },
+    {
+      "bufferView": 1,
+      "componentType": 5126,
+      "count": 5625,
+      "max": [
+        0.9975809454917908,
+        0.9969503879547119
+      ],
+      "min": [
+        0.0026938500814139843,
+        0.004844844341278076
+      ],
+      "type": "VEC2"
+    },
+    {
+      "bufferView": 0,
+      "componentType": 5125,
+      "count": 14511,
+      "type": "SCALAR"
+    },
+    {
+      "bufferView": 2,
+      "byteOffset": 135000,
+      "componentType": 5126,
+      "count": 260,
+      "max": [
+        2990.708251953125,
+        2173.41357421875,
+        2452.178466796875
+      ],
+      "min": [
+        -1264.5364990234375,
+        1150.358642578125,
+        -1611.3980712890625
+      ],
+      "type": "VEC3"
+    },
+    {
+      "bufferView": 2,
+      "byteOffset": 138120,
+      "componentType": 5126,
+      "count": 260,
+      "max": [
+        0.9882302284240723,
+        0.949760913848877,
+        0.9788281321525574
+      ],
+      "min": [
+        -0.993195652961731,
+        -0.8081928491592407,
+        -0.9902028441429138
+      ],
+      "type": "VEC3"
+    },
+    {
+      "bufferView": 1,
+      "byteOffset": 45000,
+      "componentType": 5126,
+      "count": 260,
+      "max": [
+        0.20657259225845337,
+        0.2642253041267395
+      ],
+      "min": [
+        0.1989617943763733,
+        0.25673091411590576
+      ],
+      "type": "VEC2"
+    },
+    {
+      "bufferView": 0,
+      "byteOffset": 58044,
+      "componentType": 5125,
+      "count": 630,
+      "type": "SCALAR"
+    }
+  ],
+  "asset": {
+    "extras": {
+      "author": "00amza (https://sketchfab.com/00amza)",
+      "license": "CC-BY-4.0 (http://creativecommons.org/licenses/by/4.0/)",
+      "source": "https://sketchfab.com/3d-models/pickup-truck-047615f53e2d45b9a1a2a4dd203d459c",
+      "title": "Pickup Truck"
+    },
+    "generator": "Sketchfab-16.95.0",
+    "version": "2.0"
+  },
+  "bufferViews": [
+    {
+      "buffer": 0,
+      "byteLength": 60564,
+      "name": "floatBufferViews",
+      "target": 34963
+    },
+    {
+      "buffer": 0,
+      "byteLength": 47080,
+      "byteOffset": 60564,
+      "byteStride": 8,
+      "name": "floatBufferViews",
+      "target": 34962
+    },
+    {
+      "buffer": 0,
+      "byteLength": 141240,
+      "byteOffset": 107644,
+      "byteStride": 12,
+      "name": "floatBufferViews",
+      "target": 34962
+    }
+  ],
+  "buffers": [
+    {
+      "byteLength": 248884,
+      "uri": "scene.bin"
+    }
+  ],
+  "extensionsUsed": [
+    "KHR_materials_specular"
+  ],
+  "images": [
+    {
+      "uri": "textures/vehicle_baseColor.png"
+    }
+  ],
+  "materials": [
+    {
+      "doubleSided": true,
+      "name": "vehicle",
+      "pbrMetallicRoughness": {
+        "baseColorTexture": {
+          "index": 0
+        },
+        "metallicFactor": 0.0,
+        "roughnessFactor": 0.8211145618000169
+      }
+    },
+    {
+      "doubleSided": true,
+      "extensions": {
+        "KHR_materials_specular": {
+          "specularColorFactor": [
+            1.0,
+            1.0,
+            1.0
+          ],
+          "specularFactor": 1.0
+        }
+      },
+      "name": "windowss",
+      "pbrMetallicRoughness": {
+        "baseColorFactor": [
+          0.0030822762267459346,
+          0.0030822762267459346,
+          0.0030822762267459346,
+          1.0
+        ],
+        "metallicFactor": 0.5531445429167022,
+        "roughnessFactor": 0.05333349587351123
+      }
+    }
+  ],
+  "meshes": [
+    {
+      "name": "pickup body_vehicle_0",
+      "primitives": [
+        {
+          "attributes": {
+            "NORMAL": 1,
+            "POSITION": 0,
+            "TEXCOORD_0": 2
+          },
+          "indices": 3,
+          "material": 0,
+          "mode": 4
+        }
+      ]
+    },
+    {
+      "name": "pickup body_windowss_0",
+      "primitives": [
+        {
+          "attributes": {
+            "NORMAL": 5,
+            "POSITION": 4,
+            "TEXCOORD_0": 6
+          },
+          "indices": 7,
+          "material": 1,
+          "mode": 4
+        }
+      ]
+    }
+  ],
+  "nodes": [
+    {
+      "children": [
+        1
+      ],
+      "matrix": [
+        1.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        2.220446049250313e-16,
+        -1.0,
+        0.0,
+        0.0,
+        1.0,
+        2.220446049250313e-16,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "name": "Sketchfab_model"
+    },
+    {
+      "children": [
+        2
+      ],
+      "matrix": [
+        0.009999999776482582,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.009999999776482582,
+        0.0,
+        0.0,
+        -0.009999999776482582,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "name": "7516aa2085f54470b90a511c693b88ce.fbx"
+    },
+    {
+      "children": [
+        3
+      ],
+      "name": "RootNode"
+    },
+    {
+      "children": [
+        4,
+        5
+      ],
+      "matrix": [
+        0.026195021470281868,
+        -3.824253263068858e-09,
+        0.0510190805851541,
+        0.0,
+        8.372745078287051e-09,
+        0.057350896298884735,
+        2.2583709109271185e-15,
+        0.0,
+        -0.05101908058515355,
+        7.448352585176723e-09,
+        0.02619502147028215,
+        0.0,
+        -194.78433227539063,
+        65.23853302001953,
+        -36.662559509277344,
+        1.0
+      ],
+      "name": "pickup body"
+    },
+    {
+      "mesh": 0,
+      "name": "pickup body_vehicle_0"
+    },
+    {
+      "mesh": 1,
+      "name": "pickup body_windowss_0"
+    }
+  ],
+  "samplers": [
+    {
+      "magFilter": 9729,
+      "minFilter": 9987,
+      "wrapS": 10497,
+      "wrapT": 10497
+    }
+  ],
+  "scene": 0,
+  "scenes": [
+    {
+      "name": "Sketchfab_Scene",
+      "nodes": [
+        0
+      ]
+    }
+  ],
+  "textures": [
+    {
+      "sampler": 0,
+      "source": 0
+    }
+  ]
+}
