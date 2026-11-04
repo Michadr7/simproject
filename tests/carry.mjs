@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import {carryEffects,restHeight,bendLean,BEND_LEAN,BEND_TIME,BEND_RELEASE,LOG_REST,PLANK_REST,BELT_SLOTS,PLANKS_PER_STACK,MAX_PLANK_DROPS,normalizeCarry,normalizeBelt,normalizePlankDrops,beltFull,shoulderLog,putDownLog,feedLog,takePlanks,putDownPlanks,pickUpPlanks} from '../dist/carry.js';
+import {carryEffects,restHeight,bendLean,bendDrop,BEND_DROP,poseBlend,plankBox,quarterOf,BEND_LEAN,BEND_TIME,BEND_RELEASE,LOG_REST,PLANK_REST,BELT_SLOTS,PLANKS_PER_STACK,MAX_PLANK_DROPS,normalizeCarry,normalizeBelt,normalizePlankDrops,beltFull,shoulderLog,putDownLog,feedLog,takePlanks,putDownPlanks,pickUpPlanks} from '../dist/carry.js';
 import {freshProgress,normalizeProgress,saveProgress,loadProgress} from '../dist/jobs.js';
 import {countItem} from '../dist/inventory.js';
 
@@ -22,7 +22,7 @@ assert.match(takePlanks(freshProgress()).error,/empty/);assert.match(takePlanks(
 let t=takePlanks({...full,carry:null});assert.deepEqual(t.state.carry,{kind:'planks',count:PLANKS_PER_STACK});assert.equal(t.state.belt,BELT_SLOTS-1);assert(!beltFull(t.state),'taking one stack makes room again');assert.equal(PLANKS_PER_STACK,4);
 assert.match(takePlanks(t.state).error,/hands are full/,'cannot take a second stack');assert.match(feedLog(t.state,true).error,/log on your shoulder/,'planks are not a log');
 // 5. Planks put down and picked up again; at most 8 stacks.
-let p=putDownPlanks(t.state,{x:104,z:-260});assert.equal(p.state.carry,null);assert.deepEqual(p.state.plankDrops,[{id:1,x:104,z:-260,count:4}]);assert.match(putDownPlanks(p.state,{x:0,z:0}).error,/not carrying/);
+let p=putDownPlanks(t.state,{x:104,z:-260});assert.equal(p.state.carry,null);assert.deepEqual(p.state.plankDrops,[{id:1,x:104,z:-260,count:4,q:0}]);assert.match(putDownPlanks(p.state,{x:0,z:0}).error,/not carrying/);
 let back=pickUpPlanks(p.state,1);assert.deepEqual(back.state.carry,{kind:'planks',count:4});assert.deepEqual(back.state.plankDrops,[]);assert.match(pickUpPlanks(p.state,5).error,/gone/);assert.match(pickUpPlanks(t.state,1).error,/hands are full/);
 let many=freshProgress();for(let i=0;i<MAX_PLANK_DROPS;i++)many=putDownPlanks({...many,carry:{kind:'planks',count:4}},{x:100+i,z:-260}).state;assert.equal(MAX_PLANK_DROPS,12);assert.equal(many.plankDrops.length,MAX_PLANK_DROPS);assert.deepEqual(many.plankDrops.map(d=>d.id),[1,2,3,4,5,6,7,8,9,10,11,12]);
 assert.match(putDownPlanks({...many,carry:{kind:'planks',count:4}},{x:0,z:0}).error,/no room/);
@@ -32,17 +32,22 @@ assert.match(putDownPlanks({...many,carry:{kind:'planks',count:4}},{x:0,z:0}).er
 // 7. Saves: additive fields with defaults; old saves load; garbage is dropped.
 {const fresh=freshProgress();assert.deepEqual([fresh.carry,fresh.belt,fresh.plankDrops],[null,0,[]]);
  const old=normalizeProgress({cash:500});assert.deepEqual([old.carry,old.belt,old.plankDrops],[null,0,[]],'a save from before the sawmill loads');
- const n=normalizeProgress({carry:{kind:'planks',count:3},belt:3,plankDrops:[{id:2,x:104,z:-260,count:2}]});assert.deepEqual([n.carry,n.belt,n.plankDrops],[{kind:'planks',count:3},3,[{id:2,x:104,z:-260,count:2}]]);
+ const n=normalizeProgress({carry:{kind:'planks',count:3},belt:3,plankDrops:[{id:2,x:104,z:-260,count:2}]});assert.deepEqual([n.carry,n.belt,n.plankDrops],[{kind:'planks',count:3},3,[{id:2,x:104,z:-260,count:2,q:0}]]);
  assert.equal(normalizeProgress({belt:9}).belt,BELT_SLOTS,'capped');assert.equal(normalizeProgress({belt:-1}).belt,0);assert.equal(normalizeProgress({belt:1.5}).belt,0);assert.equal(normalizeProgress({belt:'3'}).belt,0);
  assert.equal(normalizeCarry({kind:'planks',count:5}),null);assert.equal(normalizeCarry({kind:'planks',count:0}),null);assert.equal(normalizeCarry({kind:'stone'}),null);assert.deepEqual(normalizeCarry({kind:'log',extra:1}),{kind:'log'});assert.equal(normalizeCarry('log'),null);
- assert.deepEqual(normalizePlankDrops([{id:1,x:104,z:-260,count:4},{id:1,x:105,z:-260,count:4},{id:2,x:9999,z:0,count:4},{id:3,x:104,z:-261,count:9},{id:0,x:104,z:-262,count:1},null,'x']),[{id:1,x:104,z:-260,count:4}]);
+ assert.deepEqual(normalizePlankDrops([{id:1,x:104,z:-260,count:4},{id:1,x:105,z:-260,count:4},{id:2,x:9999,z:0,count:4},{id:3,x:104,z:-261,count:9},{id:0,x:104,z:-262,count:1},null,'x']),[{id:1,x:104,z:-260,count:4,q:0}]);
  assert.deepEqual(normalizePlankDrops('nope'),[]);assert.equal(normalizePlankDrops(Array.from({length:20},(_,i)=>({id:i+1,x:100+i*.5,z:-260,count:1}))).length,MAX_PLANK_DROPS);
- let raw;const storage={getItem:()=>raw,setItem:(k,v)=>raw=v};saveProgress(storage,{...freshProgress(),carry:{kind:'log'},belt:4,plankDrops:p.state.plankDrops});const loaded=loadProgress(storage);assert.deepEqual([loaded.carry,loaded.belt,loaded.plankDrops],[{kind:'log'},4,[{id:1,x:104,z:-260,count:4}]],'survives a save and load');
+ let raw;const storage={getItem:()=>raw,setItem:(k,v)=>raw=v};saveProgress(storage,{...freshProgress(),carry:{kind:'log'},belt:4,plankDrops:p.state.plankDrops});const loaded=loadProgress(storage);assert.deepEqual([loaded.carry,loaded.belt,loaded.plankDrops],[{kind:'log'},4,[{id:1,x:104,z:-260,count:4,q:0}]],'survives a save and load');
  assert.equal(normalizeBelt(0),0)}
 // 8. Carrying changes the body: slower, no sprint, more stamina cost; items lie at the deck height; the put-down is a bend that returns upright.
 {assert.deepEqual(carryEffects(null),{speed:1,sprint:true,load:1});assert.deepEqual(carryEffects({kind:'log'}),{speed:.8,sprint:false,load:1.5});assert.deepEqual(carryEffects({kind:'planks',count:2}),{speed:.85,sprint:false,load:1.25});
  assert.equal(restHeight(null,LOG_REST),LOG_REST);assert.ok(Math.abs(restHeight(.9,LOG_REST)-1.02)<1e-9);assert.equal(restHeight(undefined,PLANK_REST),PLANK_REST);
  assert.equal(bendLean(0),0);assert(Math.abs(bendLean(.5)-BEND_LEAN)<1e-9);assert(Math.abs(bendLean(1))<1e-9);assert.equal(bendLean(-3),0);assert(Math.abs(bendLean(9))<1e-9);assert(BEND_RELEASE>0&&BEND_RELEASE<1&&BEND_TIME<1);
+ assert(Math.abs(BEND_LEAN*180/Math.PI-50)<.5,'the design lean is about 50 degrees');assert.equal(BEND_DROP,.22);assert(Math.abs(bendDrop(.5)-.22)<1e-9);assert(Math.abs(bendLean(.25)-BEND_LEAN)<1e-9&&Math.abs(bendLean(.75)-BEND_LEAN)<1e-9,'a flat bottom, so the item changes hands while fully bent');assert(bendLean(.1)<BEND_LEAN*.6);
+ assert.equal(poseBlend(0,true,0.01)>0,true);assert.equal(poseBlend(1,false,1),0);assert.equal(poseBlend(0,false,1),0);assert.equal(poseBlend(.9995,true,.1),1);
+ assert.deepEqual(plankBox({x:10,z:20,q:0},{x:1.3,z:.4}),{x:10,z:20,hx:.65,hz:.2});assert.deepEqual(plankBox({x:10,z:20,q:1},{x:1.3,z:.4}),{x:10,z:20,hx:.2,hz:.65});assert.deepEqual(plankBox({x:1,z:2},{x:1,z:.5}),{x:1,z:2,hx:.5,hz:.25});
+ assert.deepEqual([0,1.6,3.2,4.7,-1.6,6.3].map(quarterOf),[0,1,2,3,3,0]);
+ const dropped=putDownPlanks({...freshProgress(),carry:{kind:'planks',count:4}},{x:104,z:-260,q:5}).state.plankDrops;assert.equal(dropped[0].q,1,'the yaw is a quarter turn (5 wraps to 1)');assert.equal(normalizePlankDrops([{id:1,x:104,z:-260,count:4,q:2.5}])[0].q,0);assert.equal(normalizePlankDrops([{id:1,x:104,z:-260,count:4}])[0].q,0,'old saves have no turn')
  const big=Array.from({length:20},(_,i)=>({id:i+1,x:100+i*.5,z:-260,count:1}));assert.equal(normalizePlankDrops(big).length,12,'cap of 12 on a load'); // no expiry field exists: dropped stacks stay until picked up
- assert.deepEqual(Object.keys(normalizePlankDrops(big)[0]).sort(),['count','id','x','z'])}
+ assert.deepEqual(Object.keys(normalizePlankDrops(big)[0]).sort(),['count','id','q','x','z'])}
 console.log('Carry: a log on the shoulder (not the bag), planks in the hands, one thing at a time; the saw takes a log only while on and with room; four stacks fill the belt and one taken makes room; planks can be put down (8 stacks); the three fields save additively and old saves load.');

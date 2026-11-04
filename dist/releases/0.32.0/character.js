@@ -88,7 +88,7 @@ function createFallback(appearance){
  body.position.y=.9;head.position.y=1.7;body.castShadow=head.castShadow=true;group.add(body,head);
  const hand=new T.Group();hand.position.set(-.35,.9,.1);group.add(hand);
  const noop=()=>{};
- return {group,hand,mouth:new T.Vector3(0,1.6,.2),fallback:true,apply:noop,update:noop,setMotion:noop,setSeated:noop,reach:noop,clearReach:noop,setHeldTilt:noop,alignHeld:noop,setTwoHanded:noop,setLean:noop,
+ return {group,hand,mouth:new T.Vector3(0,1.6,.2),fallback:true,apply:noop,update:noop,setMotion:noop,setSeated:noop,reach:noop,clearReach:noop,setHeldTilt:noop,alignHeld:noop,setTwoHanded:noop,setLean:noop,setCrouch:noop,setHandCurl:noop,
   hold(object){hand.add(object)},release(){for(const child of [...hand.children])hand.remove(child)},bone:()=>null,get motion(){return 'Idle'}};
 }
 
@@ -105,7 +105,7 @@ export function createCharacter(input){
  // can close around the handle. `curl` on hold() is how far the hand closes (0 open, 1 fully closed).
  const idleFingers=new Map(),gripFingers=new Map();
  // Held-item orientation override (a carry pose), a second hand on the handle, and a forward/back lean of the spine.
- let alignDir=null,alignAmount=0,twoHandWeight=0,leanAngle=0;const twoHandL={target:new T.Vector3(),weight:0},wantAlign=new T.Quaternion();
+ let alignDir=null,alignAmount=0,twoHandWeight=0,leanAngle=0,crouchDrop=0;const handCurl={R:0,L:0},bodyHome=new Map(),twoHandL={target:new T.Vector3(),weight:0},wantAlign=new T.Quaternion(); // crouchDrop: metres the hips are lowered; bodyHome remembers the animated position of the Body bone so it can be put backconst twoHandL={target:new T.Vector3(),weight:0},wantAlign=new T.Quaternion();
 
  // ── Rig and parts ─────────────────────────────────────────────────────────
  function build(){
@@ -276,22 +276,30 @@ export function createCharacter(input){
    turnBone(lower,new T.Quaternion().setFromAxisAngle(v1,Math.PI/2),1,memo);
   }
  }
+ // Lowers the hips straight down by crouchDrop metres (the foot control bones stay put, so solveLeg bends the knees).
+ function lowerBody(){
+  const body=kinds.byName.get('Body');if(!body)return;
+  bodyHome.set(body,body.position.clone());group.updateMatrixWorld(true);group.getWorldQuaternion(qGroup);
+  body.getWorldPosition(v2).addScaledVector(v1.set(0,-1,0).applyQuaternion(qGroup),crouchDrop);body.position.copy(body.parent.worldToLocal(v2));body.updateMatrixWorld(true);
+ }
  function update(dt){
   for(const [bone,q] of memo)bone.quaternion.copy(q);
-  memo.clear();
+  memo.clear();for(const [bone,p] of bodyHome)bone.position.copy(p);bodyHome.clear();
   kinds.mixer.update(dt);
   alignAmount+=((alignDir?1:0)-alignAmount)*Math.min(1,dt*10);
   let pendingSwing=false;
-  const reaching=reaches.R.weight>.001||reaches.L.weight>.001,striding=!seated&&(motion==='Walk'||motion==='Run'||motion==='Sprint'),leaning=Math.abs(leanAngle)>.001;
-  if(!reaching&&!seated&&!held&&!striding&&!leaning)return;
+  const reaching=reaches.R.weight>.001||reaches.L.weight>.001,striding=!seated&&(motion==='Walk'||motion==='Run'||motion==='Sprint'),leaning=Math.abs(leanAngle)>.001,crouching=!seated&&crouchDrop>.001;
+  if(!reaching&&!seated&&!held&&!striding&&!leaning&&!crouching)return;
   group.updateMatrixWorld(true);
-  if(seated)applySeated();else if(striding){solveLeg('R');solveLeg('L');if(api.swingArms&&motion!=='Sprint')pendingSwing=true}
+  if(crouching)lowerBody();
+  if(seated)applySeated();else if(striding||crouching){solveLeg('R');solveLeg('L');if(striding&&api.swingArms&&motion!=='Sprint')pendingSwing=true}
   if(leaning)applyLean();
   if(pendingSwing){pendingSwing=false;rig.foot.R.getWorldPosition(v1);group.worldToLocal(v1);const zR=v1.z;rig.foot.L.getWorldPosition(v1);group.worldToLocal(v1);applyTwist(T.MathUtils.clamp((v1.z-zR)/(motion==='Run'?1.05:.9),-1,1));applyArmSwing(dt)}
   solveArm('R');if(twoHandWeight<.001)solveArm('L');
   if(held)placeHeld();
   if(held&&twoHandWeight>.001)gripWithLeft();
   if(held&&held.curl){applyGrip('R',held.curl);applyGrip('L',held.curl*twoHandWeight)}
+  for(const side of ['R','L'])if(handCurl[side]>.001&&!(held&&side==='R'))applyGrip(side,handCurl[side]); // a hand laid over something (a log on the shoulder) closes its fingers without holding an item
  }
  // Puts the held item in the palm: upright items stay level, tools follow the forearm.
  const basis=new T.Matrix4(),vX=new T.Vector3(),vY=new T.Vector3(),vZ=new T.Vector3(),want=new T.Quaternion();
@@ -337,7 +345,9 @@ export function createCharacter(input){
   // Carry pose for a held tool: point its long axis along `direction` (character space), or null to follow the forearm.
   alignHeld(direction){alignDir=direction?direction.clone().normalize():null},
   setTwoHanded(weight){twoHandWeight=Math.max(0,Math.min(1,weight))},
-  setLean(angle){leanAngle=angle}
+  setLean(angle){leanAngle=angle},
+  setHandCurl(side,weight){handCurl[side]=Math.max(0,Math.min(1,Number.isFinite(weight)?weight:0))}, // 0 open .. 1 closed, for a hand that reaches without holding an item
+  setCrouch(metres){crouchDrop=Math.max(0,Number.isFinite(metres)?metres:0)}
  };
  build();
  return api;

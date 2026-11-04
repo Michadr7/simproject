@@ -31,7 +31,7 @@ const named=re=>{const out=[];scene.traverse(o=>{if(re.test(o.name))out.push(o)}
 
 // ── The flatbed truck has its tyres
 {const tyres=named(/^wheels-tyres$/),hubs=named(/^wheels-hubs$/);
- assert.equal(tyres.length,1,'one truck, one set of tyres');assert.equal(tyres[0].count,6,'six wheels: a single axle and a pair, a wheel each side');assert.equal(hubs[0].count,6);assert.equal(tyres[0].parent.name,'prop-flatbed','parented to the truck so they turn and stand with it');
+ assert.equal(tyres.length,2,'two trucks, two sets of tyres: the timber yard\'s parked flatbed and the drivable depot flatbed (0.33)');assert.deepEqual(tyres.map(x=>x.parent.name).sort(),['prop-flatbed','vehicle-eastbank-flatbed'],'each parented to its own truck so they turn and stand with it');for(const x of [...tyres,...hubs])assert.equal(x.count,6,'six wheels: a single axle and a pair, a wheel each side');tyres.sort((a,b)=>a.parent.name<b.parent.name?-1:1);
  const info=propInfo('flatbed'),spec=WHEELS.flatbed,m=new THREE.Matrix4(),p=new THREE.Vector3(),sc=new THREE.Vector3(),q=new THREE.Quaternion();
  for(let i=0;i<6;i++){tyres[0].getMatrixAt(i,m);m.decompose(p,q,sc);
   assert(Math.abs(p.y-sc.y)<1e-6,'every tyre stands on the ground (its centre is one radius up)');assert(Math.abs(Math.abs(p.x)-spec.x)<1e-6,'one each side');assert(p.y+sc.y<1.58,'and is no taller than its arch');assert(Math.abs(p.x)+sc.x/2<info.width/2,'inside the truck\'s width');

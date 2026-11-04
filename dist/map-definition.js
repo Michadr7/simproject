@@ -32,7 +32,8 @@ const roads={
   farmGate:{x:-164,z:n(-160)},farmJoin:{x:-34,z:n(-160)},woodsJoin:{x:-26,z:n(-180)},woodsEnd:{x:195,z:n(-180)},woodsLaneNorth:{x:90,z:n(-246)},woodsLaneSouth:{x:90,z:n(-146)},
   alderStreetS:{x:50,z:-3.5},alderStreetN:{x:50,z:-125},alderCrossW:{x:-30,z:-90},alderCrossE:{x:84,z:-90},
   oakEastEnd:{x:195,z:6},cedarLinkS:{x:120,z:6},cedarLoopStart:{x:120,z:-57},
-  freightW:{x:72,z:68},freightS:{x:195,z:68},freightE:{x:199.5,z:68},freightN:{x:195,z:n(-180)-3.5}
+  freightW:{x:72,z:68},freightS:{x:195,z:68},freightE:{x:199.5,z:68},freightN:{x:195,z:n(-180)-3.5},
+  worksN:{x:102,z:6},worksS:{x:102,z:68} // Works Lane (0.33): from Oak Street East's centreline to Freight South's
  },
  edges:[
   {id:'oak-street',from:'oakWest',to:'oakEast',width:19,surface:'asphalt',level:'street'},
@@ -53,8 +54,10 @@ const roads={
   {id:'cedar-loop',from:'cedarLoopStart',to:'cedarLoopStart',width:9,surface:'asphalt',level:'rural',walkable:true,zone:'cedar',curve:true,closed:true,
    path:[[101.0,-60.8],[87.1,-71.0],[82.0,-85.0],[87.1,-99.0],[101.0,-109.2],[120.0,-113.0],[139.0,-109.2],[152.9,-99.0],[158.0,-85.0],[152.9,-71.0],[139.0,-60.8]]},
   // The Freight Road: along the south side of Eastbank Works, then north up its own corridor, over the east bridge, to Pine Ridge.
-  {id:'freight-south',from:'freightW',to:'freightE',width:9,surface:'asphalt',level:'rural',walkable:true,zone:'eastbank'},
-  {id:'freight-road',from:'freightS',to:'freightN',width:9,surface:'asphalt',level:'rural',walkable:true,zone:'freight'}
+  {id:'freight-south',from:'freightW',to:'freightE',width:12,surface:'asphalt',level:'rural',walkable:true,zone:'eastbank'}, // 12 m since 0.33 (was 9): every Eastbank yard opens onto it and the flatbed turns in from the Freight Road
+  {id:'freight-road',from:'freightS',to:'freightN',width:9,surface:'asphalt',level:'rural',walkable:true,zone:'freight'},
+  // Works Lane (0.33): Eastbank's own connector, a straight 12 m road closing the loop Oak Street East -> Works Lane -> Freight South -> Freight Road.
+  {id:'works-lane',from:'worksN',to:'worksS',width:12,surface:'asphalt',level:'rural',walkable:true,zone:'eastbank'}
  ]
 };
 
@@ -136,7 +139,63 @@ const reserved=[
  {id:'R6',name:'Residential plot R6',kind:'residential',facing:'south',x0:136,x1:148,z0:-129,z1:-115,driveway:{x0:136.9,x1:140.4,z0:-119.88,z1:-110},path:{x0:144.35,x1:145.85,z0:-119.88,z1:-110},park:{x:138.65,z:-117.18,heading:'north'}},
  {id:'R7',name:'Residential plot R7',kind:'residential',facing:'north',x0:88,x1:100,z0:-55,z1:-43,driveway:{x0:95.6,x1:99.1,z0:-61.5,z1:-52.06},path:{x0:91.25,x1:92.75,z0:-61.5,z1:-52.06},park:{x:97.35,z:-54.76,heading:'south'}},
  {id:'R8',name:'Residential plot R8',kind:'residential',facing:'north',x0:140,x1:152,z0:-55,z1:-43,driveway:{x0:147.6,x1:151.1,z0:-64,z1:-52.06},path:{x0:144.05,x1:145.55,z0:-64,z1:-52.06},park:{x:149.35,z:-54.76,heading:'south'}},
- {id:'I1',name:'Industrial plot I1',kind:'industrial',facing:'north',x0:150,x1:176,z0:18,z1:46},{id:'I2',name:'Industrial plot I2',kind:'industrial',facing:'south',x0:150,x1:176,z0:-18,z1:-2}
+ {id:'I1',name:'Industrial plot I1',kind:'industrial',facing:'north',x0:150,x1:176,z0:18,z1:46},{id:'I2',name:'Industrial plot I2',kind:'industrial',facing:'south',x0:150,x1:176,z0:-18,z1:-2},
+ // Eastbank Works (0.33): I3 the building supplier and I4 the vehicle workshop front Oak Street East (facing north), I5 the timber yard fronts Freight South (facing south), I6 is the open freight yard (no building).
+ {id:'I3',name:'Industrial plot I3',kind:'industrial',facing:'north',x0:72,x1:94,z0:14,z1:40},{id:'I4',name:'Industrial plot I4',kind:'industrial',facing:'north',x0:110,x1:142,z0:14,z1:40},
+ {id:'I5',name:'Industrial plot I5',kind:'industrial',facing:'south',x0:72,x1:94,z0:42,z1:62},{id:'I6',name:'Industrial plot I6',kind:'industrial',facing:'south',x0:110,x1:188,z0:48,z1:62}
+];
+
+// ── Eastbank Works paving, bays and yards (0.33) ─────────────────────────────────────────────────────────────────────────────────────
+// `paving`: asphalt you can walk and drive on (terrain surface DRIVEWAY), drawn as one merged mesh: truck yards (at least 8 m per truck, 12 m deep), aprons, the gas station's forecourt, the depot lot, and the 8 m
+// driveway cuts between a yard and its road. Paving never lies under a building. `kind: 'island'` is the pump island (a lighter slab, still drivable ground; its bollards and later its pumps are the solid parts).
+const paving=[
+ {id:'depot',x0:80,x1:112,z0:-18,z1:-3},{id:'depot-cut',x0:96,x1:104,z0:-3,z1:0},
+ {id:'supply-apron',x0:72,x1:94,z0:14,z1:31.2},{id:'supply-cut',x0:76,x1:84,z0:12,z1:14},
+ {id:'workshop-apron',x0:112,x1:142,z0:14,z1:27.5},{id:'workshop-cut-w',x0:112,x1:120,z0:12,z1:14},{id:'workshop-cut-e',x0:133,x1:141,z0:12,z1:14},
+ {id:'warehouse-yard',x0:152,x1:174,z0:18,z1:31.5},{id:'warehouse-in',x0:156,x1:164,z0:12,z1:18},{id:'warehouse-out',x0:166,x1:174,z0:12,z1:18},
+ {id:'gas-west',x0:150,x1:161.5,z0:-18,z1:0},{id:'gas-east',x0:161.5,x1:176,z0:-10,z1:0},{id:'gas-island',x0:152.5,x1:160.5,z0:-9,z1:-7.5,kind:'island'},
+ {id:'timber-yard',x0:80,x1:94,z0:44,z1:60},{id:'timber-out',x0:82,x1:90,z0:60,z1:62},{id:'timber-in',x0:94,x1:96,z0:46,z1:54},
+ {id:'freight-yard',x0:110,x1:188,z0:48,z1:60},{id:'freight-cut-w',x0:120,x1:128,z0:60,z1:62},{id:'freight-cut-e',x0:160,x1:168,z0:60,z1:62},{id:'freight-link',x0:108,x1:110,z0:50,z1:58}
+];
+// Painted parking bays: `count` bays `width` wide and `depth` deep from (x0, z0); lines between them and along the back (the side away from the way in).
+const bayRows=[
+ {id:'supply-bays',x0:76.4,z0:22,count:6,width:2.7,depth:5,back:'south'},{id:'workshop-bays',x0:113,z0:21,count:2,width:2.7,depth:5,back:'south'},
+ {id:'depot-car-bays',x0:93,z0:-18,count:6,width:2.7,depth:5,back:'north'},{id:'depot-truck-bays',x0:82,z0:-18,count:2,width:4.5,depth:10,back:'north'} // the depot's first bays are where the pickup (94.35, -15.5) and the flatbed (84.25, -13) start in Stage 3
+];
+// Yards: each is one chunk of props (one InstancedMesh per model, eastbank.js), drawn only within `cull` metres (80) of the yard's rectangle, with caps checked by validateMap (at most YARD_CAPS.perModel of one model
+// in a yard, YARD_CAPS.total in all of them). An item is {prop, x, z, yaw, y}: y > 0 is a stacked pallet (only the bottom one is solid).
+export const YARD_CAPS=Object.freeze({perModel:32,total:160});
+const PI=Math.PI,fixed=v=>+v.toFixed(2);
+const rowOf=(prop,x,z,dx,count,yaw=0)=>Array.from({length:count},(_,i)=>({prop,x:fixed(x+dx*i),z,yaw,y:0}));
+const stackOf=(x,z,count)=>Array.from({length:count},(_,i)=>({prop:'prop.pallet',x,z,yaw:0,y:fixed(.144*i)}));
+const LOADED=['prop.pallet-small-boxes','prop.pallet-medium-boxes','prop.pallet-crate'];
+const loadedRow=(x,z,dx,count)=>Array.from({length:count},(_,i)=>({prop:LOADED[i%3],x:fixed(x+dx*i),z,yaw:0,y:0}));
+const yards=[
+ // The warehouse's truck yard. The model has ONE loading door, a ground-level garage opening 3.7 m wide and 2.15 m high, 1.2 m right of the building's centre seen from the front (propInfo('industrial-q').door); the warehouse faces north, so
+ // the dock is at world x = 163 - 1.2 = 161.8 on the north wall (z 31.52). The dock plate's lip (its local z -0.6) lies against the wall and its ramp end faces the truck. The inbound driveway (x 156..164) lines up with the dock lane, the outbound
+ // one (x 166..174) leaves to the east. Pickup sign and bollards flank the lane; loaded pallets stand against the wall on the left, a stack of empty pallets on the right.
+ {id:'warehouse-yard',bounds:{x0:152,x1:174,z0:18,z1:31.5},cull:80,items:[
+  {prop:'prop.dock-plate',x:161.8,z:30.92,yaw:PI,y:0},{prop:'prop.zone-sign-pickup',x:165.6,z:28,yaw:PI,y:0},
+  ...[159.3,164.3].map(x=>({prop:'prop.zone-bollard',x,z:30.4,yaw:0,y:0})),
+  ...loadedRow(153,30.9,1.3,4),...loadedRow(153,29.7,1.3,4),...stackOf(169.5,30.9,6)]},
+ // The freight yard behind the workshop and warehouse: eight containers in a row, stacks of empty pallets, loaded pallets and crates.
+ {id:'freight-yard',bounds:{x0:110,x1:188,z0:48,z1:60},cull:80,items:[
+  ...Array.from({length:8},(_,k)=>({prop:['container-a','container-b','container-c'][k%3],x:114+7*k,z:51,yaw:PI/2,y:0})),
+  ...stackOf(171,50.5,6),...stackOf(173,50.5,6),...stackOf(175,50.5,6),
+  ...loadedRow(170,55,1.4,6),...loadedRow(170,56.4,1.4,6),
+  ...Array.from({length:10},(_,i)=>({prop:'prop.crate-large',x:i%2?182.6:181.2,z:fixed(50.5+1.3*Math.floor(i/2)),yaw:0,y:0})),
+  ...[119.4,128.6,159.4,168.6].map(x=>({prop:'prop.zone-bollard',x,z:59.6,yaw:0,y:0}))]},
+ // The timber yard (plank dock): the UNLOAD sign, bollards at its two driveways, empty pallets and crates; the planks themselves arrive in 0.35.
+ {id:'timber-yard',bounds:{x0:80,x1:94,z0:44,z1:60},cull:80,items:[
+  {prop:'prop.zone-sign-unload',x:80.8,z:50,yaw:PI/2,y:0},
+  ...[[81.4,59.6],[90.6,59.6],[93.6,45.4],[93.6,54.6]].map(([x,z])=>({prop:'prop.zone-bollard',x,z,yaw:0,y:0})),
+  ...rowOf('prop.pallet',82.4,45.2,1.4,6),...rowOf('prop.crate-large',91.2,45.4,1.3,2)]},
+ // The workshop's apron: boxes and crates by the building, two empty pallets.
+ {id:'workshop-apron',bounds:{x0:112,x1:142,z0:14,z1:27.5},cull:80,items:[
+  ...rowOf('prop.box-small',113,26.8,.6,6),...rowOf('prop.box-medium',118,26.8,.8,4),...rowOf('prop.crate-large',136.5,26.5,1.4,2),
+  {prop:'prop.pallet',x:140,z:26,yaw:0,y:0},{prop:'prop.pallet',x:140,z:24.9,yaw:0,y:0}]},
+ // The gas station: bollards at the ends of the pump island (the pumps and the canopy come with the user's models).
+ {id:'gas-station',bounds:{x0:150,x1:161.5,z0:-18,z1:0},cull:80,items:[[152,-9.3],[152,-7.2],[161,-9.3],[161,-7.2]].map(([x,z])=>({prop:'prop.zone-bollard',x,z,yaw:0,y:0}))}
 ];
 
 function deepFreeze(value){if(value&&typeof value==='object'&&!Object.isFrozen(value)){Object.freeze(value);for(const key of Object.keys(value))deepFreeze(value[key])}return value}
@@ -176,7 +235,20 @@ const properties=[
  {id:'farm-silo',type:'farm',landmark:'farm-silo',name:'The Silo',enterable:false,reason:'A grain silo; the little shed beside it is storage only.'},
  {id:'farm-coop',type:'farm',landmark:'farm-coop',name:'The Chicken Coop',enterable:false,reason:'Too small to enter; chickens arrive with the farming update.'},
  {id:'farm-windmill',type:'farm',landmark:'farm-windmill',name:'The Windmill',enterable:false,reason:'A landmark; no interior.'},
- {id:'sawmill',type:'industrial',landmark:'sawmill',name:'Sawmill',enterable:false,reason:'An open-sided working yard; the machinery is its inside.'}
+ {id:'sawmill',type:'industrial',landmark:'sawmill',name:'Sawmill',enterable:false,reason:'An open-sided working yard; the machinery is its inside.'},
+ // Eastbank Works: the Kenney Industrial buildings have no interiors.
+ {id:'eastbank-warehouse',type:'industrial',landmark:'eastbank-warehouse',plot:'I1',name:'Eastbank Warehouse',enterable:false,reason:'Freight pickups (stock, furniture boxes) arrive with cargo in 0.35; the work happens at the docks outside.'},
+ {id:'eastbank-workshop',type:'industrial',landmark:'eastbank-workshop',plot:'I4',name:'Eastbank Vehicle Workshop',enterable:false,reason:'Repairs arrive with tool wear and repairs (0.37).'},
+ {id:'eastbank-supply',type:'shop',landmark:'eastbank-supply',plot:'I3',name:'Eastbank Building Supplier',enterable:false,reason:"The supplier's counter (blades, tools, whetstones) arrives with 0.35-0.37; the plank dock is in the timber yard behind."},
+ {id:'eastbank-gas-kiosk',type:'shop',landmark:'eastbank-gas-kiosk',plot:'I2',name:'Eastbank Gas Station',enterable:false,reason:'Paying for fuel arrives with the fuel system (0.35).'},
+ {id:'eastbank-lumber-shed',type:'industrial',landmark:'eastbank-lumber-shed',plot:'I5',name:'Eastbank Lumber Shed',enterable:false,reason:'An open-sided shed; you can already walk around it.'}
+];
+// Drivable vehicles (0.33, DESIGN 4.13 D): the two depot vehicles, parked nose to the back wall (north, so yaw pi: a model's front is +z) in the depot's first truck and car bays. Anyone can drive them (no keys yet). `model` is a converted
+// prop and a vehicle class (vehicle.js CLASSES); the id is the save key (`progress.vehicles`). The parked scenery cars and trucks elsewhere are not drivable.
+export const DRIVABLE_MODELS=Object.freeze(['pickup','flatbed']);
+const vehicles=[
+ {id:'eastbank-pickup',model:'pickup',name:'Eastbank pickup',home:{x:94.35,z:-15.5,yaw:PI}},
+ {id:'eastbank-flatbed',model:'flatbed',name:'Eastbank flatbed',home:{x:84.25,z:-13,yaw:PI}}
 ];
 export const MAP=deepFreeze({
  id:'oak-and-alder',version:1,
@@ -187,7 +259,7 @@ export const MAP=deepFreeze({
  // Where you can walk: everywhere inside this rectangle except water (and trees, fences and buildings, which are solid objects). The zones name and shape the districts; they no longer fence them in.
  playable:{x0:-250,x1:290,z0:-380,z1:100},
  openCountry:{id:'open',name:'Open Country',label:'OPEN COUNTRY',subtitle:'Meadows between districts',color:'#6e8a5c'}, // how far the ground is drawn (scenery fades into fog beyond the walkable zones)
- zones,roads,water,fields,buildings,shops,reserved,properties,
+ zones,roads,water,fields,buildings,shops,reserved,properties,paving,bayRows,yards,vehicles,
  // The marked parking lot behind the south row of shops: bays 2.7 m wide and 5 m deep along its north edge, an aisle to Alder Street, the lot's own asphalt.
  lots:[{id:'alder-lot',x0:-14,x1:45,z0:-63,z1:-52,bays:{x0:-13.5,z0:-63,count:20,width:2.7,depth:5}}],
  // Parking lanes on the cross street (6 m bays, nose in the direction of traffic: eastbound on the south side, westbound on the north), and the lane edge lines.
@@ -257,7 +329,11 @@ export const MAP=deepFreeze({
   {id:'park-lot-4',prop:'taxi',zone:'alder',x:20.25,z:-60.5,yaw:Math.PI,decor:true},{id:'park-lot-5',prop:'car-2',zone:'alder',x:28.35,z:-60.5,yaw:Math.PI,decor:true},{id:'park-lot-6',prop:'sports-car',zone:'alder',x:36.45,z:-60.5,yaw:Math.PI,decor:true},
   {id:'park-oak-1',prop:'car-2',zone:'city',x:-4,z:-1.9,yaw:-Math.PI/2,decor:true},{id:'park-oak-2',prop:'suv',zone:'city',x:30,z:13.9,yaw:Math.PI/2,decor:true},{id:'park-oak-3',prop:'sports-car',zone:'city',x:6,z:13.9,yaw:Math.PI/2,decor:true},
   // Cars parked on their driveways (props now, drivable later): R2, R4, R6 and R8 are lived in, R1, R3, R5 and R7 are vacant.
-  {id:'car-r2',prop:'suv',zone:'cedar',x:123.35,z:-71.3,yaw:Math.PI,decor:true},{id:'car-r4',prop:'car',zone:'cedar',x:101.35,z:-118.08,yaw:Math.PI,decor:true},{id:'car-r6',prop:'sports-car',zone:'cedar',x:138.65,z:-117.18,yaw:Math.PI,decor:true},{id:'car-r8',prop:'car',zone:'cedar',x:149.35,z:-54.76,yaw:0,decor:true}
+  {id:'car-r2',prop:'suv',zone:'cedar',x:123.35,z:-71.3,yaw:Math.PI,decor:true},{id:'car-r4',prop:'car',zone:'cedar',x:101.35,z:-118.08,yaw:Math.PI,decor:true},{id:'car-r6',prop:'sports-car',zone:'cedar',x:138.65,z:-117.18,yaw:Math.PI,decor:true},{id:'car-r8',prop:'car',zone:'cedar',x:149.35,z:-54.76,yaw:0,decor:true},
+  // Eastbank Works (0.33): Kenney Industrial buildings (CC0), each standing at the back of its plot with its front (door side) on the yard; a plot facing north puts the front at -z (yaw pi). None can be entered.
+  {id:'eastbank-warehouse',prop:'industrial-q',plot:'I1',zone:'eastbank',x:163,z:38.6,yaw:Math.PI},{id:'eastbank-workshop',prop:'industrial-t',plot:'I4',zone:'eastbank',x:126,z:33.5,yaw:Math.PI},
+  {id:'eastbank-supply',prop:'industrial-s',plot:'I3',zone:'eastbank',x:83,z:35.4,yaw:Math.PI},{id:'eastbank-gas-kiosk',prop:'industrial-p',plot:'I2',zone:'eastbank',x:168.5,z:-14,yaw:0},
+  {id:'eastbank-lumber-shed',prop:'hut',plot:'I5',zone:'eastbank',x:76.5,z:54,yaw:0},{id:'eastbank-tank',prop:'tank-small',zone:'eastbank',x:137,z:34,yaw:0,decor:true}
  ], // Signposts: boards are read from the front (yaw 0 faces south, towards walkers arriving from the bridge).
  signs:[
   {id:'fork',zone:'county',x:-25.5,z:n(-170),yaw:0,boards:[{text:'← WILLOW FIELDS',y:2.1},{text:'PINE RIDGE →',y:2.9}]},
@@ -467,5 +543,39 @@ export function validateMap(map=MAP){
   if(map.buildings.some(b=>overlaps(plot,footprint(b))))bad(`reserved plot ${plot.id} overlaps a building`);
  }
  for(const [i,a] of map.reserved.entries())for(const b of map.reserved.slice(i+1))if(overlaps(a,b))bad(`reserved plots ${a.id} and ${b.id} overlap`);
+ // Eastbank paving, painted bays and yard props (0.33): paving lies inside a zone and is not a duplicate; a bay row lies on paving; a yard's centre-point items lie inside its bounds and on paving, and the caps hold
+ // (at most YARD_CAPS.perModel of one model in a yard and YARD_CAPS.total in all), so a yard that asks for too much is an error, not a silent clip.
+ {const pave=map.paving||[],pids=new Set();
+  for(const p of pave){if(pids.has(p.id))bad(`duplicate paving ${p.id}`);pids.add(p.id);
+   if(!rectOk(p)){bad(`paving ${p.id} is not a valid rectangle`);continue}
+   const zone=zoneAtPoint((p.x0+p.x1)/2,(p.z0+p.z1)/2,map);if(!zone||!inside(p,zone.bounds))bad(`paving ${p.id} is not inside one zone`);
+   if(p.kind!==undefined&&p.kind!=='island')bad(`paving ${p.id} has an unknown kind`)}
+  const onPaving=(x,z)=>pave.some(p=>p.kind!=='island'&&rectOk(p)&&x>=p.x0&&x<=p.x1&&z>=p.z0&&z<=p.z1);
+  const bayIds=new Set();
+  for(const row of map.bayRows||[]){if(bayIds.has(row.id))bad(`duplicate bay row ${row.id}`);bayIds.add(row.id);
+   const r={x0:row.x0,x1:row.x0+row.count*row.width,z0:row.z0,z1:row.z0+row.depth};
+   if(!(Number.isInteger(row.count)&&row.count>=1&&row.width>0&&row.depth>0)||!['north','south'].includes(row.back)){bad(`bay row ${row.id} is not valid`);continue}
+   if(!pave.some(p=>p.kind!=='island'&&rectOk(p)&&inside(r,p)))bad(`bay row ${row.id} is not on paving`)} // the whole row on one paving rectangle
+  const yardIds=new Set();let total=0;
+  for(const yard of map.yards||[]){if(yardIds.has(yard.id))bad(`duplicate yard ${yard.id}`);yardIds.add(yard.id);
+   if(!rectOk(yard.bounds)||!(yard.cull>0)){bad(`yard ${yard.id} has no valid bounds or cull distance`);continue}
+   if(!pave.some(p=>rectOk(p)&&inside(yard.bounds,p)))bad(`yard ${yard.id} is not on one paving rectangle`);
+   const perModel=new Map();
+   for(const it of yard.items||[]){
+    if(typeof it.prop!=='string'||![it.x,it.z,it.yaw,it.y].every(Number.isFinite)||it.y<0){bad(`yard ${yard.id} has an invalid item`);continue}
+    if(it.x<yard.bounds.x0||it.x>yard.bounds.x1||it.z<yard.bounds.z0||it.z>yard.bounds.z1)bad(`yard ${yard.id}: ${it.prop} at ${it.x}, ${it.z} is outside the yard`);
+    else if(!onPaving(it.x,it.z))bad(`yard ${yard.id}: ${it.prop} at ${it.x}, ${it.z} is not on paving`);
+    if(Math.abs(Math.sin(it.yaw*2))>1e-9)bad(`yard ${yard.id}: ${it.prop} must face north, east, south or west`);
+    perModel.set(it.prop,(perModel.get(it.prop)||0)+1)}
+   for(const [prop,count] of perModel)if(count>YARD_CAPS.perModel)bad(`yard ${yard.id} has ${count} ${prop} (the cap is ${YARD_CAPS.perModel} of one model per yard)`);
+   total+=(yard.items||[]).length}
+  if(total>YARD_CAPS.total)bad(`the yards hold ${total} props (the cap is ${YARD_CAPS.total})`)
+  // drivable vehicles (0.33): a unique id, a known model, a finite home pose standing on paving (their bays) inside the playable rectangle
+  const carIds=new Set();
+  for(const v of map.vehicles||[]){if(typeof v.id!=='string'||!v.id||carIds.has(v.id))bad(`vehicle ${v.id} has a missing or duplicate id`);carIds.add(v.id);
+   if(!DRIVABLE_MODELS.includes(v.model))bad(`vehicle ${v.id} has an unknown model ${v.model}`);
+   if(!v.home||![v.home.x,v.home.z,v.home.yaw].every(Number.isFinite)){bad(`vehicle ${v.id} has no valid home pose`);continue}
+   if(!onPaving(v.home.x,v.home.z))bad(`vehicle ${v.id} does not start on paving`);
+   if(v.home.x<map.playable.x0||v.home.x>map.playable.x1||v.home.z<map.playable.z0||v.home.z>map.playable.z1)bad(`vehicle ${v.id} starts outside the playable rectangle`)}}
  return problems;
 }

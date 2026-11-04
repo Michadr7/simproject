@@ -3,6 +3,7 @@ import * as THREE from '../dist/vendor/three.module.js';
 import {createProp,propInfo} from '../dist/props.js';
 import {SHADOW_CASTERS,trimLoop} from '../dist/rigged-props.js';
 import {MAP} from '../dist/map-definition.js';
+import {PLANK_LENGTH} from '../dist/carry.js';
 import {BELT_SLOTS,freshSawmill,switchSawmill,switchLabel,anchorWorld,createSawmillController} from '../dist/sawmill.js';
 
 // three's Quaternion.angleTo is 2*acos(|dot|), which cannot resolve angles under about 0.02 degrees in float32; the chord form below can.
@@ -80,7 +81,15 @@ step(8);assert.equal(ctl.speed,0);{const hold=bladeAt();step(.5);assert(bladeAt(
  // Planks put down on the ground.
  ctl.setDrops([{id:1,x:104,z:-260,count:4},{id:2,x:106,z:-260,count:2}]);const ground=scene.getObjectByName('ground-planks');assert.equal(ground.count,6);
  ctl.setDrops([]);assert.equal(ground.count,0)}
-// ── Shadows: only the large parts cast ────────────────────────────────────────────────
+// ── One plank size everywhere: 1.2 m long, 0.45 m across; the belt's stacks fit between the rollers and inside the conveyor's length ──
+{const size=g=>{g.computeBoundingBox();return g.boundingBox.getSize(new THREE.Vector3())};
+ for(const [name,g] of [['clip plank',node('Plank_Out_0').geometry],['ground stacks',scene.getObjectByName('ground-planks').geometry],['belt stacks',scene.getObjectByName('belt-planks').geometry],['hands',ctl.plank.geometry]]){const s=size(g);assert(Math.abs(s.x-PLANK_LENGTH)<1e-4,`${name}: ${s.x.toFixed(3)} m long`);assert(Math.abs(s.z-.45)<.01,`${name}: ${s.z.toFixed(3)} m across`)}
+ assert(Math.abs(ctl.plankSize.x-1.2)<1e-4&&Math.abs(ctl.plankSize.z-.45)<.01,'the collider footprint is the drawn footprint');
+ ctl.setBelt(BELT_SLOTS);ctl.update(1/30);for(let i=0;i<400;i++)ctl.update(1/30);scene.updateMatrixWorld(true);
+ const belt=new THREE.Box3().setFromObject(scene.getObjectByName('belt-planks')),rollers=new THREE.Box3();scene.traverse(o=>{if(/^Belt_Roller_\d$/.test(o.name))rollers.union(new THREE.Box3().setFromObject(o))});
+ assert(belt.min.x>=rollers.min.x&&belt.max.x<=rollers.max.x,`the stacks sit across the rollers (${belt.min.x.toFixed(2)}..${belt.max.x.toFixed(2)} inside ${rollers.min.x.toFixed(2)}..${rollers.max.x.toFixed(2)})`);
+ assert(belt.min.z>=rollers.min.z&&belt.max.z<=rollers.max.z,`four stacks fit along the belt (${belt.min.z.toFixed(2)}..${belt.max.z.toFixed(2)} inside ${rollers.min.z.toFixed(2)}..${rollers.max.z.toFixed(2)})`);
+ const clearAt=info.anchors.anchor_belt_clear;assert(Math.abs((belt.min.x+belt.max.x)/2-clearAt[0])<.01,'the stacks are centred on the take-off point')}// ── Shadows: only the large parts cast ────────────────────────────────────────────────
 {const cast=[],plain=[];scene.traverse(o=>{if(o.isMesh)(o.castShadow?cast:plain).push(o.name)});
  assert.deepEqual(cast.sort(),['Blade_1','Blade_2','FeedLog_1','FeedLog_2','Static_Bark','Static_EndGrain','Static_Iron_Dark','Static_Roof_Slate','Static_Stone','Static_Timber','Static_Timber_Dark'],'casters');
  for(const n of plain)assert(/^(Belt_Roller_\d|Plank_Out_\d|Switch_Lamp_On|Switch_Lever|belt-planks|ground-planks|Static_(Beacon_(Green|Red)|Lamp_Off))$/.test(n),n+' is a small part and does not cast');

@@ -17,6 +17,7 @@ const root=resolve(process.argv[2]||'assets-src');
 // file; size: `width` (x extent, m), `length` (z extent, m), `longest` (the longer horizontal extent, m) or `scale` (m per model unit); `turn`: degrees about y (a multiple of 90) so the
 // front faces +z; `cut` ('auto' removes a ground plate); `triangles` (null keeps all); `texture` [px, quality or 'png'] (only for models with one colour texture; models with plain
 // colours are baked to vertex colours); `collide`: a grid cell in metres, a height band (only upright faces inside it count), `walls` (ignore roofs and floors; vehicles and logs fill their rows);
+// `collide.fit`: one exact box around what stands in the band instead of grid cells (small props); `keepOrigin`: keep the file's x/z origin instead of centring the footprint (needs `fit`; 'xyz' keeps y too); `collide.none`: no collider at all; anchor_* empties are read as `anchors` and an emissive material as `glow`;
 // `door`: where the front door is, along the front wall (x, metres from the centre) and its size.
 const S=Number(process.env.SCALE_HOUSE||8); // metres per Kenney model unit (houses and shops): a front door comes out about 2 m high, checked against the avatar
 const DOOR=x=>({x,width:1.4,height:2.05});
@@ -47,6 +48,20 @@ const PROPS={
  ...Object.fromEntries(Object.entries({'f-bed-double':'Bed Double','f-bed-single':'Bed Single','f-sofa':'Lounge Sofa','f-coffee-table':'Table Coffee','f-table':'Table','f-chair':'Chair','f-tv':'Television','f-tv-cabinet':'Cabinet Television','f-bookcase':'Bookcase Open','f-wardrobe':'Bookcase Closed Doors',
   'f-desk':'Desk','f-desk-chair':'Chair Desk','f-cabinet':'Kitchen Cabinet','f-sink':'Kitchen Sink','f-stove':'Kitchen Stove','f-fridge':'Kitchen Fridge Large','f-toilet':'Toilet','f-bath':'Bathtub','f-bath-sink':'Bathroom Sink','f-lamp':'Lamp Round Floor','f-rug':'Rug Rectangle','f-plant':'Potted Plant','f-stairs':'Stairs','f-side-table':'Side Table'})
   .map(([id,file])=>[id,{file:`kenney-furniture/${file}.glb`,scale:2,cut:null,triangles:null,collide:id==='f-rug'?{cell:.25,band:[9,10],walls:false,despeckle:false}:{cell:.25,band:[.1,1.4],walls:false,despeckle:false}}])),
+ // Pallets, crates and zone props (the project owner's own Blender models, assets-src/assets/): already in metres (scale 1), origin on the ground at the base centre, flat material colours (baked to vertex colours), kept at their true size.
+ // Solid footprints on a 10 cm grid so the small pieces get one tight box; the signs collide on their post only (the board is above head height); the dock plate is a 6 cm walk-over plate with no collider.
+ ...Object.fromEntries(Object.entries({pallet:'pallet','box-small':'box-small','box-medium':'box-medium','crate-large':'crate-large','pallet-small-boxes':'pallet-small-boxes','pallet-medium-boxes':'pallet-medium-boxes','pallet-crate':'pallet-crate','zone-bollard':'zone-bollard','zone-sign-unload':'zone-sign-unload','zone-sign-pickup':'zone-sign-pickup','dock-plate':'dock-plate'})
+  .map(([id,file])=>['prop.'+id,{file:`assets/${file}.glb`,scale:1,cut:null,triangles:null,keepOrigin:id==='dock-plate',collide:/^zone-sign/.test(id)?{cell:.1,band:[.05,1.5],walls:false,despeckle:false,fit:true}:id==='dock-plate'?{cell:.1,band:[.3,2],walls:false,despeckle:false,fit:true}:{cell:.1,band:[.02,2.4],walls:false,despeckle:false,fit:true}}])),
+ // Gas-station props (own Blender models): true size, the FILE ORIGIN KEPT (keepOrigin) so the anchor_* empties stay where the model puts them. The pumps and the island are one exact box each; the nozzles (held items) and the canopy (a roof on four columns: the map adds the column boxes) have none.
+ // The nozzle keeps its y too ('xyz': the origin is the grip centre, not the ground). The canopy's light panels are an emissive material: written as record.glow, drawn as a second material group.
+ ...Object.fromEntries(['fuel-pump','fuel-pump-diesel','fuel-nozzle','fuel-nozzle-diesel','pump-island','forecourt-canopy'].map(id=>['prop.'+id,{file:`assets/${id}.glb`,scale:1,cut:null,triangles:null,keepOrigin:/nozzle/.test(id)?'xyz':true,
+  collide:{cell:.1,band:[.02,2.4],walls:false,despeckle:false,fit:true,...(/nozzle|canopy/.test(id)?{none:true}:{})}}])),
+ // Kenney City Kit (Industrial, CC0) for Eastbank Works, 8 m per model unit like the other Kenney kits. None has an interior or a loading door (one small man-door each), so they are solid blocks (walls:false fills the rows).
+ // The containers and the tank are textured with the kit's one palette like the buildings (128 px nearest-neighbour PNG); a container comes out 3.0 x 6.6 x 2.8 m.
+ ...Object.fromEntries(Object.entries({'industrial-q':'building-q','industrial-t':'building-t','industrial-s':'building-s','industrial-p':'building-p','container-a':'shipping-container-a','container-b':'shipping-container-b','container-c':'shipping-container-c','tank-small':'detail-tank'})
+  .map(([id,file])=>[id,{file:`kenney_city-kit-industrial_2.0/Models/GLB format/${file}.glb`,scale:S,cut:null,triangles:null,texture:[128,'png'],collide:{cell:.5,band:[.5,2.1],walls:false,despeckle:false},
+   ...(/^industrial-/.test(id)?{turn:180}:{}), // the kit puts every building's big doors (and the warehouse's loading door) on the -z side: turned so they face +z, the front, like every other building
+   ...(id==='industrial-q'?{door:{x:1.2,width:3.7,height:2.15}}:{})}])), // the warehouse's loading door, a ground-level garage opening 3.7 m wide and 2.15 m high, centred 1.2 m right of the building's centre seen from the front (read off a metre-grid elevation of the model; the 2.7 m recess 6.8 m to the left is the covered man-door, not a dock)
  farmyard:{skip:true,file:'LowPOlyFarm_buildings.glb',width:40,cut:'auto',triangles:13000,texture:[1024,78],collide:{cell:1,band:[2,99],walls:false,despeckle:true}} // not used: it looked too rough in the game
 };
 // Rigged models (nodes, skins and animations kept; static meshes merged by material) are converted by scripts/rigged-glb.mjs into dist/rigged-assets.js, and loaded with GLTFLoader.
@@ -76,11 +91,15 @@ function readGltf(path){
    const tp=P.slice(),tn=N?N.slice():null;for(let k=0;k<P.length;k+=3){const x=P[k],y=P[k+1],z=P[k+2];tp[k]=m[0]*x+m[4]*y+m[8]*z+m[12];tp[k+1]=m[1]*x+m[5]*y+m[9]*z+m[13];tp[k+2]=m[2]*x+m[6]*y+m[10]*z+m[14];
     if(tn){const a=N[k],b=N[k+1],c=N[k+2];tn[k]=m[0]*a+m[4]*b+m[8]*c;tn[k+1]=m[1]*a+m[5]*b+m[9]*c;tn[k+2]=m[2]*a+m[6]*b+m[10]*c}}
    const ti=mat.baseColorTexture?json.textures[mat.baseColorTexture.index].source:null;
-   parts.push({pos:tp,nor:tn,uv:U,idx,color:(mat.baseColorFactor||[1,1,1,1]).slice(0,3),image:ti,node:n.name||''})}
+   const gm=json.materials?.[p.material]||{},strength=gm.extensions?.KHR_materials_emissive_strength?.emissiveStrength??1,glows=gm.emissiveFactor&&gm.emissiveFactor.some(v=>v>0); // an emissive material (a lit panel): kept apart so the game can draw it glowing
+   parts.push({pos:tp,nor:tn,uv:U,idx,color:(mat.baseColorFactor||[1,1,1,1]).slice(0,3),image:ti,node:n.name||'',emissive:glows?{color:gm.emissiveFactor.slice(0,3),strength}:null})}
+  if(/^anchor_/.test(n.name||'')){const name=n.name.replace(/\.\d{3}$/,''); // Blender adds ".002" to a duplicated name (the island's petrol pump came out as anchor_use_py_0.002): dropped
+   if(anchors[name])throw new Error('two anchors named '+name);anchors[name]=[m[12],m[13],m[14]]} // anchor empties (as in the sawmill GLB): their world position, converted with the prop below
   for(const c of n.children||[])walk(c,m)};
+ const anchors={};
  for(const r of json.scenes[json.scene||0].nodes)walk(r,[1,0,0,0,0,1,0,0,0,0,1,0,0,0,0,1]);
  const imageOf=i=>{const im=json.images[i];if(im.uri)return readFileSync(join(dirname(path),decodeURIComponent(im.uri)));const v=json.bufferViews[im.bufferView];return Buffer.from(bin.subarray(v.byteOffset||0,(v.byteOffset||0)+v.byteLength))};
- return {parts,imageOf};
+ return {parts,imageOf,anchors};
 }
 let fbxLoader=null;
 async function readFbx(path){
@@ -129,7 +148,7 @@ for(const [id,spec] of Object.entries(PROPS)){
  if(textured&&model.parts.some(p=>p.image===null))throw new Error(id+' mixes textured and plain materials');
  let pos=[],nor=[],uv=[],col=[],idx=[],base=0;const group=[]; // group: 1 for a vertex of a wheel (a part whose name says wheel, tyre or tire), 0 otherwise
  for(const p of model.parts){
-  const count=p.pos.length/3,isWheel=spec.wheels&&/wheel|tyre|tire/i.test(p.node||'')?1:0;for(let k=0;k<count;k++)group.push(isWheel);for(let k=0;k<p.pos.length;k++)pos.push(p.pos[k]);
+  const count=p.pos.length/3,isWheel=p.emissive?2:spec.wheels&&/wheel|tyre|tire/i.test(p.node||'')?1:0;for(let k=0;k<count;k++)group.push(isWheel); /* group 2: a vertex of an emissive (glowing) part */for(let k=0;k<p.pos.length;k++)pos.push(p.pos[k]);
   if(p.nor)for(let k=0;k<p.nor.length;k++)nor.push(p.nor[k]);else for(let k=0;k<p.pos.length;k++)nor.push(0);
   if(textured)for(let k=0;k<count*2;k++)uv.push(p.uv[k]);else{const c=p.color.map(sRGB8);for(let k=0;k<count;k++)col.push(c[0],c[1],c[2])}
   for(const i of p.idx)idx.push(i+base);base+=count}
@@ -164,25 +183,31 @@ for(const [id,spec] of Object.entries(PROPS)){
   const wheelWeights=textured?weights:[1.5,1.5,1.5,.02,.02,.02]; // wheels are round and small: their shading matters far less than their shape and colour
   const simplify=(indices,targetTris,prune=true,w=weights,errors=[.01,.02,.04,.08,.15])=>{const target=Math.max(3,Math.round(targetTris)*3);let result=indices;
    for(const error of errors){const [next]=MeshoptSimplifier.simplifyWithAttributes(indices,pos,3,attrs,width,w,null,target,error,prune?['Prune']:[]);result=next;if(next.length<=target*1.1)break}return result};
-  if(spec.wheels&&group.some(g=>g)){const body=[],wheel=[];for(let t=0;t<idx.length;t+=3)(group[idx[t]]?wheel:body).push(idx[t],idx[t+1],idx[t+2]);
+  if(spec.wheels&&group.some(g=>g===1)){const body=[],wheel=[];for(let t=0;t<idx.length;t+=3)(group[idx[t]]===1?wheel:body).push(idx[t],idx[t+1],idx[t+2]);
    const wheelTarget=Math.round(wheel.length/3*spec.wheels);if(process.env.DEBUG_WHEELS)console.log(id,'body',body.length/3,'wheel',wheel.length/3,'targets',spec.triangles-wheelTarget,wheelTarget);idx=Uint32Array.from([...simplify(Uint32Array.from(body),spec.triangles-wheelTarget),...simplify(Uint32Array.from(wheel),wheelTarget,false,wheelWeights,[.02,.05,.1,.2,.4])])}
   else idx=simplify(idx,spec.triangles)}
  // 6. compact, centre, put the ground at y = 0 and scale
+ // emissive triangles (a lit panel) go last, so the game can draw them as a second material group: record.glow = {from, count, color, strength}
+ let glow=null;{const emit=[...model.parts.filter(p=>p.emissive)];
+  if(emit.length){if(emit.some(p=>p.emissive.strength!==emit[0].emissive.strength||p.emissive.color.join()!==emit[0].emissive.color.join()))throw new Error(id+' has several emissive materials');
+   const plain=[],lit=[];for(let t=0;t<idx.length;t+=3)(group[idx[t]]===2?lit:plain).push(idx[t],idx[t+1],idx[t+2]);
+   glow={from:plain.length,count:lit.length,color:emit[0].emissive.color.map(sRGB8),strength:emit[0].emissive.strength};idx=Uint32Array.from([...plain,...lit])}}
  const used=new Map(),P=[],N=[],U=[],C=[],I=new Uint32Array(idx.length);let count=0;
  for(let i=0;i<idx.length;i++){const o=idx[i];if(!used.has(o)){used.set(o,count++);P.push(pos[o*3],pos[o*3+1],pos[o*3+2]);N.push(nor[o*3],nor[o*3+1],nor[o*3+2]);if(textured)U.push(uv[o*2],uv[o*2+1]);else C.push(col[o*3],col[o*3+1],col[o*3+2])}I[i]=used.get(o)}
  const lo=[1e9,1e9,1e9],hi=[-1e9,-1e9,-1e9];for(let i=0;i<P.length;i+=3)for(let c=0;c<3;c++){lo[c]=Math.min(lo[c],P[i+c]);hi[c]=Math.max(hi[c],P[i+c])}
  let k;if(spec.scale)k=spec.scale;else if(spec.width)k=spec.width/(hi[0]-lo[0]);else if(spec.length)k=spec.length/(hi[2]-lo[2]);else k=spec.longest/Math.max(hi[0]-lo[0],hi[2]-lo[2]);
- const cx=(lo[0]+hi[0])/2,cz=(lo[2]+hi[2])/2,baseY=spec._ground??lo[1];
+ if(spec.keepOrigin&&!spec.collide.fit)throw new Error(id+': keepOrigin needs collide.fit (the grid boxes assume a centred prop)');
+ const cx=spec.keepOrigin?0:(lo[0]+hi[0])/2,cz=spec.keepOrigin?0:(lo[2]+hi[2])/2,baseY=spec.keepOrigin==='xyz'?0:spec._ground??lo[1]; // keepOrigin: x and z stay where the file put its origin (the footprint is then off centre); 'xyz' keeps y too (a held nozzle: its origin is the grip, not the ground)
  for(let i=0;i<P.length;i+=3){P[i]=(P[i]-cx)*k;P[i+1]=(P[i+1]-baseY)*k;P[i+2]=(P[i+2]-cz)*k}
  const W=(hi[0]-lo[0])*k,D=(hi[2]-lo[2])*k;let sy=0;for(let i=1;i<P.length;i+=3)sy=Math.max(sy,P[i]);
  // 7. collision boxes: rasterise the triangles tall enough to be walls onto a grid, then cover the occupied cells with as few rectangles as possible
  const {cell,band,walls,despeckle}=spec.collide,gridN=Math.ceil(D/cell)+2,gridM=Math.ceil(W/cell)+2,grid=new Uint8Array(gridN*gridM);
  const gx=x=>Math.floor((x+W/2)/cell),gz=z=>Math.floor((z+D/2)/cell);
  const faceUp=(a,b,c)=>{const ux=P[b]-P[a],uy=P[b+1]-P[a+1],uz=P[b+2]-P[a+2],vx=P[c]-P[a],vy=P[c+1]-P[a+1],vz=P[c+2]-P[a+2],nx=uy*vz-uz*vy,ny=uz*vx-ux*vz,nz=ux*vy-uy*vx;const l=Math.hypot(nx,ny,nz)||1;return {up:ny/l,area:l/2}};
- const floorBins=new Map(),floorTris=[];
+ const floorBins=new Map(),floorTris=[],fit={x0:1e9,x1:-1e9,z0:1e9,z1:-1e9}; // fit: the extent of every triangle in the band, for `collide.fit` (one exact box instead of grid cells)
  for(let t=0;t<I.length;t+=3){const a=I[t]*3,b=I[t+1]*3,c=I[t+2]*3,top=Math.max(P[a+1],P[b+1],P[c+1]),bottom=Math.min(P[a+1],P[b+1],P[c+1]),face=faceUp(a,b,c);
   if(Math.abs(face.up)>.9&&top<1.5&&bottom>-.2){const key=Math.round(top/.03);floorBins.set(key,(floorBins.get(key)||0)+face.area);floorTris.push([a,b,c,key])}
-  if(top<band[0]||bottom>band[1])continue;if(walls&&Math.abs(face.up)>.6)continue;
+  if(top<band[0]||bottom>band[1])continue;if(walls&&Math.abs(face.up)>.6)continue;fit.x0=Math.min(fit.x0,P[a],P[b],P[c]);fit.x1=Math.max(fit.x1,P[a],P[b],P[c]);fit.z0=Math.min(fit.z0,P[a+2],P[b+2],P[c+2]);fit.z1=Math.max(fit.z1,P[a+2],P[b+2],P[c+2]);
   const x0=Math.min(P[a],P[b],P[c]),x1=Math.max(P[a],P[b],P[c]),z0=Math.min(P[a+2],P[b+2],P[c+2]),z1=Math.max(P[a+2],P[b+2],P[c+2]);
   for(let ix=gx(x0);ix<=gx(x1);ix++)for(let iz=gz(z0);iz<=gz(z1);iz++)if(ix>=0&&iz>=0&&ix<gridM&&iz<gridN)grid[iz*gridM+ix]=1}
  const solid=(ix,iz)=>ix>=0&&iz>=0&&ix<gridM&&iz<gridN&&grid[iz*gridM+ix];
@@ -195,6 +220,8 @@ for(const [id,spec] of Object.entries(PROPS)){
   let h=1;grow:while(iz+h<gridN){for(let d=0;d<w;d++)if(!clean[(iz+h)*gridM+ix+d]||taken[(iz+h)*gridM+ix+d])break grow;h++}
   for(let dz=0;dz<h;dz++)for(let dx=0;dx<w;dx++)taken[(iz+dz)*gridM+ix+dx]=1;
   boxes.push({x:+(((ix+w/2)*cell)-W/2).toFixed(2),z:+(((iz+h/2)*cell)-D/2).toFixed(2),hx:+(w*cell/2).toFixed(2),hz:+(h*cell/2).toFixed(2)})}
+ if(spec.collide.none)boxes.length=0; // held items and a roof on columns (the map adds the column boxes itself)
+ else if(spec.collide.fit&&fit.x1>fit.x0)boxes.splice(0,boxes.length,{x:+((fit.x0+fit.x1)/2).toFixed(2),z:+((fit.z0+fit.z1)/2).toFixed(2),hx:+((fit.x1-fit.x0)/2).toFixed(2),hz:+((fit.z1-fit.z0)/2).toFixed(2)}); // `fit`: a single exact box around what stands in the band (pallets, boxes, crates, posts)
  // the floor: the most common top height among large level faces, and the rectangle those faces cover (null if there is no real deck)
  let floor=null;{const best=[...floorBins.entries()].sort((p,q)=>q[1]-p[1])[0];
   if(best&&best[1]>W*W*.04){const y=best[0]*.03;let fx0=1e9,fx1=-1e9,fz0=1e9,fz1=-1e9;for(const [a,b,c,key] of floorTris)if(Math.abs(key-best[0])<=1)for(const v of [a,b,c]){fx0=Math.min(fx0,P[v]);fx1=Math.max(fx1,P[v]);fz0=Math.min(fz0,P[v+2]);fz1=Math.max(fz1,P[v+2])}
@@ -213,7 +240,8 @@ for(const [id,spec] of Object.entries(PROPS)){
  const norQ=Int8Array.from(N.map(v=>Math.max(-127,Math.min(127,Math.round(v*127))))),posA=Float32Array.from(P),idxA=Uint16Array.from(I);
  let wx0=1e9,wx1=-1e9,wz0=1e9,wz1=-1e9;for(let i=0;i<P.length;i+=3){wx0=Math.min(wx0,P[i]);wx1=Math.max(wx1,P[i]);wz0=Math.min(wz0,P[i+2]);wz1=Math.max(wz1,P[i+2])}
  const record={source:spec.file,width:+(wx1-wx0).toFixed(2),depth:+(wz1-wz0).toFixed(2),height:+sy.toFixed(2),triangles:I.length/3,footprint:{x0:+wx0.toFixed(2),x1:+wx1.toFixed(2),z0:+wz0.toFixed(2),z1:+wz1.toFixed(2)},colliders:boxes,floor,
-  door:spec.door?{x:spec.door.x,z:+wz1.toFixed(2),width:spec.door.width,height:spec.door.height}:null,pos:b64(posA),nor:b64(norQ),norQ:true,idx:b64(idxA),vertices:count};
+  door:spec.door?{x:spec.door.x,z:+wz1.toFixed(2),width:spec.door.width,height:spec.door.height}:null,...(glow?{glow}:{}),
+  ...(Object.keys(model.anchors||{}).length?{anchors:Object.fromEntries(Object.entries(model.anchors).map(([name,[x,y,z]])=>[name,[+((x-cx)*k).toFixed(4),+((y-baseY)*k).toFixed(4),+((z-cz)*k).toFixed(4)]]))}:{}),pos:b64(posA),nor:b64(norQ),norQ:true,idx:b64(idxA),vertices:count};
  if(textured){record.texture=texture;record.uv=b64(Float32Array.from(U))}else record.col=b64(Uint8Array.from(C));
  out.props[id]=record;
  report.push(`${id.padEnd(11)} ${before} -> ${I.length/3} tris, ${(wx1-wx0).toFixed(1)} x ${(wz1-wz0).toFixed(1)} m, ${sy.toFixed(1)} m tall, ${boxes.length} boxes${floor?', floor '+floor.y+' m':''}, ${textured?'texture':'colours'}, ${count} vertices`);

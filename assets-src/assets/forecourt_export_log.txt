@@ -1,0 +1,7 @@
+Output folder: C:\Users\Michael\Documents
+OK      fuel-pump.glb (18116 bytes)
+OK      fuel-pump-diesel.glb (17660 bytes)
+OK      fuel-nozzle.glb (7028 bytes)
+OK      fuel-nozzle-diesel.glb (7044 bytes)
+OK      pump-island.glb (43216 bytes)
+OK      forecourt-canopy.glb (30220 bytes)

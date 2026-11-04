@@ -5,6 +5,7 @@ import {terrain,SURFACE,roadCenterline} from './terrain.js';
 import {lampSpots} from './streetfurniture.js';
 import {markingBars,townSpots,FOUNTAIN,BUS_STOP} from './town.js';
 import {propInfo,createProp} from './props.js';
+import {createEastbank} from './eastbank.js';
 
 // ─── Layout (pure data, safe to import from rules and tests) ──────────────────
 // The city keeps its original footprint. Oak Farms lies west of it, Alder Woods east.
@@ -371,6 +372,8 @@ export function createWorld(scene,{label,cullRadius}={}){
   spots.forEach((s,i)=>{poles.setMatrixAt(i,m.compose(at.set(s.x,2.3,s.z),q.identity(),one));q.setFromAxisAngle(new THREE.Vector3(0,1,0),Math.atan2(s.dx,s.dz)+Math.PI/2);heads.setMatrixAt(i,m.compose(at.set(s.x+s.dx*.35,4.6,s.z+s.dz*.35),q,one));colliders.circle(s.x,s.z,.22)});
   poles.name='street-lamp-poles';heads.name='street-lamp-heads';poles.castShadow=true;group.add(poles,heads);
 }
+ // Eastbank Works (0.33): the merged paving, painted bays and the per-yard prop chunks (eastbank.js); the buildings are landmarks above.
+ const eastbank=createEastbank({group,fade,groundLayer,asphalt,colliders});
  // ── The town (0.31): raised pavements and the town square, the parking lot, painted markings, street furniture, the fountain and the bus stop ──────────────────────────────
  {
   const T=terrain(),m4=new THREE.Matrix4(),quat=new THREE.Quaternion(),yAxis=new THREE.Vector3(0,1,0),at=new THREE.Vector3(),one=new THREE.Vector3(1,1,1),flat=new THREE.Vector3();
@@ -460,7 +463,7 @@ export function createWorld(scene,{label,cullRadius}={}){
  logMesh.count=0;logMesh.castShadow=logMesh.receiveShadow=true;logMesh.frustumCulled=false;logMesh.name='ground-logs';group.add(logMesh);
  let clock=0;
  return {
-  group,layout,trees,fade,addBroadleaves,
+  group,layout,trees,fade,addBroadleaves,eastbank,
   blocked:(x,z)=>colliders.blocked(x,z),
   // The height of a deck or platform under the point (a building's raised floor), or null on open ground.
   floorAt(x,z){for(const l of landmarks){if(!l.floor)continue;const cos=Math.round(Math.cos(l.yaw)),sin=Math.round(Math.sin(l.yaw)),dx=x-l.x,dz=z-l.z,lx=dx*cos-dz*sin,lz=dx*sin+dz*cos;for(const f of [].concat(l.floor))if(lx>=f.x0&&lx<=f.x1&&lz>=f.z0&&lz<=f.z1)return f.y}return null},
@@ -509,6 +512,7 @@ export function createWorld(scene,{label,cullRadius}={}){
    fade.update(camera,fadeTarget);refreshView(camera,fadeTarget);
    if(fountainParts){townTime+=dt;fountainParts.jet.scale.y=1+.14*Math.sin(townTime*3.1);fountainParts.jet.position.y=3.15+.08*Math.sin(townTime*3.1);fountainParts.water.material.opacity=.86+.04*Math.sin(townTime*1.7)}
    for(const l of landmarks)l.mesh.visible=Math.hypot(fadeTarget.x-l.x,fadeTarget.z-l.z)<viewDistance+l.radius; // far buildings are not drawn
+   eastbank.update(fadeTarget.x,fadeTarget.z); // far yards are not drawn
    clock+=dt;if(ring.visible)ring.scale.setScalar(1+.07*Math.sin(clock*6));
    let changed=false;
    for(const t of trees.values()){

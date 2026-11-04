@@ -56,6 +56,8 @@ export function buildTerrain(map=MAP,{cell=.5}={}){
    paint=c=>{surface[c]=kind;if(edge.walkable){walk[c]=1;if(named)zone[c]=named}};
   if(edge.path)ribbon(roadCenterline(edge,map),edge.width/2,paint);else rect(roadRect(edge,map),paint);
  }
+ // 2a. Eastbank Works paving (yards, aprons, the forecourt, the depot, driveway cuts): asphalt you can walk and drive on
+ for(const p of map.paving||[])rect(p,c=>{surface[c]=SURFACE.DRIVEWAY;walk[c]=1})
  // 2b. parking lots: asphalt you can walk and drive on
  for(const lot of map.lots||[])rect(lot,c=>{surface[c]=SURFACE.ROAD;walk[c]=1});
  // 3. fields and 4. pavements

@@ -9,13 +9,13 @@ globalThis.document={createElement:()=>({width:0,height:0,getContext:()=>new Pro
 const world=createWorld(new THREE.Scene(),{cullRadius:Infinity}),T=terrain();
 
 // ── The registry leaves nothing out ───────────────────────────────────────────────────────────
-const HOUSES=['house-r1','house-r2','house-r3','house-r4','house-r5','house-r6','house-r7','house-r8'],ALDER=['alder-store','alder-offices','alder-tower','alder-bakery','alder-barber','alder-pharmacy','alder-bank','police-station','alder-books','alder-cinema'];
-assert.deepEqual(PROPERTIES.map(p=>p.id),['market','cafe','studio',...HOUSES,...ALDER,'farm-house','farm-barn','farm-small-barn','farm-open-barn','farm-silo','farm-coop','farm-windmill','sawmill']);
+const HOUSES=['house-r1','house-r2','house-r3','house-r4','house-r5','house-r6','house-r7','house-r8'],EASTBANK=['eastbank-warehouse','eastbank-workshop','eastbank-supply','eastbank-gas-kiosk','eastbank-lumber-shed'],ALDER=['alder-store','alder-offices','alder-tower','alder-bakery','alder-barber','alder-pharmacy','alder-bank','police-station','alder-books','alder-cinema'];
+assert.deepEqual(PROPERTIES.map(p=>p.id),['market','cafe','studio',...HOUSES,...ALDER,'farm-house','farm-barn','farm-small-barn','farm-open-barn','farm-silo','farm-coop','farm-windmill','sawmill',...EASTBANK]);
 for(const l of MAP.landmarks.filter(l=>l.prop&&!l.decor))assert(PROPERTIES.some(p=>p.landmark===l.id),`${l.id} has a door rule or an explicit "not enterable"`);
 for(const l of MAP.landmarks.filter(l=>l.decor))assert(!PROPERTIES.some(p=>p.landmark===l.id),`${l.id} is yard decor (a vehicle or a log), not a building`);
 for(const kind of Object.keys(MAP.shops))assert.equal(propertyById(kind)?.type,'shop',`${kind} is registered`);
 assert.equal(propertyById('studio').access,'tenant');
-for(const id of [...ALDER,'farm-barn','farm-small-barn','farm-open-barn','farm-silo','farm-coop','farm-windmill','sawmill']){const p=propertyById(id);assert.equal(p.enterable,false,id);assert(p.reason.length>20,`${id} says why it cannot be entered`)}
+for(const id of [...ALDER,...EASTBANK,'farm-barn','farm-small-barn','farm-open-barn','farm-silo','farm-coop','farm-windmill','sawmill']){const p=propertyById(id);assert.equal(p.enterable,false,id);assert(p.reason.length>20,`${id} says why it cannot be entered`)}
 assert.deepEqual(validateMap(),[]);
 
 // ── Doors: where they are, and that you can walk up to them ──────────────────────────────────────────
