@@ -8,6 +8,7 @@ import {createRequire} from 'node:module';
 import {readFileSync,writeFileSync,existsSync} from 'node:fs';
 import {join,resolve,dirname} from 'node:path';
 import {pathToFileURL} from 'node:url';
+import {splitWheels} from './split-wheels.mjs';
 const toolDir=resolve(process.env.TOOL_DIR||'.'),toolRequire=createRequire(join(toolDir,'noop.js'));
 let MeshoptSimplifier=null,sharp=null; // only the single-mesh props need these; the rigged models (RIGGED below) do not, so a missing TOOL_DIR is only an error when a prop is built
 try{({MeshoptSimplifier}=toolRequire('meshoptimizer'));sharp=toolRequire('sharp');await MeshoptSimplifier.ready}catch{MeshoptSimplifier=sharp=null}
@@ -45,6 +46,8 @@ const PROPS={
  pickup:{file:'vehicles/Pickup.fbx',longest:5.3,turn:180,cut:null,triangles:2800,wheels:.35,paint:{body:'#9c2f2a',tyre:'#151515',rim:'#b9bdc2',light:'#f3e8b8'},collide:SOLID}, // the file has no colours: a farm-red pickup with black tyres and silver rims
  // The pickup's original FBX is not in the repository: its data in props-assets.js was turned 180 degrees in place (its nose was at -z; the game's vehicles face +z), so rebuilding it from the FBX needs the turn above.
  // The Worktruck (0.33): Sketchfab "Pickup Truck" by 00amza (CC-BY-4.0), one textured mesh plus a plain-colour glass part: uvForAll draws the glass from the texture too; splitWheels takes the four wheel islands out of the body as separate meshes centred on their axles, so the game can spin and steer them.
+ // The off-road pickup (0.33): Sketchfab "Low poly Pickup truck v3" by Aditya Graphical (CC-BY-4.0): a textured body plus a lights part with its own texture (painted as a patch); the four tyres and their hub caps split out as wheels.
+ offroad:{file:'Veichles/low_poly_pickup_truck_v3/scene.gltf',longest:5.6,turn:180,cut:null,triangles:null,texture:[512,82],patchPlain:true,splitWheels:true,collide:{cell:.5,band:[.3,1.9],walls:false,despeckle:false,fit:true}},
  worktruck:{file:'Veichles/green_pickup/scene.gltf',longest:6,cut:null,triangles:null,texture:[512,82],uvForAll:true,splitWheels:true,collide:{cell:.5,band:[.3,1.9],walls:false,despeckle:false,fit:true}},
  // Interior furniture (Kenney Furniture Kit, CC0): 2 m per model unit, plain colours baked to vertex colours, solid boxes on a 25 cm grid (a rug has none).
  ...Object.fromEntries(Object.entries({'f-bed-double':'Bed Double','f-bed-single':'Bed Single','f-sofa':'Lounge Sofa','f-coffee-table':'Table Coffee','f-table':'Table','f-chair':'Chair','f-tv':'Television','f-tv-cabinet':'Cabinet Television','f-bookcase':'Bookcase Open','f-wardrobe':'Bookcase Closed Doors',
@@ -144,7 +147,11 @@ for(const [id,spec] of Object.entries(PROPS)){
  if(spec.skip||(only&&!only.has(id)))continue;
  const path=join(root,spec.file),model=path.toLowerCase().endsWith('.fbx')?await readFbx(path):readGltf(path);
  if(spec.paint)model.parts=paintParts(model.parts,spec.paint);
- if(spec.uvForAll){const img=model.parts.find(p=>p.image!==null)?.image;for(const p of model.parts)if(p.image===null&&p.uv)p.image=img} // a plain-colour part (glass) is drawn from the same texture, at its own texture coordinates
+ if(spec.patchPlain){ // parts that use another texture or a plain colour (lights, glass) are painted as small solid patches in the corner of the one texture; their uvs point at the patch
+  const main=model.parts.find(p=>p.image!==null)?.image,S=spec.texture[0];spec._patches=[];
+  for(const p of model.parts){if(p.image===main)continue;let rgb;
+   if(p.image===null)rgb=p.color.map(sRGB8);else{const {data}=await sharp(model.imageOf(p.image)).resize(1,1).removeAlpha().raw().toBuffer({resolveWithObject:true});rgb=[...data]}
+   const k=spec._patches.length;spec._patches.push({x0:S-4*(k+1),rgb});p.patch={uv:[(S-4*k-2)/S,(S-2)/S]};p.image=main;p.uv=null}} if(spec.uvForAll){const img=model.parts.find(p=>p.image!==null)?.image;for(const p of model.parts)if(p.image===null&&p.uv)p.image=img} // a plain-colour part (glass) is drawn from the same texture, at its own texture coordinates
  // 1. merge every mesh into one: world-space positions, normals, and either uvs (one colour texture) or colours (plain materials)
  const textured=model.parts.some(p=>p.image!==null);
  if(textured&&new Set(model.parts.map(p=>p.image)).size>1)throw new Error(id+' has several textures');
@@ -153,7 +160,7 @@ for(const [id,spec] of Object.entries(PROPS)){
  for(const p of model.parts){
   const count=p.pos.length/3,isWheel=p.emissive?2:spec.wheels&&/wheel|tyre|tire/i.test(p.node||'')?1:0;for(let k=0;k<count;k++)group.push(isWheel); /* group 2: a vertex of an emissive (glowing) part */for(let k=0;k<p.pos.length;k++)pos.push(p.pos[k]);
   if(p.nor)for(let k=0;k<p.nor.length;k++)nor.push(p.nor[k]);else for(let k=0;k<p.pos.length;k++)nor.push(0);
-  if(textured)for(let k=0;k<count*2;k++)uv.push(p.uv[k]);else{const c=p.color.map(sRGB8);for(let k=0;k<count;k++)col.push(c[0],c[1],c[2])}
+  if(textured)for(let k=0;k<count*2;k++)uv.push(p.patch?p.patch.uv[k%2]:p.uv[k]);else{const c=p.color.map(sRGB8);for(let k=0;k<count;k++)col.push(c[0],c[1],c[2])}
   for(const i of p.idx)idx.push(i+base);base+=count}
  pos=Float32Array.from(pos);nor=Float32Array.from(nor);idx=Uint32Array.from(idx);
  if(textured)uv=Float32Array.from(uv);else col=Uint8Array.from(col);
@@ -237,7 +244,10 @@ for(const [id,spec] of Object.entries(PROPS)){
    for(let i=0;i<data.length;i+=4){let best=null,bw=0;for(const [from,to,tol] of spec.recolour){const d=Math.hypot(data[i]-from[0],data[i+1]-from[1],data[i+2]-from[2]),w=Math.max(0,1-d/tol);if(w>bw){bw=w;best=to}}
     if(best)for(let c=0;c<3;c++)data[i+c]=Math.round(data[i+c]*(1-bw)+best[c]*bw)}
    source=sharp(data,{raw:{width:info.width,height:info.height,channels:4}})}
-  const buf=png?await source.resize(size,size,{fit:'fill',kernel:'nearest'}).png({palette:true}).toBuffer():await source.resize(size,size,{fit:'fill'}).jpeg({quality,mozjpeg:true}).toBuffer();
+  if(spec._patches?.length){ // paint the solid patches (4 x 4 pixels each, bottom-right corner) after shrinking
+    const {data}=await source.resize(size,size,{fit:'fill',kernel:png?'nearest':'lanczos3'}).removeAlpha().raw().toBuffer({resolveWithObject:true});
+    for(const pt of spec._patches)for(let y=size-4;y<size;y++)for(let x=pt.x0;x<pt.x0+4;x++)for(let c=0;c<3;c++)data[(y*size+x)*3+c]=pt.rgb[c];
+    source=sharp(data,{raw:{width:size,height:size,channels:3}})} const buf=png?await source.resize(size,size,{fit:'fill',kernel:'nearest'}).png({palette:true}).toBuffer():await source.resize(size,size,{fit:'fill'}).jpeg({quality,mozjpeg:true}).toBuffer();
   texture='data:image/'+(png?'png':'jpeg')+';base64,'+buf.toString('base64')}
  if(count>65535)throw new Error(id+' has too many vertices for 16-bit indices');
  const norQ=Int8Array.from(N.map(v=>Math.max(-127,Math.min(127,Math.round(v*127))))),posA=Float32Array.from(P),idxA=Uint16Array.from(I);
@@ -246,18 +256,8 @@ for(const [id,spec] of Object.entries(PROPS)){
   door:spec.door?{x:spec.door.x,z:+wz1.toFixed(2),width:spec.door.width,height:spec.door.height}:null,...(glow?{glow}:{}),
   ...(Object.keys(model.anchors||{}).length?{anchors:Object.fromEntries(Object.entries(model.anchors).map(([name,[x,y,z]])=>[name,[+((x-cx)*k).toFixed(4),+((y-baseY)*k).toFixed(4),+((z-cz)*k).toFixed(4)]]))}:{}),pos:b64(posA),nor:b64(norQ),norQ:true,idx:b64(idxA),vertices:count};
  if(textured){record.texture=texture;record.uv=b64(Float32Array.from(U))}else record.col=b64(Uint8Array.from(C));
- if(spec.splitWheels){ // the wheel islands (tyre + rim: a round disc, thin along x, standing on the ground) leave the body: each becomes its own small mesh centred on its axle, so the game can spin and steer it
-  const key=v=>`${Math.round(P[v*3]*100)},${Math.round(P[v*3+1]*100)},${Math.round(P[v*3+2]*100)}`,ids=new Map(),par=[],find=a=>{while(par[a]!==a){par[a]=par[par[a]];a=par[a]}return a},idOf=v=>{const k=key(v);if(!ids.has(k)){ids.set(k,par.length);par.push(par.length)}return ids.get(k)};
-  const triId=[];for(let t=0;t<I.length;t+=3){const a=idOf(I[t]),b=idOf(I[t+1]),c=idOf(I[t+2]);par[find(a)]=find(b);par[find(b)]=find(c);triId.push(a)}
-  const isl=new Map();for(let t=0;t<triId.length;t++){const r=find(triId[t]);if(!isl.has(r))isl.set(r,{tris:[],lo:[1e9,1e9,1e9],hi:[-1e9,-1e9,-1e9]});const e=isl.get(r);e.tris.push(t);for(let k=0;k<3;k++)for(let d=0;d<3;d++){const v=P[I[t*3+k]*3+d];e.lo[d]=Math.min(e.lo[d],v);e.hi[d]=Math.max(e.hi[d],v)}}
-  const found=[...isl.values()].filter(e=>{const dx=e.hi[0]-e.lo[0],dy=e.hi[1]-e.lo[1],dz=e.hi[2]-e.lo[2];return e.tris.length>=100&&Math.abs(dy-dz)<=.12*Math.max(dy,dz)&&dx<.6*dy&&dy>.5&&dy<1.4&&e.lo[1]<.08});
-  if(found.length!==4)throw new Error(`${id}: expected four wheels, found ${found.length}`);
-  const zMid=(wz0+wz1)/2,subset=tris=>{const map=new Map(),pp=[],nn=[],cc=[],ii=[];for(const t of tris)for(let k=0;k<3;k++){const o=I[t*3+k];if(!map.has(o)){map.set(o,map.size);pp.push(P[o*3],P[o*3+1],P[o*3+2]);nn.push(N[o*3],N[o*3+1],N[o*3+2]);if(textured)cc.push(U[o*2],U[o*2+1]);else cc.push(C[o*3],C[o*3+1],C[o*3+2])}ii.push(map.get(o))}return {pp,nn,cc,ii,count:map.size}};
-  const pack=s=>({pos:b64(Float32Array.from(s.pp)),nor:b64(Int8Array.from(s.nn.map(v=>Math.max(-127,Math.min(127,Math.round(v*127)))))),idx:b64(Uint16Array.from(s.ii)),norQ:true,vertices:s.count,...(textured?{uv:b64(Float32Array.from(s.cc))}:{col:b64(Uint8Array.from(s.cc))})});
-  const wheelTris=new Set(found.flatMap(e=>e.tris)),body=subset([...Array(I.length/3).keys()].filter(t=>!wheelTris.has(t)));
-  record.wheels=found.map(e=>{const at=[0,1,2].map(d=>+((e.lo[d]+e.hi[d])/2).toFixed(4)),s=subset(e.tris);for(let k=0;k<s.pp.length;k+=3)for(let d=0;d<3;d++)s.pp[k+d]-=at[d];
-   return {at,radius:+((e.hi[1]-e.lo[1])/2).toFixed(3),width:+(e.hi[0]-e.lo[0]).toFixed(3),front:at[2]>zMid,triangles:e.tris.length,...pack(s)}}).sort((a,b)=>b.at[2]-a.at[2]||b.at[0]-a.at[0]);
-  Object.assign(record,pack(body),{bodyTriangles:body.ii.length/3});record.vertices=body.count} out.props[id]=record;
+ if(spec.splitWheels)Object.assign(record,splitWheels(record,{id})); // the wheels become separate meshes (scripts/split-wheels.mjs), centred on their axles
+ out.props[id]=record;
  report.push(`${id.padEnd(11)} ${before} -> ${I.length/3} tris, ${(wx1-wx0).toFixed(1)} x ${(wz1-wz0).toFixed(1)} m, ${sy.toFixed(1)} m tall, ${boxes.length} boxes${floor?', floor '+floor.y+' m':''}, ${textured?'texture':'colours'}, ${count} vertices`);
 }
 if(needTools){
