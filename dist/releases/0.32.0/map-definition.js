@@ -245,9 +245,8 @@ const properties=[
 ];
 // Drivable vehicles (0.33, DESIGN 4.13 D): the two depot vehicles, parked nose to the back wall (north, so yaw pi: a model's front is +z) in the depot's first truck and car bays. Anyone can drive them (no keys yet). `model` is a converted
 // prop and a vehicle class (vehicle.js CLASSES); the id is the save key (`progress.vehicles`). The parked scenery cars and trucks elsewhere are not drivable.
-export const DRIVABLE_MODELS=Object.freeze(['pickup','worktruck','offroad']);
+export const DRIVABLE_MODELS=Object.freeze(['worktruck','offroad']);
 const vehicles=[
- {id:'eastbank-pickup',model:'pickup',name:'Eastbank pickup',home:{x:94.35,z:-15.5,yaw:PI}},
  {id:'eastbank-worktruck',model:'worktruck',name:'Worktruck',home:{x:84.25,z:-13,yaw:PI}},
  {id:'eastbank-offroad',model:'offroad',name:'Pevrolet Off Road Pickup',home:{x:88.75,z:-13,yaw:PI}}
 ];
@@ -303,10 +302,10 @@ export const MAP=deepFreeze({
   // The timber yard: the sawmill, a hut for lumber and logs (the parked flatbed truck was removed in 0.33).
   {id:'sawmill',prop:'sawmill-v4',zone:'forest',x:104,z:n(-208),yaw:-Math.PI/2}, // the rigged Blender model (rigged-props.js); its root is the main deck's centre. Turned -90 degrees: its front (switch, player) faces the woods lane to the west, the belt-clearing end faces the yard to the east, the log pile and log feed are on the open north side
   {id:'yard-hut',prop:'hut',zone:'forest',x:124,z:-280,yaw:0,decor:true},{id:'yard-log-1',prop:'log',zone:'forest',x:131,z:-278.2,yaw:0,decor:true},{id:'yard-log-2',prop:'log',zone:'forest',x:131,z:-279.8,yaw:0,decor:true},{id:'yard-log-3',prop:'log',zone:'forest',x:131,z:-281.4,yaw:0,decor:true},
-  // Willow Farmstead (Quaternius barns, 1.55 times their size): the barn, the small barn, the open barn, the silo, the coop and the windmill, with a Kenney house as the farmhouse and a pickup.
+  // Willow Farmstead (Quaternius barns, 1.55 times their size): the barn, the small barn, the open barn, the silo, the coop and the windmill, with a Kenney house as the farmhouse.
   {id:'farm-barn',prop:'barn',zone:'farm',x:-66,z:-270,yaw:0},{id:'farm-small-barn',prop:'small-barn',zone:'farm',x:-84,z:-262,yaw:0},{id:'farm-open-barn',prop:'open-barn',zone:'farm',x:-83,z:-246,yaw:0},
   {id:'farm-silo',prop:'silo-house',zone:'farm',x:-48,z:-272,yaw:0},{id:'farm-coop',prop:'coop',zone:'farm',x:-52,z:-256,yaw:0},{id:'farm-windmill',prop:'windmill',zone:'farm',x:-44,z:-282,yaw:0},
-  {id:'farm-house',prop:'house-t',zone:'farm',x:-62,z:-244,yaw:0},{id:'farm-pickup',prop:'pickup',zone:'farm',x:-51,z:-244,yaw:-Math.PI/2,decor:true},
+  {id:'farm-house',prop:'house-t',zone:'farm',x:-62,z:-244,yaw:0},
   // Alder Center: a street wall of Kenney commercial buildings and the Store along both sides of the cross street, each flush with the sidewalk behind it (CC0 / Poly Pizza).
   {id:'alder-store',prop:'store',plot:'C1',zone:'alder',x:-13.5,z:-72.40,yaw:Math.PI},
   {id:'alder-offices',prop:'shop-i',plot:'C2',zone:'alder',x:-2,z:-75.50,yaw:Math.PI},

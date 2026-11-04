@@ -195,7 +195,7 @@ const yards=[
   ...rowOf('prop.box-small',113,26.8,.6,6),...rowOf('prop.box-medium',118,26.8,.8,4),...rowOf('prop.crate-large',136.5,26.5,1.4,2),
   {prop:'prop.pallet',x:140,z:26,yaw:0,y:0},{prop:'prop.pallet',x:140,z:24.9,yaw:0,y:0}]},
  // The gas station: bollards at the ends of the pump island (the pumps and the canopy come with the user's models).
- {id:'gas-station',bounds:{x0:150,x1:161.5,z0:-18,z1:0},cull:80,items:[[152,-9.3],[152,-7.2],[161,-9.3],[161,-7.2]].map(([x,z])=>({prop:'prop.zone-bollard',x,z,yaw:0,y:0}))}
+ {id:'gas-station',bounds:{x0:150,x1:161.5,z0:-18,z1:0},cull:80,items:[...[[152,-9.3],[152,-7.2],[161,-9.3],[161,-7.2]].map(([x,z])=>({prop:'prop.zone-bollard',x,z,yaw:0,y:0})),{prop:'prop.pump-island',x:156.5,z:-8.25,yaw:0,y:0},{prop:'prop.forecourt-canopy',x:155.5,z:-8.25,yaw:0,y:0}]}
 ];
 
 function deepFreeze(value){if(value&&typeof value==='object'&&!Object.isFrozen(value)){Object.freeze(value);for(const key of Object.keys(value))deepFreeze(value[key])}return value}
@@ -245,11 +245,14 @@ const properties=[
 ];
 // Drivable vehicles (0.33, DESIGN 4.13 D): the two depot vehicles, parked nose to the back wall (north, so yaw pi: a model's front is +z) in the depot's first truck and car bays. Anyone can drive them (no keys yet). `model` is a converted
 // prop and a vehicle class (vehicle.js CLASSES); the id is the save key (`progress.vehicles`). The parked scenery cars and trucks elsewhere are not drivable.
-export const DRIVABLE_MODELS=Object.freeze(['pickup','worktruck','offroad']);
+export const DRIVABLE_MODELS=Object.freeze(['worktruck','offroad']);
+// The forecourt canopy's four steel columns, from the canopy's origin (the 0.8 m column boxes the map adds, see eastbank.js): x and z offsets in metres.
+export const CANOPY_COLUMNS=Object.freeze([[5,3.2],[-5,3.2],[5,-3.2],[-5,-3.2]]);
+// The Eastbank gas station (0.35, fuel.js): one pump island (two pumps: N=0 petrol at its x -0.8 side, N=1 diesel at +0.8, the island's own anchors read from the model). Its nozzles hang on the +Y (-z) face.
+export const FUEL_STATIONS=Object.freeze([{id:'eastbank-gas',island:{prop:'prop.pump-island',x:156.5,z:-8.25,yaw:0},pumps:[{n:0,fuel:'petrol'},{n:1,fuel:'diesel'}]}]);
 const vehicles=[
- {id:'eastbank-pickup',model:'pickup',name:'Eastbank pickup',home:{x:94.35,z:-15.5,yaw:PI}},
- {id:'eastbank-worktruck',model:'worktruck',name:'Worktruck',home:{x:84.25,z:-13,yaw:PI}},
- {id:'eastbank-offroad',model:'offroad',name:'Pevrolet Off Road Pickup',home:{x:88.75,z:-13,yaw:PI}}
+ {id:'eastbank-worktruck',model:'worktruck',name:'Worktruck',home:{x:84.25,z:-13,yaw:PI},fuel:{type:'diesel',tankMl:80000,port:{x:-1.2,z:-2.2}}},
+ {id:'eastbank-offroad',model:'offroad',name:'Pevrolet Off Road Pickup',home:{x:88.75,z:-13,yaw:PI},fuel:{type:'diesel',tankMl:70000,port:{x:-1.4,z:-2.2}}}
 ];
 export const MAP=deepFreeze({
  id:'oak-and-alder',version:1,
@@ -303,10 +306,10 @@ export const MAP=deepFreeze({
   // The timber yard: the sawmill, a hut for lumber and logs (the parked flatbed truck was removed in 0.33).
   {id:'sawmill',prop:'sawmill-v4',zone:'forest',x:104,z:n(-208),yaw:-Math.PI/2}, // the rigged Blender model (rigged-props.js); its root is the main deck's centre. Turned -90 degrees: its front (switch, player) faces the woods lane to the west, the belt-clearing end faces the yard to the east, the log pile and log feed are on the open north side
   {id:'yard-hut',prop:'hut',zone:'forest',x:124,z:-280,yaw:0,decor:true},{id:'yard-log-1',prop:'log',zone:'forest',x:131,z:-278.2,yaw:0,decor:true},{id:'yard-log-2',prop:'log',zone:'forest',x:131,z:-279.8,yaw:0,decor:true},{id:'yard-log-3',prop:'log',zone:'forest',x:131,z:-281.4,yaw:0,decor:true},
-  // Willow Farmstead (Quaternius barns, 1.55 times their size): the barn, the small barn, the open barn, the silo, the coop and the windmill, with a Kenney house as the farmhouse and a pickup.
+  // Willow Farmstead (Quaternius barns, 1.55 times their size): the barn, the small barn, the open barn, the silo, the coop and the windmill, with a Kenney house as the farmhouse.
   {id:'farm-barn',prop:'barn',zone:'farm',x:-66,z:-270,yaw:0},{id:'farm-small-barn',prop:'small-barn',zone:'farm',x:-84,z:-262,yaw:0},{id:'farm-open-barn',prop:'open-barn',zone:'farm',x:-83,z:-246,yaw:0},
   {id:'farm-silo',prop:'silo-house',zone:'farm',x:-48,z:-272,yaw:0},{id:'farm-coop',prop:'coop',zone:'farm',x:-52,z:-256,yaw:0},{id:'farm-windmill',prop:'windmill',zone:'farm',x:-44,z:-282,yaw:0},
-  {id:'farm-house',prop:'house-t',zone:'farm',x:-62,z:-244,yaw:0},{id:'farm-pickup',prop:'pickup',zone:'farm',x:-51,z:-244,yaw:-Math.PI/2,decor:true},
+  {id:'farm-house',prop:'house-t',zone:'farm',x:-62,z:-244,yaw:0},
   // Alder Center: a street wall of Kenney commercial buildings and the Store along both sides of the cross street, each flush with the sidewalk behind it (CC0 / Poly Pizza).
   {id:'alder-store',prop:'store',plot:'C1',zone:'alder',x:-13.5,z:-72.40,yaw:Math.PI},
   {id:'alder-offices',prop:'shop-i',plot:'C2',zone:'alder',x:-2,z:-75.50,yaw:Math.PI},

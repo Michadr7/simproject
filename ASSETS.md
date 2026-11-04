@@ -83,7 +83,6 @@ Licence notes: Kenney and Quaternius packs are CC0. The user states everything b
 | Van | free model, glTF + one JPEG texture | 952 triangles | delivery and restock job |
 | Jeep (Alex Safayan) | Poly Pizza, presumed **CC-BY 3.0** | 8,022 triangles | simplify to about 2,500; credit needed |
 | High-end axe (AXE.fbx, a RAR archive) | free model | 128 triangles, normal, specular and displacement maps | the Lumberjack Axe; unpacked with a JavaScript unrar |
-| Pickup (FBX) | CGTrader free model | 8,655 triangles, 2 materials | simplify to about 2,800 |
 | Flatbed truck (FBX) | SpawnCamp Games, itch.io (credit them) | 13,024 triangles, 12 materials | simplify to about 3,500; the timber haul |
 Still missing: the low-end green chainsaw (Sketchfab), the Bus, a farmhouse and a chicken.
 
@@ -178,3 +177,5 @@ Sketchfab "Pickup Truck" by 00amza, **CC-BY-4.0** (author must be credited: `cre
 
 ## Pevrolet Off Road Pickup (0.33): `offroad`, drivable
 Sketchfab "Low poly Pickup truck v3" by Aditya Graphical, **CC-BY-4.0** (credited in `credits.js`), from `assets-src/Veichles/low_poly_pickup_truck_v3/`. Body texture 512 px JPEG with the lights' texture painted as a patch (`patchPlain`), four split wheels, `turn: 180`. The old red pickup's wheels were split in place with `scripts/split-wheels.mjs` (the FBX is gone from the repo).
+
+The red CGTrader pickup (ehicles/Pickup.fbx) was removed in 0.33; its credit and converter entry went with it.

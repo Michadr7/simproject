@@ -24,7 +24,7 @@ try{
  const doc=new EventTarget();doc.getElementById=id=>ids.get(id)||null;doc.createElement=tag=>new El(tag);doc.body=new El();doc.querySelectorAll=()=>[];doc.hidden=false;
  const win=new EventTarget();win.matches=()=>false;const store=new Map();
  // the player stands at the pickup's driver door (the door point of its home pose)
- const pick=MAP.vehicles.find(v=>v.id==='eastbank-pickup'),pc=CLASSES.pickup,door=doorPoint(pick.home,pc);
+ const pick=MAP.vehicles.find(v=>v.id==='eastbank-worktruck'),pc=CLASSES.worktruck,door=doorPoint(pick.home,pc);
  store.set('citylife.character.v1',JSON.stringify({version:1,appearance:{name:'Tester'}}));
  store.set('citylife.progress.v1',JSON.stringify({version:1,progress:{cash:5000,completed:5,phase:'available',position:{x:door.x,z:door.z},vehicles:[{uid:'eastbank-offroad',model:'offroad',x:130,z:10,yaw:1.5}]}}));
  let nextFrame;Object.assign(globalThis,{document:doc,window:win,localStorage:{getItem:k=>store.get(k)||null,setItem:(k,v)=>store.set(k,v)},innerWidth:1400,innerHeight:900,devicePixelRatio:1,requestAnimationFrame:fn=>{nextFrame=fn}});
@@ -33,7 +33,7 @@ try{
  const {GameState}=await import(pathToFileURL(join(dir,'state.js')).href);
  let simTime=performance.now()+100;const frame=()=>{simTime+=40;nextFrame(simTime)},pump=s=>{for(let i=0;i<s*25;i++)frame()};
  const down=new Set(),key=(code,type)=>{const e=new Event(type);e.code=code;win.dispatchEvent(e)},hold=(code,on)=>{if(on&&!down.has(code)){down.add(code);key(code,'keydown')}else if(!on&&down.has(code)){down.delete(code);key(code,'keyup')}},press=code=>{key(code,'keydown');key(code,'keyup')},letGo=()=>{for(const c of [...down])hold(c,false)};
- const scene=globalThis.__renderScene,person=scene.getObjectByName('player'),truck=scene.getObjectByName('vehicle-eastbank-pickup'),flat=scene.getObjectByName('vehicle-eastbank-worktruck'),me=GameState.me;
+ const scene=globalThis.__renderScene,person=scene.getObjectByName('player'),truck=scene.getObjectByName('vehicle-eastbank-worktruck'),flat=scene.getObjectByName('vehicle-eastbank-worktruck'),me=GameState.me;
  assert(person&&truck&&flat,'the player and both drivable vehicles are in the scene');pump(1);
  const home=v=>Math.hypot(v.position.x-pick.home.x,v.position.z-pick.home.z);
  {const off=scene.getObjectByName('vehicle-eastbank-offroad');assert(Math.hypot(off.position.x-130,off.position.z-10)<.01,'a vehicle saved away from home loads where it was left (the game starts with a saved vehicle pose)')}
@@ -42,7 +42,7 @@ try{
 
  // 1. E at the door refuses while carrying a log, and works with empty hands
  GameState.progress.carry={kind:'log'};press('KeyE');pump(.3);assert(person.visible&&/hands are full/.test(toast()),'carrying a log: E at the door is refused ("hands are full"), you stay on foot');GameState.progress.carry=null;pump(.3);
- press('KeyE');pump(.3);assert(!person.visible,'E at the driver door: you get in (the avatar is hidden)');assert(/Driving the pickup/.test(toast()),'and the toast says how: '+toast());
+ press('KeyE');pump(.3);assert(!person.visible,'E at the driver door: you get in (the avatar is hidden)');assert(/Driving the Worktruck/.test(toast()),'and the toast says how: '+toast());
  const seat=MAP.vehicles[0],seatAt=()=>new THREE.Vector3(truck.position.x,0,truck.position.z);
  assert(Math.hypot(me.position.x-truck.position.x,me.position.z-truck.position.z)<2,'the player rides with the vehicle');
  // 2. the keys: S reverses out of the bay, W then drives forward, a stopped game stands still
@@ -67,7 +67,7 @@ try{
    else{hold('KeyW',false);hold('KeyS',true);hold('KeyA',errR<-.12);hold('KeyD',errR>.12);hold('Space',false)} // in reverse the wheel is turned the other way
    frame()}
   letGo();return {reached,t:t/25}};
- {const r=driveTo([[95,-8,3],[99,-6,3],[100,-1.5,3],[101,10,4],[102,30,5],[102,60,5]]);assert.equal(r.reached,6,`the pickup, driven with the keys, leaves the depot and runs down Works Lane (waypoint ${r.reached} of 6 after ${r.t.toFixed(0)} s)`);console.log(`  keys: depot to the south end of Works Lane in ${r.t.toFixed(0)} s of game time, at (${truck.position.x.toFixed(1)}, ${truck.position.z.toFixed(1)})`)}
+ {const r=driveTo([[86,-5,4],[96,-5,4],[100,-1.5,4],[101,10,5],[102,30,5],[102,60,5]]);assert.equal(r.reached,6,`the worktruck, driven with the keys, leaves the depot and runs down Works Lane (waypoint ${r.reached} of 6 after ${r.t.toFixed(0)} s)`);console.log(`  keys: depot to the south end of Works Lane in ${r.t.toFixed(0)} s of game time, at (${truck.position.x.toFixed(1)}, ${truck.position.z.toFixed(1)})`)}
  // zone and minimap follow the player's position (it rides with the vehicle): Works Lane is in Eastbank
  assert(Math.hypot(me.position.x-truck.position.x,me.position.z-truck.position.z)<2&&me.position.z>50,'the player position follows the vehicle (zones, minimap, objectives)');
  // 5. a building stops it: back up Works Lane, west along Oak East, and drive straight at the supplier's front wall (plot I3)
@@ -89,17 +89,17 @@ try{
   for(const k of ['KeyA','KeyD','KeyW','KeyS']){test(k)}
   assert(minDist>=.32,`a walker is never closer to the hull than the player radius (closest ${minDist.toFixed(2)} m)`)}
  // 8. what is saved: the pickup where it was left, the player at its door, and nothing else changed
- {const profile=JSON.parse(store.get('citylife.profile.v1')),saved=profile.progress;assert.deepEqual(saved.vehicles.map(x=>x.uid).sort(),['eastbank-offroad','eastbank-pickup'],'the pickup has left home, and the off-road pickup is where the save put it');const v=saved.vehicles.find(x=>x.uid==='eastbank-pickup');assert.equal(v.uid,'eastbank-pickup');assert(Math.hypot(v.x-truck.position.x,v.z-truck.position.z)<.02&&Math.abs(wrap(v.yaw-truck.rotation.y))<.002,'saved at the pose it was left in');
+ {const profile=JSON.parse(store.get('citylife.profile.v1')),saved=profile.progress;assert.deepEqual(saved.vehicles.map(x=>x.uid).sort(),['eastbank-offroad','eastbank-worktruck'],'the pickup has left home, and the off-road pickup is where the save put it');const v=saved.vehicles.find(x=>x.uid==='eastbank-worktruck');assert.equal(v.uid,'eastbank-worktruck');assert(Math.hypot(v.x-truck.position.x,v.z-truck.position.z)<.02&&Math.abs(wrap(v.yaw-truck.rotation.y))<.002,'saved at the pose it was left in');
   assert.equal(profile.version,1,'the profile format is unchanged');assert.equal(saved.schema,2,'schema stays 2');assert(saved.position&&Number.isFinite(saved.position.x),'the player position is saved too')}
  // 9. back in at the door, then R: gets you out and sends you to the spawn; the vehicle stays exactly where it was
  {const left=truck.position.clone(),yawLeft=truck.rotation.y,d=doorPoint({x:left.x,z:left.z,yaw:yawLeft},pc);me.position.x=d.x;me.position.z=d.z;pump(.2);press('KeyE');pump(.3);assert(!person.visible,'E at the door again: back in');press('KeyR');pump(.5);assert(person.visible,'R gets you out of the vehicle');assert(Math.hypot(me.position.x-MAP.spawn.x,me.position.z-MAP.spawn.z)<8,`and sends you to the spawn (${me.position.x.toFixed(1)}, ${me.position.z.toFixed(1)})`);assert(truck.position.distanceTo(left)<.01&&Math.abs(truck.rotation.y-yawLeft)<1e-9,'the vehicle stays where you left it')}
  // 10. the Worktruck: the passenger door sits you on the right and you cannot drive; the driver door lets you drive, and its wheels turn (real E presses and held keys)
- {const wt=MAP.vehicles.find(v=>v.id==='eastbank-worktruck'),wc=CLASSES.worktruck,at=side=>{const d=doorPoint(wt.home,wc,side);me.position.x=d.x;me.position.z=d.z;pump(.2)};
+ {const wt=MAP.vehicles.find(v=>v.id==='eastbank-worktruck'),wc=CLASSES.worktruck,at=side=>{const d=doorPoint({x:flat.position.x,z:flat.position.z,yaw:flat.rotation.y},wc,side);me.position.x=d.x;me.position.z=d.z;pump(.2)},startX=flat.position.x,startZ=flat.position.z; // the Worktruck is wherever the drive left it: its doors are measured from there
   at('passenger');press('KeyE');pump(.3);assert(!person.visible&&/Riding in the Worktruck/.test(toast()),'E at the passenger door: you ride along ('+toast()+')');const z0=flat.position.z;hold('KeyW',true);pump(1.5);hold('KeyW',false);assert(Math.abs(flat.position.z-z0)<1e-6,'the passenger cannot drive');
   press('KeyE');pump(.3);assert(person.visible,'E gets the passenger out');{const l=(me.position.x-flat.position.x)*Math.cos(flat.rotation.y)-(me.position.z-flat.position.z)*Math.sin(flat.rotation.y);assert(l<-wc.hx,`on the passenger side (local x ${l.toFixed(2)})`)}
   at('driver');press('KeyE');pump(.3);assert(!person.visible&&/Driving the Worktruck/.test(toast()),'E at the driver door: you drive');
   const wheels=flat.userData.wheels;assert.equal(wheels.length,4,'the Worktruck has four wheels');const spin0=wheels.map(w=>w.spin.rotation.x);hold('KeyS',true);pump(2);hold('KeyS',false);pump(.2);
-  const moved=Math.hypot(flat.position.x-wt.home.x,flat.position.z-wt.home.z);assert(moved>2,`it reverses out (${moved.toFixed(1)} m)`);for(const [i,w] of wheels.entries())assert(Math.abs(w.spin.rotation.x-spin0[i]-(-moved)/w.radius)<.35,`wheel ${i} rolled ${(w.spin.rotation.x-spin0[i]).toFixed(1)} rad for ${moved.toFixed(1)} m (expected ${(-moved/w.radius).toFixed(1)})`);
+  const moved=Math.hypot(flat.position.x-startX,flat.position.z-startZ);assert(moved>2,`it reverses out (${moved.toFixed(1)} m)`);for(const [i,w] of wheels.entries())assert(Math.abs(w.spin.rotation.x-spin0[i]-(-moved)/w.radius)<.35,`wheel ${i} rolled ${(w.spin.rotation.x-spin0[i]).toFixed(1)} rad for ${moved.toFixed(1)} m (expected ${(-moved/w.radius).toFixed(1)})`);
   hold('KeyW',true);hold('KeyA',true);pump(1.5);assert(wheels.filter(w=>w.front).every(w=>Math.abs(w.pivot.rotation.y)>.3)&&wheels.filter(w=>!w.front).every(w=>w.pivot.rotation.y===0),'the front wheels steer with A, the rear ones do not');hold('KeyA',false);hold('KeyW',false);hold('Space',true);pump(3);hold('Space',false);pump(.2);press('KeyE');pump(.3);assert(person.visible,'and E gets you out')
   // no dissolve: the vehicles' materials do not fade, and the sightline fade is not applied to them
   for(const v of [truck,flat])v.traverse(o=>{if(o.material)for(const m of [].concat(o.material))assert(!m.onBeforeCompile.toString().includes('uFade'),'vehicle materials have no sightline fade')})}

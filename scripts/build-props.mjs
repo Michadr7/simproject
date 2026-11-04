@@ -43,7 +43,6 @@ const PROPS={
  log:{file:'polypizza/Wood_Log.glb',longest:2.8,cut:null,triangles:null,collide:{cell:.5,band:[.1,.8],walls:false,despeckle:false}},
  // Vehicles: simplified to about 1,200 triangles for cars, 2,800 and 3,500 for the trucks. Parked as props for now; drivable later (DESIGN.md).
  car:car('Car',4.4),suv:car('SUV',4.7),'sports-car':car('Sports Car',4.3),'police-car':car('Police Car',4.4),taxi:car('Taxi',4.4),'car-2':car('Car-unqqkULtRU',4.4),'sports-car-2':car('Sports Car-1mkmFkAz5v',4.3),
- pickup:{file:'vehicles/Pickup.fbx',longest:5.3,turn:180,cut:null,triangles:2800,wheels:.35,paint:{body:'#9c2f2a',tyre:'#151515',rim:'#b9bdc2',light:'#f3e8b8'},collide:SOLID}, // the file has no colours: a farm-red pickup with black tyres and silver rims
  // The pickup's original FBX is not in the repository: its data in props-assets.js was turned 180 degrees in place (its nose was at -z; the game's vehicles face +z), so rebuilding it from the FBX needs the turn above.
  // The Worktruck (0.33): Sketchfab "Pickup Truck" by 00amza (CC-BY-4.0), one textured mesh plus a plain-colour glass part: uvForAll draws the glass from the texture too; splitWheels takes the four wheel islands out of the body as separate meshes centred on their axles, so the game can spin and steer them.
  // The off-road pickup (0.33): Sketchfab "Low poly Pickup truck v3" by Aditya Graphical (CC-BY-4.0): a textured body plus a lights part with its own texture (painted as a patch); the four tyres and their hub caps split out as wheels.

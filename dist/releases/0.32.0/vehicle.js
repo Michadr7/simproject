@@ -11,10 +11,9 @@ export const SAMPLE_GAP=.5; // metres between hull sample points (a 0.16 m sign 
 // Placeholders, tuned by playing. hx/hz: half the footprint (checked against the converted model by tests/vehicle.mjs). door: the driver's door point, local, +x is the vehicle's left.
 // seat: where the player's position sits while driving. camera: how far behind and above the chase camera stands, and how high it looks.
 // A class's doors and seats: the driver's side is the vehicle's left (+x when it faces +z), the passenger's the right. The chase camera scales with the vehicle's length (a bigger vehicle gets a more distant view):
-// 3 x its length behind, 1.2 x its length up (pickup 5.3 m: 8 m back, 3.2 m up).
+// 3 x its length behind, 1.2 x its length up (worktruck 6 m: 9 m back, 3.6 m up).
 function makeClass(c){const L=c.hz*2;return {...c,door:{x:+(c.hx+.6).toFixed(3),z:c.doorZ},passengerDoor:{x:-+(c.hx+.6).toFixed(3),z:c.doorZ},seat:{x:.45,z:c.doorZ},passengerSeat:{x:-.45,z:c.doorZ},camera:{back:+(3*L/2).toFixed(2),up:+(1.2*L/2).toFixed(2)}}}
 export const CLASSES=Object.freeze({
- pickup:makeClass({id:'pickup',name:'Pickup',hx:1.135,hz:2.65,top:11,reverse:4,accel:2.8,brake:7,drag:1,rMin:6,aLat:5,doorZ:.5}),
  worktruck:makeClass({id:'worktruck',name:'Worktruck',hx:1.09,hz:3,top:10,reverse:3.5,accel:2.4,brake:6,drag:.9,rMin:7,aLat:4.5,doorZ:.5}),
  offroad:makeClass({id:'offroad',name:'Pevrolet Off Road Pickup',hx:1.255,hz:2.8,top:8.5,reverse:3.5,accel:2.2,brake:6.5,drag:1,rMin:6.5,aLat:5,doorZ:.5,rough:.35}) // slower on the road, but grass, fields, paths and dirt cost it 35 points less speed (rough)
 });

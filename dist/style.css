@@ -120,9 +120,9 @@ body.creating #hotbar{display:none}
 #phoneScreen-bank #wallet>span,#phoneScreen-bank #cash,#phoneScreen-bank #needsStatus,#phoneScreen-bank #skillStatus,#phoneScreen-bank #progressStatus{display:none}
 #phoneScreen-bank #wallet small{font-size:11px;line-height:1.9}
 #phoneScreen-bank #billsButton{margin:8px 0}
-#vitals{position:fixed;right:34px;bottom:52px;width:188px;display:grid;gap:8px;padding:12px 14px;border-radius:12px;background:#183332cc;border:1px solid #ffffff22;box-shadow:0 8px 24px #0004;z-index:5;pointer-events:none}
-body.creating #vitals{display:none}
-.vital{display:grid;grid-template-columns:20px 1fr 26px;align-items:center;gap:8px;--bar:#e8a55a}
+#statusDock{position:fixed;right:34px;bottom:52px;width:232px;display:grid;gap:10px;z-index:5}#vitals{position:static;width:auto;display:grid;gap:8px;padding:12px 14px;border-radius:12px;background:#183332cc;border:1px solid #ffffff22;box-shadow:0 8px 24px #0004;z-index:5;pointer-events:none}
+body.creating #vitals,body.creating #statusDock{display:none}
+.vital{display:grid;grid-template-columns:20px 52px 1fr 28px;align-items:center;gap:8px;--bar:#e8a55a}
 .vital[data-need=thirst]{--bar:#6fb7e8}.vital[data-need=energy]{--bar:#d8e06a}
 .vital-icon{font-size:14px;line-height:1;text-align:center}
 .vital-bar{display:block;height:8px;border-radius:99px;background:#ffffff1f;overflow:hidden}
@@ -134,7 +134,7 @@ body.creating #vitals{display:none}
 @media(prefers-reduced-motion:reduce){.vital[data-level=critical] .vital-icon{animation:none}.vital-fill{transition:none}}
 #minimap{top:96px;bottom:auto}
 #minimap.large{top:auto}
-@media(max-width:600px){#vitals{right:12px;bottom:96px;width:150px}#minimap{top:76px;bottom:auto;transform-origin:top right}#minimap.large{top:auto}}
+@media(max-width:600px){#statusDock{right:12px;bottom:96px;width:200px}#minimap{top:76px;bottom:auto;transform-origin:top right}#minimap.large{top:auto}}
 
 /* 0.19.6 time chip under the minimap; the store's cash, bag space and purchase confirmation stay pinned while the list scrolls */
 #clockChip{position:fixed;right:34px;top:200px;padding:6px 13px;border-radius:99px;background:#183332cc;border:1px solid #ffffff22;color:#e9efe3;font:600 11px/1 Arial,sans-serif;letter-spacing:.4px;z-index:5;pointer-events:none}
@@ -180,4 +180,21 @@ body.creating #clockChip{display:none}
 .menu-help{margin:4px 0;font-size:12px;line-height:1.6;color:#c4d6cb}.menu-help code{background:#ffffff1c;padding:1px 5px;border-radius:4px}
 .menu-status{min-height:1.5em;margin:4px 0;font-size:12px;line-height:1.5;color:#c4d6cb}
 .menu-status[data-kind=error]{color:#ffb4a8}.menu-status[data-kind=ok]{color:#cfe8a8}/* The HUD sits above the veils; on the main menu and credits screens it only covers the picture. */
-body:has(#welcome:not([hidden])) :is(#minimap,#vitals,#clockChip),body:has(#credits:not([hidden])) :is(#minimap,#vitals,#clockChip){display:none}
+body:has(#welcome:not([hidden])) :is(#minimap,#vitals,#statusDock,#clockChip),body:has(#credits:not([hidden])) :is(#minimap,#vitals,#statusDock,#clockChip){display:none}
+
+/* Vehicle panel (0.33): above the needs; greyed out on foot, lit while you are in a vehicle */
+.vehicle-panel{display:grid;gap:9px;padding:12px 14px;border-radius:12px;background:#183332cc;border:1px solid #ffffff22;box-shadow:0 8px 24px #0004;color:#e9efe3;transition:opacity .25s ease,filter .25s ease}
+.vehicle-panel[data-state=off]{opacity:.42;filter:grayscale(1)}
+.vp-head{display:flex;justify-content:space-between;align-items:baseline;gap:10px}
+.vp-eyebrow{font:600 9px/1 Arial,sans-serif;letter-spacing:2px;color:#cae0ad}
+#vpName{font:600 12px/1.2 Arial,sans-serif;text-align:right;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.vp-stats{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+.vp-stats div{display:grid;gap:3px}
+.vp-stats span{font-size:9px;letter-spacing:1.5px;text-transform:uppercase;color:#9fb5a8}
+.vp-stats b{font:600 13px/1 Arial,sans-serif;font-variant-numeric:tabular-nums}
+.vp-keys{display:grid;gap:5px;font-size:11px;color:#dfe9d6}
+.vp-key{display:flex;align-items:center;gap:2px}
+.vp-key[data-muted=true]{opacity:.5}
+.vehicle-panel kbd{display:inline-block;min-width:20px;text-align:center;padding:2px 6px;margin-right:6px;border:1px solid #ffffff3a;border-radius:4px;font:600 11px/1.3 Arial,sans-serif;background:#14292b}
+.vp-note{margin:0;font-size:10px;line-height:1.5;color:#9fb5a8}
+.vital-name{font:600 10px/1 Arial,sans-serif;letter-spacing:.5px;color:#cfdccb}
