@@ -18,7 +18,7 @@ const EXPECT={'house-a':[1174,10.4,6.7],'house-e':[1731,10.4,9.1],'house-h':[770
  // pallets, boxes, crates and loading-zone props (the project owner's own models, true size, assets/*.glb)
  'prop.pallet':[204,1.2,.14],'prop.box-small':[36,.4,.3],'prop.box-medium':[36,.6,.4],'prop.crate-large':[264,1.03,.8],'prop.pallet-small-boxes':[636,1.2,.74],'prop.pallet-medium-boxes':[492,1.2,.94],'prop.pallet-crate':[468,1.2,.94],'prop.zone-bollard':[236,.3,.87],'prop.zone-sign-unload':[108,.92,2.3],'prop.zone-sign-pickup':[108,.92,2.3],'prop.dock-plate':[212,2,.06],
  // gas-station props (own models, true size, file origin kept)
- 'prop.fuel-pump':[252,.64,1.73],'prop.fuel-pump-diesel':[252,.64,1.73],'prop.fuel-nozzle':[84,.05,.03],'prop.fuel-nozzle-diesel':[84,.05,.03],'prop.pump-island':[672,3.4,1.91],'prop.forecourt-canopy':[456,12.08,5.59],
+ 'prop.fuel-pump':[252,.64,1.73],'prop.fuel-pump-diesel':[252,.64,1.73],'prop.fuel-nozzle':[84,.05,.03],'prop.fuel-nozzle-diesel':[84,.05,.03],'prop.pump-island':[672,3.4,1.91],'prop.forecourt-canopy':[456,12.08,5.59],'prop.fuel-can':[1162,.18,.5],
  'f-cabinet':[188,.9,.9],'f-sink':[596,.9,1],'f-stove':[1604,.9,.9],'f-fridge':[584,1,1.8],'f-toilet':[440,.6,.9],'f-bath':[1204,2.4,.8],'f-bath-sink':[632,.7,1.1],'f-lamp':[152,.3,1.7],'f-rug':[56,3.1,0],'f-plant':[104,.4,1.3],'f-stairs':[616,3.6,2.7],'f-side-table':[236,1.1,.8]};
 assert.deepEqual(Object.keys(PROPS).sort(),Object.keys(EXPECT).sort(),'every converted prop is in the table, and nothing else ships');
 let triangles=0;const GAS=new Set(['prop.fuel-pump','prop.fuel-pump-diesel','prop.fuel-nozzle','prop.fuel-nozzle-diesel','prop.pump-island','prop.forecourt-canopy']);
@@ -35,7 +35,7 @@ for(const [id,[tris,width,height]] of Object.entries(EXPECT)){
  else assert(Math.abs((box.min.x+box.max.x)/2)<.01&&Math.abs((box.min.z+box.max.z)/2)<.01,`${id}: centred`);
  if(coloured){assert(!info.texture&&info.col&&info.norQ,`${id}: baked colours, compact normals`);assert(g.attributes.normal.array.every(v=>v>=-1.001&&v<=1.001),`${id}: unit-range normals`)}
  else assert(info.texture.startsWith(/^(house|shop|industrial|container|tank)-/.test(id)?'data:image/png;base64,':'data:image/jpeg;base64,')&&info.texture.length<400e3,`${id}: texture ${(info.texture.length/1024).toFixed(0)} KB`);
- assert(info.colliders.length>=(id==='f-rug'||id==='prop.dock-plate'||/nozzle|canopy/.test(id)?0:1)&&info.colliders.length<=40,`${id}: ${info.colliders.length} collision boxes`);
+ assert(info.colliders.length>=(id==='f-rug'||id==='prop.dock-plate'||/nozzle|canopy|fuel-can/.test(id)?0:1)&&info.colliders.length<=40,`${id}: ${info.colliders.length} collision boxes`);
  for(const c of info.colliders)assert(c.x-c.hx>=info.footprint.x0-1.01&&c.x+c.hx<=info.footprint.x1+1.01&&c.z-c.hz>=info.footprint.z0-1.01&&c.z+c.hz<=info.footprint.z1+1.01,`${id}: a collision box lies outside the model`);
  assert(propGeometry(id)===g,'geometry is shared');
 }

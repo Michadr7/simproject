@@ -60,6 +60,8 @@ const PROPS={
  // The nozzle keeps its y too ('xyz': the origin is the grip centre, not the ground). The canopy's light panels are an emissive material: written as record.glow, drawn as a second material group.
  ...Object.fromEntries(['fuel-pump','fuel-pump-diesel','fuel-nozzle','fuel-nozzle-diesel','pump-island','forecourt-canopy'].map(id=>['prop.'+id,{file:`assets/${id}.glb`,scale:1,cut:null,triangles:null,keepOrigin:/nozzle/.test(id)?'xyz':true,
   collide:{cell:.1,band:[.02,2.4],walls:false,despeckle:false,fit:true,...(/nozzle|canopy/.test(id)?{none:true}:{})}}])),
+ // The gas can (0.35, the project owner's FBX, centimetres, upright 0.50 m tall, with its colour texture; the other maps (AO, metallic, normal, roughness) are not used): a bag item and a held tool, no collider.
+ 'prop.fuel-can':{file:'fuel_can/fuel_can.fbx',albedo:'textures/fuel_can_Albedo.png',scale:.01,cut:null,triangles:null,texture:[256,85],collide:{cell:.1,band:[.02,2.4],walls:false,despeckle:false,fit:true,none:true}},
  // Kenney City Kit (Industrial, CC0) for Eastbank Works, 8 m per model unit like the other Kenney kits. None has an interior or a loading door (one small man-door each), so they are solid blocks (walls:false fills the rows).
  // The containers and the tank are textured with the kit's one palette like the buildings (128 px nearest-neighbour PNG); a container comes out 3.0 x 6.6 x 2.8 m.
  ...Object.fromEntries(Object.entries({'industrial-q':'building-q','industrial-t':'building-t','industrial-s':'building-s','industrial-p':'building-p','container-a':'shipping-container-a','container-b':'shipping-container-b','container-c':'shipping-container-c','tank-small':'detail-tank'})
@@ -106,7 +108,7 @@ function readGltf(path){
  return {parts,imageOf,anchors};
 }
 let fbxLoader=null;
-async function readFbx(path){
+async function readFbx(path,spec={}){
  if(!fbxLoader){globalThis.document=globalThis.document||{createElementNS:()=>({addEventListener(){},removeEventListener(){},set src(v){}})}; // FBXLoader wants a DOM for its textures; we read none
   const {FBXLoader}=await import(pathToFileURL(join(toolDir,'node_modules/three/examples/jsm/loaders/FBXLoader.js')).href);fbxLoader=new FBXLoader()}
  const buf=readFileSync(path),obj=fbxLoader.parse(buf.buffer.slice(buf.byteOffset,buf.byteOffset+buf.byteLength),dirname(path)+'/');obj.updateMatrixWorld(true);
@@ -116,8 +118,9 @@ async function readFbx(path){
   for(let k=0;k<pos.count;k++){const x=pos.getX(k),y=pos.getY(k),z=pos.getZ(k);P[k*3]=me[0]*x+me[4]*y+me[8]*z+me[12];P[k*3+1]=me[1]*x+me[5]*y+me[9]*z+me[13];P[k*3+2]=me[2]*x+me[6]*y+me[10]*z+me[14];
    if(nor){const a=nor.getX(k),b=nor.getY(k),c=nor.getZ(k);Nn[k*3]=me[0]*a+me[4]*b+me[8]*c;Nn[k*3+1]=me[1]*a+me[5]*b+me[9]*c;Nn[k*3+2]=me[2]*a+me[6]*b+me[10]*c}}
   for(const grp of groups){const m=mats[grp.materialIndex]||mats[0],col=m.color?[m.color.r,m.color.g,m.color.b]:[.8,.8,.8];
-   parts.push({pos:P,nor:Nn,uv:null,idx:Uint32Array.from(index.slice(grp.start,grp.start+grp.count)),color:col,image:null,node:o.name||'',material:m.name||''})}});
- return {parts,imageOf:()=>null};
+   const uvA=spec.albedo?g.attributes.uv:null,UV=uvA?Float32Array.from({length:pos.count*2},(_,k)=>k%2?1-uvA.getY(k>>1):uvA.getX(k>>1)):null; // spec.albedo: the colour texture beside the FBX (v flipped to the glTF convention used here)
+   parts.push({pos:P,nor:Nn,uv:UV,idx:Uint32Array.from(index.slice(grp.start,grp.start+grp.count)),color:col,image:UV?0:null,node:o.name||'',material:m.name||''})}});
+ return {parts,imageOf:()=>spec.albedo?readFileSync(join(dirname(path),spec.albedo)):null};
 }
 
 // `paint` (a model whose materials carry no colour, like the pickup): finds the wheels as islands of connected triangles by their shape (a tyre is a thick disc standing on the ground,
@@ -144,7 +147,7 @@ const existing=existsSync('dist/props-assets.js')&&only?(await import(pathToFile
 const out={props:{...existing}},report=[];
 for(const [id,spec] of Object.entries(PROPS)){
  if(spec.skip||(only&&!only.has(id)))continue;
- const path=join(root,spec.file),model=path.toLowerCase().endsWith('.fbx')?await readFbx(path):readGltf(path);
+ const path=join(root,spec.file),model=path.toLowerCase().endsWith('.fbx')?await readFbx(path,spec):readGltf(path);
  if(spec.paint)model.parts=paintParts(model.parts,spec.paint);
  if(spec.patchPlain){ // parts that use another texture or a plain colour (lights, glass) are painted as small solid patches in the corner of the one texture; their uvs point at the patch
   const main=model.parts.find(p=>p.image!==null)?.image,S=spec.texture[0];spec._patches=[];

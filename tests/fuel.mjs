@@ -86,4 +86,16 @@ assert(world.blocked(156.5,-8.25),'the pump island is solid');
  for(const model of ['worktruck','offroad']){let s=freshVehicle({x:140,z:-5,yaw:Math.PI/2}),hits=0;for(let i=0;i<60*14&&s.x<172;i++){const r=stepVehicle(s,{throttle:1,steer:Math.max(-1,Math.min(1,(-5-s.z)*.8+(Math.PI/2-s.yaw)*1.5))},1/60,CLASSES[model],env);s=r.state;if(r.hit)hits++}
   assert(s.x>=170,`${model} drives through the station from the west entry to the east exit (reached x ${s.x.toFixed(1)}, ${hits} blocked steps)`);assert.equal(hits,0,model+' touches nothing on the way')}}
 
+// The gas can: filled at a pump (paid, in steps, one fuel at a time), poured into a tank (free, as much as fits).
+import {CAN_CAPACITY_MGAL,fillCan,pour,canText} from '../dist/fuel.js';
+{assert.equal(CAN_CAPACITY_MGAL,5000);
+ const empty={fuel:null,mgal:0},a=fillCan({cash:5000,can:empty},{pump:{fuel:'diesel'},mgal:1000});assert.deepEqual([a.can,a.soldMgal,a.cents,a.cash],[{fuel:'diesel',mgal:1000},1000,420*1,5000-420],'an empty can takes the pump\'s fuel: 1 gal of diesel is $4.20');
+ assert.equal(fillCan({cash:5000,can:a.can},{pump:{fuel:'gas'},mgal:500}).code,'wrong-fuel','a can with diesel in it will not take gas');
+ const big=fillCan({cash:99999,can:{fuel:'gas',mgal:4800}},{pump:{fuel:'gas'},mgal:1000});assert.deepEqual([big.soldMgal,big.can.mgal],[200,5000],'it takes only what fits');assert.equal(fillCan({cash:99999,can:{fuel:'gas',mgal:5000}},{pump:{fuel:'gas'},mgal:500}).code,'full');
+ assert.equal(fillCan({cash:10,can:empty},{pump:{fuel:'gas'},mgal:500}).code,'broke','nothing if you cannot pay a single step');assert.equal(fillCan({cash:100,can:empty},{pump:{fuel:'gas'},mgal:500}).soldMgal,250,'and only what you can pay for ($1.00 buys 0.25 gal)');assert.equal(fillCan({cash:100,can:{fuel:'gas',mgal:-5}},{pump:{fuel:'gas'},mgal:50}).code,'invalid');
+ const t={fuel:'diesel',mgal:5000,capacityMgal:21000},p=pour({can:{fuel:'diesel',mgal:5000},target:t,mgal:2000});assert.deepEqual([p.movedMgal,p.can,p.target.mgal],[2000,{fuel:'diesel',mgal:3000},7000],'pouring moves fuel and costs nothing');
+ const all=pour({can:p.can,target:t,mgal:9000});assert.deepEqual([all.movedMgal,all.can],[3000,{fuel:null,mgal:0}],'a can that runs dry has no fuel type left');
+ assert.equal(pour({can:{fuel:null,mgal:0},target:t,mgal:50}).code,'empty');assert.equal(pour({can:{fuel:'gas',mgal:500},target:t,mgal:50}).code,'wrong-fuel');assert.equal(pour({can:{fuel:'diesel',mgal:500},target:{...t,mgal:21000},mgal:50}).code,'full');
+ const near=pour({can:{fuel:'diesel',mgal:5000},target:{...t,mgal:20700},mgal:5000});assert.deepEqual([near.movedMgal,near.can.mgal],[300,4700],'only what fits in the tank, whatever the step');
+ assert.equal(canText({fuel:'gas',mgal:2500}),'Gas · 2.5 of 5 gal');assert.equal(canText({fuel:null,mgal:0}),'Empty gas can')}
 console.log('Fuel (imperial): whole-cent sales in gallons (gas and diesel, wrong fuel, full, broke, invalid, clipping), small steps cost the same as one big sale, mph, the burn rate, the hose (66 vertices, 120 triangles), the pump screen text, the drive-through station (canopy columns solid, the lane under the roof open, both trucks drive through), and saved fuel in milli-gallons.');

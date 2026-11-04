@@ -1,12 +1,15 @@
 import {ITEMS,itemById,isConsumable} from './items.js';
 import {normalizeLife} from './life.js';
+import {FUEL_TYPES} from './fuel.js';
 export const BASE_SLOTS=8;
 export const freshInventory=()=>({slots:[],equipment:{jacket:null,backpack:null}});
 export function normalizeInventory(value){
  const inv=freshInventory();
  for(const slot of (Array.isArray(value?.slots)?value.slots:[]).slice(0,128)){
   const item=itemById(slot?.id);
-  if(item&&Number.isInteger(slot.quantity)&&slot.quantity>0)inv.slots.push({id:item.id,quantity:Math.min(slot.quantity,item.stackLimit)});
+  if(item&&Number.isInteger(slot.quantity)&&slot.quantity>0){const entry={id:item.id,quantity:Math.min(slot.quantity,item.stackLimit)};
+   if(item.capacityMgal){const mgal=Number.isSafeInteger(slot.fuelMgal)&&slot.fuelMgal>0&&slot.fuelMgal<=item.capacityMgal&&FUEL_TYPES.includes(slot.fuelType)?slot.fuelMgal:0;entry.fuelMgal=mgal;entry.fuelType=mgal>0?slot.fuelType:null} // a gas can: how much, and of what
+   inv.slots.push(entry)}
  }
  for(const type of ['jacket','backpack']){
   const item=itemById(value?.equipment?.[type]);if(item?.type==='equipment'&&item.equipSlot===type)inv.equipment[type]=item.id;
@@ -37,7 +40,7 @@ export function useItem(progress,index){
   if(inventory.slots.length>inventoryCapacity(inventory))return {error:'Use or remove items before equipping a smaller bag.'};
   return {state:{...progress,inventory},message:item.name+' equipped.'};
  }
- if(!isConsumable(item))return {error:item.type==='tool'?`${item.name}: ${item.description}. Put it on your hotbar, then press E near a pine.`:`${item.name}: ${item.description}.`};
+ if(!isConsumable(item))return {error:item.type==='tool'?`${item.name}: ${item.description}. Put it on your hotbar to use it.`:`${item.name}: ${item.description}.`};
  const life=normalizeLife(progress.life);
  const restores={food:item.foodRestore,thirst:item.thirstRestore,energy:item.energyRestore};
  if(!Object.entries(restores).some(([key,value])=>value>0&&life[key]<100))return {error:'These stats are already full.'};
@@ -76,6 +79,12 @@ export function equipTool(progress,id){
  if(!hasItem(progress,id))return {error:`You do not have a ${item.name.toLowerCase()}.`};
  const equipped=progress.equipped===id?null:id;
  return {state:{...progress,equipped},equipped,message:equipped?`${item.name} equipped.`:`${item.name} put away.`};
+}
+// The gas can in the bag (the first one): {fuel, mgal} or null; and setting what is in it (a new progress; null when you have no can).
+export function canOf(progress){const slot=(progress.inventory?.slots||[]).find(s=>s.id==='gas-can');return slot?{fuel:slot.fuelMgal>0?slot.fuelType:null,mgal:slot.fuelMgal||0}:null}
+export function setCan(progress,can){
+ const inventory=normalizeInventory(progress.inventory),slot=inventory.slots.find(s=>s.id==='gas-can');if(!slot)return null;
+ slot.fuelMgal=can.mgal;slot.fuelType=can.mgal>0?can.fuel:null;return {...progress,inventory:normalizeInventory(inventory)};
 }
 export function sellLogs(progress){
  const count=countItem(progress,'wood-log');

@@ -6,6 +6,7 @@ import {propertyTransaction,heldIds,listingOf} from './ownership.js';
 import {CREDITS} from './credits.js';
 import {createSawmillController,freshSawmill,switchSawmill,switchLabel,BELT_SLOTS,PLANK_TINT} from './sawmill.js';
 import {createAudio,engineVoice} from './audio.js';
+import {createSmoke,exhaustRate,START_PUFFS} from './smoke.js';
 import {LOG_HOME,LOG_GROUND,LOG_HAND,LOG_POLE,carryEffects,bendLean,bendDrop,bendAmount,BEND_TIME,BEND_RELEASE,PLANK_HANDS,PLANK_STACK,PLANK_POLES,poseBlend,plankBox,quarterOf,shoulderLog,putDownLog,feedLog,takePlanks,putDownPlanks,pickUpPlanks} from './carry.js';
 import {chopTree,felledTrees,plotAt,expireLogs,regrowTrees,felledStages,CHOP_RANGE} from './grid.js';
 import {levelOf,swingTime,hitsNeeded,perkText} from './skills.js';
@@ -15,7 +16,7 @@ import {createConsumptionAnimation} from './consumption.js';
 import {itemById,ITEMS} from './items.js';
 import {DEV_MODE} from './dev-flag.js';
 import {createInventoryUI} from './inventory-ui.js';
-import {addItem,useItem,unequipItem,hasItem,hotbarItems,equipTool,sellLogs} from './inventory.js';
+import {addItem,useItem,unequipItem,hasItem,hotbarItems,equipTool,sellLogs,canOf,setCan} from './inventory.js';
 import {createPhone} from './phone.js';
 import {acceptContract,completeContract,tickContract,gigTarget,atGigPoint,refreshGigBoard,gameMinutes} from './contracts.js';
 import {GameState,initializeState,setMePosition,tickLife,setStatDrainMultiplier} from './state.js';
@@ -42,7 +43,7 @@ import {createPedestrians,createVehicles} from './neighborhood.js';
 import {createDriving} from './driving.js';
 import {createVehicleHud,vehicleHudModel} from './vehicle-hud.js';
 import {createFuelStation} from './fuel-station.js';
-import {sell,STEP_MGAL,FLOW_MGAL_PER_S,REACH_M,USE_RANGE_M,fuelText,fuelTitle,fuelName,gallons} from './fuel.js';
+import {sell,fillCan,pour,canText,CAN_CAPACITY_MGAL,STEP_MGAL,FLOW_MGAL_PER_S,REACH_M,USE_RANGE_M,fuelText,fuelTitle,fuelName,gallons} from './fuel.js';
 import * as THREE from './vendor/three.module.js';
 import { createCameraController } from './camera.js';
 import {MARKET,routeFor,targetFor,nearby,money,transactJob} from './jobs.js';
@@ -133,7 +134,7 @@ const avatar=createCharacter(savedCharacter||defaults),player=avatar.group;playe
 const groundLogs=scene.getObjectByName('ground-logs'),carryLog=new THREE.Group(),carryLogMesh=new THREE.Mesh(groundLogs.geometry,groundLogs.material);carryLogMesh.rotation.y=Math.PI/2;carryLog.add(carryLogMesh);carryLog.position.set(-.2,1.5,.05);carryLog.rotation.x=-.12;carryLog.visible=false;carryLog.name='carried-log';player.add(carryLog);
 let carryPlanks=null,dropsFor=null,plankBoxes=[],planksPose=0; // plankBoxes: a put-down stack is a solid box (carry.js plankBox); planksPose: how far the two-handed carry pose has blended in
 // The two drivable Eastbank vehicles (driving.js, vehicle.js): their poses come from the save. worldBlocked is blocked() without them, so a vehicle never collides with itself.
-const driving=createDriving({scene,fade:world.fade,surface:(x,z)=>terrain().surfaceAt(x,z),footing:footingAt,baseBlocked:(x,z)=>worldBlocked(x,z),saved:GameState.progress.vehicles});let driveIdle=9,driveSave=0;const vehicleHud=createVehicleHud($);const fuel=createFuelStation({scene,fade:world.fade,footing:footingAt}); // the Eastbank pumps: nozzles, hoses and the nozzle in your hand
+const driving=createDriving({scene,fade:world.fade,surface:(x,z)=>terrain().surfaceAt(x,z),footing:footingAt,baseBlocked:(x,z)=>worldBlocked(x,z),saved:GameState.progress.vehicles});let driveIdle=9,driveSave=0;const vehicleHud=createVehicleHud($);const fuel=createFuelStation({scene,fade:world.fade,footing:footingAt});const smoke=createSmoke(scene); // the Eastbank pumps: nozzles, hoses and the nozzle in your hand
 function syncSawmill(){
  const p=GameState.progress,c=sawmillCtl,hands=!inside&&!shop;carryLog.visible=hands&&p.carry?.kind==='log';
  if(!c?.ready)return;
@@ -272,11 +273,15 @@ function candidates(){const all=[],add=(id,point,anchor,label,run,range=1.5,key)
   const pump=fuel.pumpAt(me.position.x,me.position.z,USE_RANGE_M);
   if(pump){const at=()=>new THREE.Vector3(pump.use.x,1.2,pump.use.z);
    if(fuel.held===pump)add('fuel-hang-'+pump.id,{x:pump.holster.x,z:pump.holster.z},()=>new THREE.Vector3(pump.holster.x,1.4,pump.holster.z),'Hang the nozzle back',()=>hangNozzle(),2.2,'H'); // at the holster, so a tank cap you stand at (the fill prompt) wins over it
+   else if(!fuel.held&&GameState.progress.equipped==='gas-can'){const can=canOf(GameState.progress),wrong=can.mgal>0&&can.fuel!==pump.fuel,full=can.mgal>=CAN_CAPACITY_MGAL; // the gas can in hand: hold F at the pump to fill it (no nozzle)
+    add('can-fill-'+pump.id,pump.use,at,full?'Gas can full':wrong?`Your can holds ${fuelName(can.fuel)}`:`Hold to fill the gas can · ${pump.price}`,()=>toast(full?'The can is full.':wrong?`This can holds ${fuelName(can.fuel)}.`:'Hold F to fill the can.'),USE_RANGE_M,!wrong&&!full?'F':'')}
    else if(!fuel.held)add('fuel-take-'+pump.id,pump.use,at,`Take the ${pump.label} nozzle · ${pump.price}`,()=>takeNozzle(pump),USE_RANGE_M,'H')}
   {const near=driving.fillerNear(me.position.x,me.position.z,REACH_M);
    if(near){const info=driving.fuelOf(near),pt=driving.fillerPoint(near),spec=driving.byId.get(near).spec,cap=()=>new THREE.Vector3(pt.x,.95,pt.z),text=`${spec.name} · takes ${fuelName(info.type)} · ${fuelText(info.mgal,info.capacityMgal)}`;
     if(fuel.held){const right=fuel.held.fuel===info.type,full=info.mgal>=info.capacityMgal,say=full?'The tank is full.':right?'Hold F to fill.':`Wrong fuel: this one takes ${fuelName(info.type)}.`;
      add('fuel-fill',pt,cap,full?'Tank full':right?`Hold to fill · ${text}`:`Wrong fuel · takes ${fuelName(info.type)}`,()=>toast(say),REACH_M,right&&!full?'F':'')}
+    else if(GameState.progress.equipped==='gas-can'){const can=canOf(GameState.progress),empty=can.mgal<=0,right=can.fuel===info.type,full=info.mgal>=info.capacityMgal,say=empty?'The can is empty. Fill it at a pump.':full?'The tank is full.':right?'Hold F to pour.':`The can holds ${fuelName(can.fuel)}; this takes ${fuelName(info.type)}.`;
+     add('can-pour',pt,cap,empty?'Gas can empty':full?'Tank full':right?`Hold to pour · ${text}`:`Wrong fuel · takes ${fuelName(info.type)}`,()=>toast(say),REACH_M,!empty&&right&&!full?'F':'')}
     else add('fuel-info',pt,cap,text,()=>toast(`${text}. Take a ${fuelName(info.type)} nozzle at a pump first.`),REACH_M,'')}}
   if(!fuel.held)
   for(const d of driving.doors())add('drive-'+d.id+'-'+d.seat,{x:d.x,z:d.z},()=>new THREE.Vector3(d.x,1.3,d.z),(d.seat==='driver'?'Drive the ':'Ride in the ')+d.name.replace(/^Eastbank /,''),()=>enterVehicle(d.id,d.seat),2);
@@ -355,8 +360,32 @@ function updateNozzlePose(dt){
  if(nozzlePose>0){avatar.reach('R',NOZZLE_HAND,nozzlePose,NOZZLE_POLE);avatar.setHandCurl('R',nozzlePose*.85)}else if(was&&!GameState.progress.equipped)avatar.reach('R',null,0);
 }
 // Filling: while you HOLD F with a nozzle out and a stopped vehicle's filler cap within reach, fuel flows at FLOW_MGAL_PER_S, in whole steps, paid as it goes.
+// The gas can in hand: hold F at a pump to fill it (paid as it goes), or at a tank cap to pour it in (free). Rules: fillCan and pour (fuel.js); the can's fuel is saved on its bag slot.
+let canAt=null;
+function canTick(dt){
+ if(inside||shop||driving.active||!active||modal)return;
+ const P=GameState.progress,can=canOf(P);if(!can)return;
+ const id=driving.fillerNear(me.position.x,me.position.z,REACH_M),pump=fuel.pumpAt(me.position.x,me.position.z,USE_RANGE_M),pouring=!!id&&can.mgal>0;
+ if(!pouring&&!pump){fillAcc=0;return}
+ if(fillBlocked)return;
+ fillAcc+=FLOW_MGAL_PER_S*dt;const want=Math.floor(fillAcc/STEP_MGAL)*STEP_MGAL;if(want<=0)return;
+ if(pouring){const info=driving.fuelOf(id),at=driving.fillerPoint(id),r=pour({can,target:{fuel:info.type,mgal:info.mgal,capacityMgal:info.capacityMgal},mgal:want});
+  if(r.error){fillBlocked=true;fillAcc=0;toast(r.error);audio.chime(at,listenerAt(),{ok:r.code==='full'});return}
+  fillAcc-=want;driving.setFuel(id,r.target.mgal);GameState.progress=setCan(P,r.can);canAt=at;fuelFlow=1;fuelFull=r.target.mgal/info.capacityMgal;
+  fillSave+=dt;if(fillSave>=1){persist();fillSave=0}
+  fillToast+=dt;if(fillToast>=.5){fillToast=0;toast(`Pouring · ${fuelText(r.target.mgal,info.capacityMgal)} · ${canText(r.can)}`)}
+  if(r.can.mgal<=0||r.target.mgal>=info.capacityMgal){fillBlocked=true;fillAcc=0;fuelFlow=0;persist();toast(r.target.mgal>=info.capacityMgal?'The tank is full.':`The can is empty. ${fuelText(r.target.mgal,info.capacityMgal)}`);audio.chime(at,listenerAt(),{ok:true})}
+  return}
+ const r=fillCan({cash:P.cash,can},{pump:{fuel:pump.fuel},mgal:want});
+ if(r.error){fillBlocked=true;fillAcc=0;toast(r.error);audio.chime(pump.use,listenerAt(),{ok:r.code==='full'});return}
+ fillAcc-=want;GameState.progress={...setCan(P,r.can),cash:r.cash};canAt=pump.use;fuelFlow=1;fuelFull=r.can.mgal/CAN_CAPACITY_MGAL;
+ fillSave+=dt;if(fillSave>=1){persist();fillSave=0}
+ fillToast+=dt;if(fillToast>=.5){fillToast=0;toast(`Filling the can · ${canText(r.can)} · ${money(r.cash)}`)}
+ if(r.soldMgal<want||r.can.mgal>=CAN_CAPACITY_MGAL){fillBlocked=true;fillAcc=0;fuelFlow=0;persist();toast(r.can.mgal>=CAN_CAPACITY_MGAL?'The can is full.':'You cannot pay for any more fuel.');audio.chime(pump.use,listenerAt(),{ok:r.can.mgal>=CAN_CAPACITY_MGAL})}
+}
 function fuelTick(dt){
  if(!fHeld){fillBlocked=false;fillAcc=0;if(fillSave>0){persist();fillSave=0}return}
+ if(GameState.progress.equipped==='gas-can'&&!fuel.held){canTick(dt);return}
  if(!fuel.held||inside||shop||driving.active||!active||modal)return;
  const id=driving.fillerNear(me.position.x,me.position.z,REACH_M);
  if(!id){fillAcc=0;return}
@@ -379,7 +408,7 @@ function fuelTick(dt){
 function enterVehicle(id,seat='driver'){
  if(driving.active||inside||shop||consuming||putting||actionBusy())return;
  if(GameState.progress.carry){toast('Your hands are full. Put it down first (X).');return}
- if(!driving.enter(id,seat))return;fuel.putBack();if(driving.active.fuelMgal>0||!driving.active.spec.fuel)audio.ignition(me.position,listenerAt(),{tier:driving.active.cls.tier});
+ if(!driving.enter(id,seat))return;fuel.putBack();if(driving.active.fuelMgal>0||!driving.active.spec.fuel){audio.ignition(me.position,listenerAt(),{tier:driving.active.cls.tier});const tip=driving.exhaust();if(tip)smoke.burst(tip,START_PUFFS[driving.active.cls.tier]??6)}
  const at=driving.seat();me.position.x=at.x;me.position.z=at.z;me.rotation.y=driving.yaw;keys.clear();look.resetMotion();
  yaw=driving.yaw+Math.PI;pitch=driving.cameraPitch();zoom=zoomTarget=driving.cameraZoom();driveIdle=9;persist();
  toast(seat==='driver'?`Driving the ${driving.active.spec.name.replace(/^Eastbank /,'')} · W S accelerate and brake, A D steer, Space brakes, E gets out`:`Riding in the ${driving.active.spec.name.replace(/^Eastbank /,'')} · you are the passenger: nobody is driving · E gets out`);
@@ -611,7 +640,7 @@ function toggleEquip(id,{silent=false}={}){if(fuel.held)return {error:'Hang up t
  if(GameState.progress.carry&&GameState.progress.equipped!==id)return {error:'Your hands are full. Put it down first (X).'};
  const result=equipTool(GameState.progress,id);
  if(result.error)return result;
- GameState.progress=result.state;persist();if(!silent)toast(result.message);
+ GameState.progress=result.state;persist();if(!silent)toast(result.message+(result.equipped===id&&id==='gas-can'?` ${canText(canOf(result.state))}. Hold F at a pump to fill it.`:''));
  return result;
 }
 function updateEquipped(dt){
@@ -941,7 +970,7 @@ look.tick(view);
 if(worldPanel?.actor&&!$('dialog').hidden){const actor=worldPanel.actor,pa=getMeWorldPosition(new THREE.Vector3()),pb=actor.getWorldPosition(new THREE.Vector3()),mid=pa.clone().add(pb).multiplyScalar(.5);const angle=Math.atan2(pa.x-pb.x,pa.z-pb.z);actor.rotation.y=angle;me.rotation.y=angle+Math.PI;worldPlayer.position.copy(mid);if(shop)shops[shop].camera(worldPlayer,angle+.45,.32,5.8,view);else updateCamera(worldPlayer,angle+.45,.32,5.8,view)}else if(shop){getMeWorldPosition(worldPlayer.position);shops[shop].camera(worldPlayer,yaw,pitch,zoom,view);}else if(inside)(home.camera||indoorCamera)(me,yaw,pitch,zoom,view);else updateCamera(me,yaw,pitch,zoom,view);
 const daylight=Math.max(.12,Math.sin((GameState.progress.routine.minutes-360)/1440*Math.PI*2));sun.intensity=.2+daylight*2.9;scene.background.setRGB(.08+daylight*.65,.12+daylight*.67,.2+daylight*.62);scene.fog.color.copy(scene.background);
 
-updateEquipped(modal?0:view);updateCarryPose(view);updateNozzlePose(view);avatar.update(modal?0:view);if(shop)shops[shop].clerk.update(modal?0:view);updateZones(view);updateSleep(real);updateWork(view);updateGig(view);updateObjective(view);updateWorldUI();updateHomeNotices();updateRing();updateMultiplayer(now,moving,view);syncPlayerMesh();fuelHose();{const dv=driving.active,on=!!dv&&(dv.fuelMgal>0||!dv.spec.fuel)&&!modal;audio.engine(engineVoice({speed:dv?dv.state.speed:0,top:dv?dv.cls.top:10,throttle:dv&&driving.driving&&(keys.has('KeyW')||keys.has('ArrowUp'))?1:0,tier:dv?dv.cls.tier:'low',running:on}))}audio.fuel({listener:listenerAt(),at:fuel.held?fuel.held.use:null,level:fuelFlow,fullness:fuelFull});fuelFlow=0;renderer.render(inside?home.room.scene:scene,camera)}requestAnimationFrame(frame);
+updateEquipped(modal?0:view);updateCarryPose(view);updateNozzlePose(view);avatar.update(modal?0:view);if(shop)shops[shop].clerk.update(modal?0:view);updateZones(view);updateSleep(real);updateWork(view);updateGig(view);updateObjective(view);updateWorldUI();updateHomeNotices();updateRing();updateMultiplayer(now,moving,view);syncPlayerMesh();fuelHose();{const dv=driving.active,on=!!dv&&(dv.fuelMgal>0||!dv.spec.fuel)&&!modal;{const tip=dv&&on?driving.exhaust(dv):null;if(tip)smoke.emit(dv.spec.id,view,tip,exhaustRate({running:true,throttle:driving.driving&&(keys.has('KeyW')||keys.has('ArrowUp'))?1:0,speed:dv.state.speed,top:dv.cls.top,tier:dv.cls.tier}));smoke.update(view,!inside)}audio.engine(engineVoice({speed:dv?dv.state.speed:0,top:dv?dv.cls.top:10,throttle:dv&&driving.driving&&(keys.has('KeyW')||keys.has('ArrowUp'))?1:0,tier:dv?dv.cls.tier:'low',running:on}))}audio.fuel({listener:listenerAt(),at:fuel.held?fuel.held.use:canAt,level:fuelFlow,fullness:fuelFull});fuelFlow=0;canAt=null;renderer.render(inside?home.room.scene:scene,camera)}requestAnimationFrame(frame);
 
 // Development hook: open the game with ?debug to inspect state from the console (window.__city).
 if(typeof location!=='undefined'&&new URLSearchParams(location.search).has('debug'))window.__city={GameState,world,scene,camera,avatar,pedestrians,audio,sawmillCtl,holdBend:a=>{bendNow=a;avatar.setLean(a*.87);avatar.setCrouch(a*.22)},

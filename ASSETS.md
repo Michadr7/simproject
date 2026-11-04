@@ -179,3 +179,6 @@ Sketchfab "Pickup Truck" by 00amza, **CC-BY-4.0** (author must be credited: `cre
 Sketchfab "Low poly Pickup truck v3" by Aditya Graphical, **CC-BY-4.0** (credited in `credits.js`), from `assets-src/Veichles/low_poly_pickup_truck_v3/`. Body texture 512 px JPEG with the lights' texture painted as a patch (`patchPlain`), four split wheels, `turn: 180`. The old red pickup's wheels were split in place with `scripts/split-wheels.mjs` (the FBX is gone from the repo).
 
 The red CGTrader pickup (ehicles/Pickup.fbx) was removed in 0.33; its credit and converter entry went with it.
+
+## Gas can (0.35): `prop.fuel-can`
+The project owner's FBX (`assets-src/fuel_can/fuel_can.fbx`, centimetres, upright 0.50 m, 1,162 triangles) with its Albedo texture only (256 px JPEG, the AO, metallic, normal and roughness maps are not used). Authorship and licence still to be confirmed (credited as own work for now). No collider (a held and bagged item). Rebuild: `TOOL_DIR=<tools> node scripts/build-props.mjs assets-src prop.fuel-can`.

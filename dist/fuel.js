@@ -39,6 +39,28 @@ export function sell(state,action){
  return {cash:cash-cents,target:{...target,mgal:target.mgal+soldMgal},soldMgal,cents};
 }
 
+// The gas can (0.35): 5 gallons of one fuel. Filling it at a pump is a sale into the can (the same prices and steps as a tank); pouring it into a vehicle is free and moves as much as fits.
+//   fillCan({cash, can: {fuel, mgal}}, {pump: {fuel}, mgal}) -> {cash, can, soldMgal, cents} | {error, code}   (an empty can takes whatever the pump sells; a can with fuel only its own)
+//   pour({can: {fuel, mgal}, target: {fuel, mgal, capacityMgal}, mgal}) -> {can, target, movedMgal} | {error, code: 'empty' | 'wrong-fuel' | 'full' | 'invalid'}
+export const CAN_CAPACITY_MGAL=5000;
+export function fillCan(state,action){
+ const can=state?.can;if(!can||!Number.isSafeInteger(can.mgal)||can.mgal<0||can.mgal>CAN_CAPACITY_MGAL)return {error:'Bad sale.',code:'invalid'};
+ const pumpFuel=action?.pump?.fuel,fuel=can.mgal>0?can.fuel:pumpFuel;
+ const r=sell({cash:state.cash,target:{fuel,mgal:can.mgal,capacityMgal:CAN_CAPACITY_MGAL}},action);
+ if(r.error)return r.code==='wrong-fuel'?{error:`This can holds ${fuelName(can.fuel)}, not ${fuelName(pumpFuel)}.`,code:'wrong-fuel'}:r.code==='full'?{error:'The can is full.',code:'full'}:r;
+ return {cash:r.cash,can:{fuel,mgal:r.target.mgal},soldMgal:r.soldMgal,cents:r.cents};
+}
+export function pour(state){
+ const can=state?.can,target=state?.target,want=state?.mgal;
+ if(!can||!target||!Number.isSafeInteger(can.mgal)||!Number.isSafeInteger(target.mgal)||!Number.isSafeInteger(target.capacityMgal)||!(want>0))return {error:'Bad pour.',code:'invalid'};
+ if(can.mgal<=0)return {error:'The can is empty.',code:'empty'};
+ if(can.fuel!==target.fuel)return {error:`The can holds ${fuelName(can.fuel)}; this takes ${fuelName(target.fuel)}.`,code:'wrong-fuel'};
+ const room=target.capacityMgal-target.mgal;if(room<=0)return {error:'The tank is full.',code:'full'};
+ const moved=Math.min(Math.floor(want),can.mgal,room),left=can.mgal-moved;
+ return {can:{fuel:left>0?can.fuel:null,mgal:left},target:{...target,mgal:target.mgal+moved},movedMgal:moved};
+}
+export const canText=can=>!can||can.mgal<=0?'Empty gas can':`${fuelTitle(can.fuel)} · ${gallons(can.mgal)} of ${(CAN_CAPACITY_MGAL/GALLON).toFixed(0)} gal`;
+
 // The fuel in a saved vehicle: an integer between 0 and its tank. A missing or bad value is a full tank (so old saves start full).
 export function normalizeFuelMgal(value,tankMgal){
  if(!Number.isSafeInteger(value)||value<0||value>tankMgal)return tankMgal;

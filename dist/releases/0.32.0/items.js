@@ -25,6 +25,7 @@ export const ITEMS=Object.freeze([
  equipment('small-backpack','Small backpack','🎒','backpack',10,2500),
  equipment('large-backpack','Large backpack','🎒','backpack',20,4500),
  tool('axe','Axe','🪓','Equip it, then press E (hold to keep chopping) at a pine in Pine Ridge',2000),
+ {...tool('gas-can','Gas can','⛽','Equip it. At a pump hold F to fill it (5 gallons of one fuel); at a vehicle\'s tank cap hold F to pour it in',1500),capacityMgal:5000},
  material('wood-log','Wood log','🪵','Timber from Pine Ridge · sells for $1.00 at the Corner Market',100)
 ].map(Object.freeze));
 export const itemById=id=>ITEMS.find(item=>item.id===id);

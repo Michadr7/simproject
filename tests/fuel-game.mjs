@@ -93,5 +93,17 @@ try{
  assert(/hose is at its limit/.test(toast()),'walking away past 3.5 m puts the nozzle back ('+toast()+')');
  // 8. the save keeps the truck's tank (it is away from home, so it is saved), in milli-gallons
  assert(profile().vehicles.some(v=>v.uid==='eastbank-worktruck'&&v.fuelMgal===after.fuelMgal&&v.fuelMl===undefined),'the saved tank is the one the game shows');
+ // 9. the gas can: equipped, hold F at the gas pump fills it (paid, one fuel); a can with gas is not for the diesel truck; a can with diesel pours into it (free)
+ {const {canOf}=await import(pathToFileURL(join(dir,'inventory.js')).href);
+  GameState.progress={...GameState.progress,inventory:{slots:[{id:'gas-can',quantity:1,fuelMgal:0,fuelType:null}],equipment:{jacket:null,backpack:null}},equipped:'gas-can'};
+  Object.assign(me.position,{x:155.7,z:-6.95});pump(.5);{const p=prompt();assert(/Hold to fill the gas can/.test(p.text)&&/\$4\.00\/gal/.test(p.text)&&p.key==='F','at the gas pump with the can: F, Hold to fill the gas can ('+JSON.stringify(p)+')')}
+  const cash0=GameState.progress.cash;hold('KeyF',true);pump(2.2);hold('KeyF',false);pump(.3);
+  const c1=canOf(GameState.progress);assert(c1.fuel==='gas'&&c1.mgal>=900&&c1.mgal<=1200,'the empty can took gas: '+JSON.stringify(c1));assert.equal(cash0-GameState.progress.cash,c1.mgal*400/1000,'and it was paid for at $4.00 a gallon');
+  Object.assign(me.position,dieselUse);pump(.4);
+  const before=truck().fuelMgal;hold('KeyF',true);pump(1.5);hold('KeyF',false);pump(.3);assert.equal(truck().fuelMgal,before,'F does not pour gas into a diesel tank');
+  GameState.progress={...GameState.progress,inventory:{slots:[{id:'gas-can',quantity:1,fuelMgal:2000,fuelType:'diesel'}],equipment:{jacket:null,backpack:null}}};
+  const cash1=GameState.progress.cash,tank0=truck().fuelMgal;hold('KeyF',true);pump(2);hold('KeyF',false);pump(.3);
+  const c2=canOf(GameState.progress);assert(c2.mgal<2000&&c2.mgal>=0,'pouring empties the can ('+JSON.stringify(c2)+')');assert.equal(GameState.progress.cash,cash1,'pouring is free');assert(truck().fuelMgal>tank0&&truck().fuelMgal-tank0===2000-c2.mgal,'the truck got exactly what left the can ('+tank0+' to '+truck().fuelMgal+')');
+  GameState.progress={...GameState.progress,equipped:null}}
  console.log('Refuelling (the packaged game, imperial): a real H press takes the diesel nozzle at the pump, the tank cap glows and says what the truck takes, F held fills in whole steps at exactly $4.20 a gallon, E never fills, letting go stops it, the wrong fuel is refused without money, the arm holds the nozzle, E hangs it up, walking past 3.5 m puts it back, the tank is saved.');
 }finally{await rm(dir,{recursive:true,force:true})}

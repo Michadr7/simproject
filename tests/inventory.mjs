@@ -3,8 +3,8 @@ import {ITEMS,itemById,isConsumable,isBuyable} from '../dist/items.js';
 import {addItem,useItem,unequipItem,inventoryCapacity,normalizeInventory,quickItems,countItem,hasItem,hotbarItems,equipTool,sellLogs} from '../dist/inventory.js';
 import {freshProgress,normalizeProgress,transactJob} from '../dist/jobs.js';
 assert.equal(ITEMS.filter(i=>i.type==='food').length,10);assert.equal(ITEMS.filter(i=>i.type==='drink').length,5);assert.equal(ITEMS.filter(i=>i.type==='equipment').length,3);
-assert.equal(ITEMS.filter(i=>i.type==='tool').length,1);assert.equal(ITEMS.filter(i=>i.type==='material').length,1);
-assert.equal(new Set(ITEMS.map(i=>i.id)).size,20);assert(isBuyable(itemById('axe'))&&!isBuyable(itemById('wood-log')));
+assert.equal(ITEMS.filter(i=>i.type==='tool').length,2);assert.equal(ITEMS.filter(i=>i.type==='material').length,1);
+assert.equal(new Set(ITEMS.map(i=>i.id)).size,21);assert(isBuyable(itemById('axe'))&&!isBuyable(itemById('wood-log')));
 for(const item of ITEMS){assert(item.icon);for(const field of ['foodRestore','thirstRestore','energyRestore'])assert(Number.isFinite(item[field]));if(item.type==='drink')assert(item.thirstRestore>0)}
 for(const item of ITEMS.filter(isConsumable)){
  let s=freshProgress();s.life={...s.life,food:90,thirst:90,energy:90};s=addItem(s,item.id).state;
@@ -42,3 +42,14 @@ assert.deepEqual(normalizeInventory({slots:[{id:'bad',quantity:2}],equipment:{ba
  assert.match(sellLogs(sold.state).error,/no wood logs/);assert.match(sellLogs(addItem(freshProgress(),'wood-log').state).message,/1 wood log for \$1\.00/);
  assert.equal(itemById('wood-log').price,100);}
 console.log('20 item definitions (incl. axe and wood log), restoration, stacking, equipment swaps, capacity safeguards, purchases and save preservation passed.');
+// The gas can: a tool you can buy and equip, whose fuel and fuel type live on its bag slot and survive a save; bad fields are dropped.
+{import('../dist/inventory.js').then(({canOf,setCan})=>{
+ const can=itemById('gas-can');assert(can&&can.type==='tool'&&can.capacityMgal===5000&&isBuyable(can)&&can.price===1500,'a $15 gas can that holds 5 gallons');
+ let p=freshProgress();p={...p,cash:5000};const bought=addItem(p,'gas-can',{purchase:true});assert(!bought.error&&bought.state.cash===3500,'bought for $15');p=bought.state;
+ assert.deepEqual(canOf(p),{fuel:null,mgal:0},'new cans are empty');assert.deepEqual(normalizeInventory(p.inventory).slots.find(s=>s.id==='gas-can'),{id:'gas-can',quantity:1,fuelMgal:0,fuelType:null});
+ p=setCan(p,{fuel:'diesel',mgal:3250});assert.deepEqual(canOf(p),{fuel:'diesel',mgal:3250},'fuel is kept on the slot');assert.deepEqual(canOf(normalizeProgress(JSON.parse(JSON.stringify(p)))),{fuel:'diesel',mgal:3250},'and in a save');
+ const bad=normalizeInventory({slots:[{id:'gas-can',quantity:1,fuelMgal:9999,fuelType:'gas'},{id:'axe',quantity:1,fuelMgal:100,fuelType:'gas'}]});assert.deepEqual(bad.slots,[{id:'gas-can',quantity:1,fuelMgal:0,fuelType:null},{id:'axe',quantity:1}],'a can cannot hold more than 5 gallons, and only cans have fuel');
+ assert.equal(normalizeInventory({slots:[{id:'gas-can',quantity:1,fuelMgal:100,fuelType:'water'}]}).slots[0].fuelMgal,0,'an unknown fuel type is emptied');
+ assert.equal(setCan({inventory:{slots:[]}},{fuel:'gas',mgal:50}),null,'no can, nothing to set');assert.equal(canOf({inventory:{slots:[]}}),null);
+ assert(hotbarItems(p).some(h=>h.item.id==='gas-can')&&equipTool(p,'gas-can').equipped==='gas-can','it shows on the hotbar and can be equipped');
+ console.log('Gas can: bought, equipped, fuel saved on its slot.')})}
