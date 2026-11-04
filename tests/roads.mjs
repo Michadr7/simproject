@@ -13,7 +13,9 @@ const comp=new Int32Array(T.walk.length),sizes=[],seeds=[];
 for(let c0=0;c0<comp.length;c0++){if(comp[c0]||!isPaved(c0))continue;const id=sizes.length+1;let n=0;const stack=[c0];comp[c0]=id;
  while(stack.length){const c=stack.pop(),i=c%T.cols,j=(c-i)/T.cols;n++;for(let dj=-2;dj<=2;dj++)for(let di=-2;di<=2;di++){const a=i+di,b=j+dj;if(a<0||b<0||a>=T.cols||b>=T.rows||Math.abs(di)+Math.abs(dj)>2)continue;const d=b*T.cols+a;if(!comp[d]&&isPaved(d)){comp[d]=id;stack.push(d)}}}
  sizes.push(n);seeds.push([T.x0+(c0%T.cols+.5)*T.cell,T.z0+(Math.floor(c0/T.cols)+.5)*T.cell])}
-const floating=sizes.map((n,k)=>({n,at:seeds[k].map(v=>+v.toFixed(0)).join(',')})).slice(1);
+// a hill's dirt track is a declared trail: it starts in the meadow and is its own piece (MAP.relief.tracks)
+const isTrail=k=>MAP.relief.tracks.some(t=>t.points.some(([x,z])=>Math.hypot(x-seeds[k][0],z-seeds[k][1])<4));
+const floating=sizes.map((n,k)=>({n,at:seeds[k].map(v=>+v.toFixed(0)).join(','),trail:isTrail(k)})).slice(1).filter(p=>!p.trail);sizes.splice(0,sizes.length,...sizes.filter((n,k)=>k===0||!isTrail(k)));
 assert.equal(sizes.length,1,`the paved network is one piece: ${sizes.length} pieces; the others are ${JSON.stringify(floating)} cells at (x,z) (the first is Oak Street's)`);
 
 // ── Every walkable road can be walked along its whole centreline ─────────────────────────────────────────

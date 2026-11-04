@@ -70,8 +70,8 @@ assert(!world.blocked(161.8,30.4),'the dock plate is walked over (its ramp end; 
  assert(!at(-30,-100)['warehouse-yard'],'and not from Alder Center');
  const s=at(163,25)&&eb.stats(163,25),far=eb.stats(-5,15);assert.equal(far.chunksOn,0);assert.equal(far.instances,0);
  // one InstancedMesh per model per yard, never one per prop: warehouse 7 models (dock plate, sign, bollard, three loaded pallets, empty pallet), freight yard 9 (three containers, empty and three loaded pallets, crate, bollard), timber yard 4, workshop 4, gas station 1
- assert.deepEqual(eb.chunks.map(c=>c.meshes.length),[7,9,4,4,3]); // the gas station: its bollards, the pump island and the canopy (0.35)
- assert(s.instances===103&&s.triangles<=30000&&s.drawCalls<=30,`worst case, standing among all five yards: ${s.instances} instances, ${s.triangles} triangles, ${s.drawCalls} draw calls`);
+ assert.deepEqual(eb.chunks.map(c=>c.meshes.length),[7,9,4,4,4]); // the gas station: its bollards, the pump island and the canopy (a roof and its columns, two meshes, 0.35)
+ assert(s.instances===103&&s.triangles<=30000&&s.drawCalls<=31,`worst case, standing among all five yards: ${s.instances} instances, ${s.triangles} triangles, ${s.drawCalls} draw calls`);
  // Eastbank is compact (about 120 x 95 m): from the depot all five yards are within 80 m, so standing anywhere in it you pay for all 107 props. The city and Alder Center pay nothing.
  const depot=eb.stats(95,-10);assert.equal(depot.chunksOn,5);assert.equal(depot.instances,103);for(const [x,z] of [[0,0],[20,-100],[-30,60]])assert.equal(eb.stats(x,z).chunksOn,0,`no yard is drawn from ${x}, ${z}`);console.log(`Eastbank cost: from the depot ${JSON.stringify(depot)}; from the spawn ${JSON.stringify(far)}`)}
 // The validator catches a bad yard.
@@ -86,9 +86,13 @@ assert(!world.blocked(161.8,30.4),'the dock plate is walked over (its ramp end; 
  has(broken(m=>{m.bayRows[0].count=20}),/bay row supply-bays is not on paving/);
  has(broken(m=>{m.yards[2].bounds={x0:70,x1:96,z0:40,z1:62}}),/not on one paving rectangle/);
  has(broken(m=>{m.properties.splice(m.properties.findIndex(p=>p.id==='eastbank-warehouse'),1)}),/landmark eastbank-warehouse has no property entry/)}
-// the forecourt roof dissolves (is not drawn) while the player stands under it, and is back when they step out
-{assert.equal(eb.canopies.length,1,'one forecourt canopy');const roof=eb.canopies[0].mesh;
- eb.update(156.5,-8.25);assert.equal(roof.visible,false,'standing under the canopy hides its roof');
- eb.update(159.5,-8.25);assert.equal(roof.visible,false,'and in the lane near the roof edge (3 m east of its centre)');
- eb.update(162,-8.25);assert.equal(roof.visible,true,'outside the roof (5.5 m along the lane) it is drawn again');eb.update(140,-4);assert.equal(roof.visible,true,'and from the road to the west')}
+// the forecourt roof fades to a faint ghost while the player stands under it (it eases, a few frames), and is solid again when they step out
+{assert.equal(eb.canopies.length,1,'one forecourt canopy');const roof=eb.canopies[0].mesh,op=()=>[].concat(roof.material)[0].opacity,step=(x,z)=>{for(let i=0;i<40;i++)eb.update(x,z)};
+ step(156.5,-8.25);assert(op()<.3&&roof.visible,'standing under the canopy fades its roof to a ghost (still there)');
+ step(159.5,-8.25);assert(op()<.3,'and in the lane near the roof edge (3 m east of its centre)');
+ step(162,-8.25);assert.equal(op(),1,'outside the roof it is solid again');assert.equal([].concat(roof.material)[0].transparent,false);step(140,-4);assert.equal(op(),1,'and from the road to the west')}
+// the columns stay drawn when the roof dissolves (you can see what you would run into), and stand beside the island's ends, not in the lanes
+{const c=eb.canopies[0];eb.update(156.5,-8.25);assert.equal(c.columns.visible,true,'the columns are drawn under the roof');const {splitCanopy}=await import('../dist/eastbank.js'),{propGeometry}=await import('../dist/props.js'),whole=propGeometry('prop.forecourt-canopy'),parts=splitCanopy(whole);
+ assert.equal(parts.roof.index.count+parts.columns.index.count,whole.index.count,'every triangle is in the roof or the columns');
+ assert(parts.columns.index.count>0&&parts.roof.index.count>parts.columns.index.count);const P=parts.columns.attributes.position,used=[...parts.columns.index.array];const xs=used.map(i=>P.getX(i)),ys=used.map(i=>P.getY(i));assert(Math.max(...xs.map(Math.abs))<1.5,'the columns stand within 1.5 m of the canopy centre (the model had them 5 m out)');assert(Math.min(...ys)<.3&&Math.max(...ys)>=4.5,'full height')}
 console.log('Eastbank Works: Works Lane and a 12 m Freight South close a drivable loop; 5 buildings in their plots (all in the registry with reasons), 20 paving rectangles that are asphalt, connected to the roads and walkable; 8 m driveway cuts clear for a truck; 101 yard props in 5 chunks under the caps; solid and walk-over parts; culling; 10 broken yards and maps caught.');

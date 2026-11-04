@@ -31,9 +31,9 @@ export function wheelGeometry(id,i){
 }// Repeated props (pallets, boxes, crates, bollards...): ONE InstancedMesh per model however many are placed, so a yard of 200 pallets is one draw call.
 // spots: [{x, z, y?, yaw?}] (y defaults to 0: callers add heightAt/floor heights themselves). The mesh does not cast shadows by default (small props; pass shadows:true for tall ones);
 // its colliders are not added here: they come from propInfo(id).colliders, placed by whoever owns the spots.
-export function createPropInstances(id,spots,fade,{shadows=false}={}){
+export function createPropInstances(id,spots,fade,{shadows=false,geometry=null}={}){
  const material=propMaterial(id,fade); // flat-colour props (pallets, boxes) and textured ones (the kit's containers) alike
- const mesh=new THREE.InstancedMesh(propGeometry(id),material,Math.max(1,spots.length)),m=new THREE.Matrix4(),q=new THREE.Quaternion(),up=new THREE.Vector3(0,1,0),one=new THREE.Vector3(1,1,1),at=new THREE.Vector3();
+ const mesh=new THREE.InstancedMesh(geometry||propGeometry(id),material,Math.max(1,spots.length)),m=new THREE.Matrix4(),q=new THREE.Quaternion(),up=new THREE.Vector3(0,1,0),one=new THREE.Vector3(1,1,1),at=new THREE.Vector3();
  spots.forEach((s,i)=>{q.setFromAxisAngle(up,s.yaw||0);m.compose(at.set(s.x,s.y||0,s.z),q,one);mesh.setMatrixAt(i,m)});
  mesh.count=spots.length;mesh.instanceMatrix.needsUpdate=true;mesh.name='props-'+id;mesh.castShadow=shadows;mesh.receiveShadow=true;mesh.frustumCulled=false; // instances are scattered: the shared geometry's bounding sphere is the first one's
  return mesh;

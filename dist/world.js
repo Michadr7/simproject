@@ -1,4 +1,6 @@
 import * as THREE from './vendor/three.module.js';
+import {junctionPatches} from './junctions.js';
+import {heightAt,valleyAt,deckAt,bridgeRise,RIVER_PATHS,RIVER_WATER_Y} from './height.js';
 import {MAP,zoneById,zoneAtPoint,roadRects,riverPath,riverDistance} from './map-definition.js';
 import {PINES,BROADLEAVES,modelInfo,modelGeometry,createNatureMaterials} from './nature.js';
 import {terrain,SURFACE,roadCenterline} from './terrain.js';
@@ -29,6 +31,9 @@ export function zoneAt(x,z){
 // Walking and footing come from the terrain mask (terrain.js), built from the map at first use.
 export function isWalkable(x,z){return terrain().walkable(x,z)}
 export function footingAt(x,z){return terrain().footingAt(x,z)}
+export {heightAt};
+// what feet, a put-down plank stack or a log stand on: the terrain elevation plus the deck (the sawmill's floors, measured from the ground) or the surface footing
+export const standHeight=(x,z,deck=null)=>{const b=deckAt(x,z);return b!==null?b+footingAt(x,z):heightAt(x,z)+(deck??footingAt(x,z))}; // on a bridge: the deck's arch; elsewhere the ground
 
 // ─── Grid: 1 world unit = 1 plot. Cell (ix,iz) covers [ix,ix+1) × [iz,iz+1). ──
 export const cellOf=(x,z)=>({ix:Math.floor(x),iz:Math.floor(z)});
@@ -203,12 +208,43 @@ export function createWorld(scene,{label,cullRadius}={}){
   const mesh=new THREE.Mesh(new THREE.PlaneGeometry(x1-x0,z1-z0),groundLayer(material,y));mesh.rotation.x=-Math.PI/2;
   mesh.position.set((x0+x1)/2,y,(z0+z1)/2);mesh.receiveShadow=true;mesh.name=name;group.add(mesh);return mesh;
  }
- function textured(tex,w,h,scale,color='#ffffff'){const map=tex.clone();map.needsUpdate=true;map.repeat.set(w/scale,h/scale);return new THREE.MeshStandardMaterial({map,color,roughness:1})}
+ // The ground planes are cut where the river valley is (the valley is below them and a plane would hide it): a plane over a rectangle becomes the part north of the valley's lip and the part
+ // south of it (the lips are the river's edge offset by its lip distance). Everything else about them (colour, bias, name) is as before.
+ const lips=(()=>{const R=RIVER_PATHS[0],N=[],S=[];if(!R)return null;for(const p of R.path){const nx=-p.tz,nz=p.tx;const n={x:p.x-nx*R.lip,z:p.z-nz*R.lip},s={x:p.x+nx*R.lip,z:p.z+nz*R.lip};if(!N.length||n.x>N.at(-1).x)N.push(n);if(!S.length||s.x>S.at(-1).x)S.push(s)}return {N,S,first:R.path[0].z,last:R.path.at(-1).z}})();
+ const lipZ=(line,x)=>{if(x<=line[0].x)return lips.first;if(x>=line.at(-1).x)return lips.last;let lo=0,hi=line.length-1;while(hi-lo>1){const m=(lo+hi)>>1;if(line[m].x<=x)lo=m;else hi=m}const a=line[lo],b=line[hi];return a.z+(b.z-a.z)*(x-a.x)/((b.x-a.x)||1)};
+ function groundSplit(x0,x1,z0,z1,y,material,name){
+  const clamp=z=>Math.max(z0,Math.min(z1,z));
+  const xs=new Set([x0,x1]);for(const line of [lips.N,lips.S])for(const p of line)if(p.x>x0&&p.x<x1)xs.add(p.x);const X=[...xs].sort((a,b)=>a-b);
+  const make=(north)=>{const edge=X.map(x=>({x,z:clamp(lipZ(north?lips.N:lips.S,x))}));if(edge.every(p=>north?p.z<=z0+1e-6:p.z>=z1-1e-6))return null;
+   const pts=north?[{x:x0,z:z0},{x:x1,z:z0},...edge.slice().reverse()]:[...edge,{x:x1,z:z1},{x:x0,z:z1}];
+   const shape=new THREE.Shape(pts.map(p=>new THREE.Vector2(p.x,-p.z))),g=new THREE.ShapeGeometry(shape),pos=g.attributes.position,uv=g.attributes.uv;
+   for(let i=0;i<pos.count;i++)uv.setXY(i,(pos.getX(i)-x0)/(x1-x0),(-pos.getY(i)-z0)/(z1-z0));
+   const mesh=new THREE.Mesh(g,groundLayer(material,y));mesh.rotation.x=-Math.PI/2;mesh.position.y=y;mesh.receiveShadow=true;mesh.name=name+(north?'-north':'-south');group.add(mesh);return mesh};
+  if(!lips){return plane(x0,x1,z0,z1,y,material,name)}
+  make(true);make(false);
+ } function textured(tex,w,h,scale,color='#ffffff'){const map=tex.clone();map.needsUpdate=true;map.repeat.set(w/scale,h/scale);return new THREE.MeshStandardMaterial({map,color,roughness:1})}
  const farmZone=zoneById('farm').bounds,forestZone=zoneById('forest').bounds;
- plane(GROUND.x0-700,GROUND.x1+700,GROUND.z0-700,GROUND.z1+700,-.09,new THREE.MeshStandardMaterial({color:'#8a9a7c',roughness:.95}),'ground-far'); // far beyond the fog, so the world never seems to end at the map's edge
- plane(GROUND.x0,GROUND.x1,GROUND.z0,GROUND.z1,-.082,new THREE.MeshStandardMaterial({color:'#8a9a7c',roughness:.95}),'ground-base');
- {const f={x0:farmZone.x0-14,x1:farmZone.x1,z0:farmZone.z0-14,z1:farmZone.z1+7};plane(f.x0,f.x1,f.z0,f.z1,-.074,textured(textures.farm,f.x1-f.x0,f.z1-f.z0,7),'ground-farm')}
- {const f={x0:forestZone.x0,x1:forestZone.x1+14,z0:forestZone.z0-14,z1:forestZone.z1+7};plane(f.x0,f.x1,f.z0,f.z1,-.074,textured(textures.forest,f.x1-f.x0,f.z1-f.z0,6),'ground-forest')}
+ groundSplit(GROUND.x0-700,GROUND.x1+700,GROUND.z0-700,GROUND.z1+700,-.09,new THREE.MeshStandardMaterial({color:'#8a9a7c',roughness:.95}),'ground-far'); // far beyond the fog, so the world never seems to end at the map's edge
+ groundSplit(GROUND.x0,GROUND.x1,GROUND.z0,GROUND.z1,-.082,new THREE.MeshStandardMaterial({color:'#8a9a7c',roughness:.95}),'ground-base');
+ // The river valley (0.34): one mesh from the lip on one side across the bank, the bed and the other bank to the lip on the other; its height is valleyAt and its colour goes from grass at the lip to
+ // mud at the bed. The ground planes are cut along its lips (groundSplit), so it is the ground there.
+ if(RIVER_PATHS[0]){const R=RIVER_PATHS[0],O=[],half=R.half,bank=R.bank;for(const o of [R.lip,R.lip-1.3,R.lip-2.6,half+bank+3,half+bank+1.5,half+bank+.7,half+bank,half+bank*.75,half+bank*.5,half+bank*.25,half,half*.5,0])O.push(o);
+  const offsets=[...O.slice(0,-1).map(o=>-o).reverse(),...O].sort((a,b)=>a-b),pos=[],col=[],idx=[],grass=new THREE.Color('#8a9a7c'),mud=new THREE.Color('#6b6244'),c=new THREE.Color(),cols=offsets.length;
+  R.path.forEach((p,i)=>{for(const o of offsets){const x=p.x-p.tz*o,z=p.z+p.tx*o,dy=valleyAt(x,z);pos.push(x,-.079+dy,z);c.copy(grass).lerp(mud,Math.min(1,-dy/.7));col.push(c.r,c.g,c.b)}
+   if(i){const a=(i-1)*cols;for(let k=0;k<cols-1;k++)idx.push(a+k,a+k+1,a+k+cols,a+k+1,a+k+cols+1,a+k+cols)}});
+  const g=new THREE.BufferGeometry();g.setAttribute('position',new THREE.Float32BufferAttribute(pos,3));g.setAttribute('color',new THREE.Float32BufferAttribute(col,3));g.setIndex(idx);g.computeVertexNormals();g.computeBoundingSphere();
+  const mesh=new THREE.Mesh(g,groundLayer(new THREE.MeshStandardMaterial({vertexColors:true,roughness:1}),-.078));mesh.receiveShadow=true;mesh.name='river-valley';group.add(mesh)} // Hills (0.34): each hill is its own grid of 2 m cells over the flat base ground (one mesh, one draw call, culled by the camera like any mesh); its height is heightAt, which is 0 at its edge,
+ // so it meets the base ground without a seam. Only open country has hills (terrain.js validateTerrain), so nothing built stands on a slope.
+ const hillMaterial=new THREE.MeshStandardMaterial({color:'#8a9a7c',roughness:.95});
+ for(const h of MAP.relief?.hills||[]){
+  const cell=2,nx=Math.ceil(h.rx*2/cell),nz=Math.ceil(h.rz*2/cell),pos=[],idx=[];
+  for(let j=0;j<=nz;j++)for(let i=0;i<=nx;i++){const x=h.x-h.rx+i*h.rx*2/nx,z=h.z-h.rz+j*h.rz*2/nz;pos.push(x,-.079+heightAt(x,z),z)}
+  for(let j=0;j<nz;j++)for(let i=0;i<nx;i++){const a=j*(nx+1)+i,b=a+1,c=a+nx+1,d=c+1;idx.push(a,c,b,b,c,d)}
+  const g=new THREE.BufferGeometry();g.setAttribute('position',new THREE.Float32BufferAttribute(pos,3));g.setIndex(idx);g.computeVertexNormals();g.computeBoundingSphere();
+  const mesh=new THREE.Mesh(g,groundLayer(hillMaterial,-.078));mesh.receiveShadow=true;mesh.name='hill-'+h.id;group.add(mesh);
+ }
+ {const f={x0:farmZone.x0-14,x1:farmZone.x1,z0:farmZone.z0-14,z1:farmZone.z1+7};groundSplit(f.x0,f.x1,f.z0,f.z1,-.074,textured(textures.farm,f.x1-f.x0,f.z1-f.z0,7),'ground-farm')}
+ {const f={x0:forestZone.x0,x1:forestZone.x1+14,z0:forestZone.z0-14,z1:forestZone.z1+7};groundSplit(f.x0,f.x1,f.z0,f.z1,-.074,textured(textures.forest,f.x1-f.x0,f.z1-f.z0,6),'ground-forest')}
  for(const r of DIRT_ROADS)plane(r.x0,r.x1,r.z0,r.z1,-.066,textured(textures.dirt,r.x1-r.x0,r.z1-r.z0,5),'dirt-road');
  // Fields: plowed soil, wheat and young crops, each its own ground, open to vehicles.
  for(const f of FIELDS)plane(f.x0,f.x1,f.z0,f.z1,-.069,textured(textures[f.surface],f.x1-f.x0,f.z1-f.z0,6),'field-'+f.id);
@@ -218,36 +254,61 @@ export function createWorld(scene,{label,cullRadius}={}){
  const asphalt=new THREE.MeshStandardMaterial({color:'#585d60',roughness:.95}),lineMaterial=new THREE.MeshStandardMaterial({color:'#e8e2c8',roughness:.9,polygonOffset:true,polygonOffsetFactor:-12,polygonOffsetUnits:-24}),upAxis=new THREE.Vector3(0,1,0);
  const densify=(points,max=6)=>{const out=[points[0]];for(let i=1;i<points.length;i++){const [ax,az]=points[i-1],[bx,bz]=points[i],k=Math.max(1,Math.ceil(Math.hypot(bx-ax,bz-az)/max));for(let s=1;s<=k;s++)out.push([ax+(bx-ax)*s/k,az+(bz-az)*s/k])}return out};
  const toPath=points=>points.map((p,i)=>{const a=points[Math.max(0,i-1)],b=points[Math.min(points.length-1,i+1)],l=Math.hypot(b[0]-a[0],b[1]-a[1])||1;return {x:p[0],z:p[1],tx:(b[0]-a[0])/l,tz:(b[1]-a[1])/l}});
+ // Bridge crossings: the road is cut where it meets a bridge (the bridge builds its own deck, an arch over the river), and the road's own ribbon follows the ground (heightAt) so that it is
+ // never left floating or buried where the ground is not flat. Points are added at each bridge end and every 2 m across the bridge so the arch is smooth.
+ const onBridge=(x,z)=>MAP.water.bridges.find(b=>x>b.x0&&x<b.x1&&z>b.z0&&z<b.z1);
+ const withBridgePoints=line=>{const out=[line[0]];for(let i=1;i<line.length;i++){const [ax,az]=line[i-1],[bx,bz]=line[i];const cuts=[];for(const b of MAP.water.bridges){const x=(ax+bx)/2;if(x<=b.x0||x>=b.x1)continue;for(const zc of [b.z0,b.z1])if((az-zc)*(bz-zc)<0)cuts.push(zc);if((az>b.z0&&az<b.z1)||(bz>b.z0&&bz<b.z1)||cuts.length)for(let zc=b.z0+2;zc<b.z1;zc+=2)if((az-zc)*(bz-zc)<0)cuts.push(zc)}
+   cuts.sort((p,q)=>Math.abs(p-az)-Math.abs(q-az));for(const zc of cuts){const k=(zc-az)/(bz-az);out.push([ax+(bx-ax)*k,zc])}out.push([bx,bz])}return out};
+ const splitAtBridges=line=>{const pieces=[],mid=(p,q)=>[(p[0]+q[0])/2,(p[1]+q[1])/2];let cur=[line[0]],inB=null;for(let i=1;i<line.length;i++){const m=mid(line[i-1],line[i]),b=onBridge(...m)||null;if(b!==inB&&cur.length){cur.push(line[i-1]);if(cur.length>1||true)pieces.push({line:cur,bridge:inB});cur=[line[i-1]];inB=b}cur.push(line[i])}pieces.push({line:cur,bridge:inB});return pieces.filter(p=>p.line.length>1&&!p.bridge)};
  for(const edge of MAP.roads.edges){
   if(edge.surface!=='asphalt'||edge.level!=='rural')continue;
-  const line=densify(roadCenterline(edge));ribbon(toPath(line),edge.width/2,-.045,asphalt,'road-'+edge.id);
+  const line=withBridgePoints(densify(roadCenterline(edge)));
+  splitAtBridges(line).forEach((piece,k)=>ribbon(toPath(piece.line),edge.width/2,-.045,asphalt,'road-'+edge.id+(k?'-'+k:''),true));
   const dashes=[];let carried=0;for(let i=1;i<line.length;i++){const [ax,az]=line[i-1],[bx,bz]=line[i],len=Math.hypot(bx-ax,bz-az);let at=6-carried;while(at<=len){dashes.push({x:ax+(bx-ax)*at/len,z:az+(bz-az)*at/len,yaw:Math.atan2(bx-ax,bz-az)});at+=6}carried=len-(at-6)}
   if(!dashes.length)continue;
   const marks=new THREE.InstancedMesh(new THREE.BoxGeometry(.18,.02,2.2),lineMaterial,dashes.length),mat=new THREE.Matrix4(),at=new THREE.Vector3(),turn=new THREE.Quaternion(),one=new THREE.Vector3(1,1,1);
-  dashes.forEach((d,i)=>{const bridge=MAP.water.bridges.some(b=>d.x>=b.x0&&d.x<=b.x1&&d.z>b.z0&&d.z<b.z1);marks.setMatrixAt(i,mat.compose(at.set(d.x,bridge?-.005:-.032,d.z),turn.setFromAxisAngle(upAxis,d.yaw),one))});
+  dashes.forEach((d,i)=>{const deck=deckAt(d.x,d.z);marks.setMatrixAt(i,mat.compose(at.set(d.x,deck!==null?deck+.01:heightAt(d.x,d.z)-.032,d.z),turn.setFromAxisAngle(upAxis,d.yaw),one))});
   marks.name='road-line-'+edge.id;group.add(marks);
- }
- // The river: flat water between two muddy banks, outside every zone (a hard barrier). The bridge is the only way across.
+ } // Road joints (0.34, junctions.js): the rounded corners and width tapers that take the hard edges out of the junctions, one asphalt mesh.
+ {const pos=[],idx=[];for(const patch of junctionPatches()){const P=patch.points,k=pos.length/3;for(const [x,z] of P)pos.push(x,-.045+heightAt(x,z),z);
+   for(let i=1;i<P.length-1;i++){const a=[P[i][0]-P[0][0],P[i][1]-P[0][1]],b=[P[i+1][0]-P[0][0],P[i+1][1]-P[0][1]];if(a[1]*b[0]-a[0]*b[1]>=0)idx.push(k,k+i,k+i+1);else idx.push(k,k+i+1,k+i)}}
+  if(idx.length){const g=new THREE.BufferGeometry();g.setAttribute('position',new THREE.Float32BufferAttribute(pos,3));g.setIndex(idx);g.computeVertexNormals();const mesh=new THREE.Mesh(g,groundLayer(asphalt,-.045));mesh.receiveShadow=true;mesh.name='road-joints';group.add(mesh)}} // The river: flat water between two muddy banks, outside every zone (a hard barrier). The bridge is the only way across.
  const water=new THREE.MeshStandardMaterial({color:'#4a86a6',roughness:.2,metalness:.1,transparent:true,opacity:.94,side:THREE.DoubleSide,depthWrite:false}),mud=new THREE.MeshStandardMaterial({color:'#7d7352',roughness:1,side:THREE.DoubleSide});
 
- function ribbon(path,half,y,material,name){
+ function ribbon(path,half,y,material,name,lift=false){const up=lift===true?heightAt:lift||(()=>0);
   const position=[],uv=[],index=[];let along=0;
   path.forEach((p,i)=>{if(i)along+=Math.hypot(p.x-path[i-1].x,p.z-path[i-1].z);
-   position.push(p.x-p.tz*half,y,p.z+p.tx*half,p.x+p.tz*half,y,p.z-p.tx*half);uv.push(0,along/12,1,along/12);
+   position.push(p.x-p.tz*half,y+up(p.x-p.tz*half,p.z+p.tx*half),p.z+p.tx*half,p.x+p.tz*half,y+up(p.x+p.tz*half,p.z-p.tx*half),p.z-p.tx*half);uv.push(0,along/12,1,along/12);
    if(i){const a=(i-1)*2;index.push(a,a+2,a+1,a+1,a+2,a+3)}});
   const geometry=new THREE.BufferGeometry();geometry.setAttribute('position',new THREE.Float32BufferAttribute(position,3));geometry.setAttribute('uv',new THREE.Float32BufferAttribute(uv,2));geometry.setIndex(index);geometry.computeVertexNormals();
   const mesh=new THREE.Mesh(geometry,groundLayer(material,y));mesh.name=name;mesh.receiveShadow=true;group.add(mesh);return mesh;
  }
- for(const r of MAP.water.rivers){const path=riverPath(r,3);ribbon(path,r.width/2+r.bank,-.068,mud,'river-bank');ribbon(path,r.width/2,-.058,water,'river')}
+ // dirt tracks up the hills (0.34): a ribbon laid on the ground (every edge point lifted by heightAt), the dirt layer, one draw call each
+ {const dirtTrack=new THREE.MeshStandardMaterial({color:'#8a7152',roughness:1});for(const t of MAP.relief?.tracks||[])ribbon(toPath(densify(t.points,2)),t.half,-.066,dirtTrack,'track-'+t.id,true)}
+ for(const r of MAP.water.rivers){const path=riverPath(r,3);ribbon(path,r.width/2+r.bank,RIVER_WATER_Y,water,'river')}
  const stone=new THREE.MeshStandardMaterial({color:'#8b8f8c',roughness:1}),timber=new THREE.MeshStandardMaterial({color:'#6f5b43',roughness:1});
+ // Bridges (0.34): the deck is an arch, rising BRIDGE_RISE m above the ground at its crown and level where it meets the road (bridgeRise, height.js). Each part is one extrusion along the deck
+ // (flat-shaded faces): the deck body (stone), its asphalt top, a parapet and a timber cap on each side, and piers that stand on the river bed. Solid parapets keep nobody off the deck.
+ function extrude(zs,x0,x1,bottom,top,material,name){const pos=[],idx=[],n=zs.length;
+  const quad=(a,b,c,d)=>{const k=pos.length/3;pos.push(...a,...b,...c,...d);idx.push(k,k+1,k+2,k,k+2,k+3)};
+  for(let i=1;i<n;i++){const za=zs[i-1],zb=zs[i],ta=top(za),tb=top(zb),ba=bottom(za),bb=bottom(zb);
+   quad([x0,ta,za],[x0,tb,zb],[x1,tb,zb],[x1,ta,za]); // top
+   quad([x0,ba,za],[x1,ba,za],[x1,bb,zb],[x0,bb,zb]); // bottom
+   quad([x0,ba,za],[x0,bb,zb],[x0,tb,zb],[x0,ta,za]); // one side
+   quad([x1,ba,za],[x1,ta,za],[x1,tb,zb],[x1,bb,zb])} // the other
+  const g=new THREE.BufferGeometry();g.setAttribute('position',new THREE.Float32BufferAttribute(pos,3));g.setIndex(idx);g.computeVertexNormals();
+  const mesh=new THREE.Mesh(g,material);mesh.castShadow=mesh.receiveShadow=true;mesh.name=name;mesh.frustumCulled=true;group.add(mesh);return mesh}
  for(const b of MAP.water.bridges){
-  const len=b.z1-b.z0,cx=(b.x0+b.x1)/2,cz=(b.z0+b.z1)/2,width=b.x1-b.x0;
-  const part=(w,h,d,x,y,z,material,name)=>{const mesh=new THREE.Mesh(new THREE.BoxGeometry(w,h,d),material);mesh.position.set(x,y,z);mesh.castShadow=mesh.receiveShadow=true;mesh.name=name;group.add(mesh);return mesh};
-  part(width,.3,len,cx,-.17,cz,asphalt,'bridge-deck'); // top at y = -0.02, level with the road
+  const len=b.z1-b.z0,cx=(b.x0+b.x1)/2,cz=(b.z0+b.z1)/2,width=b.x1-b.x0,zs=[];for(let z=b.z0;z<b.z1-1e-6;z+=2)zs.push(z);zs.push(b.z1);
+  const rise=z=>bridgeRise(b,z);
+  extrude(zs,b.x0,b.x1,z=>rise(z)-.34,z=>rise(z)-.03,stone,'bridge-body');
+  extrude(zs,b.x0,b.x1,z=>rise(z)-.03,z=>rise(z)-.02,asphalt,'bridge-deck');
   for(const side of [-1,1]){ // low parapets along both sides, solid so nobody walks off the deck
-   const x=cx+side*(width/2-.25);part(.5,.7,len,x,.33,cz,stone,'bridge-parapet');part(.62,.12,len,x,.72,cz,timber,'bridge-cap');colliders.box(x,cz,.25,len/2);
+   const o=side*(width/2-.25),a=side<0?[b.x0,b.x0+.5]:[b.x1-.5,b.x1];
+   extrude(zs,a[0],a[1],z=>rise(z)-.02,z=>rise(z)+.68,stone,'bridge-parapet');extrude(zs,a[0]-.06,a[1]+.06,z=>rise(z)+.68,z=>rise(z)+.8,timber,'bridge-cap');colliders.box(cx+o,cz,.25,len/2);
   }
-  for(const dz of [-len*.22,len*.22])for(const side of [-1,1])part(.9,1.4,.9,cx+side*(width/2-.8),-.7,cz+dz,stone,'bridge-pier');
+  for(const dz of [-len*.22,len*.22])for(const side of [-1,1]){ // piers from the river bed up to the underside of the deck
+   const x=cx+side*(width/2-.8),z=cz+dz,top=rise(z)-.34,bed=-.079+heightAt(x,z)-.3,h=top-bed;const pier=new THREE.Mesh(new THREE.BoxGeometry(.9,h,.9),stone);pier.position.set(x,bed+h/2,z);pier.castShadow=pier.receiveShadow=true;pier.name='bridge-pier';group.add(pier)}
  }
 
  // Fences (instanced posts and rails, solid for walking).
@@ -299,7 +360,7 @@ export function createWorld(scene,{label,cullRadius}={}){
    for(const id of BROADLEAVES){
     const mine=list.filter((t,i)=>models[i]===id);if(!mine.length)continue;
     const bark=new THREE.InstancedMesh(modelGeometry(id,'bark'),nature.bark,mine.length),leaves=new THREE.InstancedMesh(modelGeometry(id,'leaves'),nature.broadleafLeaves,mine.length);
-    mine.forEach((t,i)=>{m4.compose(v.set(t.x,t.y??0,t.z),q.setFromAxisAngle(yAxis,variantHash(t.z,t.x)*Math.PI*2),s.setScalar(scale));bark.setMatrixAt(i,m4);leaves.setMatrixAt(i,m4);leaves.setColorAt(i,tints[i%4]);solid.push({x:t.x,z:t.z,radius:modelInfo(id).trunkRadius*scale*.85})});
+    mine.forEach((t,i)=>{m4.compose(v.set(t.x,heightAt(t.x,t.z)+(t.y??0),t.z),q.setFromAxisAngle(yAxis,variantHash(t.z,t.x)*Math.PI*2),s.setScalar(scale));bark.setMatrixAt(i,m4);leaves.setMatrixAt(i,m4);leaves.setColorAt(i,tints[i%4]);solid.push({x:t.x,z:t.z,radius:modelInfo(id).trunkRadius*scale*.85})});
     bark.name=`${name}-${id}-bark`;leaves.name=`${name}-${id}-leaves`;
     for(const mesh of [bark,leaves]){mesh.castShadow=mesh.receiveShadow=true;mesh.computeBoundingSphere();group.add(mesh)}
    }
@@ -344,17 +405,17 @@ export function createWorld(scene,{label,cullRadius}={}){
   yaw.setFromAxisAngle(yAxis,t.rot);
   axis.set(dirZ,0,-dirX).normalize();
   tilt.setFromAxisAngle(axis.lengthSq()?axis:v.set(1,0,0),fall*Math.PI*.47+shake);
-  m4.compose(v.set(t.x,0,t.z),tilt.multiply(yaw),s.setScalar(t.scale*shrink));
+  m4.compose(v.set(t.x,heightAt(t.x,t.z),t.z),tilt.multiply(yaw),s.setScalar(t.scale*shrink));
   t.entry.matrix.set(m4.elements);if(t.entry.slot>=0)for(const mesh of t.meshes)mesh.setMatrixAt(t.entry.slot,m4);
  }
  function hideTree(t){t.entry.off=true;dirty=true; // a felled tree leaves the draw lists altogether
-  stumps.setMatrixAt(t.index,m4.compose(v.set(t.x,0,t.z),yaw.setFromAxisAngle(yAxis,t.rot),s.set(t.scale,1,t.scale)))}
+  stumps.setMatrixAt(t.index,m4.compose(v.set(t.x,heightAt(t.x,t.z),t.z),yaw.setFromAxisAngle(yAxis,t.rot),s.set(t.scale,1,t.scale)))}
  function touch(){if(dirty)rebuild();for(const mesh of cutMeshes)mesh.instanceMatrix.needsUpdate=true;stumps.instanceMatrix.needsUpdate=true}
  rebuild();
 
  // ── Landmarks (the farmyard, the sawmill) placed from the map, solid where their walls are, and the fork's signpost ──────────────────────────────────
  const landmarks=MAP.landmarks.map(l=>{
-  const info=propInfo(l.prop),mesh=createProp(l.prop,fade);mesh.position.set(l.x,0,l.z);mesh.rotation.y=l.yaw;group.add(mesh);
+  const info=propInfo(l.prop),mesh=createProp(l.prop,fade);mesh.position.set(l.x,heightAt(l.x,l.z),l.z);mesh.rotation.y=l.yaw;group.add(mesh);
   const cos=Math.round(Math.cos(l.yaw)),sin=Math.round(Math.sin(l.yaw)),turned=sin!==0;
   for(const b of info.colliders)colliders.box(l.x+b.x*cos+b.z*sin,l.z-b.x*sin+b.z*cos,turned?b.hz:b.hx,turned?b.hx:b.hz);
   return {id:l.id,mesh,x:l.x,z:l.z,yaw:l.yaw,floor:info.floors||info.floor||null,radius:Math.hypot(info.width,info.depth)/2};
@@ -479,7 +540,7 @@ export function createWorld(scene,{label,cullRadius}={}){
   setStage(key,stage){
    const t=trees.get(key);if(!t||t.standing||t.anim||t.stage===stage)return false;
    t.stage=stage;
-   if(stage==='sapling'){t.entry.off=false;dirty=true;stumps.setMatrixAt(t.index,hidden);poseTree(t,{shrink:.3});stumps.setMatrixAt(t.index,m4.compose(v.set(t.x,0,t.z),yaw.setFromAxisAngle(yAxis,t.rot),s.set(t.scale*.8,.5,t.scale*.8)))}
+   if(stage==='sapling'){t.entry.off=false;dirty=true;stumps.setMatrixAt(t.index,hidden);poseTree(t,{shrink:.3});stumps.setMatrixAt(t.index,m4.compose(v.set(t.x,heightAt(t.x,t.z),t.z),yaw.setFromAxisAngle(yAxis,t.rot),s.set(t.scale*.8,.5,t.scale*.8)))}
    else hideTree(t);
    touch();return true;
   },
@@ -495,7 +556,7 @@ export function createWorld(scene,{label,cullRadius}={}){
   // Logs lying on the ground: [{x,z,rot}], drawn as instances.
   setLogs(list){
    const n=Math.min(list.length,MAX_LOG_INSTANCES);
-   for(let i=0;i<n;i++)logMesh.setMatrixAt(i,m4.compose(v.set(list[i].x,.12+(this.floorAt(list[i].x,list[i].z)??0),list[i].z),q.setFromAxisAngle(yAxis,list[i].rot),s.set(1,1,1)));
+   for(let i=0;i<n;i++)logMesh.setMatrixAt(i,m4.compose(v.set(list[i].x,heightAt(list[i].x,list[i].z)+.12+(this.floorAt(list[i].x,list[i].z)??0),list[i].z),q.setFromAxisAngle(yAxis,list[i].rot),s.set(1,1,1)));
    logMesh.count=n;logMesh.instanceMatrix.needsUpdate=true;
   },
   // Grid overlay: show only in farm/forest. Returns the targeted cell (or null).

@@ -247,9 +247,24 @@ const properties=[
 // prop and a vehicle class (vehicle.js CLASSES); the id is the save key (`progress.vehicles`). The parked scenery cars and trucks elsewhere are not drivable.
 export const DRIVABLE_MODELS=Object.freeze(['worktruck','offroad']);
 // The forecourt canopy's four steel columns, from the canopy's origin when it is not turned (the 0.8 m column boxes the map adds, see eastbank.js, which turns them with the canopy: x and z offsets in metres).
-export const CANOPY_COLUMNS=Object.freeze([[5,3.2],[-5,3.2],[5,-3.2],[-5,-3.2]]);
+export const CANOPY_MODEL_X=5,CANOPY_COLUMN_X=0; // the model's columns stand 5 m from its centre (across the lanes), in pairs; eastbank.js moves each pair together onto the island's centre line, so one column stands at each end of the island and both lanes under the roof are open
+export const CANOPY_COLUMNS=Object.freeze([[CANOPY_COLUMN_X,3.2],[-CANOPY_COLUMN_X,3.2],[CANOPY_COLUMN_X,-3.2],[-CANOPY_COLUMN_X,-3.2]]);
 // The Eastbank gas station (0.35, fuel.js): one pump island (two pumps: N=0 gas at its x -0.8 side, N=1 diesel at +0.8, the island's own anchors read from the model). A drive-through: you come in from the west (the gas-in paving), pass along the island's south side with your driver's door to the island, and leave east. The nozzles hang on the south (+z, the model's -Y) face.
 export const FUEL_STATIONS=Object.freeze([{id:'eastbank-gas',island:{prop:'prop.pump-island',x:156.5,z:-8.25,yaw:0},face:'ny',pumps:[{n:0,fuel:'gas'},{n:1,fuel:'diesel'}]}]);
+// Terrain relief (0.34): smooth elliptical hills in open country only, far from every road, zone, field, plot and the river (terrain.js validateTerrain checks it). height = h at the centre, 0 at the ellipse edge (a cosine falloff).
+// rx, rz: radii in metres; h: peak height in metres. The ground under everything built stays flat. heightAt (height.js) reads this.
+// A track winds up a hill as a spiral (a gentle climb, no tighter than a truck can turn): from rom to 	o of the hill's radius (0 = summit, 1 = edge), 	urns times round, starting due east.
+const spiral=(cx,cz,rx,rz,from,to,turns)=>{const out=[],n=Math.ceil(turns*2*Math.PI/.07);for(let i=0;i<=n;i++){const t=i/n,a=turns*2*Math.PI*t,r=from+(to-from)*t;out.push(Object.freeze([+(cx+r*rx*Math.cos(a)).toFixed(2),+(cz+r*rz*Math.sin(a)).toFixed(2)]))}return Object.freeze(out)};
+const relief=Object.freeze({hills:Object.freeze([
+ {id:'west-hill',x:-192,z:5,rx:52,rz:48,h:9},
+ {id:'west-knoll',x:-160,z:84,rx:30,rz:22,h:5},
+ {id:'north-west-hill',x:-212,z:-356,rx:32,rz:30,h:8},
+ // beyond Pine Ridge's east edge (past the Freight Road), north of the river
+ {id:'ridge-east-hill',x:264,z:-300,rx:22,rz:32,h:8},
+ {id:'ridge-east-knoll',x:266,z:-356,rx:20,rz:16,h:6}
+]),tracks:Object.freeze([
+ {id:'west-hill-track',half:3,points:spiral(-192,5,52,48,.95,.2,1.8)} // a dirt track up the big west hill: drivable, DIRT underfoot (a declared trail: it starts in the meadow and is not joined to the paved network)
+])});
 const vehicles=[
  {id:'eastbank-worktruck',model:'worktruck',name:'Worktruck',home:{x:84.25,z:-13,yaw:PI},fuel:{type:'diesel',tankMgal:21000,port:{x:1.2,z:-2.2}}},
  {id:'eastbank-offroad',model:'offroad',name:'Pevrolet Off Road Pickup',home:{x:88.75,z:-13,yaw:PI},fuel:{type:'diesel',tankMgal:18000,port:{x:1.4,z:-2.2}}}
@@ -263,7 +278,7 @@ export const MAP=deepFreeze({
  // Where you can walk: everywhere inside this rectangle except water (and trees, fences and buildings, which are solid objects). The zones name and shape the districts; they no longer fence them in.
  playable:{x0:-250,x1:290,z0:-380,z1:100},
  openCountry:{id:'open',name:'Open Country',label:'OPEN COUNTRY',subtitle:'Meadows between districts',color:'#6e8a5c'}, // how far the ground is drawn (scenery fades into fog beyond the walkable zones)
- zones,roads,water,fields,buildings,shops,reserved,properties,paving,bayRows,yards,vehicles,
+ zones,roads,water,fields,buildings,shops,reserved,properties,paving,bayRows,yards,vehicles,relief,
  // The marked parking lot behind the south row of shops: bays 2.7 m wide and 5 m deep along its north edge, an aisle to Alder Street, the lot's own asphalt.
  lots:[{id:'alder-lot',x0:-14,x1:45,z0:-63,z1:-52,bays:{x0:-13.5,z0:-63,count:20,width:2.7,depth:5}}],
  // Parking lanes on the cross street (6 m bays, nose in the direction of traffic: eastbound on the south side, westbound on the north), and the lane edge lines.

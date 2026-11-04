@@ -3,6 +3,7 @@
 // Doors: the driver's door (the vehicle's left) puts you in the driver's seat; the passenger's door (the right) in the passenger seat, where you ride along and cannot steer (nobody else can drive yet).
 // Vehicles never dissolve when the camera looks through them (the sightline fade would show their empty insides): they are built with a fade that does nothing.
 // Wheels (models converted with splitWheels, the Worktruck) are real meshes that spin with the distance travelled and, at the front, steer.
+import {heightAt} from './height.js';
 import * as THREE from './vendor/three.module.js';
 import {MAP} from './map-definition.js';
 import {createProp} from './props.js';
@@ -42,7 +43,9 @@ export function createDriving({scene,surface,footing,baseBlocked,saved=[]}){
   if(f.spec.fuel)f.fuelMgal=normalizeFuelMgal(s.fuelMgal,f.spec.fuel.tankMgal); // a saved tank (missing: full)
   if(ok)f.state=freshVehicle(ok);
  }
- const place=f=>{f.mesh.position.set(f.state.x,f.y,f.state.z);f.mesh.rotation.set(f.pitch,f.state.yaw,f.roll)};
+ const place=f=>{f.mesh.position.set(f.state.x,f.y,f.state.z);f.mesh.rotation.order='YXZ';f.mesh.rotation.set(f.pitch,f.state.yaw,f.roll)}; // yaw first, then tilt about the vehicle's own axes
+// The ground's tilt under a vehicle (from heightAt, not the footing: a kerb is not a hill): nose-up is negative pitch; the +x side up is positive roll.
+const tilt=f=>{const s=f.state,sy=Math.sin(s.yaw),cy=Math.cos(s.yaw),at=(lx,lz)=>heightAt(s.x+lx*cy+lz*sy,s.z-lx*sy+lz*cy);return {pitch:-Math.atan2(at(0,f.cls.hz)-at(0,-f.cls.hz),2*f.cls.hz),roll:Math.atan2(at(f.cls.hx,0)-at(-f.cls.hx,0),2*f.cls.hx)}};
  fleet.forEach(place);
  return {
   fleet,byId,
@@ -74,7 +77,7 @@ export function createDriving({scene,surface,footing,baseBlocked,saved=[]}){
   showFillers(show,nozzleFuel=null){for(const f of fleet){if(!f.marker)continue;f.marker.visible=!!show&&f.present&&f!==driven;f.markerBright=nozzleFuel===null||nozzleFuel===f.spec.fuel.type}},
   update(dt){pulse+=dt;for(const f of fleet){f.mesh.visible=f.present;if(f.marker&&f.marker.visible){const k=(f.markerBright?.8:.3)*(.6+.4*Math.sin(pulse*6));for(const part of f.marker.children)part.material.opacity=k}
    const s=f.state,accel=dt>0?(s.speed-f.lastSpeed)/dt:0,lateral=s.speed*(Math.abs(s.speed)<.01?0:s.steer*s.speed/Math.max(f.cls.rMin,s.speed*s.speed/f.cls.aLat));f.lastSpeed=s.speed;
-   const k=1-Math.exp(-dt*8);f.pitch+=(clamp(-.01*accel,-.04,.04)-f.pitch)*k;f.roll+=(clamp(.012*lateral,-.05,.05)-f.roll)*k;
+   const k=1-Math.exp(-dt*8);const g=tilt(f);f.pitch+=(clamp(-.01*accel,-.04,.04)+g.pitch-f.pitch)*k;f.roll+=(clamp(.012*lateral,-.05,.05)+g.roll-f.roll)*k;
    f.y+=(footing(s.x,s.z)-f.y)*(1-Math.exp(-dt*10));place(f);
    // wheels: roll with the distance travelled (angle = distance / radius, forward is +z so a positive turn about x), the front pair steers
    f.spin+=s.speed*dt;for(const w of f.wheels){w.spin.rotation.x=f.spin/w.radius;if(w.front)w.pivot.rotation.y=s.steer*STEER_ANGLE}}},

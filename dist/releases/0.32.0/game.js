@@ -1,5 +1,6 @@
 import {createStoreUI} from './store.js';
-import {createWorld,zoneAt,isWalkable,footingAt} from './world.js';
+import {createWorld,zoneAt,isWalkable,footingAt,standHeight} from './world.js';
+import {heightAt} from './height.js';
 import {worldDoors,doorOf,propertyById} from './properties.js';
 import {buildHouseRoom} from './interiors.js';
 import {propertyTransaction,heldIds,listingOf} from './ownership.js';
@@ -100,7 +101,7 @@ const audio=createAudio({AudioContextClass:globalThis.AudioContext||globalThis.w
 for(const type of ['pointerdown','keydown'])window.addEventListener(type,()=>audio.unlock(),{capture:true});
 document.addEventListener('visibilitychange',()=>audio.setActive(!document.hidden));
 const vehicles=createVehicles(scene,colliders,world.fade); // the parked cars are converted models; they need the world's sightline fade
-for(const t of world.addBroadleaves(OAK_TREES.map(([x,z])=>({x,z,y:footingAt(x,z)}))))colliders.push({x:t.x,z:t.z,hx:t.radius,hz:t.radius}); // trunks block walking
+for(const t of world.addBroadleaves(OAK_TREES.map(([x,z])=>({x,z,y:standHeight(x,z)}))))colliders.push({x:t.x,z:t.z,hx:t.radius,hz:t.radius}); // trunks block walking
 // 'For rent or sale' signs on the lawns of the houses you can rent or buy; each disappears while you hold the house (synced from the ownership state in frame()).
 const houseSigns=createHouseSigns({scene,properties:MAP.properties,doorOf,surfaceAt:(x,z)=>terrain().surfaceAt(x,z),GRASS:SURFACE.GRASS,blocked:(x,z)=>!isWalkable(x,z)||world.blocked(x,z)||colliders.some(b=>Math.abs(x-b.x)<b.hx+.33&&Math.abs(z-b.z)<b.hz+.33),solids:colliders});let signsFor=null; // blocked: the outdoor test only, because the game's blocked() reads state that is set up further down
 sun.target.position.set(0,0,0);scene.add(sun.target);
@@ -134,13 +135,13 @@ const avatar=createCharacter(savedCharacter||defaults),player=avatar.group;playe
 const groundLogs=scene.getObjectByName('ground-logs'),carryLog=new THREE.Group(),carryLogMesh=new THREE.Mesh(groundLogs.geometry,groundLogs.material);carryLogMesh.rotation.y=Math.PI/2;carryLog.add(carryLogMesh);carryLog.position.set(-.2,1.5,.05);carryLog.rotation.x=-.12;carryLog.visible=false;carryLog.name='carried-log';player.add(carryLog);
 let carryPlanks=null,dropsFor=null,plankBoxes=[],planksPose=0; // plankBoxes: a put-down stack is a solid box (carry.js plankBox); planksPose: how far the two-handed carry pose has blended in
 // The two drivable Eastbank vehicles (driving.js, vehicle.js): their poses come from the save. worldBlocked is blocked() without them, so a vehicle never collides with itself.
-const driving=createDriving({scene,fade:world.fade,surface:(x,z)=>terrain().surfaceAt(x,z),footing:footingAt,baseBlocked:(x,z)=>worldBlocked(x,z),saved:GameState.progress.vehicles});let driveIdle=9,driveSave=0;const vehicleHud=createVehicleHud($);const fuel=createFuelStation({scene,fade:world.fade,footing:footingAt});const smoke=createSmoke(scene); // the Eastbank pumps: nozzles, hoses and the nozzle in your hand
+const driving=createDriving({scene,fade:world.fade,surface:(x,z)=>terrain().surfaceAt(x,z),footing:standHeight,baseBlocked:(x,z)=>worldBlocked(x,z),saved:GameState.progress.vehicles});let driveIdle=9,driveSave=0;const vehicleHud=createVehicleHud($);const fuel=createFuelStation({scene,fade:world.fade,footing:standHeight});const smoke=createSmoke(scene); // the Eastbank pumps: nozzles, hoses and the nozzle in your hand
 function syncSawmill(){
  const p=GameState.progress,c=sawmillCtl,hands=!inside&&!shop;carryLog.visible=hands&&p.carry?.kind==='log';
  if(!c?.ready)return;
  if(!carryPlanks){carryPlanks=new THREE.Group();carryPlanks.name='carried-planks';for(let k=0;k<4;k++){const plain=c.plank.material.clone();plain.color.multiplyScalar(PLANK_TINT[k]);const m=new THREE.Mesh(c.plank.geometry,plain);m.position.y=k*.12;carryPlanks.add(m)}carryPlanks.position.set(PLANK_STACK.x,PLANK_STACK.y,PLANK_STACK.z);player.add(carryPlanks)}
  const n=p.carry?.kind==='planks'?p.carry.count:0;carryPlanks.visible=hands&&n>0;carryPlanks.children.forEach((m,i)=>m.visible=i<n);
- if(dropsFor!==p.plankDrops){dropsFor=p.plankDrops;c.setDrops(dropsFor.map(d=>({...d,floor:world.floorAt(d.x,d.z)})));plankBoxes=dropsFor.map(d=>plankBox(d,c.plankSize))}
+ if(dropsFor!==p.plankDrops){dropsFor=p.plankDrops;c.setDrops(dropsFor.map(d=>({...d,floor:heightAt(d.x,d.z)+(world.floorAt(d.x,d.z)??0)})));plankBoxes=dropsFor.map(d=>plankBox(d,c.plankSize))}
  if(!c.cutting&&c.count()!==p.belt)c.setBelt(p.belt); // a new game or a loaded save: the belt shows what is saved
 }
 // Rendering consumes the simulation state; gameplay never reads mesh transforms.
@@ -197,7 +198,7 @@ function finishJob(action){
 }
 function enterHome(target=studioHome){  if(target.kind==='studio'&&!GameState.progress.housing.rented)return;persist();home=target;home.room.setFloor?.(0);inside=true;if(home.kind==='house')zoom=zoomTarget=9;home.room.scene.add(player);setMePosition(home.ENTRY.x,.02,home.ENTRY.z);yaw=0;pitch=home.kind==='house'?.85:.4;camera.position.set(home.ENTRY.x,3,home.ENTRY.z+5.5);$('dialog').hidden=true;clearWorldPanel();modal=false;keys.clear();
 }
-function leaveHome(){doorCooldown=2;look.resetMotion();inside=false;scene.add(player);const out=home.kind==='studio'?{x:STUDIO.x,z:STUDIO.z,yaw:0,y:.165}:{...home.outside,y:footingAt(home.outside.x,home.outside.z)};setMePosition(out.x,out.y,out.z);yaw=out.yaw;camera.position.set(out.x+Math.sin(out.yaw)*5,3,out.z+Math.cos(out.yaw)*5);home.room.setFloor?.(0);if(home.kind==='house')zoom=zoomTarget=7;home=studioHome;persist();keys.clear()}
+function leaveHome(){doorCooldown=2;look.resetMotion();inside=false;scene.add(player);const out=home.kind==='studio'?{x:STUDIO.x,z:STUDIO.z,yaw:0,y:.165}:{...home.outside,y:standHeight(home.outside.x,home.outside.z)};setMePosition(out.x,out.y,out.z);yaw=out.yaw;camera.position.set(out.x+Math.sin(out.yaw)*5,3,out.z+Math.cos(out.yaw)*5);home.room.setFloor?.(0);if(home.kind==='house')zoom=zoomTarget=7;home=studioHome;persist();keys.clear()}
  function enterHouse(id){enterHome(houseHome(id))}
  function changeFloor(n){const st=home.STAIRS;if(!st)return;home.room.setFloor(n);setMePosition(st.x,n*home.room.FLOOR_HEIGHT+.02,n?st.topZ+.1:st.footZ);look.resetMotion();keys.clear()}
 function changeHousing(action){
@@ -289,7 +290,7 @@ function candidates(){const all=[],add=(id,point,anchor,label,run,range=1.5,key)
    add('sawmill-switch',sawmillCtl.switchPoint,sawmillCtl.promptPoint,switchLabel(sawmillState),toggleSawmill,2.2);
    if(pr.carry?.kind==='log')add('sawmill-feed',sawmillCtl.logPoint,sawmillCtl.logPrompt,'Put the log on the bench',feedSawmill,2.4);
    if(pr.belt>0)add('sawmill-belt',sawmillCtl.clearPoint,sawmillCtl.clearPrompt,pr.carry?'Planks on the belt · your hands are full':'Take 4 planks · '+pr.belt+(pr.belt===1?' stack':' stacks')+' on the belt',takeBeltPlanks,2.4);
-   for(const d of pr.plankDrops)if(Math.hypot(d.x-me.position.x,d.z-me.position.z)<2.6)add('planks-'+d.id,{x:d.x,z:d.z},()=>new THREE.Vector3(d.x,.8+(world.floorAt(d.x,d.z)??0),d.z),'Pick up '+d.count+' planks',()=>pickPlanks(d.id),1.8)}
+   for(const d of pr.plankDrops)if(Math.hypot(d.x-me.position.x,d.z-me.position.z)<2.6)add('planks-'+d.id,{x:d.x,z:d.z},()=>new THREE.Vector3(d.x,.8+heightAt(d.x,d.z)+(world.floorAt(d.x,d.z)??0),d.z),'Pick up '+d.count+' planks',()=>pickPlanks(d.id),1.8)}
   // Doors of houses (properties.js): every one is locked until its owner is you, and the inside does not exist yet.
   for(const door of doorsNow())add('door-'+door.id,door,()=>new THREE.Vector3(door.x,1.4,door.z),door.label,door.open?()=>enterHouse(door.id):()=>showWorld(()=>new THREE.Vector3(door.x,1.7,door.z),door.title,door.message),2.2);
   const progress=GameState.progress,axe=hasItem(progress,'axe'),equipped=progress.equipped==='axe',need=hitsNeeded(levelOf(progress.skills.lumberjack.xp).level);
@@ -297,7 +298,7 @@ function candidates(){const all=[],add=(id,point,anchor,label,run,range=1.5,key)
    const hits=plotAt(progress,tree.key).hits;
    add('tree-'+tree.key,tree,()=>new THREE.Vector3(tree.x,2.2,tree.z),equipped?(hits?`Chop pine · ${hits} / ${need}`:'Chop pine · hold E to keep going'):axe?'Pine · equip your axe (hotbar)':'Pine · needs an axe',()=>startChop(tree),CHOP_RANGE);
   }
-  for(const log of progress.logs)if(!pendingLogs.has(log.id)&&Math.hypot(log.x-me.position.x,log.z-me.position.z)<2.4)add('log-'+log.id,{x:log.x,z:log.z},()=>new THREE.Vector3(log.x,.5+(world.floorAt(log.x,log.z)??0),log.z),'Pick up wood log',()=>pickUpLog(log.id),1.8);
+  for(const log of progress.logs)if(!pendingLogs.has(log.id)&&Math.hypot(log.x-me.position.x,log.z-me.position.z)<2.4)add('log-'+log.id,{x:log.x,z:log.z},()=>new THREE.Vector3(log.x,.5+heightAt(log.x,log.z)+(world.floorAt(log.x,log.z)??0),log.z),'Pick up wood log',()=>pickUpLog(log.id),1.8);
  }
  for(const car of vehicles)add(car.id,car,()=>new THREE.Vector3(car.x,1.3,car.z),'Inspect '+car.name,()=>showWorld(()=>new THREE.Vector3(car.x,1.4,car.z),car.name,'Parked · not owned. Driving will be available in a future update.'),1.6);return all;
 }
@@ -653,8 +654,10 @@ function updateEquipped(dt){
  if(consuming||busy){avatar.setTwoHanded(0);return} // they own the hand until they finish
  if(!carried||carried.userData.itemId!==want){
   if(carried){if(carried.parent===avatar.hand)avatar.release();disposeHeldItem(carried)}
-  carried=createHeldItem(itemById(want));avatar.hold(carried,{axis:'z',grip:GRIP,curl:1});
- }else if(carried.parent!==avatar.hand)avatar.hold(carried,{axis:'z',grip:GRIP,curl:1});
+  carried=createHeldItem(itemById(want));avatar.hold(carried,want==='gas-can'?{upright:true,curl:1}:{axis:'z',grip:GRIP,curl:1});
+ }else if(carried.parent!==avatar.hand)avatar.hold(carried,want==='gas-can'?{upright:true,curl:1}:{axis:'z',grip:GRIP,curl:1});
+ if(want==='gas-can'){ // the can hangs level from the hand at the side (the arm swings with the walk); no chest carry
+  avatar.alignHeld(null);avatar.setTwoHanded(0);if(carryWeight>0){carryWeight=Math.max(0,carryWeight-dt*5);avatar.reach('R',CARRY,carryWeight,CARRY_POLE)}return}
  const idle=!chopping&&!armRecovery;
  avatar.alignHeld(chopping?null:CARRY_DIR); // carried across the chest; follows the forearm while swinging
  if(idle){carryWeight=Math.min(1,carryWeight+dt*4);avatar.reach('R',CARRY,carryWeight,CARRY_POLE)}else if(!chopping)carryWeight=0;
@@ -963,7 +966,7 @@ avatar.setMotion(moving?(running?8.2:4.5)*carryEffects(GameState.progress.carry)
 // Match foot height to the road, pavement, or grass rather than hovering.
 const px=me.position.x,pz=me.position.z;
  const deck=world.floorAt(px,pz);
- me.position.y=THREE.MathUtils.lerp(me.position.y,(inside||shop)?.02+(inside&&home.room.floor?home.room.floor*home.room.FLOOR_HEIGHT:0):deck!==null?deck:footingAt(px,pz),1-Math.exp(-view*30));
+ me.position.y=THREE.MathUtils.lerp(me.position.y,(inside||shop)?.02+(inside&&home.room.floor?home.room.floor*home.room.FLOOR_HEIGHT:0):standHeight(px,pz,deck),1-Math.exp(-view*30));
 zoom=THREE.MathUtils.lerp(zoom,zoomTarget,1-Math.exp(-view*10));
 
 look.tick(view);

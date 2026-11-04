@@ -5,6 +5,7 @@
 //   zone     which zone the cell belongs to (index into map.zones, plus one; 0 for none)
 // A cell counts as inside a shape when its centre is. Everything inside the map's `playable` rectangle starts walkable (open country); shapes painted later win, in this
 // order: zones, roads, fields, pavements, the river and its banks, bridges. Water and banks are never walkable; a bridge deck always is.
+import {junctionPatches} from './junctions.js';
 import {MAP,roadRect,riverPath} from './map-definition.js';
 
 export const SURFACE=Object.freeze({GRASS:1,STREET:2,ROAD:3,DIRT:4,PAVEMENT:5,WATER:6,BANK:7,BRIDGE:8,WHEAT:9,PLOWED:10,GREEN:11,DRIVEWAY:12,PATH:13});
@@ -56,10 +57,14 @@ export function buildTerrain(map=MAP,{cell=.5}={}){
    paint=c=>{surface[c]=kind;if(edge.walkable){walk[c]=1;if(named)zone[c]=named}};
   if(edge.path)ribbon(roadCenterline(edge,map),edge.width/2,paint);else rect(roadRect(edge,map),paint);
  }
+ // 2-joints. rounded corners at junctions and tapers where road widths change (junctions.js): ROAD, walkable and drivable like the roads they join
+ for(const patch of junctionPatches(map)){const xs=patch.points.map(p=>p[0]),zs=patch.points.map(p=>p[1]);rect({x0:Math.min(...xs),x1:Math.max(...xs),z0:Math.min(...zs),z1:Math.max(...zs)},c=>{const x=centreX(c%cols),z=centreZ((c-c%cols)/cols);let inside=false;const P=patch.points;for(let i=0,j=P.length-1;i<P.length;j=i++){const [xi,zi]=P[i],[xj,zj]=P[j];if((zi>z)!==(zj>z)&&x<(xj-xi)*(z-zi)/(zj-zi)+xi)inside=!inside}if(inside){surface[c]=SURFACE.ROAD;walk[c]=1}})}
  // 2a. Eastbank Works paving (yards, aprons, the forecourt, the depot, driveway cuts): asphalt you can walk and drive on
  for(const p of map.paving||[])rect(p,c=>{surface[c]=SURFACE.DRIVEWAY;walk[c]=1})
  // 2b. parking lots: asphalt you can walk and drive on
  for(const lot of map.lots||[])rect(lot,c=>{surface[c]=SURFACE.ROAD;walk[c]=1});
+ // 2c. dirt tracks up the hills (relief.tracks): ribbons, walkable and drivable
+ for(const t of map.relief?.tracks||[])ribbon(t.points,t.half,c=>{surface[c]=SURFACE.DIRT});
  // 3. fields and 4. pavements
  for(const f of map.fields)rect(f,c=>{surface[c]=FIELD_SURFACE[f.surface]||SURFACE.GRASS});
  for(const p of map.pavements||[])rect(p,c=>{surface[c]=SURFACE.PAVEMENT});
@@ -84,11 +89,16 @@ export function buildTerrain(map=MAP,{cell=.5}={}){
 }
 
 // Problems with the terrain (empty when it is sound): every zone can be reached on foot from the spawn point, and no walkable cell is water.
+// is (x, z) on or next to one of the hills' tracks (within half its width + 1 m)?
+const nearTrack=(map,x,z)=>(map.relief?.tracks||[]).some(t=>t.points.some(([px,pz],i)=>{if(!i)return false;const [ax,az]=t.points[i-1],dx=px-ax,dz=pz-az,l2=dx*dx+dz*dz||1,u=Math.max(0,Math.min(1,((x-ax)*dx+(z-az)*dz)/l2));return Math.hypot(x-ax-dx*u,z-az-dz*u)<=t.half+1}));
 export function validateTerrain(terrain,map=MAP){
  const problems=[],reached=terrain.reach(map.spawn.x,map.spawn.z),cells=new Map();
  for(let c=0;c<terrain.walk.length;c++){if(!terrain.walk[c])continue;const z=terrain.zone[c];if(!cells.has(z))cells.set(z,[0,0]);const t=cells.get(z);t[0]++;if(reached[c])t[1]++;
   if(terrain.surface[c]===SURFACE.WATER||terrain.surface[c]===SURFACE.BANK)problems.push('walkable water at cell '+c)}
  map.zones.forEach((zone,k)=>{const [all,ok]=cells.get(k+1)||[0,0];if(!all)problems.push(`zone ${zone.id} has no walkable ground`);else if(ok<all)problems.push(`zone ${zone.id}: ${all-ok} of ${all} walkable cells cannot be reached from the spawn point`)});
+ // relief: a hill and a 25 m margin around it must be open grass (no road, field, plot, water) outside every zone
+ for(const h of map.relief?.hills||[]){let bad=0;for(let a=0;a<=1;a+=.05)for(let b=0;b<6.2832;b+=.35){const x=h.x+Math.cos(b)*(h.rx+25)*a,z=h.z+Math.sin(b)*(h.rz+25)*a;if(nearTrack(map,x,z))continue;if(x<map.playable.x0||x>map.playable.x1||z<map.playable.z0||z>map.playable.z1)continue;if(terrain.surfaceAt(x,z)!==SURFACE.GRASS||map.zones.some(q=>x>=q.bounds.x0-10&&x<=q.bounds.x1+10&&z>=q.bounds.z0-10&&z<=q.bounds.z1+10))bad++}
+  if(bad)problems.push(`hill ${h.id}: ${bad} sample points of it (or its 25 m margin) are not open grass`);if(h.x-h.rx<map.ground.x0||h.x+h.rx>map.ground.x1||h.z-h.rz<map.ground.z0||h.z+h.rz>map.ground.z1)problems.push(`hill ${h.id} leaves the ground`)}
  return problems.slice(0,20);
 }
 

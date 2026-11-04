@@ -7,13 +7,15 @@ export const AUDIO_KEY='citylife.audio.v1',NEAR=2.5,HEARING=40,MAX_CLICKS=3;
 export const attenuate=d=>d<=NEAR?1:d>=HEARING?0:Math.pow(1-(d-NEAR)/(HEARING-NEAR),2);
 // A vehicle's engine voice, pure (tested): what the engine sounds like at a speed. speed and top in m/s; throttle 0..1; tier 'low' | 'mid' | 'high'.
 // Four gears: the revs climb through each gear and drop at the shift. Cheaper tiers are lower, rougher and louder; better ones higher and smoother.
-const ENGINE_TIERS={low:{base:34,gain:.16,rough:.6,lowpass:520},mid:{base:42,gain:.13,rough:.35,lowpass:700},high:{base:52,gain:.11,rough:.15,lowpass:900}};
+// (0.35 retry) a truck is low and thumping, not buzzy: the tone is a train of sharp pulses (the firing strokes: the idle is about 22 pulses a second for the old truck), softened by a low-pass that
+// stays low, with a strong lope (the throb) in the rough ones. The pulse rate is `freq`.
+const ENGINE_TIERS={low:{base:22,gain:.34,rough:.8,lowpass:240},mid:{base:24,gain:.3,rough:.6,lowpass:300},high:{base:28,gain:.26,rough:.3,lowpass:380}};
 const GEARS=[0,.2,.42,.68,1.0001];
 export function engineVoice({speed=0,top=10,throttle=0,tier='low',running=true}={}){
  const t=ENGINE_TIERS[tier]||ENGINE_TIERS.low;if(!running)return {freq:t.base,gain:0,lowpass:t.lowpass,rough:t.rough,rpm:0,gear:0,road:0};
  const ratio=Math.max(0,Math.min(1,Math.abs(speed)/Math.max(.1,top)));let gear=0;while(gear<3&&ratio>=GEARS[gear+1])gear++;
  const p=(ratio-GEARS[gear])/(GEARS[gear+1]-GEARS[gear]),rpm=gear===0?.12+.88*p:.42+.58*p,load=Math.max(0,Math.min(1,throttle));
- return {freq:t.base*(1+rpm*3.2),gain:t.gain*(.55+.3*load+.25*rpm),lowpass:t.lowpass+rpm*600+load*250,rough:t.rough,rpm,gear,road:Math.min(1,ratio*1.3)};
+ return {freq:t.base*(1+rpm*2.1),gain:t.gain*(.55+.3*load+.25*rpm),lowpass:t.lowpass+rpm*600+load*250,rough:t.rough,rpm,gear,road:Math.min(1,ratio*1.3)};
 }
 export function loadAudioSettings(storage){
  try{const v=JSON.parse(storage.getItem(AUDIO_KEY)||'null');return {volume:Number.isFinite(v?.volume)?Math.max(0,Math.min(1,v.volume)):.6,muted:v?.muted===true}}catch{return {volume:.6,muted:false}}
@@ -43,8 +45,9 @@ export function createAudio({AudioContextClass,storage,random=Math.random}){
   const fuelRush=looping(buffer),fuelBand=filtered('bandpass',600,.9),fuelRushGain=gain(),fuelHum=ctx.createOscillator();fuelHum.type='triangle';fuelHum.frequency.value=92;const fuelHumGain=gain();
   fuelRush.connect(fuelBand);fuelBand.connect(fuelRushGain);fuelRushGain.connect(master);fuelHum.connect(fuelHumGain);fuelHumGain.connect(master);
   // The engine of the vehicle you are in: a sawtooth with a sub-octave triangle through a low-pass that opens with the revs, a throb for rough engines, and road noise that grows with speed.
-  const engSaw=ctx.createOscillator();engSaw.type='sawtooth';engSaw.frequency.value=34;const engSub=ctx.createOscillator();engSub.type='triangle';engSub.frequency.value=17;
-  const engLow=filtered('lowpass',520,.8),engGain=gain(),engThrob=ctx.createOscillator();engThrob.type='sine';engThrob.frequency.value=9;const engThrobDepth=gain(0);
+  const engSaw=ctx.createOscillator();engSaw.type='sawtooth';engSaw.frequency.value=22;const engSub=ctx.createOscillator();engSub.type='triangle';engSub.frequency.value=11;
+  if(ctx.createPeriodicWave){const n=40,real=new Float32Array(n),imag=new Float32Array(n);for(let i=1;i<n;i++)real[i]=1/Math.pow(i,.55);engSaw.setPeriodicWave(ctx.createPeriodicWave(real,imag))} // cosines add up to a sharp pulse, not a saw
+  const engLow=filtered('lowpass',240,1.4),engGain=gain(),engThrob=ctx.createOscillator();engThrob.type='sine';engThrob.frequency.value=9;const engThrobDepth=gain(0);
   engSaw.connect(engLow);engSub.connect(engLow);engLow.connect(engGain);engGain.connect(master);engThrob.connect(engThrobDepth);engThrobDepth.connect(engGain.gain);
   const road=looping(buffer),roadBand=filtered('bandpass',420,.6),roadGain=gain();road.connect(roadBand);roadBand.connect(roadGain);roadGain.connect(master);
   for(const node of [bladeTone,bladeHiss,beltRumble,beltHum,fuelRush,fuelHum,engSaw,engSub,engThrob,road])node.start();
@@ -81,7 +84,7 @@ export function createAudio({AudioContextClass,storage,random=Math.random}){
   engine(voice){
    if(!ctx)return;
    ease(v.engSaw.frequency,voice.freq,.05);ease(v.engSub.frequency,voice.freq/2,.05);ease(v.engLow.frequency,voice.lowpass,.08);
-   ease(v.engGain.gain,voice.gain,.08);ease(v.engThrobDepth.gain,voice.gain*.5*voice.rough,.1);ease(v.engThrob.frequency,voice.freq/3.2,.1);
+   ease(v.engGain.gain,voice.gain,.08);ease(v.engThrobDepth.gain,voice.gain*.8*voice.rough,.1);ease(v.engThrob.frequency,voice.freq/2.6,.1);
    ease(v.roadGain.gain,.09*voice.road*(voice.gain>0?1:0),.1);ease(v.roadBand.frequency,300+500*voice.road,.1);
   },
   // Turning the key: a few rough cranks, then the engine catches. `at` and `listener` as for click. Plays through the shared click limit.

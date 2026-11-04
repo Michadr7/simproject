@@ -5,6 +5,10 @@ import {money} from './jobs.js';
 import {clockText} from './routine.js';
 import {weekday} from './housing.js';
 import {LISTED} from './ownership.js';
+import {MAP} from './map-definition.js';
+import {CLASSES} from './vehicle.js';
+import {GALLON,mph,fuelName,fuelText,priceLabel,canText} from './fuel.js';
+import {canOf} from './inventory.js';
 
 // UI only: transactions and movement/cursor ownership stay in game.js.
 export function createPhone({document:doc,getState,canOpen,onOpen,onClose,onAccept,onRefresh,onDrainChange,onGrantItem,onHomeAction}){
@@ -45,6 +49,16 @@ export function createPhone({document:doc,getState,canOpen,onOpen,onClose,onAcce
     card.append(title,terms,status,actions);$('phoneHomes').append(card);
     return {h,status,buttons};
   });
+  // The Player screen's Vehicles list (built once, updated in place): name, tier, mileage, top speed and how much fuel is in the tank. A vehicle with no saved fuel entry is full.
+  const TIER_NAME={low:'Starter',mid:'Mid-range',high:'High-end'};
+  const garage=(MAP.vehicles||[]).filter(v=>CLASSES[v.model]).map(v=>{
+    const cls=CLASSES[v.model],card=doc.createElement('article');card.className='phone-contract';
+    const title=doc.createElement('h3');title.textContent=v.name;
+    const specs=doc.createElement('p');specs.textContent=`${TIER_NAME[cls.tier]||cls.tier} · ${cls.mpg} mpg · top ${mph(cls.top)} mph · ${(v.fuel.tankMgal/GALLON).toFixed(0)} gal ${fuelName(v.fuel.type)} tank`;
+    const level=doc.createElement('p');level.className='phone-home-status';
+    card.append(title,specs,level);$('phoneGarage').append(card);
+    return {v,level};
+  });
   function refresh(){
     onRefresh?.();const state=getState(),progress=state.progress;
     const available=new Set(availableContracts(progress).map(job=>job.id));
@@ -52,6 +66,9 @@ export function createPhone({document:doc,getState,canOpen,onOpen,onClose,onAcce
     $('phoneDate').textContent=weekday(progress.housing.day)+' · Oak Street';
     $('phoneGreeting').textContent=state.me.name?`Hello, ${state.me.name}.`:'Your life, in reach.';
     $('phoneBalance').textContent=money(progress.cash);
+    $('phoneFuelPrices').textContent=`Eastbank gas station: gas ${priceLabel('gas')} · diesel ${priceLabel('diesel')}.`;
+    for(const {v,level} of garage){const saved=progress.vehicles?.find(s=>s.uid===v.id),mgal=saved?.fuelMgal??v.fuel.tankMgal;level.textContent=`Fuel: ${fuelText(mgal,v.fuel.tankMgal)}`}
+    {const can=canOf(progress);$('phoneCan').textContent=can?`Gas can: ${canText(can)}.`:'No gas can. Buy one ($15) from the store.'}
     $('phonePlayerName').textContent=state.me.name||'New neighbor';
     {const xp=progress.skills.lumberjack.xp,{level,into,next}=levelOf(xp);
      $('phoneLumberLevel').textContent=level>=20?'Lv 20 · max':'Lv '+level;$('phoneLumberMeter').max=next||1;$('phoneLumberMeter').value=next?into:1;
