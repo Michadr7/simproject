@@ -74,7 +74,7 @@ try{
  const supplier=MAP.landmarks.find(l=>l.id==='eastbank-supply'),info=propInfo(supplier.prop);
  {const r=driveTo([[102,30,5],[100,10,5],[95,8,5],[83,8,4]]);assert.equal(r.reached,4,'back up the lane and west along Oak East to the supplier');
   const wall=supplier.z-info.depth/2; // the wall facing north (the plot faces Oak Street); the kit's front is turned to +z and the plot yaw puts the doors on the yard, so use the footprint's z extent
-  hold('KeyW',true);pump(10);hold('KeyW',false);pump(.3);const nose=truck.position.z+pc.hz,still=truck.position.clone();pump(.5);assert(truck.position.distanceTo(still)<.01,'driven at the supplier it comes to a stop');
+  hold('KeyW',true);hold('KeyA',true);pump(1);hold('KeyA',false);pump(10);hold('KeyW',false);pump(.3);const nose=truck.position.z+pc.hz,still=truck.position.clone();pump(.5);assert(truck.position.distanceTo(still)<.01,'driven at the supplier it comes to a stop');
   console.log(`  supplier: stopped at z ${truck.position.z.toFixed(2)}, nose at ${nose.toFixed(2)}`);assert(truck.position.z<supplier.z-info.depth/2+.5||nose<supplier.z+1,'and its nose is not inside the building');
   // nothing solid is inside the hull: sample the building's footprint
   const fx0=supplier.x-info.width/2,fx1=supplier.x+info.width/2,fz0=supplier.z-info.depth/2;assert(!(truck.position.x>fx0&&truck.position.x<fx1&&truck.position.z>fz0),'the vehicle centre is outside the building')}

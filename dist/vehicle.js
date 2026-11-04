@@ -13,10 +13,13 @@ export const SAMPLE_GAP=.5; // metres between hull sample points (a 0.16 m sign 
 // seat: where the player's position sits while driving. camera: how far behind and above the chase camera stands, and how high it looks.
 // A class's doors and seats: the driver's side is the vehicle's left (+x when it faces +z), the passenger's the right. The chase camera scales with the vehicle's length (a bigger vehicle gets a more distant view):
 // 3 x its length behind, 1.2 x its length up (worktruck 6 m: 9 m back, 3.6 m up).
-function makeClass(c){const L=c.hz*2;return {...c,door:{x:+(c.hx+.6).toFixed(3),z:c.doorZ},passengerDoor:{x:-+(c.hx+.6).toFixed(3),z:c.doorZ},seat:{x:.45,z:c.doorZ},passengerSeat:{x:-.45,z:c.doorZ},camera:{back:+(3*L/2).toFixed(2),up:+(1.2*L/2).toFixed(2)}}}
+// Tiers (cheapest first): 'low' is the starter, 'mid', 'high' (none yet). Every class has a tier, a top speed (m/s) and an mpg. The map is tiny, so burn uses ARCADE_MILE_SCALE (8 mpg = 1 gal/mile):
+// gallonsPerMile = ARCADE_MILE_SCALE / mpg. Top speed and mpg are tuned per class; auto-shop parts will change them later (DESIGN roadmap 0.40).
+export const TIERS=Object.freeze(['low','mid','high']);export const ARCADE_MILE_SCALE=8;
+function makeClass(c){const L=c.hz*2;return {...c,gallonsPerMile:+(ARCADE_MILE_SCALE/c.mpg).toFixed(4),door:{x:+(c.hx+.6).toFixed(3),z:c.doorZ},passengerDoor:{x:-+(c.hx+.6).toFixed(3),z:c.doorZ},seat:{x:.45,z:c.doorZ},passengerSeat:{x:-.45,z:c.doorZ},camera:{back:+(3*L/2).toFixed(2),up:+(1.2*L/2).toFixed(2)}}}
 export const CLASSES=Object.freeze({
- worktruck:makeClass({id:'worktruck',gallonsPerMile:1.0,name:'Worktruck',hx:1.09,hz:3,top:10,reverse:3.5,accel:2.4,brake:6,drag:.9,rMin:7,aLat:4.5,doorZ:.5}),
- offroad:makeClass({id:'offroad',gallonsPerMile:1.2,name:'Pevrolet Off Road Pickup',hx:1.255,hz:2.8,top:8.5,reverse:3.5,accel:2.2,brake:6.5,drag:1,rMin:6.5,aLat:5,doorZ:.5,rough:.35}) // slower on the road, but grass, fields, paths and dirt cost it 35 points less speed (rough)
+ worktruck:makeClass({id:'worktruck',tier:'low',mpg:8,name:'Worktruck',hx:1.09,hz:3,top:17.9,reverse:5,accel:3,brake:8,drag:.9,rMin:7,aLat:10,doorZ:.5}), // the starter: about 40 mph, thirsty
+ offroad:makeClass({id:'offroad',tier:'mid',mpg:14.5,name:'Pevrolet Off Road Pickup',hx:1.255,hz:2.8,top:26.8,reverse:6,accel:4.5,brake:9,drag:1,rMin:6.5,aLat:14,doorZ:.5,rough:.35}) // mid tier: about 60 mph, nearly twice the mileage; grass, fields, paths and dirt cost it 35 points less speed (rough)
 });
 
 // Top speed and acceleration multiplier by terrain surface. Water, banks and everything off the map are never driven on (blocked() refuses them as well).

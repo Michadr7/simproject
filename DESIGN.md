@@ -357,6 +357,7 @@ Gaps: no wage figures for cashier or gigs; crop and shop prices undefined; no in
 | 0.37 | Tools: axe/chainsaw ladder, wear (incl. Hand Saw wear), chainsaw bucking fuel, repairs, blade tiers; schema 3 | Planned | Opus numbers, Sonnet build |
 | 0.38 | Cashier shift and POS | Planned | Opus economy, Sonnet build |
 | 0.39 | Farming and animals | Planned | Opus numbers, Sonnet build |
+| 0.40 | Auto shop: vehicle tuning parts (engine, tyres, gearing, fuel economy) that raise a vehicle's top speed and mpg within its tier | Planned | Opus numbers, Sonnet build |
 | Later | Elevation (own build, Pine Ridge and river banks first), ambient traffic, in-world interior shell (may be pulled ahead of 0.36 if windows are wanted sooner), NPC schedules, hired workers, hosted multiplayer | Deferred | Opus |
 After each build: Haiku tunes prices, wages, durability, growth times. Every build keeps: data first, pure transactions with tests, `validateMap` for anything placed, performance budget checked before shipping.
 

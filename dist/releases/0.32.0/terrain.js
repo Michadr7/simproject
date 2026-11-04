@@ -9,7 +9,7 @@ import {MAP,roadRect,riverPath} from './map-definition.js';
 
 export const SURFACE=Object.freeze({GRASS:1,STREET:2,ROAD:3,DIRT:4,PAVEMENT:5,WATER:6,BANK:7,BRIDGE:8,WHEAT:9,PLOWED:10,GREEN:11,DRIVEWAY:12,PATH:13});
 // How high the player's feet sit on each surface (the city's streets and pavements are raised meshes; the County Road is a plane on the grass).
-export const FOOTING=Object.freeze({1:-.095,2:.01,3:-.035,4:-.095,5:.165,6:-.095,7:-.095,8:-.01,9:-.095,10:-.095,11:-.095,12:-.04,13:-.04});
+export const FOOTING=Object.freeze({1:-.095,2:.01,3:-.045,4:-.066,5:.165,6:-.095,7:-.095,8:-.01,9:-.069,10:-.069,11:-.069,12:-.04,13:-.04}); // 0.32.1: each is the top of the mesh drawn there (rural asphalt -0.045, dirt road -0.066, fields -0.069), so feet and wheels no longer sink 3-5 cm into them; grass stays (the city is pinned to it)
 export const MINIMAP_COLOUR=Object.freeze({2:'#45494b',3:'#45494b',4:'#9c8462',5:'#8d9294',6:'#3f7ea3',7:'#5b6448',8:'#6f5b43',9:'#d4b45a',10:'#6b4f3a',11:'#82a653',12:'#8f9396',13:'#b9b3a4'});
 const FIELD_SURFACE={wheat:SURFACE.WHEAT,plowed:SURFACE.PLOWED,green:SURFACE.GREEN};
 

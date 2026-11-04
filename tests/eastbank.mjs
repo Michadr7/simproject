@@ -86,4 +86,9 @@ assert(!world.blocked(161.8,30.4),'the dock plate is walked over (its ramp end; 
  has(broken(m=>{m.bayRows[0].count=20}),/bay row supply-bays is not on paving/);
  has(broken(m=>{m.yards[2].bounds={x0:70,x1:96,z0:40,z1:62}}),/not on one paving rectangle/);
  has(broken(m=>{m.properties.splice(m.properties.findIndex(p=>p.id==='eastbank-warehouse'),1)}),/landmark eastbank-warehouse has no property entry/)}
+// the forecourt roof dissolves (is not drawn) while the player stands under it, and is back when they step out
+{assert.equal(eb.canopies.length,1,'one forecourt canopy');const roof=eb.canopies[0].mesh;
+ eb.update(156.5,-8.25);assert.equal(roof.visible,false,'standing under the canopy hides its roof');
+ eb.update(159.5,-8.25);assert.equal(roof.visible,false,'and in the lane near the roof edge (3 m east of its centre)');
+ eb.update(162,-8.25);assert.equal(roof.visible,true,'outside the roof (5.5 m along the lane) it is drawn again');eb.update(140,-4);assert.equal(roof.visible,true,'and from the road to the west')}
 console.log('Eastbank Works: Works Lane and a 12 m Freight South close a drivable loop; 5 buildings in their plots (all in the registry with reasons), 20 paving rectangles that are asphalt, connected to the roads and walkable; 8 m driveway cuts clear for a truck; 101 yard props in 5 chunks under the caps; solid and walk-over parts; culling; 10 broken yards and maps caught.');

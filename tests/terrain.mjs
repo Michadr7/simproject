@@ -73,3 +73,5 @@ const mid=line[Math.floor(line.length/2)];assert(mid[1]<-65,'it really bends (it
 assert.notEqual(ct.surfaceAt(260,-50),SURFACE.ROAD,'the inside of the bend is not road');assert.notEqual(ct.surfaceAt(mid[0],mid[1]-6),SURFACE.ROAD,'nor is ground 6 m off the centreline');
 assert(ct.walkable(250,-60)&&ct.walkable(280,-45),'and the meadow around it is open country, so it joins everything');
 console.log(`Terrain mask: ${built.cols} x ${built.rows} cells in ${ms.toFixed(0)} ms; the city identical to the old rules at ${cityPoints} points; open country walkable (no invisible walls), the river and the map edge not; both bridges aligned; the Cedar Heights loop closed and smooth; plots on open grass; all districts reachable.`);
+// feet and wheels stand on the top of the mesh drawn there: rural asphalt -0.045, dirt roads -0.066, fields -0.069 (they sank 3-5 cm before)
+assert.equal(FOOTING[SURFACE.ROAD],-.045);assert.equal(FOOTING[SURFACE.DIRT],-.066);assert([SURFACE.WHEAT,SURFACE.PLOWED,SURFACE.GREEN].every(k=>FOOTING[k]===-.069),'fields');

@@ -46,9 +46,9 @@ try{
 
  // 1. the prompts at the diesel pump: take the nozzle (E), and the tank cap says what the truck takes
  Object.assign(me.position,dieselUse);me.rotation.y=Math.PI;pump(.4);
- {const p=prompt();assert(!p.hidden&&/Take the diesel nozzle/.test(p.text)&&p.key==='E'&&!p.keyHidden,'the pump says: E, Take the diesel nozzle ('+JSON.stringify(p)+')');assert(/\$4\.20\/gal/.test(p.text),'with its price in dollars a gallon')}
- press('KeyE');pump(1);
- assert(/diesel nozzle in your hand/i.test(toast()),'E at the diesel pump takes the nozzle ('+toast()+')');
+ {const p=prompt();assert(!p.hidden&&/Take the diesel nozzle/.test(p.text)&&p.key==='H'&&!p.keyHidden,'the pump says: H, Take the diesel nozzle ('+JSON.stringify(p)+')');assert(/\$4\.20\/gal/.test(p.text),'with its price in dollars a gallon')}
+ press('KeyH');pump(1);
+ assert(/diesel nozzle in your hand/i.test(toast()),'H at the diesel pump takes the nozzle ('+toast()+')');
  assert(marker.visible,'the tank cap glows while the nozzle is in hand');
  {const p=prompt();assert(!p.hidden&&/^Hold to fill · Worktruck · takes diesel · 5\.0 of 21 gal/.test(p.text)&&p.key==='F'&&!p.keyHidden,'at the cap the prompt says: F, hold to fill, which vehicle, which fuel, how much ('+JSON.stringify(p)+')')}
  // the arm holds the nozzle out in front, and the nozzle is in the hand
@@ -73,9 +73,9 @@ try{
  // 5. the wrong fuel: the gas pump does not fill a diesel truck (an error, no money taken, no penalty); the tank cap says so
  press('KeyE');pump(.3); // (the cap prompt is chosen here: E shows how to fill)
  assert(/Hold F to fill/.test(toast()),'E at the cap only reminds you to hold F ('+toast()+')');
- Object.assign(me.position,{x:156.9,z:-7.25});pump(.4);press('KeyE');pump(.3);assert(/Nozzle back in its holster/.test(toast()),'the diesel nozzle hangs up at its own pump ('+toast()+')');
+ Object.assign(me.position,{x:156.9,z:-7.25});pump(.4);press('KeyH');pump(.3);assert(/Nozzle back in its holster/.test(toast()),'the diesel nozzle hangs up at its own pump ('+toast()+')');
  assert(!marker.visible,'and the glow goes out');
- Object.assign(me.position,gasUse);pump(.4);press('KeyE');pump(.3);assert(/gas nozzle in your hand/i.test(toast()),'and the gas nozzle comes out of the other pump ('+toast()+')');
+ Object.assign(me.position,gasUse);pump(.4);press('KeyH');pump(.3);assert(/gas nozzle in your hand/i.test(toast()),'and the gas nozzle comes out of the other pump ('+toast()+')');
  Object.assign(me.position,nearCap);pump(.4);
  {const p=prompt();assert(/Wrong fuel · takes diesel/.test(p.text)&&p.keyHidden,'at the cap: "Wrong fuel · takes diesel", with no key shown ('+JSON.stringify(p)+')')}
  const cash1=GameState.progress.cash,mgal1=truck().fuelMgal;
@@ -84,14 +84,14 @@ try{
  assert(/takes diesel, not gas/.test(toast()),'the game says which fuel the truck takes ('+toast()+')');
 
  // 6. hanging up: E at the pump takes the nozzle back to its holster (the gas one, taken in step 5)
- Object.assign(me.position,gasUse);pump(.4);press('KeyE');pump(.3);assert(/Nozzle back in its holster/.test(toast()),'E at the pump hangs the nozzle back ('+toast()+')');
+ Object.assign(me.position,gasUse);pump(.4);press('KeyH');pump(.3);assert(/Nozzle back in its holster/.test(toast()),'H at the pump hangs the nozzle back ('+toast()+')');
  pump(1);{const w=local('WristR');assert(w.z-wristRest.z<.1,'and the arm relaxes again')}
 
  // 7. the hose limit: walk away with a nozzle out and it goes back by itself
- Object.assign(me.position,dieselUse);pump(.4);press('KeyE');pump(.3);assert(/diesel nozzle in your hand/i.test(toast()),'taken again');
+ Object.assign(me.position,dieselUse);pump(.4);press('KeyH');pump(.3);assert(/diesel nozzle in your hand/i.test(toast()),'taken again');
  Object.assign(me.position,{x:138,z:-20});pump(.6);
  assert(/hose is at its limit/.test(toast()),'walking away past 3.5 m puts the nozzle back ('+toast()+')');
  // 8. the save keeps the truck's tank (it is away from home, so it is saved), in milli-gallons
  assert(profile().vehicles.some(v=>v.uid==='eastbank-worktruck'&&v.fuelMgal===after.fuelMgal&&v.fuelMl===undefined),'the saved tank is the one the game shows');
- console.log('Refuelling (the packaged game, imperial): a real E press takes the diesel nozzle at the pump, the tank cap glows and says what the truck takes, F held fills in whole steps at exactly $4.20 a gallon, E never fills, letting go stops it, the wrong fuel is refused without money, the arm holds the nozzle, E hangs it up, walking past 3.5 m puts it back, the tank is saved.');
+ console.log('Refuelling (the packaged game, imperial): a real H press takes the diesel nozzle at the pump, the tank cap glows and says what the truck takes, F held fills in whole steps at exactly $4.20 a gallon, E never fills, letting go stops it, the wrong fuel is refused without money, the arm holds the nozzle, E hangs it up, walking past 3.5 m puts it back, the tank is saved.');
 }finally{await rm(dir,{recursive:true,force:true})}

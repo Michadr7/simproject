@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import {AUDIO_KEY,NEAR,HEARING,MAX_CLICKS,attenuate,loadAudioSettings,saveAudioSettings,createAudio} from '../dist/audio.js';
+import {AUDIO_KEY,NEAR,HEARING,MAX_CLICKS,attenuate,loadAudioSettings,saveAudioSettings,createAudio,engineVoice} from '../dist/audio.js';
 
 // Sound is generated with Web Audio: the rules (how loud, how far, what is saved) are checked here with a fake AudioContext that records the nodes.
 class Param{constructor(v=0){this.value=v;this.target=v}setTargetAtTime(v){this.target=v}setValueAtTime(v){this.value=v}linearRampToValueAtTime(v){this.ramp=v}}
@@ -33,7 +33,7 @@ const storage=memory(),audio=createAudio({AudioContextClass:FakeContext,storage}
 assert(audio.unlock());const ctx=FakeContext.made.at(-1),gains=()=>ctx.nodes.filter(n=>n.kind==='gain'),master=()=>gains()[0];
 assert.equal(ctx.state,'running');assert(audio.ready);assert(Math.abs(master().gain.value-.36)<1e-9,'volume 0.6 squared');
 const built=ctx.nodes.length;audio.unlock();assert.equal(ctx.nodes.length,built,'unlock twice builds once');assert.equal(FakeContext.made.at(-1),ctx);
-assert.equal(ctx.nodes.filter(n=>n.kind==='osc'||n.kind==='src').filter(n=>n.started).length,6,'blade tone, blade hiss, belt rumble, belt hum, fuel rush and fuel hum are running');
+assert.equal(ctx.nodes.filter(n=>n.kind==='osc'||n.kind==='src').filter(n=>n.started).length,10,'blade tone, blade hiss, belt rumble, belt hum, fuel rush, fuel hum, the engine (two tones and a throb) and road noise are running');
 audio.setMuted(true);assert.equal(master().gain.target,0);assert.equal(loadAudioSettings(storage).muted,true);audio.setMuted(false);assert(master().gain.target>0);
 audio.setVolume(.5);assert.equal(master().gain.target,.25);assert.equal(loadAudioSettings(storage).volume,.5);audio.setVolume(5);assert.equal(audio.settings.volume,1);audio.setVolume(NaN);assert.equal(audio.settings.volume,1,'not a number: unchanged');audio.setVolume(.6);
 ctx.state='running';audio.setActive(false);assert.equal(ctx.state,'suspended','a hidden tab is silent');audio.setActive(true);assert.equal(ctx.state,'running');
@@ -53,7 +53,7 @@ update(here,{level:0,sawing:false},{level:1});assert(gains()[3].gain.target>0&&g
  audio.fuel({listener:here,at:pump,level:1,fullness:0});const flowing=rush();assert(flowing>0&&hum()>0,'fuel flowing is heard close by');
  audio.fuel({listener:{x:100,z:-240},at:pump,level:1,fullness:0});assert(rush()<flowing&&rush()>0,'quieter 30 m away');audio.fuel({listener:{x:100,z:-200},at:pump,level:1,fullness:0});assert.equal(rush(),0,'silent beyond 40 m');
  audio.fuel({listener:here,at:null,level:1,fullness:0});assert.equal(rush(),0,'no pump, no sound');
- const filters=ctx.nodes.filter(n=>n.kind==='filter');const fuelBand=filters.at(-1);audio.fuel({listener:here,at:pump,level:1,fullness:0});const empty=fuelBand.frequency.target;audio.fuel({listener:here,at:pump,level:1,fullness:1});assert(fuelBand.frequency.target>empty*1.5,'the pitch rises as the tank fills');
+ const filters=ctx.nodes.filter(n=>n.kind==='filter');const fuelBand=filters.find(n=>n.frequency.value===600);audio.fuel({listener:here,at:pump,level:1,fullness:0});const empty=fuelBand.frequency.target;audio.fuel({listener:here,at:pump,level:1,fullness:1});assert(fuelBand.frequency.target>empty*1.5,'the pitch rises as the tank fills');
  audio.fuel({listener:here,at:pump,level:0,fullness:1});
  const before=ctx.nodes.length;assert.equal(audio.chime(pump,here),true,'the full chime plays near');assert(ctx.nodes.length>before);assert.equal(audio.chime(pump,far),false,'too far to hear');
  const oscs=ctx.nodes.filter(n=>n.kind==='osc').slice(-2);assert.deepEqual(oscs.map(o=>o.frequency.value),[880,1320],'two rising notes');
@@ -63,4 +63,14 @@ const nodesBefore=ctx.nodes.length;assert.equal(audio.click(at,here),true);asser
 assert.equal(audio.click(at,far),false,'too far to hear');assert.equal(audio.click(at,here),true);assert.equal(audio.click(at,here),true);assert.equal(audio.click(at,here),false,'three at once is the limit');assert.equal(MAX_CLICKS,3);
 srcs[0].onended();assert.equal(audio.click(at,here),true,'a finished click frees a place');
 audio.setMuted(true);assert.equal(audio.click(at,here),false,'muted');
+// Engines: the pure voice (revs climb through four gears and drop at the shift; cheaper tiers are lower and rougher), and the nodes follow it; the key turn is heard near only.
+{const E=(speed,o={})=>engineVoice({speed,top:10,throttle:1,tier:'low',...o});
+ assert.equal(E(0,{running:false}).gain,0,'an engine that is off is silent');assert(E(0).gain>0&&E(0).gear===0,'idling is audible, in first gear');
+ assert(E(1.5).freq>E(0).freq&&E(1.9).freq>E(1.5).freq,'the revs climb inside a gear');assert(E(2.1).gear===1&&E(2.1).freq<E(1.99).freq,'and drop at the shift to the next gear');assert(E(10).gear===3&&E(10).rpm<=1.0001,'top speed is the last gear');
+ assert(E(4,{tier:'low'}).freq<E(4,{tier:'mid'}).freq&&E(4,{tier:'mid'}).freq<E(4,{tier:'high'}).freq,'better tiers sound higher');assert(E(4,{tier:'low'}).rough>E(4,{tier:'high'}).rough,'and smoother');
+ assert(E(4,{throttle:1}).gain>E(4,{throttle:0}).gain,'throttle is louder than coasting');assert(E(0).road===0&&E(10).road===1,'road noise grows with speed');
+ const a=createAudio({AudioContextClass:FakeContext,storage:memory()});a.unlock();const ctx2=FakeContext.made.at(-1),oscs=()=>ctx2.nodes.filter(n=>n.kind==='osc');
+ a.engine(E(0,{running:false}));assert(ctx2.nodes.filter(n=>n.kind==='gain').every(g=>g.gain.target<=1),'engine call is safe when off');
+ const voice=E(5);a.engine(voice);assert(oscs().some(o=>Math.abs(o.frequency.target-voice.freq)<1e-9),'the engine oscillator follows the voice');
+ assert.equal(a.ignition({x:0,z:0},{x:0,z:0},{tier:'low'}),true,'the key turn is heard beside you');assert.equal(a.ignition({x:0,z:0},{x:80,z:0}),false,'and not from 80 m away')}
 console.log('Audio: distance falloff (full within 2.5 m, silent beyond 40 m), saved volume and mute, one context built on the first click, blade pitch and hiss follow speed and load, the belt hums only while it runs, the lever click is limited to three at once, fuel flows with a rising pitch and chimes when full.');

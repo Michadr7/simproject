@@ -139,7 +139,7 @@ const reserved=[
  {id:'R6',name:'Residential plot R6',kind:'residential',facing:'south',x0:136,x1:148,z0:-129,z1:-115,driveway:{x0:136.9,x1:140.4,z0:-119.88,z1:-110},path:{x0:144.35,x1:145.85,z0:-119.88,z1:-110},park:{x:138.65,z:-117.18,heading:'north'}},
  {id:'R7',name:'Residential plot R7',kind:'residential',facing:'north',x0:88,x1:100,z0:-55,z1:-43,driveway:{x0:95.6,x1:99.1,z0:-61.5,z1:-52.06},path:{x0:91.25,x1:92.75,z0:-61.5,z1:-52.06},park:{x:97.35,z:-54.76,heading:'south'}},
  {id:'R8',name:'Residential plot R8',kind:'residential',facing:'north',x0:140,x1:152,z0:-55,z1:-43,driveway:{x0:147.6,x1:151.1,z0:-64,z1:-52.06},path:{x0:144.05,x1:145.55,z0:-64,z1:-52.06},park:{x:149.35,z:-54.76,heading:'south'}},
- {id:'I1',name:'Industrial plot I1',kind:'industrial',facing:'north',x0:150,x1:176,z0:18,z1:46},{id:'I2',name:'Industrial plot I2',kind:'industrial',facing:'south',x0:150,x1:176,z0:-18,z1:-2},
+ {id:'I1',name:'Industrial plot I1',kind:'industrial',facing:'north',x0:150,x1:176,z0:18,z1:46},{id:'I2',name:'Industrial plot I2',kind:'industrial',facing:'south',x0:150,x1:180,z0:-18,z1:-2},
  // Eastbank Works (0.33): I3 the building supplier and I4 the vehicle workshop front Oak Street East (facing north), I5 the timber yard fronts Freight South (facing south), I6 is the open freight yard (no building).
  {id:'I3',name:'Industrial plot I3',kind:'industrial',facing:'north',x0:72,x1:94,z0:14,z1:40},{id:'I4',name:'Industrial plot I4',kind:'industrial',facing:'north',x0:110,x1:142,z0:14,z1:40},
  {id:'I5',name:'Industrial plot I5',kind:'industrial',facing:'south',x0:72,x1:94,z0:42,z1:62},{id:'I6',name:'Industrial plot I6',kind:'industrial',facing:'south',x0:110,x1:188,z0:48,z1:62}
@@ -153,7 +153,7 @@ const paving=[
  {id:'supply-apron',x0:72,x1:94,z0:14,z1:31.2},{id:'supply-cut',x0:76,x1:84,z0:12,z1:14},
  {id:'workshop-apron',x0:112,x1:142,z0:14,z1:27.5},{id:'workshop-cut-w',x0:112,x1:120,z0:12,z1:14},{id:'workshop-cut-e',x0:133,x1:141,z0:12,z1:14},
  {id:'warehouse-yard',x0:152,x1:174,z0:18,z1:31.5},{id:'warehouse-in',x0:156,x1:164,z0:12,z1:18},{id:'warehouse-out',x0:166,x1:174,z0:12,z1:18},
- {id:'gas-in',x0:142,x1:150,z0:-9,z1:0},{id:'gas-west',x0:150,x1:161.5,z0:-18,z1:0},{id:'gas-east',x0:161.5,x1:176,z0:-10,z1:0},{id:'gas-island',x0:152.5,x1:160.5,z0:-9,z1:-7.5,kind:'island'},
+ {id:'gas-in',x0:142,x1:150,z0:-9,z1:0},{id:'gas-west',x0:150,x1:161.5,z0:-18,z1:0},{id:'gas-east',x0:161.5,x1:179,z0:-10,z1:0},{id:'gas-island',x0:154.5,x1:158.5,z0:-9.15,z1:-7.35,kind:'island'},
  {id:'timber-yard',x0:80,x1:94,z0:44,z1:60},{id:'timber-out',x0:82,x1:90,z0:60,z1:62},{id:'timber-in',x0:94,x1:96,z0:46,z1:54},
  {id:'freight-yard',x0:110,x1:188,z0:48,z1:60},{id:'freight-cut-w',x0:120,x1:128,z0:60,z1:62},{id:'freight-cut-e',x0:160,x1:168,z0:60,z1:62},{id:'freight-link',x0:108,x1:110,z0:50,z1:58}
 ];
@@ -195,7 +195,7 @@ const yards=[
   ...rowOf('prop.box-small',113,26.8,.6,6),...rowOf('prop.box-medium',118,26.8,.8,4),...rowOf('prop.crate-large',136.5,26.5,1.4,2),
   {prop:'prop.pallet',x:140,z:26,yaw:0,y:0},{prop:'prop.pallet',x:140,z:24.9,yaw:0,y:0}]},
  // The gas station: bollards at the ends of the pump island (the pumps and the canopy come with the user's models).
- {id:'gas-station',bounds:{x0:150,x1:161.5,z0:-18,z1:0},cull:80,items:[...[[152,-9.3],[152,-7.2],[161,-9.3],[161,-7.2]].map(([x,z])=>({prop:'prop.zone-bollard',x,z,yaw:0,y:0})),{prop:'prop.pump-island',x:156.5,z:-8.25,yaw:0,y:0},{prop:'prop.forecourt-canopy',x:156.5,z:-8.25,yaw:Math.PI/2,y:0}]}
+ {id:'gas-station',bounds:{x0:150,x1:161.5,z0:-18,z1:0},cull:80,items:[...[[154,-9.3],[154,-7.2],[159,-9.3],[159,-7.2]].map(([x,z])=>({prop:'prop.zone-bollard',x,z,yaw:0,y:0})),{prop:'prop.pump-island',x:156.5,z:-8.25,yaw:0,y:0},{prop:'prop.forecourt-canopy',x:156.5,z:-8.25,yaw:Math.PI/2,y:0}]}
 ];
 
 function deepFreeze(value){if(value&&typeof value==='object'&&!Object.isFrozen(value)){Object.freeze(value);for(const key of Object.keys(value))deepFreeze(value[key])}return value}
@@ -335,7 +335,7 @@ export const MAP=deepFreeze({
   {id:'car-r2',prop:'suv',zone:'cedar',x:123.35,z:-71.3,yaw:Math.PI,decor:true},{id:'car-r4',prop:'car',zone:'cedar',x:101.35,z:-118.08,yaw:Math.PI,decor:true},{id:'car-r6',prop:'sports-car',zone:'cedar',x:138.65,z:-117.18,yaw:Math.PI,decor:true},{id:'car-r8',prop:'car',zone:'cedar',x:149.35,z:-54.76,yaw:0,decor:true},
   // Eastbank Works (0.33): Kenney Industrial buildings (CC0), each standing at the back of its plot with its front (door side) on the yard; a plot facing north puts the front at -z (yaw pi). None can be entered.
   {id:'eastbank-warehouse',prop:'industrial-q',plot:'I1',zone:'eastbank',x:163,z:38.6,yaw:Math.PI},{id:'eastbank-workshop',prop:'industrial-t',plot:'I4',zone:'eastbank',x:126,z:33.5,yaw:Math.PI},
-  {id:'eastbank-supply',prop:'industrial-s',plot:'I3',zone:'eastbank',x:83,z:35.4,yaw:Math.PI},{id:'eastbank-gas-kiosk',prop:'industrial-p',plot:'I2',zone:'eastbank',x:168.5,z:-14,yaw:0},
+  {id:'eastbank-supply',prop:'industrial-s',plot:'I3',zone:'eastbank',x:83,z:35.4,yaw:Math.PI},{id:'eastbank-gas-kiosk',prop:'industrial-p',plot:'I2',zone:'eastbank',x:172,z:-14,yaw:0},
   {id:'eastbank-lumber-shed',prop:'hut',plot:'I5',zone:'eastbank',x:76.5,z:54,yaw:0},{id:'eastbank-tank',prop:'tank-small',zone:'eastbank',x:137,z:34,yaw:0,decor:true}
  ], // Signposts: boards are read from the front (yaw 0 faces south, towards walkers arriving from the bridge).
  signs:[
