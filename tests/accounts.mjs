@@ -27,7 +27,7 @@ const file=(cash,game='0.35.0')=>({format:SAVE_FORMAT,formatVersion:SAVE_FORMAT_
 // Without a database: a clear 503, not a crash
 assert.equal((await call('/api/me',{e:{}})).status,503);
 // Signed out
-assert.deepEqual((await call('/api/me')).body,{user:null});
+assert.deepEqual((await call('/api/me')).body,{user:null,methods:['dev']});
 assert.equal((await call('/api/save')).status,401);
 // The dev login exists only locally and only when switched on
 assert.equal((await call('/api/dev-login',{method:'POST',body:{name:'ada'},e:{DB:D1}})).status,404,'off unless DEV_LOGIN=1');
@@ -42,7 +42,7 @@ const token=cookie.split('=')[1];
 const stored=D1.db.prepare('SELECT token_hash FROM sessions').all();assert.equal(stored.length,1);assert.notEqual(stored[0].token_hash,token);assert.equal(stored[0].token_hash,await sha256(token),'only the hash is stored');
 const me=(await call('/api/me')).body.user;assert.equal(me.name,'ada');assert.deepEqual(me.providers,['dev']);
 // A wrong or forged cookie is nobody
-assert.deepEqual((await call('/api/me',{jar:false,headers:{cookie:`${SESSION_COOKIE}=${'x'.repeat(43)}`}})).body,{user:null});
+assert.deepEqual((await call('/api/me',{jar:false,headers:{cookie:`${SESSION_COOKIE}=${'x'.repeat(43)}`}})).body,{user:null,methods:['dev']});
 
 // Cloud save: none yet, then revisions; bad files, size, too-soon and stale writes are refused
 assert.deepEqual((await call('/api/save')).body,{save:null,revision:0,savedAt:null,game:null});
@@ -65,10 +65,10 @@ assert.notEqual(await findOrCreateUser(env,{provider:'google',subject:'g-999',em
 assert.notEqual(await findOrCreateUser(env,{provider:'google',subject:'g-998'},now),me.id,'no email: never linked');
 
 // Sessions end: after 30 days, and on logout (cookie cleared, row deleted)
-const later=now;now+=31*86400000;assert.deepEqual((await call('/api/me')).body,{user:null},'expired');now=later;
+const later=now;now+=31*86400000;assert.deepEqual((await call('/api/me')).body,{user:null,methods:['dev']},'expired');now=later;
 const out=await call('/api/logout',{method:'POST'});assert.equal(out.status,200);assert.match(out.set,/^cl_session=; .*Max-Age=0$/);
-assert.deepEqual((await call('/api/me')).body,{user:null});assert.equal(D1.db.prepare('SELECT COUNT(*) AS n FROM sessions WHERE token_hash=?').get(await sha256(token)).n,0);
+assert.deepEqual((await call('/api/me')).body,{user:null,methods:['dev']});assert.equal(D1.db.prepare('SELECT COUNT(*) AS n FROM sessions WHERE token_hash=?').get(await sha256(token)).n,0);
 assert.equal((await call('/api/nothing')).status,404);
 // The Worker routes /api/ here
-const routed=await handleRequest(new Request(LOCAL+'/api/me'),env);assert.equal(routed.status,200);assert.deepEqual(await routed.json(),{user:null});
+const routed=await handleRequest(new Request(LOCAL+'/api/me'),env);assert.equal(routed.status,200);assert.deepEqual(await routed.json(),{user:null,methods:['dev']});
 console.log('Accounts: no-database 503, dev login only locally and when switched on, header and Origin required for changes, HttpOnly cookie with only its hash stored, cloud save revisions (bad file, size, too soon, stale 409), linking by verified email, expiry, logout, and /api/ routing passed.');

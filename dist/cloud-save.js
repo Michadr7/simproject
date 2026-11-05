@@ -25,7 +25,7 @@ export function planSync({local,cloud,state,userId}){
 }
 
 export function createCloud({fetchFn,storage,version,now=()=>Date.now()}){
- let user=null;
+ let user=null,methods=[]; // methods: the sign-in buttons the server offers ('google', 'dev')
  const api=async(path,{method='GET',body}={})=>{
   const res=await fetchFn(path,{method,credentials:'same-origin',headers:{'x-city-life':'1',...(body?{'content-type':'application/json'}:{})},body:body?JSON.stringify(body):undefined});
   let data=null;try{data=await res.json()}catch{}
@@ -34,7 +34,7 @@ export function createCloud({fetchFn,storage,version,now=()=>Date.now()}){
  const remember=(revision,save)=>saveCloudState(storage,{userId:user.id,revision,fingerprint:fingerprint(save)});
 
  async function me(){
-  try{const r=await api('/api/me');if(r.status!==200)return {available:false,user:null};user=r.data?.user??null;return {available:true,user}}
+  try{const r=await api('/api/me');if(r.status!==200)return {available:false,user:null};user=r.data?.user??null;methods=Array.isArray(r.data?.methods)?r.data.methods:[];return {available:true,user}}
   catch{return {available:false,user:null,offline:true}}
  }
  async function upload(local,base){
@@ -74,5 +74,5 @@ export function createCloud({fetchFn,storage,version,now=()=>Date.now()}){
  }
  async function devLogin(name){try{const r=await api('/api/dev-login',{method:'POST',body:{name}});return r.status===200}catch{return false}}
  async function logout(){try{await api('/api/logout',{method:'POST'})}catch{}user=null}
- return {me,sync,pushIfChanged,devLogin,logout,get user(){return user}};
+ return {me,sync,pushIfChanged,devLogin,logout,get user(){return user},get methods(){return methods}};
 }

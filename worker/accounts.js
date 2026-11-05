@@ -79,9 +79,11 @@ export async function handleAccounts(request,env,now=Date.now()){
  }
  const user=await currentUser(request,env,now);
  if(path==='/api/me'&&method==='GET'){
-  if(!user)return json({user:null});
+  // methods: the sign-in buttons this server can offer (Google once its client id and secret are set; dev only locally).
+  const methods=[...(env.GOOGLE_CLIENT_ID&&env.GOOGLE_CLIENT_SECRET?['google']:[]),...(env.DEV_LOGIN==='1'&&isLocal(request.url)?['dev']:[])];
+  if(!user)return json({user:null,methods});
   const {results}=await env.DB.prepare('SELECT provider FROM identities WHERE user_id=?').bind(user.id).all();
-  return json({user:{id:user.id,name:user.name,providers:[...new Set(results.map(r=>r.provider))]}});
+  return json({user:{id:user.id,name:user.name,providers:[...new Set(results.map(r=>r.provider))]},methods});
  }
  if(path==='/api/logout'&&method==='POST'){
   if(user)await env.DB.prepare('DELETE FROM sessions WHERE token_hash=?').bind(user.tokenHash).run();

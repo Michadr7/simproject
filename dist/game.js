@@ -955,7 +955,9 @@ const reloadWithNewSave=()=>{saveLocked=true;if(typeof location!=='undefined'&&l
 const saveMenu=createSaveMenu({$,doc:document,storage:saveStore,version:VERSION,download:(...a)=>globalThis.__download?globalThis.__download(...a):downloadText(...a),reload:reloadWithNewSave});
 // Account and cloud save (cloud-save.js, account-menu.js; the server is worker/accounts.js). Synced when the page loads, every 2 minutes while playing if the save changed, and before "Save and go to the main menu".
 const cloud=createCloud({fetchFn:(...a)=>(globalThis.__fetch||fetch)(...a),storage:saveStore,version:VERSION});
-const accountMenu=createAccountMenu({$,cloud,devLogin:typeof location!=='undefined'&&['localhost','127.0.0.1'].includes(location.hostname),reload:reloadWithNewSave,show:()=>mainMenu.show('menuAccountPanel')});
+// Back from Google: /?signedin=google or /?signin=cancelled|failed|unavailable. Read once, then removed from the address bar so a reload does not repeat it.
+const signinReturn=(()=>{if(typeof location==='undefined')return null;const q=new URLSearchParams(location.search),r={signedin:q.get('signedin'),signin:q.get('signin')};if(!r.signedin&&!r.signin)return null;try{history.replaceState(null,'',location.pathname)}catch{}return r})();
+const accountMenu=createAccountMenu({$,cloud,reload:reloadWithNewSave,show:()=>mainMenu.show('menuAccountPanel'),navigate:url=>{persist();location.assign(url)},returned:signinReturn});
 if(typeof location!=='undefined'||globalThis.__fetch)accountMenu.start();
 const cloudConflictToast=r=>{if(r?.status==='conflict')toast('Your cloud save changed on another browser. Choose which one to keep in Account, on the main menu.')};
 setInterval(()=>{if(active&&$('welcome').hidden&&cloud.user){persist();cloud.pushIfChanged().then(cloudConflictToast)}},PUSH_EVERY_MS)?.unref?.();
