@@ -273,6 +273,23 @@ const vehicles=[
  {id:'eastbank-worktruck',model:'worktruck',name:'Worktruck',sale:'both',home:{x:84.25,z:-13,yaw:PI},fuel:{type:'diesel',tankMgal:21000,port:{x:1.2,z:-2.2}}},
  {id:'eastbank-offroad',model:'offroad',name:'Pevrolet Off Road Pickup',sale:'both',home:{x:88.75,z:-13,yaw:PI},fuel:{type:'diesel',tankMgal:18000,port:{x:1.4,z:-2.2}}}
 ];
+// Employers (0.35, DESIGN 4.15): a company with one owner (an NPC at the start), a skill, an office building, the places that count as "on site" (a zone, a plot or an
+// interior room), opening hours in game minutes (6 AM to 6 PM; the last clock-in half an hour before closing) and its ranks. A rank: what it needs (skill level,
+// shifts worked, reputation 0-100), its wage in cents per game hour on site, the tools handed over once when it is reached (item ids), the task kinds it adds.
+// Names are defaults: a save may rename a company (careers.js employerName). Placeholder numbers (Haiku tunes).
+const employers=[
+ {id:'ridgeline',name:'Ridgeline Timber Co.',skill:'lumberjack',office:'eastbank-lumber-shed',owner:{kind:'npc',id:'walt-hargrove',name:'Walt Hargrove',title:'Owner'},
+  hours:{from:360,to:1080,lastIn:1050},
+  sites:[{zone:'forest'},{plot:'I5'},{plot:'I1'},{room:'ridgeline-office'},{room:'ridgeline-warehouse'}],
+  ranks:[
+   {id:'trainee',name:'Trainee',needs:{level:1,shifts:0,rep:0},wage:800,grants:['axe'],tasks:['fell','landing']},
+   {id:'feller',name:'Feller',needs:{level:3,shifts:3,rep:20},wage:1000,grants:[],tasks:['mill']},
+   {id:'hauler',name:'Hauler',needs:{level:5,shifts:6,rep:35},wage:1200,grants:[],tasks:['haul']}, // + the Steel Axe once it is an item (0.35 step 5)
+   {id:'yard-hand',name:'Yard hand',needs:{level:7,shifts:10,rep:50},wage:1400,grants:[],tasks:['stack','pick']},
+   {id:'sawyer',name:'Sawyer',needs:{level:10,shifts:15,rep:60},wage:1600,grants:[],tasks:['deliver','replant']}, // + the Lumberjack Axe (step 5)
+   {id:'foreman',name:'Foreman',needs:{level:15,shifts:25,rep:75},wage:1800,grants:[],tasks:[]}
+  ]}
+];
 export const MAP=deepFreeze({
  id:'oak-and-alder',version:1,
  seed:7301, // changing it moves every generated tree and orphans saved forest plots
@@ -282,7 +299,7 @@ export const MAP=deepFreeze({
  // Where you can walk: everywhere inside this rectangle except water (and trees, fences and buildings, which are solid objects). The zones name and shape the districts; they no longer fence them in.
  playable:{x0:-250,x1:290,z0:-380,z1:100},
  openCountry:{id:'open',name:'Open Country',label:'OPEN COUNTRY',subtitle:'Meadows between districts',color:'#6e8a5c'}, // how far the ground is drawn (scenery fades into fog beyond the walkable zones)
- zones,roads,water,fields,buildings,shops,reserved,properties,paving,bayRows,yards,vehicles,relief,
+ zones,roads,water,fields,buildings,shops,reserved,properties,paving,bayRows,yards,vehicles,relief,employers,
  // The marked parking lot behind the south row of shops: bays 2.7 m wide and 5 m deep along its north edge, an aisle to Alder Street, the lot's own asphalt.
  lots:[{id:'alder-lot',x0:-14,x1:45,z0:-63,z1:-52,bays:{x0:-13.5,z0:-63,count:20,width:2.7,depth:5}}],
  // Parking lanes on the cross street (6 m bays, nose in the direction of traffic: eastbound on the south side, westbound on the north), and the lane edge lines.
@@ -611,5 +628,15 @@ export function validateMap(map=MAP){
    if(!onPaving(v.home.x,v.home.z))bad(`vehicle ${v.id} does not start on paving`);
    if(v.home.x<map.playable.x0||v.home.x>map.playable.x1||v.home.z<map.playable.z0||v.home.z>map.playable.z1)bad(`vehicle ${v.id} starts outside the playable rectangle`)}
   const slots=(map.bayRows||[]).filter(r=>r.id.startsWith('depot-')).reduce((s,r)=>s+r.count,0);if(displays>slots)bad(`the dealership lot has ${slots} bays but ${displays} models have a display slot (sale: dealership or both): build another lot or sell the newest online only`)}
+ // employers (0.35, DESIGN 4.15): unique ids, an office that is a property (a building with a name), sites that name a known zone or plot (or an interior room), sane hours, and ranks whose needs climb
+ const employerIds=new Set();
+ for(const e of map.employers||[]){if(typeof e.id!=='string'||!e.id||employerIds.has(e.id))bad(`employer ${e.id} has a missing or duplicate id`);employerIds.add(e.id);
+  if(!e.name||!e.owner?.name||!['npc','player'].includes(e.owner.kind))bad(`employer ${e.id} needs a name and an owner (kind npc or player)`);
+  if(!(map.properties||[]).some(b=>b.id===e.office))bad(`employer ${e.id} has an unknown office ${e.office}`);
+  for(const s of e.sites||[])if(!(s.zone&&map.zones.some(z=>z.id===s.zone))&&!(s.plot&&(map.reserved||[]).some(p=>p.id===s.plot))&&!(typeof s.room==='string'&&s.room))bad(`employer ${e.id} has a site that names nothing known (${JSON.stringify(s)})`);
+  const h=e.hours||{};if(![h.from,h.to,h.lastIn].every(Number.isInteger)||!(0<=h.from&&h.from<h.lastIn&&h.lastIn<h.to&&h.to<=1440))bad(`employer ${e.id} has bad hours`);
+  if(!(e.ranks||[]).length)bad(`employer ${e.id} has no ranks`);
+  (e.ranks||[]).forEach((r,i)=>{const p=e.ranks[i-1];if(!r.id||!r.name||!Number.isSafeInteger(r.wage)||r.wage<=0||!Array.isArray(r.grants)||!Array.isArray(r.tasks))bad(`employer ${e.id} rank ${r.id} is incomplete`);
+   if(p&&!(r.needs.level>=p.needs.level&&r.needs.shifts>=p.needs.shifts&&r.needs.rep>=p.needs.rep&&r.wage>=p.wage))bad(`employer ${e.id} rank ${r.id} needs or pays less than the rank below`)})}
  return problems;
 }

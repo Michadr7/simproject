@@ -13,6 +13,8 @@ import {normalizePlots,normalizeLogs,nextLogIdFor} from './grid.js';
 import {isWalkable} from './world.js';
 import {normalizeCarry,normalizeBelt,normalizePlankDrops} from './carry.js';
 import {normalizeVehicles} from './vehicle.js';
+import {normalizeCareers,normalizeCompanies} from './careers.js';
+import {normalizeShift,normalizePayStubs} from './shift.js';
 export const MARKET={name:MAP.shops.market.name,x:MAP.shops.market.x,z:MAP.shops.market.z};
 export const ROUTES=[
  {name:'18 Oak Street',description:'A grocery order for a resident at the apartments.',x:3.8,z:-7,pay:1200},
@@ -20,7 +22,7 @@ export const ROUTES=[
  {name:'Oak Street Laundry',description:'A grocery order for the laundry staff.',x:-10.2,z:-7,pay:1800}
 ];
 export const PROGRESS_KEY='citylife.progress.v1';
-export const freshProgress=()=>({schema:SCHEMA,properties:{},homeNotices:[],cash:0,completed:0,phase:'available',activeJob:null,inventory:freshInventory(),settings:{statDrainMultiplier:1},cooldowns:{},gigBoard:{ids:[],refreshAt:0},position:null,housing:freshHousing(),life:normalizeLife(),routine:normalizeRoutine(),cafe:normalizeCafe(),plots:{},equipped:null,skills:freshSkills(),stats:freshStats(),logs:[],nextLogId:1,carry:null,belt:0,plankDrops:[],vehicles:[],orders:freshOrders()});
+export const freshProgress=()=>({schema:SCHEMA,properties:{},homeNotices:[],cash:0,completed:0,phase:'available',activeJob:null,inventory:freshInventory(),settings:{statDrainMultiplier:1},cooldowns:{},gigBoard:{ids:[],refreshAt:0},position:null,housing:freshHousing(),life:normalizeLife(),routine:normalizeRoutine(),cafe:normalizeCafe(),plots:{},equipped:null,skills:freshSkills(),stats:freshStats(),logs:[],nextLogId:1,carry:null,belt:0,plankDrops:[],vehicles:[],orders:freshOrders(),careers:{},companies:{},shift:null,payStubs:[]});
 export const money=cents=>'$'+(cents/100).toFixed(2);
 export function normalizeProgress(value){
  const a=value&&typeof value==='object'?value:{},s=freshProgress();
@@ -35,6 +37,7 @@ export function normalizeProgress(value){
  s.housing=normalizeHousing(a.housing);s.life=normalizeLife(a.life);s.routine=normalizeRoutine(a.routine);s.cafe=normalizeCafe(a.cafe);s.plots=normalizePlots(a.plots);s.skills=normalizeSkills(a.skills);s.stats=normalizeStats(a.stats);s.logs=normalizeLogs(a.logs);s.nextLogId=nextLogIdFor(a.nextLogId,s.logs);s.carry=normalizeCarry(a.carry);s.belt=normalizeBelt(a.belt);s.plankDrops=normalizePlankDrops(a.plankDrops);
  s.vehicles=normalizeVehicles(a.vehicles,MAP.vehicles,MAP.playable); // 0.33: where the drivable vehicles were left (a new optional field: no schema bump)
  s.orders=normalizeOrders(a.orders); // 0.34: Store orders and the main home (an optional field: no schema bump)
+ s.careers=normalizeCareers(a.careers);s.companies=normalizeCompanies(a.companies);s.shift=normalizeShift(a.shift,s.careers);s.payStubs=normalizePayStubs(a.payStubs); // 0.35: careers (DESIGN 4.15), optional fields: no schema bump
  // A save from the first dealership build kept owned vehicles as ids in orders.owned: they become owned vehicles v1, v2 ... where they were left.
  if(Array.isArray(a.orders?.owned)&&!s.vehicles.length){const old=Array.isArray(a.vehicles)?a.vehicles:[],moved=[];for(const id of a.orders.owned){const slot=MAP.vehicles.find(v=>v.id===id);if(!slot)continue;const was=old.find(v=>v?.uid===id);moved.push({uid:'v'+(s.orders.nextVehicle+moved.length),model:slot.model,x:Number.isFinite(was?.x)?was.x:slot.home.x,z:Number.isFinite(was?.z)?was.z:slot.home.z,yaw:Number.isFinite(was?.yaw)?was.yaw:slot.home.yaw,fuelMgal:was?.fuelMgal})}
   s.vehicles=normalizeVehicles(moved,MAP.vehicles,MAP.playable);s.orders={...s.orders,nextVehicle:s.orders.nextVehicle+s.vehicles.length}}

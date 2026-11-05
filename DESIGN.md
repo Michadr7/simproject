@@ -350,6 +350,80 @@ With a single island (2 pumps, 4 hoses) the idle forecourt is 1,944 triangles an
 - **Dealership (later pass, after housing):** the lot becomes a real dealership, not an empty lot with a parking lot: use the glass-front shop building at County Road (the teal-fronted one) or the Eastbank depot, moved or adjusted so the display vehicles stand on a marked parking lot in front of it. A sign reads "Riden Deals" with a picture of one of the asset trucks (a rendered vehicle picture can be the sign texture). The two display slots move to the new lot (`MAP.vehicles` homes), and E on a display vehicle still buys it. Check the frame budget (a sign and a lot are cheap; do not add a new building model if an existing one fits).
 - **Gigs revamp (own build, after the housing pass and before 0.38 cashier):** gigs are too simple and repetitive today (six flows, one board, fixed pay). Ideas to settle first: varied contract types per district and employer with a story line and a named customer; distance, time-window and rush pay; multi-stop runs; jobs that need an owned vehicle or a tool; a reputation per employer that unlocks better gigs; the delivery job from the Store plan (carry parcels from the lot to an NPC's or another player's home); a daily board that does not repeat the same three offers. The contracts code (`contracts.js`) and the Store's delivery queue (`orders.js`) are the starting points.- **Clothing (a later pass):** wearable clothing that shows on the character and matters. Today the jacket and the backpacks only add inventory slots and are not visible. Each piece of clothing (and each bag) gets its own slot size, a model or a texture layer on the character (`character.js` outfit parts), and a place in the Clothing and Tools shelves of the Store.- **Housing pass (next after the above):** For Rent or Sale signs must not be crossed by their post or hidden by trees (the post is in front of the text today), and houses need bigger interiors with a camera that does not show a wall from outside.
 
+### 4.15 Careers and the Lumberjack company (0.35 design, Opus 5.5, 2026-11-05; numbers are placeholders for Haiku to tune)
+**Goal:** the first job that works end to end and stays interesting for many hours: a career inside a company, with ranks, a daily set of varied tasks, and new tools, vehicles and buildings opened by rank. Not a single repeated loop.
+
+**Decided with the user (2026-11-05):** company first, freelance later (Pine Ridge belongs to the company; logs and planks only pay on shift until a late rank opens a timber lease); the office goes on plot I5 (replacing the hut beside the plank dock) and the Eastbank Warehouse (I1) becomes the company's lumber warehouse, both with interiors; the axe ladder ships in 0.35, wear and repairs stay in 0.37; daylight is 6 AM to 6 PM; clocking in is done on the phone; the flatbed can be bought at Lumberjack level 5; chainsaws are sold only by the company; axes are sold in stores and on the phone.
+
+#### A. Employers (generic; every later job uses the same shape)
+- **`MAP.employers`** (data, checked by `validateMap`): `{id, name, owner:{name, title}, skill, office:<building id>, sites:[zone or rect ids], ranks:[...], hours:{from:360, to:1080}}`. 0.35 has one: **Ridgeline Timber Co.** (placeholder), owner **Walt Hargrove** (placeholder), skill `lumberjack`, office on I5, sites: Pine Ridge, the sawmill, the timber yard and the warehouse. The café (`cafe-job.js`) and the delivery gigs keep working as they are; they move onto this shape in the gigs revamp.
+- **Every career starts at the bottom.** You are hired in person: the first visit to the owner in the office is a short interview (dialog), which hires you as rank 1. Later visits are for promotions. Everything else (clock in, tasks, pay) is on the phone.
+- **The owner is an NPC** who stands in the office during opening hours (6 AM to 6 PM). Outside those hours the office is locked, but the phone still works.
+
+#### B. Ranks (Ridgeline; each rank adds tasks, tools and access, and keeps the earlier ones)
+| Rank | Needs (skill level, shifts worked, reputation) | Opens | Granted |
+|---|---|---|---|
+| 1 Trainee | hired | fell and buck marked pines, carry logs to the landing; sawmill access (none before hiring) | Axe (tier 1), Hand Saw |
+| 2 Feller | L3, 3 shifts, rep 20 | milling tasks at the sawmill, larger cut blocks | — |
+| 3 Hauler | L5, 6 shifts, rep 35 | the company flatbed on shift; haul timber to Eastbank; **can buy a flatbed** | Steel Axe (tier 2) |
+| 4 Yard hand | L7, 10 shifts, rep 50 | warehouse tasks: stack planks in racks, pick customer orders | — |
+| 5 Sawyer | L10, 15 shifts, rep 60 | customer deliveries (plank orders to build sites and homes), replanting quotas | Lumberjack Axe (tier 3) |
+| 6 Foreman | L15, 25 shifts, rep 75 | chainsaws in the company store (0.37), pick the day's cut block, a timber lease to work freelance (later build) | — |
+- **Promotion is not automatic:** when you meet a rank's needs, the Job app says "Walt wants to see you", and the promotion happens in the office. The granted tool is handed over there.
+- **Reputation 0-100:** + for finishing the day's tasks, a full shift, a delivery on time; − for cutting unmarked trees, leaving a task unfinished at clock-out, abandoning the company truck. Below 10 for two shifts: a warning; it never fires you in 0.35 (open question).
+- **Skill XP** keeps its source (swings, fells) and gains XP from the other tasks (milling, hauling, stacking, deliveries), so the whole career levels the skill, not only chopping. Retune so L5 is reached in about 3 shifts, L10 in about 12 and L20 in about 40 (a shift is 12 game hours = 24 real minutes). Today's curve (40 XP to L2, +20 per level) stays; only the XP per action changes.
+
+#### C. Shifts and pay
+- **Clock in** from the phone's Job app between 6:00 AM and 5:30 PM (at least half an hour left). The shift ends at **6:00 PM** at the latest (automatic clock-out with a toast); you can clock out earlier. One shift per game day.
+- **Wage** per game hour by rank (Trainee $8, +$2 per rank, placeholder), counted only while you are **on site** (inside a site area or in a company vehicle). Off site the Job app shows "Off site · not paid"; after 60 game minutes off site you are clocked out. Travel to work is unpaid (clock in when you arrive, or pay the walk).
+- **Piece pay** on top: per log at the landing ($1.00), per plank milled ($0.25), per load hauled to Eastbank ($15), per rack stacked, per order filled (placeholders). Pay is the wage plus piece pay; it is paid in cash at clock-out, with a **pay stub** (hours, pieces, bonus) kept in the Job app (last 7).
+- **Daily tasks:** at clock-in the company hands out 2-4 tasks from the rank's pool, chosen by counters (not random, so a save is repeatable) and varied day to day, e.g. "Fell 6 marked pines in block C", "Mill 30 planks", "Haul one full load to the timber yard", "Stack 40 planks in rack 2", "Deliver 20 planks to 3 Cedar Loop by 2 PM". Finishing all of them pays a **shift bonus** (placeholder $25 × rank) and reputation.
+- **Cut blocks:** Pine Ridge is split into blocks along the existing plot grid. Each day one or two blocks are marked: their mature pines carry a paint mark (one `InstancedMesh`, one draw call). Cutting an unmarked tree pays nothing and costs reputation. Blocks rotate so the forest regrows (the regrowth rules in 4.8 apply); replanting a cleared block is a Sawyer task.
+- **Company timber is the company's:** logs and planks made on shift are not yours; they are pieces of work (their count pays you). Off shift, the forest is closed to cutting (prompt: "Pine Ridge belongs to Ridgeline Timber. Clock in to work it."). The Corner Market stops buying logs. **Old saves:** logs already in the inventory are bought back once by Walt at the interview ($1.00 each); existing Lumberjack XP and the Axe are kept, so an old player is promotable quickly.
+
+#### D. The company flatbed and the player's own
+- **Company flatbed** (the user's new model, still to come): parked in the timber yard (I5). Only on shift, only Hauler and up; E at its driver door. At clock-out (or after 30 game minutes away from it) it is returned to its bay; leaving it out in the world costs reputation. Fuel is the company's (no pay at the pump while on shift; refuelling is a task when its tank is low).
+- **Own flatbed:** sold from rank 3 (Lumberjack L5) at the dealership and in the Store's Vehicles (low tier, large bed; price placeholder **$7,500**, between the Worktruck $4,500 and the pickup $11,000), same colours, delivery and room rules as other vehicles (4.14). On shift it can be used instead of the company truck (paid a mileage allowance, placeholder $0.50 per mile); its real value comes with freelancing and furniture/material hauling later.
+- **Cargo** (0.35, generic for every vehicle with a bed): a bed holds slots (flatbed 24 logs or 6 plank bundles; pickup 6 logs or 2 bundles; Worktruck to be measured); E with a log on your shoulder or a plank bundle in your hands puts it on the bed, E at the bed takes the nearest one off. Cargo is drawn as instanced logs and bundles on the bed (one draw call per kind), saved on the vehicle (`cargo:{logs, bundles}`), and slows the vehicle by its load (the 4.13 D numbers: flatbed 10 m/s empty, 8 loaded). The plank dock in the timber yard takes bundles off for a haul task.
+
+#### E. Buildings and interiors (separate scenes, like the shops, until the in-world shell)
+- **Ridgeline office (I5):** a small Kenney Industrial building in place of the hut, its door facing the timber yard. Inside: reception, Walt's desk (hire, promotions), a time clock on the wall (a second place to clock in), a notice board (today's tasks and the cut-block map), the **company store** counter (safety gear now; chainsaws in 0.37) and lockers. Plot I5 is narrow west of the plank dock (x 72..80): measure the model before choosing it; the dock and its two driveways must stay clear (`driving-game.mjs`).
+- **Lumber warehouse (I1, the Eastbank Warehouse):** the existing big building and its truck door. Inside: plank racks (numbered), a receiving area by the door, an order-picking table, pallets. Warehouse tasks (rank 4) are stacking received bundles into racks and picking orders for deliveries. The **forklift** (the user's model in `assets-src/Veichles/Forklifts/`) is the warehouse's vehicle later: driving inside an interior scene is new work, so it is not in 0.35.
+- The building supplier (I3) keeps selling tools (the axes and the Hand Saw), separate from the company.
+
+#### F. Axe ladder (0.35; wear, repairs and chainsaws in 0.37)
+- `tools.js` table from 4.8: Axe tier 1 (L1, $20, damage 3), Steel Axe tier 2 (L5, $120, damage 4), Lumberjack Axe tier 3 (L10, $350, damage 6, two-handed, bonus log). Hits per pine = ceil(24 / (damage × (1 + 0.04 × (level − 1)))): Axe 8 at L1, Steel 5 at L5, Lumberjack 3 at L10. This replaces today's `hitsNeeded` (3, then 2 at L6), so the tool matters; `swingTime` and `logsPerTree` stay level perks.
+- Granted at rank 1, 3 and 5 (L1, L5, L10) and also sold at the Corner Market's hardware counter, the Eastbank supplier and the phone Store's Tools shelf. **Buying a tier needs its level**, so a new player cannot skip the ladder with money. Spares matter once wear arrives (0.37).
+- Chainsaws (0.37): low (L15, $600) and high (L20, $1,500), sold only at the company store, Foreman rank.
+
+#### G. Job app (phone)
+A fifth app, **Jobs** (the home grid becomes 3 × 2): **Employers** (who is hiring, where the office is, the owner's name), **My job** (company, rank, wage, reputation bar, progress to the next rank with the three needs, "Walt wants to see you"), **Shift** (Clock in / Clock out, time left until 6 PM, on site or off site, today's tasks with progress, earnings so far), **Pay** (the last 7 pay stubs). The Gigs app stays for one-off gigs until the gigs revamp.
+
+#### H. Save (no schema bump; optional fields normalised like `orders`)
+`progress.careers = {ridgeline:{hired, rank, rep, shifts, promoteSeen}}`, `progress.shift = null | {employer, day, startedAt, paidMinutes, offSiteMinutes, tasks:[{id, kind, target, done}], pieces:{logs, planks, loads, racks, orders}, earned}`, `progress.payStubs` (last 7), `progress.forest = {day, blocks:[ids]}` (the marked blocks; trees already carry their own state), and `cargo` on each vehicle in `progress.vehicles` (the company flatbed's pose and cargo in `progress.companyVehicles`). Pure rules in `careers.js` and `shift.js` (`state, action → new state or error`), tested like `orders.js`.
+
+#### I. Cost (performance budget)
+Tree marks: one InstancedMesh (≤ 400 instances), 1 draw call. Cargo: two InstancedMeshes per loaded vehicle (≤ 24 + 6 instances). Flatbed about 3,500 triangles + generated wheels (as the old one, 4.13 F). Office: one Kenney building (a few hundred triangles). The interiors are separate scenes, so they cost nothing outdoors. The owner NPC exists only inside the office. Nothing here is expected to cost more than 1 FPS on the user's GPU; check after the flatbed and the marks are in.
+
+#### J. Build order (each step stops with tests passing)
+1. `careers.js` + `shift.js` (rules, pay, tasks by counters, daylight, on-site test) and `MAP.employers`, with tests. *Opus (save and rules), then Sonnet.* **Done (0.35.0, `tests/careers.mjs`).**
+2. Jobs app on the phone (Employers, My job, Shift, Pay). *Sonnet.*
+3. Ridgeline office on I5 (building, interior scene, Walt, interview and hire, buy-back of old logs), sawmill gated behind hiring, forest closed off shift, Corner Market stops buying logs. *Sonnet.*
+4. Cut blocks and tree marks; landing and milling tasks with piece pay. *Sonnet.*
+5. Axe ladder (`tools.js`, two more axe models, shop shelves with level gates, granted tools). **Needs the Steel Axe (Quaternius) and AXE.fbx originals in `assets-src/`; they are not there.** *Sonnet.*
+6. Flatbed (the user's model) + generic cargo + plank dock unloading + company vehicle rules + buying your own at L5. *Opus for cargo rules, Sonnet to build.*
+7. Ranks and promotions in the office, reputation. *Sonnet.*
+8. Lumber warehouse interior and its tasks (stacking, picking) and customer deliveries. *Sonnet; may become 0.36 if 0.35 grows too big (then the roadmap moves up by one).*
+
+**Not ready (assets):** chainsaws (the high-end Chainsaw01 archive is not in `assets-src/` and its TGA textures still need converting; the low-end green chainsaw was never received), the Steel Axe and Lumberjack Axe originals, the flatbed (coming from the user), an office building model choice (Kenney Industrial has several; pick by footprint).
+
+**Decided 2026-11-05 (second round):**
+- **Names can change.** Ridgeline Timber Co. and Walt Hargrove are the defaults; a company's name lives in the save as an override (`progress.companies[id].name`), and every text and sign reads it through one function (`employerName`), never a literal. Signs are canvas-drawn boards, so a rename redraws one texture (cheap). Who may rename: the company's owner (below).
+- **One owner per company, plus co-owners.** Ownership data: `owner:{kind:'npc'|'player', id}` and `coOwners:[player ids]`; co-owners can make every owner-level decision (prices, names, hiring later). At the start every company is NPC-owned. How a player becomes an owner (buy-out, founding a company) is a later build; 0.35 only shapes the data so it fits. In multiplayer, ownership is shared world state and needs the hosted server to hold it (the relay carries positions only today; D1 is there for accounts): not in 0.35.
+- **Any number of jobs**, one shift at a time (clocking in to one employer while on another's shift is refused). **No firing.** **Quitting** resets that employer's rank, reputation and shifts to zero; the skill's XP stays (it is the player's), and tools already handed over stay yours. Each granted tool is given **once per player per employer, ever** (`granted` survives quitting), so quitting and climbing again cannot farm axes. Rehiring is allowed at once (a fresh interview); a high skill level makes the climb back quicker, but shifts and reputation still have to be earned.
+
+**Open questions:** do NPC loggers work the forest beside you (later, with NPC schedules); multiplayer (each player's shift is their own; trees are still per client today).
+
 ## 5. Economy progression (existing numbers; placeholders marked)
 | Stage | Player can do | Money in | Money out | Core loop |
 |---|---|---|---|---|
@@ -367,7 +441,7 @@ Gaps: no wage figures for cashier or gigs; crop and shop prices undefined; no in
 | ≤ 0.32.0 | Skeleton, houses, registry, assets, interiors v1 + ownership (schema 2), living town, menu/dev mode, interior editor | Done | Sonnet |
 | 0.33 | Eastbank Works (Kenney Industrial) + Vehicle Driving (kinematic driving, enter/exit, collisions for pickup and flatbed) + `heightAt` prep | Next | Opus design, Sonnet build |
 | 0.34 | Logging Chain: carry system and animations, bucking (Hand Saw, trunks), sawmill chain (planks pile) | Planned | Opus design, Sonnet build |
-| 0.35 | Cargo loading, selling planks at Eastbank, basic fuel system (gas stations) | Planned | Opus architecture, Sonnet build |
+| 0.35 | **Lumberjack career** (4.15): employers and ranks, Jobs app, shifts (6 AM to 6 PM, clock in on the phone), daily tasks, cut blocks, Ridgeline office interior on I5, axe ladder, company and own flatbed, cargo, plank dock, lumber warehouse (fuel system already built) | Designed | Opus design, Sonnet build |
 | 0.36 | Furniture edit mode, storage, Furnish app, sink/fridge/sofa/TV uses, mortgages | Planned | Sonnet (Opus for save/delivery) |
 | 0.37 | Tools: axe/chainsaw ladder, wear (incl. Hand Saw wear), chainsaw bucking fuel, repairs, blade tiers; schema 3 | Planned | Opus numbers, Sonnet build |
 | 0.38 | Cashier shift and POS | Planned | Opus economy, Sonnet build |
