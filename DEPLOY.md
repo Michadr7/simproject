@@ -40,3 +40,8 @@ The GitHub link did not trigger builds, so deploys go from the command line:
 3. Check `https://simproject.ghostjumper007.workers.dev/` shows the new version.
 
 The first time on a PC: `npx wrangler login` (browser sign-in, one time). `wrangler` is a dev dependency (`npm install` installs it).
+
+## Update notice (0.34.1)
+- `npm run release` also writes `dist/version.json` (the newest version; never cached) and `dist/version.js` (each release's own number).
+- A running game asks for `version.json` 2.5 s after loading and every 10 minutes. A newer version shows the banner (Reload saves first, then reloads). So deploying a new version is all it takes to notify players.
+- Do not edit `version.json` or `version.js` by hand.

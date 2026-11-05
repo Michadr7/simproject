@@ -16,6 +16,8 @@ if(exists&&!force){
 }
 
 await mkdir(`${dest}/vendor`,{recursive:true});
+// The version the game reports to itself (update-check.js compares it with the site's version.json). Written before the copy below so every release carries its own number.
+await writeFile('dist/version.js',`// WRITTEN by scripts/package-release.mjs (npm run release): the version of this release. Do not edit by hand.\nexport const VERSION='${version}';\n`);
 const files=(await readdir('dist',{withFileTypes:true})).filter(f=>f.isFile()&&(f.name.endsWith('.js')||f.name==='style.css')).map(f=>f.name);
 for(const name of files)await copyFile(`dist/${name}`,`${dest}/${name}`);
 for(const name of (await readdir('dist/vendor')).filter(f=>f.endsWith('.js')))await copyFile(`dist/vendor/${name}`,`${dest}/vendor/${name}`);
@@ -29,5 +31,7 @@ html=html.replace(/releases\/[^/'"]+\/game\.js/g,`releases/${version}/game.js`);
 html=html.replace(/(LIVING NEIGHBORHOOD \/ )\d+\.\d+\.\d+/g,`$1${version}`);
 if(!html.includes(`releases/${version}/game.js`)||!html.includes(`releases/${version}/style.css`)){console.error('Could not update dist/index.html to the new release paths.');process.exit(1)}
 await writeFile('dist/index.html',html);
-await writeFile('dist/_headers','/\n  Cache-Control: no-cache\n/index.html\n  Cache-Control: no-cache\n/releases/*\n  Cache-Control: public, max-age=31536000, immutable\n');
+// The site's newest version, read by the running game (update-check.js). It must never be cached, or players would never hear about an update.
+await writeFile('dist/version.json',JSON.stringify({version,released:new Date().toISOString().slice(0,10)})+'\n');
+await writeFile('dist/_headers','/\n  Cache-Control: no-cache\n/index.html\n  Cache-Control: no-cache\n/version.json\n  Cache-Control: no-cache\n/releases/*\n  Cache-Control: public, max-age=31536000, immutable\n');
 console.log(`Packaged release ${version}: ${files.length} files -> ${dest}\ndist/index.html now loads releases/${version}/`);

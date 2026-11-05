@@ -19,7 +19,7 @@ import {createMinimap} from './minimap.js';
 import {createHeldItem,disposeHeldItem} from './item-models.js';
 import {createConsumptionAnimation} from './consumption.js';
 import {itemById,ITEMS} from './items.js';
-import {DEV_MODE} from './dev-flag.js';
+import {DEV_MODE} from './dev-flag.js';import {VERSION} from './version.js';import {installUpdateNotice} from './update-check.js';
 import {createInventoryUI} from './inventory-ui.js';
 import {addItem,useItem,unequipItem,hasItem,hotbarItems,equipTool,sellLogs,canOf,setCan} from './inventory.js';
 import {createPhone} from './phone.js';
@@ -1005,6 +1005,8 @@ if(typeof location!=='undefined'&&new URLSearchParams(location.search).has('debu
  give(id){return commitInventory(addItem(GameState.progress,id))},equip:id=>toggleEquip(id,{silent:true}),hotbarUse,eHold(on){eHeld=on},place(x,z){setMePosition(x,me.position.y,z)},get shop(){return shop},get beacon(){return {visible:marker.visible,x:+marker.position.x.toFixed(2),y:+marker.position.y.toFixed(2),z:+marker.position.z.toFixed(2),diamondY:+diamond.position.y.toFixed(2)}},doors(){return {modal,active,busy:!!busy,fade:!!doorFade,cooldown:+doorCooldown.toFixed(2),fronts:shopDoors.map(f=>({kind:f.kind,amount:+f.door.amount.toFixed(2),open:shopOpen(f.kind,GameState.progress.routine),blocked:colliders.includes(f.blocker),dx:+(me.position.x-f.x).toFixed(2),z:+me.position.z.toFixed(2)}))}},get pos(){return {x:+me.position.x.toFixed(2),z:+me.position.z.toFixed(2),ry:+me.rotation.y.toFixed(2)}},get doorCooldown(){return +doorCooldown.toFixed(2)},get inside(){return inside},get hidden(){return $('objectiveDetails').hidden},tickRegrowth,
  use(index){return beginConsumption(index)},chop:startChop,get acting(){return !!(chopping||consuming||armRecovery)},fps:()=>$("fps").textContent};
 
+// Update notice (update-check.js): asks the site for version.json a few seconds after loading and every 10 minutes; a newer version shows the banner, and Reload saves first (only once you are in the game, not on the menu).
+installUpdateNotice({document,version:VERSION,fetchJson:url=>fetch(url,{cache:'no-store'}).then(r=>r.ok?r.json():null),beforeReload:()=>{if($('welcome').hidden)persist()},reload:()=>location.reload()});
 // Dev mode (dev.js): one flag, dev-flag.js. With it off, dev.js is never fetched. To remove it for good, delete dev-flag.js, dev.js, the DEV_MODE import and this block.
 // Everything the panel can do goes through the object below.
 if(DEV_MODE){try{

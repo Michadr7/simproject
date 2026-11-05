@@ -265,3 +265,16 @@ select:hover,select:focus-visible,.phone-nav button:hover:not(:disabled){box-sha
 .menu-play:hover,.menu-play:focus-visible{background:var(--honey-pale);box-shadow:none}
 .menu-row .menu-button{clip-path:var(--chamfer)}
 .menu-panel{background-image:var(--comb);background-size:56px 100px}
+
+/* Update notice (0.34): 480 x 64 px, top centre, over the menu and the game. Tokens only (honey, ink, chamfer, hex). */
+#updateBanner{position:fixed;z-index:200;top:14px;left:50%;transform:translateX(-50%);width:min(480px,calc(100vw - 24px));height:64px;display:flex;align-items:center;gap:12px;padding:8px 12px 8px 10px;background:var(--ink,#0c0b08);color:#f1ebd9;clip-path:var(--chamfer);box-shadow:inset 0 0 0 1px #f5c51888}
+#updateBanner[hidden]{display:none}
+#updateBanner .update-icon{flex:none;width:48px;height:48px;display:grid;place-items:center;background:var(--honey,#f5c518);color:var(--ink,#0c0b08);font-size:26px;font-weight:800;line-height:1;clip-path:var(--hex)}
+#updateBanner .update-copy{flex:1;min-width:0;display:flex;flex-direction:column;gap:2px}
+#updateBanner .update-copy b{color:var(--honey,#f5c518);font-size:14px;letter-spacing:.04em}
+#updateBanner .update-copy span{font-size:12px;line-height:1.25;opacity:.85}
+#updateBanner button{flex:none;border:0;cursor:pointer;font:inherit;font-weight:700}
+#updateReload{width:96px;height:36px;background:var(--honey,#f5c518);color:var(--ink,#0c0b08);clip-path:var(--chamfer);font-size:14px}
+#updateReload:hover,#updateReload:focus-visible{background:var(--honey-pale,#ffe48a);outline:none}
+#updateLater{width:28px;height:28px;background:none;color:#f1ebd9;font-size:15px;opacity:.7}
+#updateLater:hover,#updateLater:focus-visible{opacity:1;outline:none}
