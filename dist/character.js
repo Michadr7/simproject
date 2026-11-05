@@ -12,7 +12,20 @@ const WALK_SPEED=1.5,RUN_SPEED=4.4;
 
 let assets=null,loading=null;
 export const characterAssetsReady=()=>!!assets;
-function extract(gltf){
+// The women's pack leaves some hair untagged (no `role` in the model), so those parts never took the chosen hair colour: Formal's whole head of hair
+// is the material "Red", and on every female head "Brown" is the eyebrows. Fixed here, on the head meshes only (Red is also the Formal shoes), with
+// copies of the materials so nothing else that shares them changes. Eyebrows follow the hair colour, a little darker, as the men's do.
+export function tagFemaleHair(mesh,partName){
+ if(!/__Head$/.test(partName))return;
+ const retag=m=>{
+  if(m.userData?.role)return m;
+  const hair=partName==='Formal__Head'&&m.name==='Red',brows=m.name==='Brown';
+  if(!hair&&!brows)return m;
+  const copy=m.clone();copy.userData={...m.userData,role:'hair',...(brows?{brows:true}:{})};return copy;
+ };
+ mesh.material=Array.isArray(mesh.material)?mesh.material.map(retag):retag(mesh.material);
+}
+function extract(gltf,kind){
  const meshes=[];gltf.scene.traverse(o=>{if(o.isSkinnedMesh)meshes.push(o)});
  if(!meshes.length)throw new Error('Character file has no skinned meshes');
  const skeleton=meshes[0].skeleton,container=gltf.scene.getObjectByName('character')||gltf.scene;
@@ -20,6 +33,7 @@ function extract(gltf){
  const rigRoot=topOf(skeleton.bones[0]),parts=new Map(),clips=new Map(gltf.animations.map(c=>[c.name,c]));
  for(const mesh of meshes){
   const key=topOf(mesh).name;if(!parts.has(key))parts.set(key,[]);
+  if(kind==='female')tagFemaleHair(mesh,key);
   parts.get(key).push({geometry:mesh.geometry,material:mesh.material,bindMatrix:mesh.bindMatrix});
  }
  return {rigRoot,bones:skeleton.bones,boneInverses:skeleton.boneInverses,parts,clips};
@@ -32,7 +46,7 @@ export function loadCharacterAssets(){
   for(const kind of ['male','female']){
    const {default:data}=await import(`./character-${kind}.js`);
    const binary=Uint8Array.from(atob(data),c=>c.charCodeAt(0)).buffer;
-   result[kind]=extract(await loader.parseAsync(binary,''));
+   result[kind]=extract(await loader.parseAsync(binary,''),kind);
   }
   return assets=result;
  })();
@@ -153,7 +167,7 @@ export function createCharacter(input){
     const own=[].concat(record.material).map(material=>{
      const role=material.userData?.role;if(!role)return material;
      const copy=material.clone();copy.userData={...material.userData,cloned:true};
-     copy.color.set(appearance[role]);if(/^eyebrows/i.test(material.name))copy.color.multiplyScalar(.7);return copy;
+     copy.color.set(appearance[role]);if(/^eyebrows/i.test(material.name)||material.userData.brows)copy.color.multiplyScalar(.7);return copy;
     });
     const mesh=new T.SkinnedMesh(record.geometry,own.length===1?own[0]:own);
     mesh.bind(kinds.skeleton,record.bindMatrix);mesh.castShadow=true;mesh.frustumCulled=false;mesh.name=`${appearance[key]}__${PART_NAMES[key]}`;

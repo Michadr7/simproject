@@ -43,6 +43,22 @@ const pale=createCharacter({...outfit('male','Suit'),skin:'#edc9ae',hair:'#a8aaa
 assert(roleColors(pale,'skin').length>0&&roleColors(pale,'skin').every(h=>h==='edc9ae'));assert(roleColors(dark,'skin').every(h=>h==='4b332b'));
 assert(roleColors(pale,'hair').some(h=>h==='a8aaa5')&&roleColors(dark,'hair').some(h=>h==='292b2b'));
 pale.apply({...outfit('male','Suit'),skin:'#d9ae8d'});assert(roleColors(pale,'skin').every(h=>h==='d9ae8d')&&roleColors(dark,'skin').every(h=>h==='4b332b'));
+// Every hairstyle takes every hair colour (the women's Formal hair was an untagged material, so it never changed). Compared on the head parts only:
+// the hair is whatever head material is not skin, an accessory or the pack's fixed dye (Worker's yellow cap, Punk's pink and black).
+{
+ const FIXED=/^(Skin|Worker_Yellow|Pink|Black)/,headMats=c=>c.meshes.filter(m=>m.name.endsWith('__Head')).flatMap(m=>[].concat(m.material));
+ for(const [id] of OUTFITS.female)for(const [,hex] of palettes.hair){
+  const c=createCharacter({...outfit('female',id),hair:hex});
+  const hairs=headMats(c).filter(x=>x.userData.role==='hair'&&!x.userData.brows);
+  assert(hairs.length>0&&hairs.every(x=>x.color.getHexString()===hex.slice(1)),`female ${id}: hair ${hex} reaches all of the hair`);
+  const loose=headMats(c).filter(x=>!x.userData.role&&!FIXED.test(x.name));assert.equal(loose.length,0,`female ${id} head has untagged materials: ${loose.map(x=>x.name)}`);
+  const brows=headMats(c).filter(x=>x.userData.brows);assert(brows.length>0&&brows.every(x=>x.color.r<new T.Color(hex).r+1e-6),`female ${id}: eyebrows follow the hair, never lighter`);
+ }
+ // Red is Formal's hair on the head but also its shoes: the shoes must not turn into hair.
+ const formal=createCharacter({...outfit('female','Formal'),hair:'#bca06a'}),shoes=formal.meshes.filter(m=>m.name.endsWith('__Feet')).flatMap(m=>[].concat(m.material));
+ assert(shoes.length>0&&shoes.every(x=>!x.userData.role||x.userData.role==='skin'),'Formal shoes keep their own colour');
+ const before=roleColors(createCharacter({...outfit('female','Formal'),hair:'#292b2b'}),'hair').join(),after=roleColors(createCharacter({...outfit('female','Formal'),hair:'#bca06a'}),'hair').join();assert.notEqual(before,after,'Formal hair changes when the colour does');
+}
 // Clothes keep the pack's own colours.
 const vest=createCharacter(outfit('male','Worker')).meshes.flatMap(m=>[].concat(m.material)).find(x=>x.name==='Worker_Vest');assert(vest&&vest.color.r>vest.color.b*2,'orange hi-vis vest, not darkened');
 // ── Motion ────────────────────────────────────────────────────────────────────
