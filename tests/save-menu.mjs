@@ -35,7 +35,7 @@ const pickFile=async(t,text)=>{t.$('menuImportFile').files=[{text:async()=>text}
  await pickFile(t,'{"format":"nope"}');assert.equal(t.$('menuSaveStatus').dataset.kind,'error');assert(t.$('menuSaveConfirm').hidden);
  const good=JSON.stringify(makeSaveFile(player(250000,'New'),{version:'0.34.3',now:Date.UTC(2026,10,1)}));
  await pickFile(t,good);assert(!t.$('menuSaveConfirm').hidden,'asks before replacing');
- assert.match(t.$('menuSaveConfirmText').textContent,/Replace your save with New \(\$2,500\.00; saved v0\.34\.3, /);
+ assert.match(t.$('menuSaveConfirmText').textContent,/Replace your save with New \(\$2,500\.00, day 1 9:00 AM; saved v0\.34\.3, /);
  t.$('menuSaveConfirmNo').click();assert(t.$('menuSaveConfirm').hidden);assert.equal(readStoredSave(s).profile.name,'Old');assert.equal(t.log.length,0);
  await pickFile(t,good);t.$('menuSaveConfirmYes').click();
  assert.equal(readStoredSave(s).profile.name,'New');assert.equal(readStoredSave(s).profile.progress.cash,250000);assert.deepEqual(t.log,['reload']);

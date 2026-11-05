@@ -6,6 +6,7 @@
 // It uses the WebSocket Hibernation API: an idle lobby is evicted from memory (not billed for time) and rebuilt from its sockets' attachments.
 // No login yet: anyone with the code can join. Accounts come later (DESIGN.md).
 import {createLobby,makeLobbyCode,normalizeLobbyCode,HELLO_TIMEOUT_MS,CLOSE_REFUSED,REFUSED,PROTOCOL} from '../dist/relay-protocol.js';
+import {handleAccounts} from './accounts.js';
 
 export const EMPTY_LOBBY_MS=10*60*1000; // a lobby with nobody in it is forgotten after this
 const CODE_HEADER='x-lobby-code',CREATE_HEADER='x-lobby-create';
@@ -21,6 +22,7 @@ export function originAllowed(request){
 
 export async function handleRequest(request,env){
   const url=new URL(request.url);
+  if(url.pathname.startsWith('/api/'))return handleAccounts(request,env); // accounts and cloud saves (worker/accounts.js)
   const m=/^\/relay\/([^/]+)\/?$/.exec(url.pathname);
   if(!m)return new Response('Not found',{status:404});
   if(request.headers.get('upgrade')?.toLowerCase()!=='websocket')return new Response('This is the City Life relay: connect with a WebSocket.',{status:426,headers:{upgrade:'websocket'}});

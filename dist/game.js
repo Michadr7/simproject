@@ -27,7 +27,7 @@ import {acceptContract,completeContract,tickContract,gigTarget,atGigPoint,refres
 import {GameState,initializeState,setMePosition,tickLife,setStatDrainMultiplier} from './state.js';
 import {loadProfile,saveProfile} from './profile.js';
 import {MultiplayerClient} from './multiplayer.js';
-import {createMainMenu,relayBase,refusalText} from './main-menu.js';import {createSaveMenu} from './save-menu.js';import {normalizeLobbyCode,REFUSED} from './relay-protocol.js';
+import {createMainMenu,relayBase,refusalText} from './main-menu.js';import {createSaveMenu} from './save-menu.js';import {createCloud,PUSH_EVERY_MS} from './cloud-save.js';import {createAccountMenu} from './account-menu.js';import {normalizeLobbyCode,REFUSED} from './relay-protocol.js';
 import {findNearestClearSpot,MAX_SEARCH,OPEN_AREA} from './safe-spot.js';
 import {createHouseSigns} from './house-signs.js';
 import {terrain,SURFACE} from './terrain.js';
@@ -191,7 +191,7 @@ let openCredits=()=>{};{let built=false,from='controls';function buildCredits(){
  openCredits=source=>{from=source;if(!built)buildCredits();if(source==='menu')$('welcome').hidden=true;else $('controls').hidden=true;$('credits').hidden=false};
  $('showCredits').onclick=()=>openCredits('controls');$('closeCredits').onclick=()=>{$('credits').hidden=true;if(from==='menu')$('welcome').hidden=false;else $('controls').hidden=false}}$('resume').onclick=()=>{pause(false);look.capture()};
 // Back to the main menu: save, leave any multiplayer server, and reload the page. The reload is the cleanest reset (scenes, timers, sockets, held input), and the save has just been written.
-$('mainMenu').onclick=()=>{persist();multiplayer.disconnect();if(typeof location!=='undefined')location.reload()};$('closeDialog').onclick=()=>{$('dialog').hidden=true;clearWorldPanel();modal=false;keys.clear();look.capture()};
+$('mainMenu').onclick=()=>{persist();multiplayer.disconnect();const go=()=>{if(typeof location!=='undefined')location.reload()};if(cloud.user)Promise.race([cloud.pushIfChanged(),new Promise(r=>setTimeout(r,3000))]).finally(go);else go()};$('closeDialog').onclick=()=>{$('dialog').hidden=true;clearWorldPanel();modal=false;keys.clear();look.capture()};
 function updateHomeNotices(){const n=GameState.progress.homeNotices;if(n?.length){toast(n.join(' '));GameState.progress.homeNotices=[];persist()}} var saveLocked=false; // var, not let: persist() is hoisted and may run before this line. Set once an import or restore has written a new save: nothing may save the old game over it while the page reloads
  function persist(){if(saveLocked)return;refreshHotbar();refreshSkillHud();if(!inside&&!shop){const at=driving.active?driving.door():me.position;GameState.progress.position={x:at.x,z:at.z}} // driving: you are saved standing at the driver's door, and the vehicles where they were left
  GameState.progress.vehicles=driving.save();const ok=saveProfile({playerId:me.id,name:me.name,progress:GameState.progress});$('progressStatus').textContent=ok?'Saved on this browser':'Saving unavailable · session only';return ok}
@@ -950,7 +950,15 @@ multiplayer.onDropped(({wasIn,refused})=>{showLobby();if(!$('welcome').hidden)re
 const mainMenu=createMainMenu({$,storage:{getItem:k=>localStorage.getItem(k),setItem:(k,v)=>localStorage.setItem(k,v)},connect:url=>multiplayer.connect(url),disconnect:()=>multiplayer.disconnect(),onConnected:cb=>multiplayer.onConnected(cb),onDisconnected:cb=>multiplayer.onDisconnected(cb),onRefused:cb=>multiplayer.onRefused(cb),needUpdate:()=>updateNotice.announce(LOBBY_UPDATE),relay:relayBase(typeof location!=='undefined'?location:null),play:startGame,applyQuality,openCredits:()=>openCredits('menu')});
 // Settings > Your save (save-menu.js): export, import, backups. A replaced save reloads the page with persist() locked, or pagehide would write the old game back.
 const downloadText=(name,text)=>{const url=URL.createObjectURL(new Blob([text],{type:'application/json'}));const a=document.createElement('a');a.href=url;a.download=name;document.body.append(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(url),1000)};
-const saveMenu=createSaveMenu({$,doc:document,storage:{getItem:k=>localStorage.getItem(k),setItem:(k,v)=>localStorage.setItem(k,v),removeItem:k=>localStorage.removeItem?.(k)},version:VERSION,download:(...a)=>globalThis.__download?globalThis.__download(...a):downloadText(...a),reload:()=>{saveLocked=true;if(typeof location!=='undefined'&&location.reload)location.reload();else globalThis.__reloaded=true}});
+const saveStore={getItem:k=>localStorage.getItem(k),setItem:(k,v)=>localStorage.setItem(k,v),removeItem:k=>localStorage.removeItem?.(k)};
+const reloadWithNewSave=()=>{saveLocked=true;if(typeof location!=='undefined'&&location.reload)location.reload();else globalThis.__reloaded=true};
+const saveMenu=createSaveMenu({$,doc:document,storage:saveStore,version:VERSION,download:(...a)=>globalThis.__download?globalThis.__download(...a):downloadText(...a),reload:reloadWithNewSave});
+// Account and cloud save (cloud-save.js, account-menu.js; the server is worker/accounts.js). Synced when the page loads, every 2 minutes while playing if the save changed, and before "Save and go to the main menu".
+const cloud=createCloud({fetchFn:(...a)=>(globalThis.__fetch||fetch)(...a),storage:saveStore,version:VERSION});
+const accountMenu=createAccountMenu({$,cloud,devLogin:typeof location!=='undefined'&&['localhost','127.0.0.1'].includes(location.hostname),reload:reloadWithNewSave,show:()=>mainMenu.show('menuAccountPanel')});
+if(typeof location!=='undefined'||globalThis.__fetch)accountMenu.start();
+const cloudConflictToast=r=>{if(r?.status==='conflict')toast('Your cloud save changed on another browser. Choose which one to keep in Account, on the main menu.')};
+setInterval(()=>{if(active&&$('welcome').hidden&&cloud.user){persist();cloud.pushIfChanged().then(cloudConflictToast)}},PUSH_EVERY_MS)?.unref?.();
 $('quality').value=mainMenu.settings.quality;
 $('menuVolume').value=Math.round(audio.settings.volume*100);$('menuMute').checked=audio.settings.muted;$('menuVolume').oninput=()=>audio.setVolume($('menuVolume').value/100);$('menuMute').onchange=()=>audio.setMuted($('menuMute').checked);
 function updateMultiplayer(now,moving,dt){

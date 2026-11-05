@@ -24,7 +24,7 @@ assert.equal(PROFILE_KEY,'citylife.profile.v1');assert.equal(CHARACTER_KEY,'city
  assert.equal(file.format,SAVE_FORMAT);assert.equal(file.formatVersion,SAVE_FORMAT_VERSION);assert.equal(file.game,'0.35.0');assert.equal(file.savedAt,'2026-11-05T12:00:00.000Z');
  assert.equal(saveFileName(file),'citylife-ada-2026-11-05.json');assert.equal(saveFileName({...file,profile:{name:'Ü ../x'}}),'citylife-x-2026-11-05.json');
  const r=readSaveFile(JSON.stringify(file));assert(r.ok);assert.equal(r.save.profile.progress.cash,500);
- assert.deepEqual(r.summary,{name:'Ada',cash:500,vehicles:0,game:'0.35.0',savedAt:'2026-11-05T12:00:00.000Z'});
+ assert.deepEqual(r.summary,{name:'Ada',cash:500,vehicles:0,day:1,clock:'9:00 AM',game:'0.35.0',savedAt:'2026-11-05T12:00:00.000Z'});
  assert(readSaveFile('﻿'+JSON.stringify(file)).ok,'a byte-order mark (Windows editors) is fine');
  for(const [text,re] of [['not json',/not a City Life save/],['{"format":"other"}',/not a City Life save/],[JSON.stringify({...file,formatVersion:SAVE_FORMAT_VERSION+1,game:'9.0.0'}),/newer version of the game \(9\.0\.0\)/],[JSON.stringify({...file,formatVersion:'1'}),/damaged/],[JSON.stringify({...file,profile:null}),/no player/],['x'.repeat(MAX_FILE_BYTES+1),/too big/],[null,/too big/]]){const bad=readSaveFile(text);assert.equal(bad.ok,false);assert.match(bad.error,re)}
  // a hand-edited file cannot inject anything: unknown fields go, bad values are normalised

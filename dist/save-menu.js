@@ -48,7 +48,7 @@ export function createSaveMenu({$,doc,storage,version,download,reload,now=()=>Da
   const read=readSaveFile(text);
   if(!read.ok){status(read.error,'error');return}
   const s=read.summary,from=[s.game&&'v'+s.game,s.savedAt&&when(Date.parse(s.savedAt))].filter(Boolean).join(', ');
-  ask(`Replace your save with ${s.name} (${money(s.cash)}${s.vehicles?`, ${s.vehicles} vehicle${s.vehicles>1?'s':''}`:''}${from?`; saved ${from}`:''})? Your current save is backed up first.`,()=>replace(read.save,'before import'));
+  ask(`Replace your save with ${s.name} (${money(s.cash)}, day ${s.day} ${s.clock}${s.vehicles?`, ${s.vehicles} vehicle${s.vehicles>1?'s':''}`:''}${from?`; saved ${from}`:''})? Your current save is backed up first.`,()=>replace(read.save,'before import'));
  };
 
  // One backup per page load, when the player first enters the world: the save exactly as it was loaded.

@@ -12,6 +12,8 @@
     "bindings": [{"name": "LOBBY", "class_name": "Lobby"}]
   },
   "migrations": [{"tag": "v1", "new_sqlite_classes": ["Lobby"]}],
+  // Accounts and cloud saves (worker/accounts.js). Schema: migrations/*.sql, applied with `npx wrangler d1 migrations apply simproject --local` (or --remote).
+  "d1_databases": [{"binding": "DB", "database_name": "simproject", "database_id": "6fe7aa70-bf5b-4ba1-89d4-658c542bb62a", "migrations_dir": "migrations"}],
   // Same as the dashboard's current settings, so a deploy from this file does not switch logging off.
   "observability": {
     "logs": {

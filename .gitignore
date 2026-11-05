@@ -1,3 +1,5 @@
 node_modules/
 # wrangler dev's local state (Durable Object storage, caches)
 .wrangler/
+# wrangler dev's local variables (secrets go here too, never in git)
+.dev.vars

@@ -5,9 +5,12 @@
 import {normalizeProgress} from './jobs.js';
 import {normalizeAppearance,SAVE_KEY as CHARACTER_KEY} from './appearance.js';
 import {PROFILE_KEY} from './profile.js';
+import {formatClock} from './routine.js';
 
 export {PROFILE_KEY,CHARACTER_KEY};
-export const SAVE_FORMAT='citylife-save',SAVE_FORMAT_VERSION=1,BACKUPS_KEY='citylife.backups.v1';
+import {SAVE_FORMAT,SAVE_FORMAT_VERSION} from './save-file-format.js';
+export {SAVE_FORMAT,SAVE_FORMAT_VERSION};
+export const BACKUPS_KEY='citylife.backups.v1';
 export const MAX_BACKUPS=5,MAX_BACKUP_BYTES=1_000_000,MAX_FILE_BYTES=2_000_000;
 
 const parse=text=>{try{return JSON.parse(text)}catch{return undefined}};
@@ -45,7 +48,7 @@ export function saveFileName(file){
 // What the player is told about a save before it replaces theirs.
 export function summarize(save,meta={}){
  const p=save.profile.progress;
- return {name:save.profile.name||save.character?.name||'Unnamed',cash:p.cash,vehicles:p.vehicles?.length||0,game:meta.game??null,savedAt:meta.savedAt??null};
+ return {name:save.profile.name||save.character?.name||'Unnamed',cash:p.cash,vehicles:p.vehicles?.length||0,day:p.housing?.day??1,clock:formatClock(p.routine?.minutes??0),game:meta.game??null,savedAt:meta.savedAt??null};
 }
 export function readSaveFile(text){
  if(typeof text!=='string'||text.length>MAX_FILE_BYTES)return {ok:false,error:'That file is too big to be a City Life save.'};

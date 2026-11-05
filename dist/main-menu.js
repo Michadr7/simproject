@@ -41,7 +41,7 @@ export function loadSettings(storage){
 export function saveSettings(storage,settings){try{storage.setItem(SETTINGS_KEY,JSON.stringify({quality:settings.quality==='low'?'low':'high'}));return true}catch{return false}}
 
 export function createMainMenu({$,storage,connect,disconnect,onConnected,onDisconnected,onRefused=()=>()=>{},needUpdate=()=>{},relay=LIVE_RELAY,play,applyQuality,openCredits,setTimer=setTimeout,clearTimer=clearTimeout}){
- const panels=['menuHome','menuMultiplayerPanel','menuSettingsPanel'];
+ const panels=['menuHome','menuMultiplayerPanel','menuSettingsPanel','menuAccountPanel'];
  const show=id=>{for(const p of panels)$(p).hidden=p!==id;if(id!=='menuMultiplayerPanel')setStatus('')};
  const setStatus=(text,kind='')=>{$('menuNetStatus').textContent=text;$('menuNetStatus').dataset.kind=kind};
  const setBusy=busy=>{for(const id of ['menuHost','menuJoin','menuCreateLobby','menuJoinLobby'])$(id).disabled=busy};
@@ -70,8 +70,9 @@ export function createMainMenu({$,storage,connect,disconnect,onConnected,onDisco
 
  $('menuMultiplayer').onclick=()=>show('menuMultiplayerPanel');
  $('menuSettings').onclick=()=>show('menuSettingsPanel');
+ $('menuAccount').onclick=()=>show('menuAccountPanel');
  $('menuCredits').onclick=()=>openCredits();
- for(const id of ['menuMultiplayerBack','menuSettingsBack'])$(id).onclick=()=>{cancel();show('menuHome')};
+ for(const id of ['menuMultiplayerBack','menuSettingsBack','menuAccountBack'])$(id).onclick=()=>{cancel();show('menuHome')};
 
  const offline=url=>`Could not reach the online server (${url}). Check your connection and try again.`;
  $('menuCreateLobby').onclick=()=>start(relay+'/relay/new',offline);
