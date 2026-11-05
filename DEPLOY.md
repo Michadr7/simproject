@@ -32,3 +32,11 @@ The game is static files in `dist/`, with no build step. A Cloudflare **Worker**
 - **LAN multiplayer from the hosted page:** the page is `https://`, and browsers block it from opening a plain `ws://` connection to another machine on the network. `ws://localhost` is usually allowed. LAN play works from a local copy (`npm run dev`), and later from the launcher.
 - **Dev Mode:** `DEV_MODE` in `dist/dev-flag.js` decides whether testers see the Dev Mode button (free money, teleport). Set it to `false` for a public build.
 - **Saves:** they live in the browser (`localStorage`) and belong to the site's address. A save on `localhost:8000` does not appear on `workers.dev`, and the reverse. Export and import of saves is planned.
+
+## Deploying from this PC (the route that works now)
+The GitHub link did not trigger builds, so deploys go from the command line:
+1. `npm run release` (only if `dist/` changed), then `npm test`.
+2. `npx wrangler deploy`. It uploads `dist/` to the `simproject` Worker and prints the live address.
+3. Check `https://simproject.ghostjumper007.workers.dev/` shows the new version.
+
+The first time on a PC: `npx wrangler login` (browser sign-in, one time). `wrangler` is a dev dependency (`npm install` installs it).
