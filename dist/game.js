@@ -27,7 +27,7 @@ import {acceptContract,completeContract,tickContract,gigTarget,atGigPoint,refres
 import {GameState,initializeState,setMePosition,tickLife,setStatDrainMultiplier} from './state.js';
 import {loadProfile,saveProfile} from './profile.js';
 import {MultiplayerClient} from './multiplayer.js';
-import {createMainMenu,relayBase,refusalText} from './main-menu.js';import {normalizeLobbyCode,REFUSED} from './relay-protocol.js';
+import {createMainMenu,relayBase,refusalText} from './main-menu.js';import {createSaveMenu} from './save-menu.js';import {normalizeLobbyCode,REFUSED} from './relay-protocol.js';
 import {findNearestClearSpot,MAX_SEARCH,OPEN_AREA} from './safe-spot.js';
 import {createHouseSigns} from './house-signs.js';
 import {terrain,SURFACE} from './terrain.js';
@@ -185,14 +185,15 @@ function worldBlocked(x,z){if(!isWalkable(x,z)||world.blocked(x,z))return true;r
 function blocked(x,z){if(shop)return shops[shop].blocked(x,z);if(inside)return home.room.blocked(x,z);return worldBlocked(x,z)||driving.blocksWalker(x,z)} // a drivable vehicle is solid to a walker (its hull, inflated by the player radius)
 function clearWorldPanel(){if(worldPanel?.actor){const pa=getMeWorldPosition(new THREE.Vector3()),pb=worldPanel.actor.getWorldPosition(new THREE.Vector3());yaw=Math.atan2(pa.x-pb.x,pa.z-pb.z)+.45;pitch=.32;zoom=zoomTarget=5.8;}worldPanel=null;look.resetMotion()}
 function pause(show){if(sleepElapsed!==null)return;if(show){phone?.close();inventoryUI?.close();storeUI?.close();}if(show){$('dialog').hidden=true;clearWorldPanel();}$('controls').hidden=!show;modal=show;keys.clear();if(show)look.release()}
-function startGame(){if(currentAppearance.name){$('welcome').hidden=true;active=true}else openCreator()}$('start').onclick=startGame;$('help').onclick=()=>pause(true);
+function startGame(){if(currentAppearance.name){saveMenu.backupOnPlay();$('welcome').hidden=true;active=true}else openCreator()}$('start').onclick=startGame;$('help').onclick=()=>pause(true);
 // Credits (credits.js): built from the data the first time they are opened from the Controls panel.
 let openCredits=()=>{};{let built=false,from='controls';function buildCredits(){const list=$('creditsList');for(const c of CREDITS){const row=document.createElement('div');row.className='credit';const who=document.createElement('b');who.textContent=c.who;const what=document.createElement('span');what.textContent=c.what;const lic=document.createElement('small');lic.textContent=c.licence+' · ';if(c.url){const a=document.createElement('a');a.href=c.url;a.target='_blank';a.rel='noopener noreferrer';a.textContent=c.url.replace(/^https?:\/\//,'');lic.appendChild(a)}else lic.textContent=c.licence;row.append(who,what,lic);list.appendChild(row)}built=true}
  openCredits=source=>{from=source;if(!built)buildCredits();if(source==='menu')$('welcome').hidden=true;else $('controls').hidden=true;$('credits').hidden=false};
  $('showCredits').onclick=()=>openCredits('controls');$('closeCredits').onclick=()=>{$('credits').hidden=true;if(from==='menu')$('welcome').hidden=false;else $('controls').hidden=false}}$('resume').onclick=()=>{pause(false);look.capture()};
 // Back to the main menu: save, leave any multiplayer server, and reload the page. The reload is the cleanest reset (scenes, timers, sockets, held input), and the save has just been written.
 $('mainMenu').onclick=()=>{persist();multiplayer.disconnect();if(typeof location!=='undefined')location.reload()};$('closeDialog').onclick=()=>{$('dialog').hidden=true;clearWorldPanel();modal=false;keys.clear();look.capture()};
-function updateHomeNotices(){const n=GameState.progress.homeNotices;if(n?.length){toast(n.join(' '));GameState.progress.homeNotices=[];persist()}} function persist(){refreshHotbar();refreshSkillHud();if(!inside&&!shop){const at=driving.active?driving.door():me.position;GameState.progress.position={x:at.x,z:at.z}} // driving: you are saved standing at the driver's door, and the vehicles where they were left
+function updateHomeNotices(){const n=GameState.progress.homeNotices;if(n?.length){toast(n.join(' '));GameState.progress.homeNotices=[];persist()}} var saveLocked=false; // var, not let: persist() is hoisted and may run before this line. Set once an import or restore has written a new save: nothing may save the old game over it while the page reloads
+ function persist(){if(saveLocked)return;refreshHotbar();refreshSkillHud();if(!inside&&!shop){const at=driving.active?driving.door():me.position;GameState.progress.position={x:at.x,z:at.z}} // driving: you are saved standing at the driver's door, and the vehicles where they were left
  GameState.progress.vehicles=driving.save();const ok=saveProfile({playerId:me.id,name:me.name,progress:GameState.progress});$('progressStatus').textContent=ok?'Saved on this browser':'Saving unavailable · session only';return ok}
 function toast(text){$('jobToast').textContent=text;$('jobToast').hidden=false;clearTimeout(toast.timer);toast.timer=setTimeout(()=>$('jobToast').hidden=true,4500)}
 function showDialog(kicker,title,text,tag,action,label){
@@ -947,6 +948,9 @@ multiplayer.onDropped(({wasIn,refused})=>{showLobby();if(!$('welcome').hidden)re
 });
 // Main menu (main-menu.js). Play is offline; Host and Join open a connection first and start the game once the server has answered.
 const mainMenu=createMainMenu({$,storage:{getItem:k=>localStorage.getItem(k),setItem:(k,v)=>localStorage.setItem(k,v)},connect:url=>multiplayer.connect(url),disconnect:()=>multiplayer.disconnect(),onConnected:cb=>multiplayer.onConnected(cb),onDisconnected:cb=>multiplayer.onDisconnected(cb),onRefused:cb=>multiplayer.onRefused(cb),needUpdate:()=>updateNotice.announce(LOBBY_UPDATE),relay:relayBase(typeof location!=='undefined'?location:null),play:startGame,applyQuality,openCredits:()=>openCredits('menu')});
+// Settings > Your save (save-menu.js): export, import, backups. A replaced save reloads the page with persist() locked, or pagehide would write the old game back.
+const downloadText=(name,text)=>{const url=URL.createObjectURL(new Blob([text],{type:'application/json'}));const a=document.createElement('a');a.href=url;a.download=name;document.body.append(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(url),1000)};
+const saveMenu=createSaveMenu({$,doc:document,storage:{getItem:k=>localStorage.getItem(k),setItem:(k,v)=>localStorage.setItem(k,v),removeItem:k=>localStorage.removeItem?.(k)},version:VERSION,download:(...a)=>globalThis.__download?globalThis.__download(...a):downloadText(...a),reload:()=>{saveLocked=true;if(typeof location!=='undefined'&&location.reload)location.reload();else globalThis.__reloaded=true}});
 $('quality').value=mainMenu.settings.quality;
 $('menuVolume').value=Math.round(audio.settings.volume*100);$('menuMute').checked=audio.settings.muted;$('menuVolume').oninput=()=>audio.setVolume($('menuVolume').value/100);$('menuMute').onchange=()=>audio.setMuted($('menuMute').checked);
 function updateMultiplayer(now,moving,dt){

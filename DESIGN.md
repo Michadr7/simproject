@@ -376,6 +376,11 @@ Gaps: no wage figures for cashier or gigs; crop and shop prices undefined; no in
 | Later | A proper day and night cycle (sun and moon, clouds, rain, darkness, street and house lights, shop signs lit at night; must keep the frame-rate budget), elevation (own build, Pine Ridge and river banks first), ambient traffic, in-world interior shell (may be pulled ahead of 0.36 if windows are wanted sooner), NPC schedules, hired workers, hosted multiplayer | Deferred | Opus |
 After each build: Haiku tunes prices, wages, durability, growth times. Every build keeps: data first, pure transactions with tests, `validateMap` for anything placed, performance budget checked before shipping.
 
+**Bug list (after the current phase; not yet started):**
+- Female hair colours do not change. Sonnet 5.5 (fix against the character code, with a test).
+- Character creator is unclear, and some buttons change other parts of the character. Opus 5.5 for the layout and labels, then Sonnet 5.5 to build.
+- The mouse goes wrong when it reaches the screen edge (look at mouse controls). Sonnet 5.5, checked in the browser lab and on a real GPU.
+
 ## 7. Open questions
 - **Engine:** stay on three.js/JavaScript, or move to a native engine such as Godot? A one-day spike (hilly terrain, a few houses, a river and bridge, a kinematic truck) after 0.33 would inform this. — decision needed (after 0.33)
 - **Map size:** a much larger map (about 3× per side) is being explored; this doc says do not enlarge until a district needs it. — decision needed

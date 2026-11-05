@@ -1,0 +1,147 @@
+// Drivable vehicles, the pure part (0.33, DESIGN 4.13 D): classes, the arcade step, hull maths and the safe-pose search. No THREE, no DOM, no game state: everything the step needs
+// from the world comes in through `env`, so the whole thing runs in a test (and, later, on a relay).
+//
+// A vehicle's state is {x, z, yaw, speed, steer} (y is never stored). Forward is the model's +z: (sin yaw, cos yaw). Yaw grows toward +x, which is the vehicle's LEFT when it faces +z,
+// so steer > 0 turns left. The hull is an oriented box from the converted model's footprint; a pose is free when every hull sample point passes the game's own `blocked()`.
+import {SURFACE} from './terrain.js';
+import {normalizeFuelMgal} from './fuel.js';
+import {validColour,defaultColour} from './paint.js';
+
+export const PLAYER_RADIUS=.33; // what blocked() adds around every solid box: the hull points are inset by it, so the inflation lands exactly on the hull edge
+export const SAMPLE_GAP=.5; // metres between hull sample points (a 0.16 m sign post cannot slip between two: the gap must stay under 2 x 0.49 m)
+
+// Placeholders, tuned by playing. hx/hz: half the footprint (checked against the converted model by tests/vehicle.mjs). door: the driver's door point, local, +x is the vehicle's left.
+// seat: where the player's position sits while driving. camera: how far behind and above the chase camera stands, and how high it looks.
+// A class's doors and seats: the driver's side is the vehicle's left (+x when it faces +z), the passenger's the right. The chase camera scales with the vehicle's length (a bigger vehicle gets a more distant view):
+// 3 x its length behind, 1.2 x its length up (worktruck 6 m: 9 m back, 3.6 m up).
+// exhaust: where the muffler tip is, local (the pipe points straight back, -z): the smoke leaves from here (smoke.js).
+// Tiers (cheapest first): 'low' is the starter, 'mid', 'high' (none yet). Every class has a tier, a top speed (m/s) and an mpg. The map is tiny, so burn uses ARCADE_MILE_SCALE (8 mpg = 1 gal/mile):
+// gallonsPerMile = ARCADE_MILE_SCALE / mpg. Top speed and mpg are tuned per class; auto-shop parts will change them later (DESIGN roadmap 0.40).
+export const TIERS=Object.freeze(['low','mid','high']);export const ARCADE_MILE_SCALE=8;
+function makeClass(c){const L=c.hz*2;return {...c,gallonsPerMile:+(ARCADE_MILE_SCALE/c.mpg).toFixed(4),door:{x:+(c.hx+.6).toFixed(3),z:c.doorZ},passengerDoor:{x:-+(c.hx+.6).toFixed(3),z:c.doorZ},seat:{x:.45,z:c.doorZ},passengerSeat:{x:-.45,z:c.doorZ},camera:{back:+(3*L/2).toFixed(2),up:+(1.2*L/2).toFixed(2)}}}
+export const CLASSES=Object.freeze({
+ worktruck:makeClass({id:'worktruck',tier:'low',mpg:8,name:'Worktruck',hx:1.09,hz:3,top:17.9,reverse:5,accel:3,brake:8,drag:.9,rMin:7,aLat:10,doorZ:.5,exhaust:{x:-.7,y:.35,z:-3.02}}), // the starter: about 40 mph, thirsty
+ offroad:makeClass({id:'offroad',tier:'mid',mpg:14.5,name:'Pevrolet Off Road Pickup',hx:1.255,hz:2.8,top:26.8,reverse:6,accel:4.5,brake:9,drag:1,rMin:6.5,aLat:14,doorZ:.5,rough:.35,exhaust:{x:-.75,y:.42,z:-2.95}}) // mid tier: about 60 mph, nearly twice the mileage; grass, fields, paths and dirt cost it 35 points less speed (rough)
+});
+
+// Top speed and acceleration multiplier by terrain surface. Water, banks and everything off the map are never driven on (blocked() refuses them as well).
+export const SURFACE_SPEED=Object.freeze({[SURFACE.GRASS]:.5,[SURFACE.STREET]:1,[SURFACE.ROAD]:1,[SURFACE.DIRT]:.8,[SURFACE.PAVEMENT]:.5,[SURFACE.WATER]:0,[SURFACE.BANK]:0,[SURFACE.BRIDGE]:1,[SURFACE.WHEAT]:.5,[SURFACE.PLOWED]:.5,[SURFACE.GREEN]:.5,[SURFACE.DRIVEWAY]:1,[SURFACE.PATH]:.5});
+// cls.rough (an off-road vehicle) lifts the rough-ground multipliers (grass 0.5, dirt 0.8 ...) by that much, never above 1; water and banks stay 0.
+// What the ground is called on the vehicle panel (grouped: a road, a track, rough ground, a pavement)
+export const SURFACE_LABEL=Object.freeze({[SURFACE.STREET]:'Road',[SURFACE.ROAD]:'Road',[SURFACE.BRIDGE]:'Road',[SURFACE.DRIVEWAY]:'Road',[SURFACE.DIRT]:'Dirt track',[SURFACE.PAVEMENT]:'Pavement',[SURFACE.PATH]:'Path',[SURFACE.GRASS]:'Grass',[SURFACE.WHEAT]:'Crop field',[SURFACE.PLOWED]:'Crop field',[SURFACE.GREEN]:'Crop field',[SURFACE.WATER]:'Water',[SURFACE.BANK]:'Mud bank'});
+export const surfaceSpeed=(surface,cls)=>{const base=SURFACE_SPEED[surface]??0;return base>0&&base<1&&cls?.rough?Math.min(1,base+cls.rough):base};
+
+export const freshVehicle=(home)=>({x:home.x,z:home.z,yaw:home.yaw,speed:0,steer:0});
+const clamp=(v,lo,hi)=>Math.max(lo,Math.min(hi,v));
+const cos=Math.cos,sin=Math.sin;
+
+// Hull sample points (local, +z forward), every SAMPLE_GAP along the perimeter of the footprint inset by PLAYER_RADIUS, plus the centre. Cached per class.
+const sampleCache=new Map();
+export function hullSamples(cls){
+ if(sampleCache.has(cls.id))return sampleCache.get(cls.id);
+ const hx=cls.hx-PLAYER_RADIUS,hz=cls.hz-PLAYER_RADIUS,pts=[{x:0,z:0}],edge=(x0,z0,x1,z1)=>{const n=Math.max(1,Math.ceil(Math.hypot(x1-x0,z1-z0)/SAMPLE_GAP));for(let i=0;i<n;i++)pts.push({x:x0+(x1-x0)*i/n,z:z0+(z1-z0)*i/n})};
+ edge(-hx,-hz,hx,-hz);edge(hx,-hz,hx,hz);edge(hx,hz,-hx,hz);edge(-hx,hz,-hx,-hz);
+ sampleCache.set(cls.id,pts);return pts;
+}
+// local -> world and back (the same rotation the game uses for collider boxes: x + lx cos + lz sin, z - lx sin + lz cos)
+export const toWorld=(s,lx,lz)=>({x:s.x+lx*cos(s.yaw)+lz*sin(s.yaw),z:s.z-lx*sin(s.yaw)+lz*cos(s.yaw)});
+export const toLocal=(s,x,z)=>{const dx=x-s.x,dz=z-s.z;return {x:dx*cos(s.yaw)-dz*sin(s.yaw),z:dx*sin(s.yaw)+dz*cos(s.yaw)}};
+export const doorPoint=(s,cls,side='driver')=>{const d=side==='driver'?cls.door:cls.passengerDoor;return toWorld(s,d.x,d.z)};
+export const seatPoint=(s,cls,side='driver')=>{const d=side==='driver'?cls.seat:cls.passengerSeat;return toWorld(s,d.x,d.z)};
+// Is the point inside the oriented hull, inflated by `margin` (the player's 0.33 m for a walker)?
+export const insideHull=(s,cls,x,z,margin=0)=>{const l=toLocal(s,x,z);return Math.abs(l.x)<cls.hx+margin&&Math.abs(l.z)<cls.hz+margin};
+// Two hulls overlap (separating-axis test on the full footprints).
+export function hullsOverlap(a,ca,b,cb,gap=0){
+ const corners=(s,c)=>[[-1,-1],[1,-1],[1,1],[-1,1]].map(([i,j])=>toWorld(s,i*(c.hx+gap/2),j*(c.hz+gap/2)));
+ const A=corners(a,ca),B=corners(b,cb);
+ for(const s of [a,b]){const axes=[{x:cos(s.yaw),z:-sin(s.yaw)},{x:sin(s.yaw),z:cos(s.yaw)}];
+  for(const ax of axes){const pa=A.map(p=>p.x*ax.x+p.z*ax.z),pb=B.map(p=>p.x*ax.x+p.z*ax.z);if(Math.max(...pa)<=Math.min(...pb)||Math.max(...pb)<=Math.min(...pa))return false}}
+ return true;
+}
+// A circle (a pedestrian) touching the hull: distance from its centre to the oriented box.
+export const circleTouchesHull=(s,cls,c)=>{const l=toLocal(s,c.x,c.z);return Math.hypot(Math.max(Math.abs(l.x)-cls.hx,0),Math.max(Math.abs(l.z)-cls.hz,0))<c.r};
+
+// env: {blocked(x, z) -> bool (the game's own blocked(): walls, trees, buildings, props, water, the map edge), surface(x, z) -> terrain surface id,
+//       others?: [{state, cls}] (other drivable vehicles), people?: [{x, z, r}] (pedestrians)}
+// Is the pose free?
+export function poseFree(pose,cls,env){
+ for(const p of hullSamples(cls)){const w=toWorld(pose,p.x,p.z);if(env.blocked(w.x,w.z))return false}
+ for(const o of env.others||[])if(hullsOverlap(pose,cls,o.state,o.cls))return false;
+ for(const c of env.people||[])if(circleTouchesHull(pose,cls,c))return false;
+ return true;
+}
+
+// The input: {throttle: -1..1 (W = 1, S = -1), steer: -1..1 (A = 1 left, D = -1 right), brake: bool (Space), }. dt must be small (the game's slices are at most 1/30 s).
+// Returns {state, hit} (a new state; hit is true when the hull met something and the pose was refused or slid).
+export const OFFROAD_DECEL=6; // m/s squared: how hard rough ground drags a vehicle that is faster than the ground allows
+export function stepVehicle(s,input,dt,cls,env){
+ const surface=surfaceSpeed(env.surface(s.x,s.z),cls);
+ const top=cls.top*surface,rev=cls.reverse*surface,accel=cls.accel*Math.max(.35,surface);
+ let v=s.speed;
+ const throttle=clamp(input.throttle||0,-1,1);
+ if(input.brake)v=toward(v,0,cls.brake*1.5*dt);
+ else if(throttle>0){v=v<-.3?toward(v,0,cls.brake*dt):toward(v,top,accel*dt*(v<top?1:3))}
+ else if(throttle<0){v=v>.3?toward(v,0,cls.brake*dt):toward(v,-rev,accel*dt*(v>-rev?1:3))}
+ else v=toward(v,0,cls.drag*dt);
+ if(v>top)v=toward(v,top,OFFROAD_DECEL*dt); // leaving the road: rougher ground slows you down, firmly, to its own top speed
+ if(v<-rev)v=toward(v,-rev,OFFROAD_DECEL*dt);
+ // steering ramps to full in 0.4 s and back to centre in 0.3 s
+ const want=clamp(input.steer||0,-1,1),rate=(want===0?1/.3:1/.4)*dt;let steer=toward(s.steer,want,rate);
+ // R(v) = max(Rmin, v^2 / aLat): fast corners are wider; yaw rate = steer x v / R (the sign of v makes reversing steer the right way round)
+ const radius=Math.max(cls.rMin,v*v/cls.aLat),yawRate=Math.abs(v)<.01?0:steer*v/radius;
+ const yaw=s.yaw+yawRate*dt,mid=s.yaw+yawRate*dt/2,nx=s.x+sin(mid)*v*dt,nz=s.z+cos(mid)*v*dt;
+ const next={x:nx,z:nz,yaw,speed:v,steer};
+ if(poseFree(next,cls,env))return {state:next,hit:false};
+ // blocked: slide along the obstacle (x only, then z only), keeping the new heading; then turn on the spot; else stay put and stop (and refuse the yaw change too)
+ // (a slide must keep at least a fifth of the intended step, or head-on contact would "slide" a hair sideways for ever and never stop)
+ const step=Math.hypot(nx-s.x,nz-s.z);
+ for(const [x,z] of [[nx,s.z],[s.x,nz]]){const p={x,z,yaw,speed:v*(1-2.5*dt),steer};if(Math.hypot(x-s.x,z-s.z)>=.2*step&&poseFree(p,cls,env))return {state:p,hit:true}}
+ return {state:{x:s.x,z:s.z,yaw:s.yaw,speed:0,steer},hit:true};
+}
+const toward=(v,target,step)=>v<target?Math.min(target,v+step):Math.max(target,v-step);
+
+// The nearest free pose to a pose that has become blocked (a saved game, a rule change, a prop placed later): a spiral outward, the saved yaw first, then a quarter turn at a time.
+// Event-driven (a load, a spawn), never per frame. Returns {x, z, yaw} or null.
+export function findSafePose(pose,cls,env,{maxRadius=40,step=1}={}){
+ const yaws=[0,Math.PI/2,Math.PI,-Math.PI/2].map(d=>pose.yaw+d);
+ for(let r=0;r<=maxRadius;r+=step){
+  const n=r===0?1:Math.max(8,Math.ceil(2*Math.PI*r/step));
+  for(let i=0;i<n;i++){const a=i/n*Math.PI*2,x=pose.x+Math.cos(a)*r,z=pose.z+Math.sin(a)*r;for(const yaw of yaws)if(poseFree({x,z,yaw},cls,env))return {x,z,yaw}}}
+ return null;
+}
+
+// Where the player steps out: the driver's door point; if that is blocked, the passenger side, then behind, then in front. `free(x, z)` is the game's blocked() inverted (and not inside any hull).
+export function exitPoint(s,cls,free,side='driver'){
+ const own=side==='driver'?1:-1,x=cls.door.x,z=cls.door.z; // your own door first, then the other side, behind, in front, then a little further out on each side
+ const tries=[[own*x,z],[-own*x,z],[0,-(cls.hz+.9)],[0,cls.hz+.9],[own*(x+.8),z],[-own*(x+.8),z]];
+ for(const [lx,lz] of tries){const w=toWorld(s,lx,lz);if(free(w.x,w.z))return w}
+ return null;
+}
+
+// The owned vehicles' saved list (0.34): one entry per vehicle you own, {uid, model, colour, x, z, yaw, fuelMgal}. A uid is "v" and a number, made when you buy or take delivery. Unknown models, bad uids and bad numbers
+// are dropped; positions must be inside the playable rectangle; a missing or unknown colour is the model's first. `known` is MAP.vehicles (the dealership's display slots): the tank size comes from the slot with the same model.
+// Fuel: normalizeFuelMgal (fuel.js) keeps a saved amount inside the tank; a missing one is a full tank.
+export const MAX_OWNED=12;
+export function normalizeVehicles(value,known,playable){
+ if(!Array.isArray(value))return [];
+ const out=[],seen=new Set();
+ for(const v of value){
+  if(!v||typeof v!=='object'||typeof v.uid!=='string'||!/^v\d{1,6}$/.test(v.uid)||seen.has(v.uid))continue;
+  const spec=known.find(k=>k.model===v.model);if(!spec||!CLASSES[v.model])continue;
+  if(![v.x,v.z,v.yaw].every(Number.isFinite))continue;
+  if(playable&&(v.x<playable.x0||v.x>playable.x1||v.z<playable.z0||v.z>playable.z1))continue;
+  seen.add(v.uid);
+  const entry={uid:v.uid,model:v.model,colour:validColour(v.model,v.colour)?v.colour:defaultColour(v.model),x:+v.x.toFixed(2),z:+v.z.toFixed(2),yaw:+v.yaw.toFixed(3)};
+  if(spec.fuel)entry.fuelMgal=normalizeFuelMgal(v.fuelMgal,spec.fuel.tankMgal);
+  out.push(entry);if(out.length>=MAX_OWNED)break;
+ }
+ return out;
+}
+// What to save: every owned vehicle, where it stands. specs = [{id: uid, model, colour, fuel?}]; states[uid] = {x, z, yaw, fuelMgal?}.
+export function vehiclesToSave(specs,states){
+ const out=[];for(const spec of specs){const s=states[spec.id];if(!s)continue;
+  const entry={uid:spec.id,model:spec.model,colour:spec.colour,x:+s.x.toFixed(2),z:+s.z.toFixed(2),yaw:+s.yaw.toFixed(3)};
+  if(spec.fuel)entry.fuelMgal=normalizeFuelMgal(s.fuelMgal,spec.fuel.tankMgal);
+  out.push(entry)}
+ return out;
+}

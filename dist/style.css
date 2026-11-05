@@ -285,3 +285,9 @@ select:hover,select:focus-visible,.phone-nav button:hover:not(:disabled){box-sha
 .menu-local[open]>*:not(summary){margin-top:10px}.menu-local>label{display:block}.menu-local>.menu-button{width:100%}.menu-local[open]>.menu-help{margin-bottom:0}
 #menuLobbyCode{text-transform:uppercase;letter-spacing:4px;font-weight:700}
 .lobby-info{margin:4px 0;font-size:13px;color:var(--honey)}.lobby-info b{letter-spacing:3px;font-size:15px}
+/* Your save (0.34.3): export, import, backups in the main menu's Settings. */
+#menuExport,#menuImport,#menuSaveConfirmYes,#menuSaveConfirmNo{flex:1}
+.save-confirm{border:1px solid var(--honey);padding:10px 12px;background:#f5c51814}.save-confirm p{margin:0 0 8px;font-size:13px;line-height:1.5;color:#f1ebd9}.save-confirm .menu-play{font-size:14px;padding:12px 20px}
+.backup-list{display:flex;flex-direction:column;gap:6px;max-height:190px;overflow:auto}
+.backup-row{display:flex;align-items:center;gap:10px;padding:6px 8px;border:1px solid #ffffff1f;font-size:12px;color:#f1ebd9}.backup-row span{flex:1;min-width:0}.backup-row small{display:block;color:#d3d0c7;font-size:11px;margin-top:2px}
+.backup-row .backup-restore{width:auto;padding:8px 14px;font-size:12px}

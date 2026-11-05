@@ -1,6 +1,6 @@
 import {loadProgress, normalizeProgress} from './jobs.js';
 import {loadAppearance} from './appearance.js';
-const PROFILE_KEY = 'citylife.profile.v1';
+export const PROFILE_KEY = 'citylife.profile.v1';
 let sessionProfile;
 const storage = {
   getItem: key => localStorage.getItem(key),
