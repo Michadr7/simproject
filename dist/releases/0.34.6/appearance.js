@@ -12,6 +12,33 @@ export const OUTFITS={
  female:[['Casual','Casual'],['Formal','Formal'],['Suit','Suit'],['Worker','Worker'],['Punk','Punk'],['Adventurer','Explorer']]
 };
 export const PART_KEYS=['head','top','legs','feet'];
+// What each part looks like, for the creator's buttons (named from renders of every outfit, 0.34.6). A part missing here is a
+// duplicate of another (the men's Explorer top, trousers and shoes are the Suit's) and is not offered, unless it is already worn.
+export const PART_NAMES={
+ male:{
+  head:{Casual_Hoodie:'Swept back',Casual_2:'Ponytail',Suit:'Side part',Worker:'Hard hat & moustache',Farmer:'Straw hat',Beach:'Spiky',Punk:'Mohawk',Adventurer:'Long hair & beard'},
+  top:{Casual_Hoodie:'Hoodie',Casual_2:'T-shirt',Suit:'Suit jacket',Worker:'Hi-vis vest',Farmer:'Work shirt & braces',Beach:'Tank top',Punk:'Sleeveless jacket'},
+  legs:{Casual_Hoodie:'Shorts',Casual_2:'Jeans',Suit:'Suit trousers',Worker:'Work trousers',Farmer:'Overalls',Beach:'Swim shorts',Punk:'Ripped jeans'},
+  feet:{Casual_Hoodie:'Purple sneakers',Casual_2:'Red sneakers',Suit:'Dress shoes',Worker:'Work boots',Farmer:'Brown boots',Beach:'Flip-flops',Punk:'Black boots'}
+ },
+ female:{
+  head:{Casual:'Bob',Formal:'Updo',Suit:'Long bob',Worker:'Hard hat',Punk:'Mohawk',Adventurer:'Short crop'},
+  top:{Casual:'T-shirt',Formal:'Dress top',Suit:'Blazer',Worker:'Hi-vis vest',Punk:'Crop top',Adventurer:'Field shirt'},
+  legs:{Casual:'Trousers',Formal:'Skirt',Suit:'Suit trousers',Worker:'Work trousers',Punk:'Ripped jeans',Adventurer:'Shorts'},
+  feet:{Casual:'Sneakers',Formal:'Flats',Suit:'Dress shoes',Worker:'Work boots',Punk:'Platform boots',Adventurer:'Tall boots'}
+ }
+};
+// Clothes only: a quick outfit sets top, legs and feet and leaves the hairstyle alone.
+export const CLOTHES_KEYS=['top','legs','feet'];
+// The choices offered for one part: [label, model id], duplicates left out unless `current` wears one.
+export function partChoices(body,key,current){const names=(PART_NAMES[body]||PART_NAMES.male)[key];return outfitIds(body).filter(id=>names[id]||id===current).map(id=>[names[id]||(OUTFITS[body]||OUTFITS.male).find(([o])=>o===id)[1],id])}
+// Quick outfits: the ones whose clothes are all on offer (the men's Explorer is the Suit's clothes, so it is left out).
+export function quickOutfits(body){const names=(PART_NAMES[body]||PART_NAMES.male);return (OUTFITS[body]||OUTFITS.male).filter(([id])=>CLOTHES_KEYS.every(k=>names[k][id]))}
+// Changing body type keeps every part the other body also has, and the colours.
+export function switchBody(a,body){return normalizeAppearance({...a,body})}
+// A random look for the same body: any hairstyle, one quick outfit's clothes, any skin and hair colour. rand() is in [0,1).
+export function randomLook(a,rand=Math.random){const pick=list=>list[Math.floor(rand()*list.length)%list.length];const body=a.body,clothes=pick(quickOutfits(body))[0];
+ return normalizeAppearance({...a,head:pick(partChoices(body,'head'))[1],top:clothes,legs:clothes,feet:clothes,skin:pick(palettes.skin)[1],hair:pick(palettes.hair)[1]})}
 export const outfitIds=body=>(OUTFITS[body]||OUTFITS.male).map(([id])=>id);
 export const defaults={name:'',body:'male',head:'Casual_Hoodie',top:'Casual_Hoodie',legs:'Casual_Hoodie',feet:'Casual_Hoodie',skin:'#b88f72',hair:'#574033'};
 // A whole outfit from one set, e.g. outfit('female','Formal').

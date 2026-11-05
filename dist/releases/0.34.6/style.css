@@ -293,3 +293,6 @@ select:hover,select:focus-visible,.phone-nav button:hover:not(:disabled){box-sha
 .backup-row .backup-restore{width:auto;padding:8px 14px;font-size:12px}
 /* Account panel (0.34.4) */
 #accountSignedOut,#accountSignedIn{display:flex;flex-direction:column;gap:10px}#accountSignedOut[hidden],#accountSignedIn[hidden],#accountDevLogin[hidden]{display:none}#accountSyncNow,#accountSignOut,#accountKeepLocal,#accountUseCloud{flex:1}#accountGoogle:disabled{opacity:.55;cursor:default}
+
+/* Character creator tabs (0.34.6) */
+.creator-tabs{display:flex;align-items:center;gap:6px;margin:22px 0 4px;border-bottom:1px solid #ffffff1c}.creator-tab{background:none;border:0;border-bottom:2px solid transparent;color:#c9c5ba;padding:9px 10px 8px;font-size:12px;font-weight:bold;letter-spacing:.3px;cursor:pointer;margin-bottom:-1px}.creator-tab[aria-selected=true]{color:var(--honey);border-bottom-color:var(--honey)}.creator-random{margin-left:auto;background:var(--ink-3);color:#e0ded8;border:1px solid #ffffff28;border-radius:5px;padding:6px 10px;font-size:11px;cursor:pointer}.creator-random:hover{border-color:var(--honey);color:var(--honey)}.option-hint{font-size:10px;color:#b9b5aa;margin:-4px 0 10px;line-height:1.4}

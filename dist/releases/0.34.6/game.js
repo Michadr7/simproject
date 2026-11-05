@@ -60,7 +60,7 @@ import {createIndoorCamera} from './indoor-camera.js';
 import {polishWorld} from './visuals.js';
 import {createMovementInput} from './input.js';
 import {createCharacter,loadCharacterAssets} from './character.js';
-import {palettes,defaults,loadAppearance,saveAppearance,normalizeAppearance,BODIES,OUTFITS,PART_KEYS} from './appearance.js';
+import {palettes,defaults,loadAppearance,saveAppearance,normalizeAppearance,BODIES,OUTFITS,PART_KEYS,CLOTHES_KEYS,partChoices,quickOutfits,switchBody,randomLook} from './appearance.js';
 // Decode the embedded character models once, before any character (player, clerks, pedestrians) is built.
 await loadCharacterAssets();
 const $=id=>document.getElementById(id);
@@ -529,35 +529,49 @@ const previewScene=new THREE.Scene();previewScene.background=new THREE.Color('#3
 previewScene.add(new THREE.HemisphereLight('#edf5e9','#334f40',2.7));const previewLight=new THREE.DirectionalLight('#fff0d6',3);previewLight.position.set(3,5,4);previewScene.add(previewLight);
 const previewAvatar=createCharacter(draft);previewScene.add(previewAvatar.group);
 const plinth=new THREE.Mesh(new THREE.CylinderGeometry(1,1.1,.12,32),new THREE.MeshStandardMaterial({color:'#527363',roughness:1}));plinth.position.y=-.06;previewScene.add(plinth);
-const previewCamera=new THREE.PerspectiveCamera(34,1,.1,30);previewCamera.position.set(0,1.35,4.9);previewCamera.lookAt(0,1.02,0);
-const optionLabels={body:'Body',outfit:'Outfit',head:'Head & hair',top:'Top',legs:'Legs',feet:'Shoes',skin:'Skin tone',hair:'Hair color'};
-function updateDraft(){draft.name=$('characterName').value;previewAvatar.apply(draft);$('previewName').textContent=draft.name.trim()||'Your character';
- document.querySelectorAll('[data-appearance]').forEach(b=>{const k=b.dataset.appearance;b.setAttribute('aria-pressed',String(k==='outfit'?PART_KEYS.every(part=>draft[part]===b.dataset.value):draft[k]===b.dataset.value))});
+const previewCamera=new THREE.PerspectiveCamera(34,1,.1,30);
+// The preview frames a band of the figure: whole body (feet to above the head) or a close-up. previewFrame eases toward previewFocus each frame.
+const PREVIEW_FRAMES={body:{y:1.02,span:2.45},head:{y:1.68,span:.75}};let previewFocus=PREVIEW_FRAMES.body;const previewFrame={...PREVIEW_FRAMES.body};
+function framePreview(aspect){previewFrame.y+=(previewFocus.y-previewFrame.y)*.18;previewFrame.span+=(previewFocus.span-previewFrame.span)*.18;const half=THREE.MathUtils.degToRad(previewCamera.fov/2),span=Math.max(previewFrame.span,previewFrame.span*.62/aspect),d=span/2/Math.tan(half);previewCamera.position.set(0,previewFrame.y+d*.08,d);previewCamera.lookAt(0,previewFrame.y,0)}
+// Two tabs: body and hair, then clothes. Every button names the part itself (PART_NAMES); a quick outfit sets the clothes only.
+const optionLabels={body:'Body type',skin:'Skin tone',head:'Hairstyle',hair:'Hair color',outfit:'Quick outfits',top:'Top',legs:'Bottoms',feet:'Shoes'};
+const CREATOR_TABS=[['look','Body & hair',['body','skin','head','hair']],['clothes','Clothes',['outfit','top','legs','feet']]];let creatorTab='look';
+// The figure's height (hats and mohawks included) frames the preview: the whole body, or the head while a hairstyle or hair color is being picked.
+const previewBox=new THREE.Box3();let previewHeight=1.9;
+function focusPreview(head){previewFocus=head?{y:previewHeight-.32,span:.85}:{y:previewHeight/2+.02,span:previewHeight+.55}}
+function updateDraft(){draft.name=$('characterName').value;previewAvatar.apply(draft);previewAvatar.group.updateMatrixWorld(true);previewBox.setFromObject(previewAvatar.group);if(Number.isFinite(previewBox.max.y))previewHeight=THREE.MathUtils.clamp(previewBox.max.y,1.4,2.4);$('previewName').textContent=draft.name.trim()||'Your character';
+ document.querySelectorAll('[data-appearance]').forEach(b=>{const k=b.dataset.appearance;b.setAttribute('aria-pressed',String(k==='outfit'?CLOTHES_KEYS.every(part=>draft[part]===b.dataset.value):draft[k]===b.dataset.value))});
 }
-// Body type picks which outfit parts are on offer, so the rows are rebuilt when it changes.
+// Body type picks which parts are on offer, so the rows are rebuilt when it (or the tab) changes.
 function renderOptions(){
- $('appearanceOptions').replaceChildren();
- const outfits=OUTFITS[draft.body].map(([id,label])=>[label,id]);
- const rows=[['body',BODIES.map(([id,label])=>[label,id])],['outfit',outfits],...PART_KEYS.map(key=>[key,outfits]),['skin',palettes.skin],['hair',palettes.hair]];
- for(const [key,values] of rows){
-  const field=document.createElement('fieldset'),legend=document.createElement('legend');legend.textContent=optionLabels[key];field.append(legend);const row=document.createElement('div');row.className='options';
-  const swatches=key==='skin'||key==='hair';
-  for(const [label,value] of values){
+ const host=$('appearanceOptions');host.replaceChildren();
+ const tabs=document.createElement('div');tabs.className='creator-tabs';tabs.setAttribute('role','tablist');
+ for(const [id,label] of CREATOR_TABS){const t=document.createElement('button');t.type='button';t.className='creator-tab';t.textContent=label;t.setAttribute('role','tab');t.setAttribute('aria-selected',String(id===creatorTab));t.onclick=()=>{creatorTab=id;renderOptions();updateDraft();focusPreview(false)};tabs.append(t)}
+ const random=document.createElement('button');random.type='button';random.className='creator-random';random.textContent='Surprise me';random.title='A random hairstyle, outfit and colors';
+ random.onclick=()=>{draft=randomLook({...draft,name:$('characterName').value});renderOptions();updateDraft();focusPreview(false)};tabs.append(random);host.append(tabs);
+ const fixed={body:BODIES.map(([id,label])=>[label,id]),skin:palettes.skin,hair:palettes.hair,outfit:quickOutfits(draft.body).map(([id,label])=>[label,id])};
+ for(const key of CREATOR_TABS.find(([id])=>id===creatorTab)[2]){
+  const field=document.createElement('fieldset'),legend=document.createElement('legend');legend.textContent=optionLabels[key];field.append(legend);
+  if(key==='outfit'){const hint=document.createElement('p');hint.className='option-hint';hint.textContent='Sets your top, bottoms and shoes. Your hairstyle stays.';field.append(hint)}
+  const row=document.createElement('div');row.className='options';const swatches=key==='skin'||key==='hair';
+  for(const [label,value] of fixed[key]||partChoices(draft.body,key,draft[key])){
    const b=document.createElement('button');b.type='button';b.dataset.appearance=key;b.dataset.value=value;b.className=swatches?'swatch':'style-option';b.setAttribute('aria-label',label);b.title=label;
    if(swatches)b.style.setProperty('--color',value);else b.textContent=label;
    b.onclick=()=>{
-    if(key==='body'&&value!==draft.body){draft=normalizeAppearance({...draft,body:value,head:'',top:'',legs:'',feet:''});renderOptions()}
-    else if(key==='outfit')for(const part of PART_KEYS)draft[part]=value; // a whole outfit in one click, then mix parts below
+    if(key==='body'){if(value!==draft.body){draft=switchBody(draft,value);renderOptions()}}
+    else if(key==='outfit')for(const part of CLOTHES_KEYS)draft[part]=value; // the clothes of one outfit; the hairstyle stays
     else draft[key]=value;
-    updateDraft();
+    updateDraft();focusPreview(key==='head'||key==='hair');
    };
    row.append(b);
   }
-  field.append(row);$('appearanceOptions').append(field);
+  field.append(row);host.append(field);
  }
 }
+// Drag on the empty stage beside the panel to turn the figure.
+{let dragX=null;const stage=$('creator');stage.addEventListener('pointerdown',e=>{if(e.target!==stage)return;dragX=e.clientX;stage.setPointerCapture?.(e.pointerId)});stage.addEventListener('pointermove',e=>{if(dragX===null)return;previewTurn+=(e.clientX-dragX)*.012;dragX=e.clientX});for(const type of ['pointerup','pointercancel'])stage.addEventListener(type,()=>{dragX=null})}
 renderOptions();
-function openCreator(){if(consuming)return;phone?.close();inventoryUI?.close();storeUI?.close();clearWorldPanel();$('dialog').hidden=true;draft={...currentAppearance};$('characterName').value=draft.name;creatorOpen=true;modal=true;look.release();keys.clear();$('welcome').hidden=true;$('controls').hidden=true;$('creator').hidden=false;document.body.classList.add('creating');renderOptions();updateDraft();$('characterName').focus()}
+function openCreator(){if(consuming)return;phone?.close();inventoryUI?.close();storeUI?.close();clearWorldPanel();$('dialog').hidden=true;draft={...currentAppearance};$('characterName').value=draft.name;creatorOpen=true;modal=true;look.release();keys.clear();$('welcome').hidden=true;$('controls').hidden=true;$('creator').hidden=false;document.body.classList.add('creating');creatorTab='look';renderOptions();updateDraft();focusPreview(false);Object.assign(previewFrame,previewFocus);$('characterName').focus()}
 let currentAppearance={...(savedCharacter||defaults)};
 if(savedCharacter)$('customizeSaved').hidden=false;
 $('customizeSaved').onclick=openCreator;$('editCharacter').onclick=openCreator;
@@ -576,10 +590,9 @@ function drawCreator(){
  const narrow=innerWidth<=700,left=narrow?0:410;
  const top=narrow?Math.round(innerHeight*.38):innerHeight;
  const reserved=narrow?0:150,h=Math.max(1,top-reserved),w=narrow?innerWidth:Math.max(1,innerWidth-410);
- renderer.setViewport(0,0,innerWidth,innerHeight);renderer.clear();
- renderer.setViewport(left,innerHeight-top+reserved,w,h);
- previewCamera.aspect=w/h;previewCamera.updateProjectionMatrix();previewAvatar.group.rotation.y=previewTurn;
- renderer.render(previewScene,previewCamera);renderer.setViewport(0,0,innerWidth,innerHeight);
+ const y=innerHeight-top+reserved;renderer.setViewport(0,0,innerWidth,innerHeight);renderer.setScissorTest(false);renderer.clear();renderer.setScissorTest(true);renderer.setScissor(left,y,w,h);renderer.setViewport(left,y,w,h);
+ previewCamera.aspect=w/h;framePreview(w/h);previewCamera.updateProjectionMatrix();previewAvatar.group.rotation.y=previewTurn;
+ renderer.render(previewScene,previewCamera);renderer.setScissorTest(false);renderer.setViewport(0,0,innerWidth,innerHeight);
 }
 
 
