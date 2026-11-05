@@ -28,7 +28,7 @@ Windows 11, VS Code, PowerShell 5.1. The user plays on a real GPU (about 165 FPS
 Deploying: `DEPLOY.md` (Cloudflare Pages from GitHub, output `dist/`, no build step; never `--force` a deployed version).
 
 ## Environment gotchas (these cost real time)
-- **`git` is not on PATH** in the agent's shell: no commits or diffs; tell the user changes are uncommitted.
+- **`git` is not on PATH**, but GitHub Desktop's copy works: `C:\Users\Michael\AppData\Local\GitHubDesktop\app-3.5.2\resources\app\git\cmd\git.exe` (the folder name changes when Desktop updates). Commit and push only when the user asks; never add `assets-src/` originals or `simproject.code-workspace`.
 - **PowerShell 5.1 `Set-Content -Encoding utf8` writes a BOM**, which breaks `JSON.parse` (it killed `package.json` once). Write files with `[IO.File]::WriteAllText(path, text, (New-Object Text.UTF8Encoding $false))`.
 - Multi-line `Edit` matches on `dist/world.js` and `dist/game.js` often fail (indentation); use single-line anchors with `.Replace()` in PowerShell, and check each swap landed. `game.js` is dense on purpose (one statement per line, long lines): match the style.
 - PowerShell double-quoted strings eat backticks; use single-quoted here-strings for JS.
