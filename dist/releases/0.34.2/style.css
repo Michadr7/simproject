@@ -278,3 +278,10 @@ select:hover,select:focus-visible,.phone-nav button:hover:not(:disabled){box-sha
 #updateReload:hover,#updateReload:focus-visible{background:var(--honey-pale,#ffe48a);outline:none}
 #updateLater{width:28px;height:28px;background:none;color:#f1ebd9;font-size:15px;opacity:.7}
 #updateLater:hover,#updateLater:focus-visible{opacity:1;outline:none}
+/* Multiplayer panel (0.34.2): the local-server controls fold away under the online lobby ones; the pause menu shows the lobby code. */
+.menu-local{border-top:1px solid #ffffff1f;padding-top:8px}
+.menu-local summary{cursor:pointer;font-size:12px;color:#d3d0c7;list-style-position:inside}
+.menu-local summary:hover,.menu-local summary:focus-visible{color:var(--honey);outline:none}
+.menu-local[open]>*:not(summary){margin-top:10px}.menu-local>label{display:block}.menu-local>.menu-button{width:100%}.menu-local[open]>.menu-help{margin-bottom:0}
+#menuLobbyCode{text-transform:uppercase;letter-spacing:4px;font-weight:700}
+.lobby-info{margin:4px 0;font-size:13px;color:var(--honey)}.lobby-info b{letter-spacing:3px;font-size:15px}

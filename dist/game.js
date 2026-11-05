@@ -27,7 +27,7 @@ import {acceptContract,completeContract,tickContract,gigTarget,atGigPoint,refres
 import {GameState,initializeState,setMePosition,tickLife,setStatDrainMultiplier} from './state.js';
 import {loadProfile,saveProfile} from './profile.js';
 import {MultiplayerClient} from './multiplayer.js';
-import {createMainMenu} from './main-menu.js';
+import {createMainMenu,relayBase,refusalText} from './main-menu.js';import {normalizeLobbyCode,REFUSED} from './relay-protocol.js';
 import {findNearestClearSpot,MAX_SEARCH,OPEN_AREA} from './safe-spot.js';
 import {createHouseSigns} from './house-signs.js';
 import {terrain,SURFACE} from './terrain.js';
@@ -933,9 +933,20 @@ function sendLocalPosition(){
  if(!multiplayer.sendPosition(GameState.me.position,room))return false;
  lastSent={...me.position,room};networkTimer=0;return true;
 }
-multiplayer.onConnected(()=>{lastSent=null;sendLocalPosition()});
+// Online: the lobby code shows in the pause menu. A dropped connection during play is retried (after 2, 5 and 10 s) to the same lobby; if the relay wants a newer game, the update banner appears (its Reload saves first, then the page starts at the main menu).
+const RECONNECT_MS=[2000,5000,10000],LOBBY_UPDATE='The online lobby needs the new version. Your game is saved before it reloads.';let reconnectTries=0;
+function showLobby(){const code=normalizeLobbyCode(multiplayer.lobby);$('lobbyInfo').hidden=!multiplayer.online;$('lobbyInfo').innerHTML=code?`Online lobby <b>${code}</b> · share the code to play together`:'Online · local server'}
+multiplayer.onConnected(()=>{lastSent=null;sendLocalPosition();showLobby();if(reconnectTries)toast('Back in the lobby.');reconnectTries=0});
+multiplayer.onDropped(({wasIn,refused})=>{showLobby();if(!$('welcome').hidden)return; // on the main menu the menu reports it
+ if(refused){reconnectTries=0;if(refused===REFUSED.update)updateNotice.announce(LOBBY_UPDATE);toast('Could not rejoin the lobby. '+refusalText(refused)+' Playing offline.');return}
+ if(!wasIn&&!reconnectTries)return;
+ const url=multiplayer.rejoinUrl;
+ if(!url||reconnectTries>=RECONNECT_MS.length){reconnectTries=0;toast('Lost the lobby. Playing offline; join again from the main menu.');return}
+ toast(reconnectTries?'Still trying to reach the lobby…':'Lost the connection to the lobby. Reconnecting…');
+ setTimeout(()=>{if(!multiplayer.socket)multiplayer.connect(url)},RECONNECT_MS[reconnectTries++]);
+});
 // Main menu (main-menu.js). Play is offline; Host and Join open a connection first and start the game once the server has answered.
-const mainMenu=createMainMenu({$,storage:{getItem:k=>localStorage.getItem(k),setItem:(k,v)=>localStorage.setItem(k,v)},connect:url=>multiplayer.connect(url),disconnect:()=>multiplayer.disconnect(),onConnected:cb=>multiplayer.onConnected(cb),onDisconnected:cb=>multiplayer.onDisconnected(cb),play:startGame,applyQuality,openCredits:()=>openCredits('menu')});
+const mainMenu=createMainMenu({$,storage:{getItem:k=>localStorage.getItem(k),setItem:(k,v)=>localStorage.setItem(k,v)},connect:url=>multiplayer.connect(url),disconnect:()=>multiplayer.disconnect(),onConnected:cb=>multiplayer.onConnected(cb),onDisconnected:cb=>multiplayer.onDisconnected(cb),onRefused:cb=>multiplayer.onRefused(cb),needUpdate:()=>updateNotice.announce(LOBBY_UPDATE),relay:relayBase(typeof location!=='undefined'?location:null),play:startGame,applyQuality,openCredits:()=>openCredits('menu')});
 $('quality').value=mainMenu.settings.quality;
 $('menuVolume').value=Math.round(audio.settings.volume*100);$('menuMute').checked=audio.settings.muted;$('menuVolume').oninput=()=>audio.setVolume($('menuVolume').value/100);$('menuMute').onchange=()=>audio.setMuted($('menuMute').checked);
 function updateMultiplayer(now,moving,dt){
@@ -1006,7 +1017,7 @@ if(typeof location!=='undefined'&&new URLSearchParams(location.search).has('debu
  use(index){return beginConsumption(index)},chop:startChop,get acting(){return !!(chopping||consuming||armRecovery)},fps:()=>$("fps").textContent};
 
 // Update notice (update-check.js): asks the site for version.json a few seconds after loading and every 10 minutes; a newer version shows the banner, and Reload saves first (only once you are in the game, not on the menu).
-installUpdateNotice({document,version:VERSION,fetchJson:url=>fetch(url,{cache:'no-store'}).then(r=>r.ok?r.json():null),beforeReload:()=>{if($('welcome').hidden)persist()},reload:()=>location.reload()});
+const updateNotice=installUpdateNotice({document,version:VERSION,fetchJson:url=>fetch(url,{cache:'no-store'}).then(r=>r.ok?r.json():null),beforeReload:()=>{if($('welcome').hidden)persist()},reload:()=>location.reload()});
 // Dev mode (dev.js): one flag, dev-flag.js. With it off, dev.js is never fetched. To remove it for good, delete dev-flag.js, dev.js, the DEV_MODE import and this block.
 // Everything the panel can do goes through the object below.
 if(DEV_MODE){try{

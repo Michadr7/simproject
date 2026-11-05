@@ -10,6 +10,7 @@ export class MultiplayerClient {
     this.id = null; // Connection identity, separate from the saved profile ID.
     this.lobby = null; // the hosted lobby's code; null on a local relay
     this.refused = null; // why the relay last turned us away (REFUSED in relay-protocol.js), until the next connect
+    this.rejoinUrl = null; // where to reconnect after a drop: a created lobby (/relay/new) becomes its code's address once welcomed
     this.listeners = new Map();
   }
   on(type, callback) {
@@ -27,9 +28,11 @@ export class MultiplayerClient {
   onDisconnected(cb) { return this.on('disconnected', cb); }
   // The relay said no (old game, full lobby, unknown code). Fired before 'disconnected'.
   onRefused(cb) { return this.on('refused', cb); }
+  // The connection ended without disconnect() being called (network, a relay restart, a refusal). Fired after 'disconnected'.
+  onDropped(cb) { return this.on('dropped', cb); }
   connect(url) {
     this.disconnect();
-    this.refused = null;
+    this.refused = null; this.rejoinUrl = url;
     let socket;
     try { socket = new WebSocket(url); } catch {
       this.emit('disconnected'); return false;
@@ -45,6 +48,7 @@ export class MultiplayerClient {
       if (message?.type === 'welcome' && typeof message.id === 'string') {
         this.id = message.id;
         this.lobby = typeof message.lobby === 'string' ? message.lobby : null;
+        if (this.lobby) this.rejoinUrl = url.replace(/\/relay\/[^/]*$/, '/relay/' + this.lobby);
         this.emit('connected', message.id);
       } else if (message?.type === 'refused') {
         this.refused = Object.values(REFUSED).includes(message.reason) ? message.reason : REFUSED.bad;
@@ -58,8 +62,10 @@ export class MultiplayerClient {
     socket.addEventListener('error', () => {}); // Offline play continues normally.
     socket.addEventListener('close', () => {
       if (this.socket !== socket) return;
+      const wasIn = !!this.id;
       this.socket = null; this.id = null; this.lobby = null;
       this.emit('disconnected');
+      this.emit('dropped', {wasIn, refused: this.refused});
     });
     return true;
   }

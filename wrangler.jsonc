@@ -1,11 +1,17 @@
 // Cloudflare Worker config (DEPLOY.md). The game is static files: the Worker serves dist/ as-is, honouring dist/_headers
-// (index.html never cached, releases/* cached forever). No script yet; the hosted multiplayer relay (Durable Objects) will be added here later.
+// (index.html never cached, releases/* cached forever). The script (worker/relay.js) runs only for paths no file matches: the multiplayer relay at /relay/...
 {
   "name": "simproject",
+  "main": "worker/relay.js",
   "compatibility_date": "2026-11-01",
   "assets": {
     "directory": "./dist"
   },
+  // One Durable Object per lobby code. SQLite-backed, which the Workers free plan allows.
+  "durable_objects": {
+    "bindings": [{"name": "LOBBY", "class_name": "Lobby"}]
+  },
+  "migrations": [{"tag": "v1", "new_sqlite_classes": ["Lobby"]}],
   // Same as the dashboard's current settings, so a deploy from this file does not switch logging off.
   "observability": {
     "logs": {

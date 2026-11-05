@@ -10,10 +10,10 @@ export const parseVersion=text=>{const m=/^(\d+)\.(\d+)\.(\d+)$/.exec(String(tex
 export const isNewer=(latest,running)=>{const a=parseVersion(latest),b=parseVersion(running);if(!a||!b)return false;for(let i=0;i<3;i++)if(a[i]!==b[i])return a[i]>b[i];return false};
 
 // document: the page; fetchJson(url): a promise of the parsed file (or null); version: the running version; beforeReload(): save the game; reload(): reload the page.
-// The timer functions can be replaced (tests). Returns {check, banner}: check() looks once and resolves to the version it announced, or null.
+// The timer functions can be replaced (tests). Returns {check, banner, announce}: check() looks once and resolves to the version it announced, or null.
 export function installUpdateNotice({document,fetchJson,version,beforeReload=()=>{},reload=()=>{},setTimeoutFn=setTimeout,setIntervalFn=setInterval}){
  const banner=document.getElementById('updateBanner'),text=document.getElementById('updateText'),go=document.getElementById('updateReload'),later=document.getElementById('updateLater');
- if(!banner)return {check:async()=>null,banner:null};
+ if(!banner)return {check:async()=>null,banner:null,announce:()=>{}};
  let shown=null,dismissed=null; // the version on the banner; the newest version the player said "not now" to
  banner.hidden=true;
  if(go)go.onclick=()=>{try{beforeReload()}catch(error){console.warn('Saving before the update failed:',error)}reload()};
@@ -26,5 +26,7 @@ export function installUpdateNotice({document,fetchJson,version,beforeReload=()=
  }
  const first=setTimeoutFn(()=>{check()},FIRST_CHECK_MS),every=setIntervalFn(()=>{check()},CHECK_EVERY_MS);
  for(const t of [first,every])t?.unref?.(); // in Node (tests) a pending timer must not keep the process alive
- return {check,banner};
+ // announce(text): show the banner now, whatever version.json says (the relay refused this version: the lobby needs the update).
+ const announce=message=>{shown=shown??version;if(text)text.textContent=message;banner.hidden=false};
+ return {check,banner,announce};
 }

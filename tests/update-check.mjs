@@ -26,6 +26,7 @@ function rig({running='0.34.0',answer={version:'0.34.0'}}={}){
  r.answer({version:'0.36.0'});assert.equal(await r.notice.check(),'0.36.0');assert(!r.banner.hidden,'an even newer version shows it again');
  r.calls.length=0;r.els.get('updateReload').click();assert.deepEqual(r.calls,['save','reload'],'Reload saves the game first, then reloads');
 }
+{ const r=rig();r.notice.announce('The lobby needs the new version.');assert(!r.banner.hidden,'the relay can ask for the banner');assert.equal(r.els.get('updateText').textContent,'The lobby needs the new version.');r.els.get('updateReload').click();assert.deepEqual(r.calls.slice(-2),['save','reload'],'and Reload still saves first') }
 for(const [name,answer] of [['offline',new Error('network down')],['no answer',null],['not a version',{version:'soon'}],['an older version',{version:'0.1.0'}]]){const r=rig({answer});assert.equal(await r.notice.check(),null,name);assert(r.banner.hidden,`${name}: the banner stays hidden`)}
 { const els=new Map(['updateBanner','updateReload'].map(id=>[id,new El()])),calls=[];
  installUpdateNotice({document:{getElementById:id=>els.get(id)||null},version:'0.34.0',fetchJson:async()=>null,beforeReload:()=>{throw new Error('disk full')},reload:()=>calls.push('reload'),setTimeoutFn:()=>1,setIntervalFn:()=>2});

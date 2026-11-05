@@ -43,7 +43,18 @@ for(const saved of [false,true]){
  ids.get('menuMultiplayer').click();assert(!ids.get('menuMultiplayerPanel').hidden&&ids.get('menuHome').hidden);
  ids.get('menuAddress').value='';ids.get('menuJoin').click();
  assert(globalThis.__testSocket,'Join opens a connection');assert(!ids.get('welcome').hidden,'the menu stays up until the server answers');
- __testSocket.receive({type:'welcome',id:'test-self'});
+ __testSocket.receive({type:'welcome',id:'test-self',lobby:'K7MPQ2'});
+ if(saved){ // Online during play: the lobby code is in the pause menu; a drop reconnects to the same lobby after 2 s; a relay that wants a newer game brings up the update banner.
+  assert(!ids.get('lobbyInfo').hidden&&ids.get('lobbyInfo').innerHTML.includes('<b>K7MPQ2</b>'),'the pause menu names the lobby');
+  const first=__testSocket;first.readyState=3;first.dispatchEvent(new Event('close'));
+  assert(/Reconnecting/.test(ids.get('jobToast').textContent),'a drop says it is reconnecting');assert(ids.get('lobbyInfo').hidden);
+  await new Promise(r=>setTimeout(r,2100));assert.notEqual(__testSocket,first,'a new connection after 2 s');
+  __testSocket.receive({type:'welcome',id:'test-self-2',lobby:'K7MPQ2'});assert.equal(ids.get('jobToast').textContent,'Back in the lobby.');
+  const again=__testSocket;again.receive({type:'refused',reason:'update',protocol:1});again.readyState=3;again.dispatchEvent(new Event('close'));
+  assert(!ids.get('updateBanner').hidden,'the update banner asks to reload');assert(/new version/.test(ids.get('updateText').textContent));assert(/Could not rejoin/.test(ids.get('jobToast').textContent));
+  ids.get('updateBanner').hidden=true;
+  ids.get('menuJoin').click();__testSocket.receive({type:'welcome',id:'test-self-3'});assert(ids.get('lobbyInfo').hidden===false&&/local server/.test(ids.get('lobbyInfo').innerHTML),'online again for the rest of the run (sleep checks need it)');
+ }
  globalThis.WebSocket=originalSocket;
  assert(ids.get('menuHome').hidden===false,'the menu is back on its home panel for next time');
  if(saved){

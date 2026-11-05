@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import {readFile,stat} from 'node:fs/promises';
-import {parseServerAddress,createMainMenu,loadSettings,saveSettings,DEFAULT_SERVER,SERVER_KEY,SETTINGS_KEY} from '../dist/main-menu.js';
+import {parseServerAddress,createMainMenu,loadSettings,saveSettings,relayBase,refusalText,DEFAULT_SERVER,SERVER_KEY,SETTINGS_KEY,LIVE_RELAY} from '../dist/main-menu.js';
+import {REFUSED} from '../dist/relay-protocol.js';
 
 // --- Address parsing -------------------------------------------------------------------------------------------------
 const ok=(text,url)=>assert.deepEqual(parseServerAddress(text),{ok:true,url},`"${text}" -> ${url}`);
@@ -19,10 +20,10 @@ assert.equal(saveSettings({setItem(){throw new Error('blocked')}},{quality:'low'
 assert.deepEqual(loadSettings({getItem(){throw new Error('blocked')}}),{quality:'high'});
 
 // --- The menu, with fake DOM, network and timers -----------------------------------------------------------------------
-function build({connectResult=true,saved={}}={}){
+function build({connectResult=true,saved={},relay}={}){
  const els=new Proxy({},{get:(t,id)=>t[id]??(t[id]={id,hidden:false,disabled:false,value:'',textContent:'',dataset:{},addEventListener(){}})});
  const storage=memory();for(const [k,v] of Object.entries(saved))storage.m.set(k,v);
- const net={connects:[],disconnects:0,connectedCbs:new Set(),disconnectedCbs:new Set()};
+ const net={connects:[],disconnects:0,connectedCbs:new Set(),disconnectedCbs:new Set(),refusedCbs:new Set()};
  const timers=[];const log=[];
  const menu=createMainMenu({
   $:id=>els[id],storage,
@@ -30,10 +31,11 @@ function build({connectResult=true,saved={}}={}){
   disconnect:()=>{net.disconnects++},
   onConnected:cb=>{net.connectedCbs.add(cb);return()=>net.connectedCbs.delete(cb)},
   onDisconnected:cb=>{net.disconnectedCbs.add(cb);return()=>net.disconnectedCbs.delete(cb)},
+  onRefused:cb=>{net.refusedCbs.add(cb);return()=>net.refusedCbs.delete(cb)},needUpdate:()=>log.push('needUpdate'),relay,
   play:()=>log.push('play'),applyQuality:q=>log.push('quality:'+q),openCredits:()=>log.push('credits'),
   setTimer:(fn,ms)=>{timers.push({fn,ms,live:true});return timers.length-1},clearTimer:i=>{if(timers[i])timers[i].live=false},
  });
- return {els,storage,net,timers,log,menu,connected:()=>[...net.connectedCbs].forEach(cb=>cb('id')),dropped:()=>[...net.disconnectedCbs].forEach(cb=>cb())};
+ return {els,storage,net,timers,log,menu,connected:()=>[...net.connectedCbs].forEach(cb=>cb('id')),dropped:()=>[...net.disconnectedCbs].forEach(cb=>cb()),refused:r=>{[...net.refusedCbs].forEach(cb=>cb(r));[...net.disconnectedCbs].forEach(cb=>cb())}};
 }
 const visible=t=>['menuHome','menuMultiplayerPanel','menuSettingsPanel'].filter(id=>!t.els[id].hidden);
 
@@ -79,13 +81,30 @@ const visible=t=>['menuHome','menuMultiplayerPanel','menuSettingsPanel'].filter(
  const t=build({connectResult:false});t.els.menuHost.onclick();assert.equal(t.els.menuNetStatus.dataset.kind,'error');assert(!t.els.menuHost.disabled);assert.equal(t.log.includes('play'),false);
 }
 
+{ // Online lobbies (0.34.2)
+ const loc=(protocol,host)=>{const u=new URL(protocol+'//'+host);return {protocol:u.protocol,hostname:u.hostname,host:u.host,port:u.port}};
+ assert.equal(relayBase(loc('https:','simproject.ghostjumper007.workers.dev')),'wss://simproject.ghostjumper007.workers.dev','the live site uses its own relay');
+ assert.equal(relayBase(loc('http:','127.0.0.1:8787')),'ws://127.0.0.1:8787','wrangler dev uses its own');
+ assert.equal(relayBase(loc('http:','localhost:8000')),LIVE_RELAY,'npm run dev has no relay: the live one');
+ assert.equal(relayBase({protocol:'file:',hostname:'',host:'',port:''}),LIVE_RELAY);assert.equal(relayBase(null),LIVE_RELAY);
+ assert.equal(relayBase(loc('https:','city.example.com')),'wss://city.example.com');
+ for(const r of Object.values(REFUSED))assert(refusalText(r).length>15,r);
+ const t=build({relay:'wss://r.example'});t.els.menuMultiplayer.onclick();t.els.menuCreateLobby.onclick();
+ assert.deepEqual(t.net.connects,['wss://r.example/relay/new']);assert(t.els.menuCreateLobby.disabled&&t.els.menuJoinLobby.disabled&&t.els.menuHost.disabled,'all four lock');
+ t.connected();assert.deepEqual(t.log,['play']);assert(!t.els.menuJoinLobby.disabled);
+ const j=build({relay:'wss://r.example'});j.els.menuLobbyCode.value='k7m-pq2';j.els.menuJoinLobby.onclick();
+ assert.deepEqual(j.net.connects,['wss://r.example/relay/K7MPQ2']);assert.equal(j.els.menuLobbyCode.value,'K7MPQ2','the code is tidied in the box');
+ j.refused(REFUSED.noLobby);assert.equal(j.els.menuNetStatus.textContent,refusalText(REFUSED.noLobby),'the refusal reason wins over the generic failure');assert.equal(j.els.menuNetStatus.dataset.kind,'error');assert(!j.els.menuJoinLobby.disabled);assert.equal(j.net.refusedCbs.size,0,'handlers released');
+ j.els.menuJoinLobby.onclick();j.refused(REFUSED.update);assert(j.log.includes('needUpdate'),'an old game asks for the update banner');assert.equal(j.log.includes('play'),false);
+ const bad=build();bad.els.menuLobbyCode.value='ABC';bad.els.menuJoinLobby.onclick();assert.equal(bad.net.connects.length,0);assert(/6 letters/.test(bad.els.menuNetStatus.textContent));
+}
 // --- The page itself ---------------------------------------------------------------------------------------------------
 const html=await readFile('dist/index.html','utf8');
-for(const id of ['welcome','start','menuMultiplayer','menuSettings','menuCredits','menuHost','menuJoin','menuAddress','menuQuality','menuNetStatus','menuMultiplayerBack','menuSettingsBack'])assert(html.includes(`id="${id}"`),`${id} is in the page`);
+for(const id of ['welcome','start','menuMultiplayer','menuSettings','menuCredits','menuHost','menuJoin','menuAddress','menuQuality','menuNetStatus','menuMultiplayerBack','menuSettingsBack','menuCreateLobby','menuLobbyCode','menuJoinLobby','lobbyInfo'])assert(html.includes(`id="${id}"`),`${id} is in the page`);
 assert(!/id="menuDev/i.test(html),'the Dev Mode button is not in the page: dev.js adds it, so deleting the dev files removes it');
 const image=html.match(/url\((assets\/[^)]+)\)/)?.[1];assert(image,'the menu names its background image');
 const size=(await stat('dist/'+image)).size;assert(size>10_000&&size<600_000,`the background is a web-sized image (${Math.round(size/1024)} KB), not the 1.6 MB original`);
 const css=await readFile('dist/style.css','utf8');
 assert(/\.main-menu\{[^}]*backdrop-filter:none/.test(css),'no backdrop blur over the canvas');
 assert(/\.menu-panel\[hidden\]/.test(css),'hidden panels stay hidden even though .menu-panel sets display');
-console.log('Main menu: address parsing (bare hosts, ports, ws/wss, refusals), saved settings, panels, host and join (success, refusal, timeout, cancel, no double start), and the page and its background image passed.');
+console.log('Main menu: address parsing (bare hosts, ports, ws/wss, refusals), saved settings, panels, host and join (success, refusal, timeout, cancel, no double start), online lobbies (relay address, create, join by code, refusal reasons, update), and the page and its background image passed.');

@@ -43,7 +43,12 @@ try{
  updateRemotePlayer(mesh,.05);assert(mesh.position.x>0&&mesh.position.x<10,'movement is interpolated');
  for(let i=0;i<100;i++)updateRemotePlayer(mesh,.05);
  assert(Math.abs(mesh.position.x-10)<.001);disposeRemotePlayer(mesh);
- // Inside a house is a room too (it was dropped before 0.34.2).
+ // A drop that disconnect() did not cause is reported, with whether we were in; a local relay has no lobby, so it rejoins the same address.
+ assert.equal(b.rejoinUrl,url);assert.equal(b.lobby,null);
+ const dropped=received(b,'dropped');const bSocket=b.socket;const bLeft=received(c,'playerLeft');
+ for(const s of server.clients)if(s._socket?.remotePort===bSocket._socket?.localPort)s.terminate();
+ assert.deepEqual(await dropped,{wasIn:true,refused:null});await bLeft;
+ const bBack=received(b,'connected');const cSees=received(c,'playerJoined');b.connect(b.rejoinUrl);await bBack;await cSees; // Inside a house is a room too (it was dropped before 0.34.2).
  const inHouse=received(c,'playerMoved');b.sendPosition({x:1,y:0,z:2},'house:cedar-3');assert.equal((await inHouse).room,'house:cedar-3');
  // An old client (lower protocol) is refused with 'update' and closed; one that never says hello gets nothing.
  const old=new WebSocket(url);await once(old,'open');old.send(JSON.stringify({type:'hello',protocol:PROTOCOL-1,version:'0.34.1'}));
