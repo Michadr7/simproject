@@ -37,11 +37,11 @@ export function createInventoryUI({document:doc,getState,canOpen,onOpen,onClose,
  }
  function open(next='grid'){
   if(mode){if(mode===next){close();return}mode=next}else{if(!canOpen())return;previousFocus=doc.activeElement;mode=next;page=0;onOpen()}
-  $('inventoryOverlay').hidden=false;$('inventoryOverlay').dataset.mode=mode;$('inventoryTitle').textContent=mode==='wheel'?'Quick use':'Your bag';$('inventoryPanel').hidden=mode!=='grid';$('radialPanel').hidden=mode!=='wheel';$('inventoryMessage').textContent='';refresh();$('inventoryClose').focus();
+  $('inventoryOverlay').hidden=false;$('inventoryOverlay').dataset.mode=mode;$('inventoryTitle').textContent=mode==='wheel'?'Quick use':'Inventory';$('inventoryPanel').hidden=mode!=='grid';$('radialPanel').hidden=mode!=='wheel';$('inventoryMessage').textContent='';refresh();$('inventoryClose').focus();
  }
  function close(){if(!mode)return;mode=null;$('inventoryOverlay').hidden=true;onClose();previousFocus?.focus?.()}
  for(const type of ['jacket','backpack'])$('equipment-'+type).onclick=()=>act(onUnequip(type));
  $('radialNext').onclick=()=>{const pages=Math.max(1,Math.ceil(quickItems(getState().progress).length/6));page=(page+1)%pages;refresh()};
- $('inventoryClose').onclick=close;$('bagButton').onclick=()=>{onBeforeOpen?.();open('grid')}; // the Bag is a phone app: put the phone away first
+ $('inventoryClose').onclick=close;// (the inventory opens with I; the phone no longer has a Bag app)
  return {open,close,get isOpen(){return !!mode},useQuick(number){if(mode!=='wheel')return;const entry=quickItems(getState().progress)[page*6+number];if(entry)act(onUse(entry.index))}};
 }

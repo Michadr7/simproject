@@ -3,12 +3,14 @@
 // Doors: the driver's door (the vehicle's left) puts you in the driver's seat; the passenger's door (the right) in the passenger seat, where you ride along and cannot steer (nobody else can drive yet).
 // Vehicles never dissolve when the camera looks through them (the sightline fade would show their empty insides): they are built with a fade that does nothing.
 // Wheels (models converted with splitWheels, the Worktruck) are real meshes that spin with the distance travelled and, at the front, steer.
-import {heightAt} from './height.js';
+import {heightAt,deckAt} from './height.js';
 import * as THREE from './vendor/three.module.js';
 import {MAP} from './map-definition.js';
 import {createProp} from './props.js';
 import {CLASSES,freshVehicle,stepVehicle,poseFree,findSafePose,exitPoint,doorPoint,seatPoint,insideHull,vehiclesToSave,toWorld,PLAYER_RADIUS} from './vehicle.js';
 import {normalizeFuelMgal,burnMgal} from './fuel.js';
+import {defaultColour} from './paint.js';
+import {applyPaint} from './paint-shader.js';
 
 const clamp=THREE.MathUtils.clamp;
 // The filler cap marker (0.35): a glowing disc on the cap and a ring on the ground beside it, in the colour of the fuel the vehicle takes (the pumps' colours: gas red, diesel yellow). Shown only while a nozzle is in your hand.
@@ -27,25 +29,33 @@ export const STEER_ANGLE=.5; // radians of wheel turn at full lock (visual)
 // scene: the world's scene; surface(x, z): terrain surface id; footing(x, z): ground height under a point; baseBlocked(x, z): the game's blocked() WITHOUT the vehicles
 // (so a vehicle never collides with itself); saved: progress.vehicles (already normalized).
 export function createDriving({scene,surface,footing,baseBlocked,saved=[]}){
- const fleet=MAP.vehicles.map(spec=>{
+ // The fleet: the dealership's display vehicles (MAP.vehicles with a display slot, sale dealership or both: the lot's slots, never drivable, they show what is for sale) and the vehicles you own (progress.vehicles, made on demand: add and sync).
+ const build=(spec,colour,display)=>{
   const cls=CLASSES[spec.model],mesh=createProp(spec.model,SOLID);mesh.name='vehicle-'+spec.id;mesh.rotation.order='YXZ';scene.add(mesh);
   const marker=spec.fuel?fillerMarker(spec.fuel):null;if(marker)mesh.add(marker);
-  return {spec,cls,mesh,marker,wheels:mesh.userData.wheels||[],state:freshVehicle(spec.home),y:footing(spec.home.x,spec.home.z),pitch:0,roll:0,spin:0,lastSpeed:0,present:true,fuelMgal:spec.fuel?spec.fuel.tankMgal:0,burn:0};
- });
+  const f={spec,cls,mesh,marker,wheels:mesh.userData.wheels||[],state:freshVehicle(spec.home),y:footing(spec.home.x,spec.home.z),pitch:0,roll:0,spin:0,lastSpeed:0,present:true,display:!!display,colour:null,fuelMgal:spec.fuel?spec.fuel.tankMgal:0,burn:0};
+  f.colour=colour||defaultColour(spec.model);applyPaint(mesh,spec.model,f.colour);return f;
+ };
+ const fleet=MAP.vehicles.filter(v=>v.sale!=='online').map(spec=>build(spec,defaultColour(spec.model),true));
  const byId=new Map(fleet.map(f=>[f.spec.id,f])),others=skip=>fleet.filter(f=>f!==skip&&f.present).map(f=>({state:f.state,cls:f.cls}));
  const envFor=(f,people)=>({blocked:baseBlocked,surface,others:others(f),people});
  let driven=null,side='driver',lastHit=false,pulse=0;
- // Saved poses: a pose that has become blocked (a prop placed later, a rule change) moves to the nearest clear one, else the vehicle goes home (never stuck, never lost).
- for(const f of fleet){
-  const s=saved.find(v=>v.uid===f.spec.id);if(!s)continue;
-  const pose={x:s.x,z:s.z,yaw:s.yaw},env=envFor(f);
-  const ok=poseFree(pose,f.cls,env)?pose:findSafePose(pose,f.cls,env);
-  if(f.spec.fuel)f.fuelMgal=normalizeFuelMgal(s.fuelMgal,f.spec.fuel.tankMgal); // a saved tank (missing: full)
-  if(ok)f.state=freshVehicle(ok);
+ // An owned vehicle comes into the world at its saved pose (or, if that has become blocked, the nearest clear one: never stuck, never lost). A display vehicle standing where it is (you bought it there) is taken off the lot.
+ const slotOf=model=>MAP.vehicles.find(v=>v.model===model);
+ function add(entry){
+  if(byId.has(entry.uid))return byId.get(entry.uid);
+  const slot=slotOf(entry.model);if(!slot)return null;
+  const spec={id:entry.uid,model:entry.model,name:slot.name,home:{x:entry.x,z:entry.z,yaw:entry.yaw},fuel:slot.fuel},f=build(spec,entry.colour,false);
+  for(const d of fleet)if(d.display&&Math.hypot(d.state.x-entry.x,d.state.z-entry.z)<3.2)d.present=false;
+  fleet.push(f);byId.set(spec.id,f);
+  const pose={x:entry.x,z:entry.z,yaw:entry.yaw},env=envFor(f),ok=poseFree(pose,f.cls,env)?pose:findSafePose(pose,f.cls,env);
+  if(spec.fuel)f.fuelMgal=normalizeFuelMgal(entry.fuelMgal,spec.fuel.tankMgal);
+  if(ok){f.state=freshVehicle(ok);f.y=footing(ok.x,ok.z)}
+  f.mesh.visible=f.present;return f;
  }
- const place=f=>{f.mesh.position.set(f.state.x,f.y,f.state.z);f.mesh.rotation.order='YXZ';f.mesh.rotation.set(f.pitch,f.state.yaw,f.roll)}; // yaw first, then tilt about the vehicle's own axes
-// The ground's tilt under a vehicle (from heightAt, not the footing: a kerb is not a hill): nose-up is negative pitch; the +x side up is positive roll.
-const tilt=f=>{const s=f.state,sy=Math.sin(s.yaw),cy=Math.cos(s.yaw),at=(lx,lz)=>heightAt(s.x+lx*cy+lz*sy,s.z-lx*sy+lz*cy);return {pitch:-Math.atan2(at(0,f.cls.hz)-at(0,-f.cls.hz),2*f.cls.hz),roll:Math.atan2(at(f.cls.hx,0)-at(-f.cls.hx,0),2*f.cls.hx)}};
+ for(const e of saved)add(e); const place=f=>{f.mesh.position.set(f.state.x,f.y,f.state.z);f.mesh.rotation.order='YXZ';f.mesh.rotation.set(f.pitch,f.state.yaw,f.roll)}; // yaw first, then tilt about the vehicle's own axes
+// The ground's tilt under a vehicle (from heightAt, or the deck on a bridge; not the footing: a kerb is not a hill): nose-up is negative pitch; the +x side up is positive roll.
+const tilt=f=>{const s=f.state,sy=Math.sin(s.yaw),cy=Math.cos(s.yaw),at=(lx,lz)=>{const x=s.x+lx*cy+lz*sy,z=s.z-lx*sy+lz*cy,d=deckAt(x,z);return d!==null?d:heightAt(x,z)};return {pitch:-Math.atan2(at(0,f.cls.hz)-at(0,-f.cls.hz),2*f.cls.hz),roll:Math.atan2(at(f.cls.hx,0)-at(-f.cls.hx,0),2*f.cls.hx)}};
  fleet.forEach(place);
  return {
   fleet,byId,
@@ -59,7 +69,7 @@ const tilt=f=>{const s=f.state,sy=Math.sin(s.yaw),cy=Math.cos(s.yaw),at=(lx,lz)=
   cameraZoom(f=driven){return f?Math.hypot(f.cls.camera.back,f.cls.camera.up):7},
   cameraPitch(f=driven){return f?Math.atan2(f.cls.camera.up,f.cls.camera.back):.38},
   // The doors that can be used (none while you sit in a vehicle): [{id, seat: 'driver'|'passenger', name, x, z}]
-  doors(){return driven?[]:fleet.filter(f=>f.present).flatMap(f=>['driver','passenger'].map(seat=>({id:f.spec.id,seat,name:f.spec.name,...doorPoint(f.state,f.cls,seat)})))},
+  doors(){return driven?[]:fleet.filter(f=>f.present).flatMap(f=>['driver','passenger'].map(seat=>({id:f.spec.id,seat,name:f.spec.name,model:f.spec.model,display:f.display,colour:f.colour,...doorPoint(f.state,f.cls,seat)})))},
   seat(){return driven?seatPoint(driven.state,driven.cls,side):null},
   // The muffler tip of a vehicle in the world (x, y, z) and the way the pipe points (dx, dz: straight back), for the smoke.
   exhaust(f=driven){if(!f||!f.cls.exhaust)return null;const e=f.cls.exhaust,w=toWorld(f.state,e.x,e.z);return {x:w.x,y:f.y+e.y,z:w.z,dx:-Math.sin(f.state.yaw),dz:-Math.cos(f.state.yaw)}},
@@ -83,8 +93,13 @@ const tilt=f=>{const s=f.state,sy=Math.sin(s.yaw),cy=Math.cos(s.yaw),at=(lx,lz)=
    f.spin+=s.speed*dt;for(const w of f.wheels){w.spin.rotation.x=f.spin/w.radius;if(w.front)w.pivot.rotation.y=s.steer*STEER_ANGLE}}},
   // Can a walker stand here? false inside any vehicle's hull inflated by the player radius (blocked() adds this).
   blocksWalker(x,z){for(const f of fleet){if(!f.present)continue;if(Math.abs(x-f.state.x)>f.cls.hz+PLAYER_RADIUS+.1||Math.abs(z-f.state.z)>f.cls.hz+PLAYER_RADIUS+.1)continue;if(insideHull(f.state,f.cls,x,z,PLAYER_RADIUS))return true}return false},
-  // The poses to save (vehicles away from home).
-  save(){return vehiclesToSave(MAP.vehicles,Object.fromEntries(fleet.filter(f=>f.present).map(f=>[f.spec.id,{...f.state,fuelMgal:f.fuelMgal}])))},
+  // The vehicles you own (progress.vehicles): where each stands, its paint and its tank. Display vehicles are never saved.
+  save(){const owned=fleet.filter(f=>!f.display);return vehiclesToSave(owned.map(f=>({...f.spec,colour:f.colour})),Object.fromEntries(owned.map(f=>[f.spec.id,{...f.state,fuelMgal:f.fuelMgal}])))},
+  // Bring every owned vehicle in the list into the world (the game calls this after a purchase or a delivery); ones already here are left alone.
+  sync(list){for(const e of list)add(e)},
+  // The lot's display vehicles show what is for sale: a colour (in stock) or nothing (sold out, or the bought one stands in its place).
+  setDisplay(id,colour){const f=byId.get(id);if(!f||!f.display)return false;if(colour){if(f.colour!==colour){f.colour=colour;applyPaint(f.mesh,f.spec.model,colour)}f.present=true}else f.present=false;f.mesh.visible=f.present;return true},
+  displayColour(id){const f=byId.get(id);return f&&f.display&&f.present?f.colour:null},
   // Dev tools: bring a vehicle to a pose (the nearest free one if that is blocked) and show it, or take it out of the world (not while you are in it). A removed vehicle is not saved and comes back at its saved pose or its bay next time the game loads.
   place(id,pose){const f=byId.get(id);if(!f||f===driven)return null;f.present=false;const env=envFor(f),ok=poseFree(pose,f.cls,env)?pose:findSafePose(pose,f.cls,env);if(!ok){f.present=true;return null}f.state=freshVehicle(ok);f.present=true;f.mesh.visible=true;f.lastSpeed=0;f.spin=0;return ok},
   setPresent(id,present){const f=byId.get(id);if(!f||f===driven)return false;f.present=!!present;f.mesh.visible=f.present;return true},

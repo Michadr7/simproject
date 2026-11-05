@@ -3,16 +3,16 @@
 import * as THREE from './vendor/three.module.js';
 
 const dollars=cents=>'$'+(cents/100).toLocaleString('en-US',{minimumFractionDigits:cents%100?2:0,maximumFractionDigits:2});
-export const signLines=property=>{const l=property.listing;return {head:'FOR RENT OR SALE',address:property.name.toUpperCase(),rent:`Rent ${dollars(l.rentCents)} a week  ·  deposit ${dollars(l.depositCents)}`,buy:`Buy ${dollars(l.priceCents)}`,foot:'Homes app on your phone'}};
+export const signLines=property=>{const l=property.listing;return {head:'FOR RENT OR SALE',address:property.name.toUpperCase(),rent:`Rent ${dollars(l.rentCents)} a week  ·  deposit ${dollars(l.depositCents)}`,buy:`Buy ${dollars(l.priceCents)}`,foot:'Housing app on your phone'}};
 
 function boardTexture(lines,makeCanvas){
  const canvas=makeCanvas();canvas.width=640;canvas.height=400;const g=canvas.getContext('2d');
- g.fillStyle='#f1ebd9';g.fillRect(0,0,640,400);g.fillStyle='#b8452f';g.fillRect(0,0,640,92);
+ g.fillStyle='#15130c';g.fillRect(0,0,640,400);g.fillStyle='#f5c518';g.fillRect(0,0,640,92);g.strokeStyle='#f5c518';g.lineWidth=6;g.strokeRect(3,3,634,394);
  g.textAlign='center';g.textBaseline='middle';
- g.fillStyle='#fff6e4';g.font='bold 54px sans-serif';g.fillText(lines.head,320,48);
- g.fillStyle='#243e3b';g.font='bold 66px sans-serif';g.fillText(lines.address,320,160);
- g.font='bold 36px sans-serif';g.fillText(lines.rent,320,244);g.fillText(lines.buy,320,300);
- g.fillStyle='#6a746f';g.font='28px sans-serif';g.fillText(lines.foot,320,360);
+ g.fillStyle='#15130c';g.font='bold 54px sans-serif';g.fillText(lines.head,320,48);
+ g.fillStyle='#fff6e4';g.font='bold 66px sans-serif';g.fillText(lines.address,320,160);
+ g.fillStyle='#ffe48a';g.font='bold 36px sans-serif';g.fillText(lines.rent,320,244);g.fillText(lines.buy,320,300);
+ g.fillStyle='#a8a08a';g.font='28px sans-serif';g.fillText(lines.foot,320,360);
  const texture=new THREE.CanvasTexture(canvas);texture.colorSpace=THREE.SRGBColorSpace;texture.anisotropy=4;return texture;
 }
 
@@ -36,15 +36,15 @@ export function createHouseSigns({scene,properties,doorOf,surfaceAt,GRASS,blocke
   const spot=findSignSpot(door,{surfaceAt,GRASS,blocked});if(!spot)continue;
   const group=new THREE.Group();group.name='house-sign-'+property.id;group.position.set(spot.x,0,spot.z);
   const wood=new THREE.MeshStandardMaterial({color:'#6b4a2f',roughness:.9}),face=new THREE.MeshStandardMaterial({map:boardTexture(signLines(property),makeCanvas),roughness:.8});
-  const post=new THREE.Mesh(new THREE.BoxGeometry(.12,2.3,.12),wood);post.position.y=1.15;post.castShadow=true;
+  const posts=[-.9,.9].map(x=>{const post=new THREE.Mesh(new THREE.BoxGeometry(.12,2.3,.12),wood);post.position.set(x,1.15,-.1);post.castShadow=true;return post}); // behind the board, at its two ends
   const board=new THREE.Mesh(new THREE.BoxGeometry(2.2,1.375,.07),[wood,wood,wood,wood,face,wood]);board.position.y=1.85;board.castShadow=true;
-  group.add(post,board);group.rotation.y=Math.atan2(door.faceX,door.faceZ); // the lettering faces the street
+  group.add(...posts,board);group.rotation.y=Math.atan2(door.faceX,door.faceZ); // the lettering faces the street
   scene.add(group);
-  const solid=solids?{x:spot.x,z:spot.z,hx:.15,hz:.15}:null;if(solid)solids.push(solid);
-  signs.push({id:property.id,group,x:spot.x,z:spot.z,solid});
+  const along=Math.abs(door.faceZ)>.5,solid=solids?{x:spot.x,z:spot.z,hx:along?1:.15,hz:along?.15:1}:null;if(solid)solids.push(solid); // the solid covers the board and its two posts
+  signs.push({id:property.id,group,x:spot.x,z:spot.z,solid,size:solid&&{hx:solid.hx,hz:solid.hz}});
  }
  // held: the ids of the homes you rent or own. A sign is shown only for a house you do not hold; a hidden sign is not solid either.
- function sync(held=[]){for(const s of signs){const show=!held.includes(s.id);s.group.visible=show;if(s.solid){s.solid.hx=s.solid.hz=show?.15:-1}}}
+ function sync(held=[]){for(const s of signs){const show=!held.includes(s.id);s.group.visible=show;if(s.solid){if(show)Object.assign(s.solid,s.size);else s.solid.hx=s.solid.hz=-1}}}
  sync([]);
  return {signs,sync};
 }

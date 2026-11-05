@@ -5,7 +5,7 @@
 //   zone     which zone the cell belongs to (index into map.zones, plus one; 0 for none)
 // A cell counts as inside a shape when its centre is. Everything inside the map's `playable` rectangle starts walkable (open country); shapes painted later win, in this
 // order: zones, roads, fields, pavements, the river and its banks, bridges. Water and banks are never walkable; a bridge deck always is.
-import {junctionPatches} from './junctions.js';
+import {junctionPatches,cornerRegion,inPolygon} from './junctions.js';
 import {MAP,roadRect,riverPath} from './map-definition.js';
 
 export const SURFACE=Object.freeze({GRASS:1,STREET:2,ROAD:3,DIRT:4,PAVEMENT:5,WATER:6,BANK:7,BRIDGE:8,WHEAT:9,PLOWED:10,GREEN:11,DRIVEWAY:12,PATH:13});
@@ -68,6 +68,8 @@ export function buildTerrain(map=MAP,{cell=.5}={}){
  // 3. fields and 4. pavements
  for(const f of map.fields)rect(f,c=>{surface[c]=FIELD_SURFACE[f.surface]||SURFACE.GRASS});
  for(const p of map.pavements||[])rect(p,c=>{surface[c]=SURFACE.PAVEMENT});
+ // 4b. rounded kerbs inside the towns (MAP.roundedCorners): the corner patch is street, walkable and drivable, even where the pavement rectangle used to cover it
+ for(const c of map.roundedCorners||[]){const P=cornerRegion(c);rect({x0:Math.min(...P.map(p=>p[0])),x1:Math.max(...P.map(p=>p[0])),z0:Math.min(...P.map(p=>p[1])),z1:Math.max(...P.map(p=>p[1]))},k=>{if(inPolygon(P,centreX(k%cols),centreZ((k-k%cols)/cols))){surface[k]=SURFACE.STREET;walk[k]=1}})}
  // 5. the river: banks, then water; neither is walkable
  for(const river of map.water?.rivers||[]){const line=riverPath(river,2).map(p=>[p.x,p.z]);
   ribbon(line,river.width/2+river.bank,c=>{surface[c]=SURFACE.BANK;walk[c]=0});ribbon(line,river.width/2,c=>{surface[c]=SURFACE.WATER;walk[c]=0})}

@@ -26,17 +26,17 @@ try{
  // the player stands at the pickup's driver door (the door point of its home pose)
  const pick=MAP.vehicles.find(v=>v.id==='eastbank-worktruck'),pc=CLASSES.worktruck,door=doorPoint(pick.home,pc);
  store.set('citylife.character.v1',JSON.stringify({version:1,appearance:{name:'Tester'}}));
- store.set('citylife.progress.v1',JSON.stringify({version:1,progress:{cash:5000,completed:5,phase:'available',position:{x:door.x,z:door.z},vehicles:[{uid:'eastbank-offroad',model:'offroad',x:130,z:10,yaw:1.5}]}}));
+ store.set('citylife.progress.v1',JSON.stringify({version:1,progress:{cash:5000,completed:5,phase:'available',position:{x:door.x,z:door.z},vehicles:[{uid:'v1',model:'worktruck',x:pick.home.x,z:pick.home.z,yaw:pick.home.yaw},{uid:'v2',model:'offroad',x:MAP.vehicles[1].home.x,z:MAP.vehicles[1].home.z,yaw:MAP.vehicles[1].home.yaw},{uid:'v3',model:'offroad',x:130,z:10,yaw:1.5}],orders:{nextVehicle:4}}}));
  let nextFrame;Object.assign(globalThis,{document:doc,window:win,localStorage:{getItem:k=>store.get(k)||null,setItem:(k,v)=>store.set(k,v)},innerWidth:1400,innerHeight:900,devicePixelRatio:1,requestAnimationFrame:fn=>{nextFrame=fn}});
  await import(pathToFileURL(join(dir,'game.js')).href);nextFrame(performance.now()+16);
  ids.get('start').click();assert(ids.get('welcome').hidden,'Play starts the game');
  const {GameState}=await import(pathToFileURL(join(dir,'state.js')).href);
  let simTime=performance.now()+100;const frame=()=>{simTime+=40;nextFrame(simTime)},pump=s=>{for(let i=0;i<s*25;i++)frame()};
  const down=new Set(),key=(code,type)=>{const e=new Event(type);e.code=code;win.dispatchEvent(e)},hold=(code,on)=>{if(on&&!down.has(code)){down.add(code);key(code,'keydown')}else if(!on&&down.has(code)){down.delete(code);key(code,'keyup')}},press=code=>{key(code,'keydown');key(code,'keyup')},letGo=()=>{for(const c of [...down])hold(c,false)};
- const scene=globalThis.__renderScene,person=scene.getObjectByName('player'),truck=scene.getObjectByName('vehicle-eastbank-worktruck'),flat=scene.getObjectByName('vehicle-eastbank-worktruck'),me=GameState.me;
+ const scene=globalThis.__renderScene,person=scene.getObjectByName('player'),truck=scene.getObjectByName('vehicle-v1'),flat=scene.getObjectByName('vehicle-v1'),me=GameState.me;
  assert(person&&truck&&flat,'the player and both drivable vehicles are in the scene');pump(1);
  const home=v=>Math.hypot(v.position.x-pick.home.x,v.position.z-pick.home.z);
- {const off=scene.getObjectByName('vehicle-eastbank-offroad');assert(Math.hypot(off.position.x-130,off.position.z-10)<.01,'a vehicle saved away from home loads where it was left (the game starts with a saved vehicle pose)')}
+ {const off=scene.getObjectByName('vehicle-v3');assert(Math.hypot(off.position.x-130,off.position.z-10)<.01,'a vehicle saved away from home loads where it was left (the game starts with a saved vehicle pose)')}
  assert(home(truck)<.01&&Math.abs(Math.abs(truck.rotation.y)-Math.PI)<.01,'the pickup stands in its bay, nose to the back wall');assert(Math.hypot(me.position.x-door.x,me.position.z-door.z)<.2&&person.visible,'the player stands at the driver door, visible');
  const toast=()=>ids.get('jobToast').textContent;
 
@@ -74,7 +74,7 @@ try{
  const supplier=MAP.landmarks.find(l=>l.id==='eastbank-supply'),info=propInfo(supplier.prop);
  {const r=driveTo([[102,30,5],[100,10,5],[95,8,5],[83,8,4]]);assert.equal(r.reached,4,'back up the lane and west along Oak East to the supplier');
   const wall=supplier.z-info.depth/2; // the wall facing north (the plot faces Oak Street); the kit's front is turned to +z and the plot yaw puts the doors on the yard, so use the footprint's z extent
-  hold('KeyW',true);hold('KeyA',true);pump(1);hold('KeyA',false);pump(10);hold('KeyW',false);pump(.3);const nose=truck.position.z+pc.hz,still=truck.position.clone();pump(.5);assert(truck.position.distanceTo(still)<.01,'driven at the supplier it comes to a stop');
+  driveTo([[supplier.x,supplier.z,.5]],{limit:25});pump(.3);const nose=truck.position.z+pc.hz,still=truck.position.clone();pump(.5);assert(truck.position.distanceTo(still)<.01,'driven at the supplier it comes to a stop');
   console.log(`  supplier: stopped at z ${truck.position.z.toFixed(2)}, nose at ${nose.toFixed(2)}`);assert(truck.position.z<supplier.z-info.depth/2+.5||nose<supplier.z+1,'and its nose is not inside the building');
   // nothing solid is inside the hull: sample the building's footprint
   const fx0=supplier.x-info.width/2,fx1=supplier.x+info.width/2,fz0=supplier.z-info.depth/2;assert(!(truck.position.x>fx0&&truck.position.x<fx1&&truck.position.z>fz0),'the vehicle centre is outside the building')}
@@ -89,7 +89,7 @@ try{
   for(const k of ['KeyA','KeyD','KeyW','KeyS']){test(k)}
   assert(minDist>=.32,`a walker is never closer to the hull than the player radius (closest ${minDist.toFixed(2)} m)`)}
  // 8. what is saved: the pickup where it was left, the player at its door, and nothing else changed
- {const profile=JSON.parse(store.get('citylife.profile.v1')),saved=profile.progress;assert.deepEqual(saved.vehicles.map(x=>x.uid).sort(),['eastbank-offroad','eastbank-worktruck'],'the pickup has left home, and the off-road pickup is where the save put it');const v=saved.vehicles.find(x=>x.uid==='eastbank-worktruck');assert.equal(v.uid,'eastbank-worktruck');assert(Math.hypot(v.x-truck.position.x,v.z-truck.position.z)<.02&&Math.abs(wrap(v.yaw-truck.rotation.y))<.002,'saved at the pose it was left in');
+ {const profile=JSON.parse(store.get('citylife.profile.v1')),saved=profile.progress;assert.deepEqual(saved.vehicles.map(x=>x.uid).sort(),['v1','v2','v3'],'the pickup has left home, and the off-road pickup is where the save put it');const v=saved.vehicles.find(x=>x.uid==='v1');assert.equal(v.model,'worktruck');assert(Math.hypot(v.x-truck.position.x,v.z-truck.position.z)<.02&&Math.abs(wrap(v.yaw-truck.rotation.y))<.002,'saved at the pose it was left in');
   assert.equal(profile.version,1,'the profile format is unchanged');assert.equal(saved.schema,2,'schema stays 2');assert(saved.position&&Number.isFinite(saved.position.x),'the player position is saved too')}
  // 9. back in at the door, then R: gets you out and sends you to the spawn; the vehicle stays exactly where it was
  {const left=truck.position.clone(),yawLeft=truck.rotation.y,d=doorPoint({x:left.x,z:left.z,yaw:yawLeft},pc);me.position.x=d.x;me.position.z=d.z;pump(.2);press('KeyE');pump(.3);assert(!person.visible,'E at the door again: back in');press('KeyR');pump(.5);assert(person.visible,'R gets you out of the vehicle');assert(Math.hypot(me.position.x-MAP.spawn.x,me.position.z-MAP.spawn.z)<8,`and sends you to the spawn (${me.position.x.toFixed(1)}, ${me.position.z.toFixed(1)})`);assert(truck.position.distanceTo(left)<.01&&Math.abs(truck.rotation.y-yawLeft)<1e-9,'the vehicle stays where you left it')}

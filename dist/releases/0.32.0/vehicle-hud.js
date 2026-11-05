@@ -4,7 +4,8 @@ import {fuelText,fuelTitle,mph} from './fuel.js';
 export const STOP_SPEED=1; // m/s: below this you may get out (the same rule as game.js exitVehicle)
 
 // fuel: {mgal, capacityMgal, type} of the vehicle you are in, or null.
-export function vehicleHudModel({driving=null,seat=null,name=null,speed=0,fuel=null}={}){
+// ground: {label, factor} (the surface under the wheels and the share of top speed it allows), or null.
+export function vehicleHudModel({driving=null,seat=null,name=null,speed=0,fuel=null,ground=null}={}){
  const fuelShown=fuel?`${fuelTitle(fuel.type)} · ${fuelText(fuel.mgal,fuel.capacityMgal)}`:'—',empty=!!fuel&&fuel.mgal<=0;
  if(!driving)return {state:'off',name:'Not in a vehicle',speed:'—',fuel:'—',
   keys:[],note:'Walk up to a vehicle’s door and press E to get in.'};
@@ -14,7 +15,7 @@ export function vehicleHudModel({driving=null,seat=null,name=null,speed=0,fuel=n
  const stopped=Math.abs(speed)<STOP_SPEED;
  return {state:'driving',name:name||'Vehicle',speed:speedShown,fuel:fuelShown,
   keys:[{kbd:'E',text:stopped?'Get out':'Stop to get out',muted:!stopped}],
-  note:empty?`Out of fuel. Fill up at the Eastbank gas station: this one takes ${fuel.type}.`:'W S accelerate and brake · A D steer · Space brakes'};
+  note:empty?`Out of fuel. Fill up at the Eastbank gas station: this one takes ${fuel.type}.`:ground&&ground.factor<.95?`Off road · ${ground.label} · top speed ${Math.round(ground.factor*100)}%. Get back on the road to go faster.`:'W S accelerate and brake · A D steer · Space brakes'};
 }
 
 // Writes a model into the panel. `$` is the page's getElementById helper. Returns update(model), which skips the DOM work when nothing changed.

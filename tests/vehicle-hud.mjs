@@ -35,3 +35,6 @@ assert.doesNotThrow(()=>createVehicleHud(()=>null)(driving));
  const empty=vehicleHudModel({driving:true,seat:'driver',name:'Worktruck',speed:0,fuel:{mgal:0,capacityMgal:21000,type:'diesel'}});assert.equal(empty.fuel,'Diesel · Empty');assert.match(empty.note,/Out of fuel.*diesel/);
  assert.equal(vehicleHudModel({driving:true,seat:'passenger',name:'X',fuel:{mgal:1000,capacityMgal:21000,type:'diesel'}}).fuel,'Diesel · 1.0 of 21 gal','a passenger sees the tank too');assert.equal(off.fuel,'—')}
 console.log('Vehicle panel: greyed out on foot; driving shows the name, speed in mph, the fuel type and gallons, and Get out, or Stop to get out while moving (1 m/s); riding shows Get out; the DOM is written only when the model changes.');
+
+// off road: the panel names the ground and the share of top speed it allows (only when it is a real slowdown)
+{const {vehicleHudModel}=await import('../dist/vehicle-hud.js');const base={driving:{},seat:'driver',name:'Worktruck',speed:10,fuel:{mgal:5000,capacityMgal:21000,type:'diesel'}};const road=vehicleHudModel({...base,ground:{label:'Road',factor:1}}),grass=vehicleHudModel({...base,ground:{label:'Grass',factor:.5}});assert(!/Off road/.test(road.note),'no warning on the road');assert(/Off road · Grass · top speed 50%/.test(grass.note),'the panel says so on the grass: '+grass.note)}

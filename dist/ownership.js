@@ -58,7 +58,7 @@ export function advanceProperties(state){
   while(day>=entry.nextBillDay){
    entry.rentDue+=rent;entry.nextBillDay+=WEEK;
    if(money>=entry.rentDue){money-=entry.rentDue;notices.push(`Rent paid for ${name}: ${cash(entry.rentDue)}.`);entry.rentDue=0;entry.missed=0}
-   else{entry.missed+=1;if(entry.missed>=GRACE){notices.push(`You were evicted from ${name}: two weeks of rent went unpaid.`);evicted=true;break}notices.push(`Rent for ${name} is overdue (${cash(entry.rentDue)}). Pay it in the Homes app within a week or you will be evicted.`)}
+   else{entry.missed+=1;if(entry.missed>=GRACE){notices.push(`You were evicted from ${name}: two weeks of rent went unpaid.`);evicted=true;break}notices.push(`Rent for ${name} is overdue (${cash(entry.rentDue)}). Pay it in the Housing app within a week or you will be evicted.`)}
   }
   if(!evicted)out[id]=entry;
  }

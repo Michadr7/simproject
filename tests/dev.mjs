@@ -12,8 +12,13 @@ assert.match(await readFile('dist/dev-flag.js','utf8'),/export const DEV_MODE=tr
 { // ── Flag on ────────────────────────────────────────────────────────────────────────────────────────────────────────────
  const g=await bootGame({play:false}),{GameState:S}=g,me=S.me.position;
  const button=g.find('menuDev'),panel=g.find('devPanel');
- assert(button,'the main menu has a Dev Mode button');assert.equal(button.textContent,'Dev Mode');assert(g.ids.get('menuHome').children.includes(button),'inside the menu\'s home panel');
+ assert(button,'the main menu has a Dev Mode button');assert.equal(button.textContent,'Dev Mode');const row=g.find('menuDevRow'),off=g.find('menuDevOff');assert(row&&g.ids.get('menuHome').children.includes(row)&&row.children.includes(button)&&row.children.includes(off),'Dev Mode and Turn off sit in one row inside the menu\'s home panel');
  assert(panel&&panel.hidden,'the panel starts hidden');
+ assert(button.hidden,'the Dev Mode button is hidden until unlocked');
+ for(let i=0;i<3;i++)g.send('keydown','KeyD');assert(button.hidden,'three presses of D are not enough');
+ g.send('keydown','KeyD');assert(!button.hidden&&!off.hidden&&!row.hidden,'the fourth D on the main menu shows the Dev Mode button and Turn off');
+ off.click();assert(row.hidden&&button.hidden,'Turn off hides them again');
+ for(let i=0;i<4;i++)g.send('keydown','KeyD');assert(!button.hidden,'and four more presses bring them back');
  g.send('keydown','F2');assert(panel.hidden,'F2 does nothing until you have entered dev mode');
 
  button.click();
@@ -59,7 +64,7 @@ assert.match(await readFile('dist/dev-flag.js','utf8'),/export const DEV_MODE=tr
  {const count=id=>S.progress.inventory.slots.filter(s=>s.id===id).reduce((n,s)=>n+s.quantity,0);
   g.find('devItem').value='apple';g.find('devQty').value='5';g.find('devSpawn').click();assert.equal(count('apple'),5);assert.match(g.find('devMessage').textContent,/Added 5 × Apple/);
   g.find('devItem').value='axe';g.find('devQty').value='99';g.find('devSpawn').click();
-  const axes=count('axe');assert(axes>=1&&axes<20,`a full bag stops the spawn (${axes} axes)`);assert.equal(g.find('devMessage').dataset.kind==='error'?'error':'ok','ok','some were added, so it is not an error');assert.match(g.find('devMessage').textContent,/bag is full/);
+  const axes=count('axe');assert(axes>=1&&axes<20,`a full bag stops the spawn (${axes} axes)`);assert.equal(g.find('devMessage').dataset.kind==='error'?'error':'ok','ok','some were added, so it is not an error');assert.match(g.find('devMessage').textContent,/inventory is full/);
   g.find('devItem').value='apple';g.find('devQty').value='1';g.find('devSpawn').click();assert.equal(count('apple'),6,'later spawns still stack');
   g.find('devItem').value='nonsense';g.find('devSpawn').click();assert.equal(g.find('devMessage').dataset.kind,'error');
   assert.equal(S.progress.inventory.slots.every(s=>s.quantity>=1),true)}

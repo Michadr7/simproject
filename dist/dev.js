@@ -4,10 +4,13 @@
 // Changes go to your normal save: this is not a separate profile.
 export const QUICK_TIMES=[['Dawn',360],['Noon',720],['Dusk',1080],['Night',1380]];
 export const MONEY_STEPS=[10000,100000,1000000]; // cents
+export const UNLOCK_KEY='citylife.devUnlocked'; // set once D is pressed four times on the main menu: the Dev Mode button then shows in this browser
 export const clockLabel=minutes=>{const total=Math.floor(minutes)%1440,hour=Math.floor(total/60);return `${hour%12||12}:${String(total%60).padStart(2,'0')} ${hour<12?'AM':'PM'}`};
 const dollars=cents=>'$'+(cents/100).toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2});
 
-const STYLE=`
+const STYLE=`#menuDevRow[hidden]{display:none}
+#menuDevOff{flex:none}
+
 :is(#devPanel,#devInteriorBody){position:fixed;top:84px;right:12px;z-index:90;width:min(320px,calc(100vw - 24px));max-height:calc(100vh - 100px);overflow:auto;box-sizing:border-box;padding:14px;border-radius:10px;border:1px solid #d4e7b366;background:#0b191bf5;color:#eef6e6;font:12px/1.5 system-ui,sans-serif}
 :is(#devPanel,#devInteriorBody)[hidden]{display:none}
 #devInteriorBody{right:auto;left:12px;width:min(360px,calc(100vw - 24px))}
@@ -58,6 +61,7 @@ export function installDevMode(api){
  const money=MONEY_STEPS.map(c=>make('button',{textContent:'+'+dollars(c).replace('.00',''),dataset:{cents:c},onclick:()=>{const r=api.addMoney(c);say(r.error||`You have ${dollars(r.cash)}.`,r.error?'error':'');refresh()}}));
 
  // Items
+ const drain=make('select',{id:'devDrain'});for(const [v,label] of [[1,'1× Normal'],[5,'5× Fast'],[10,'10× Faster'],[50,'50× Stress test']])drain.append(make('option',{value:String(v),textContent:label}));drain.value=String(api.statDrain());drain.onchange=()=>{const r=api.setStatDrain(Number(drain.value));say('Stat drain '+r.value+'×. Put it back to 1× after testing.','')}; // was the phone Settings app's one real control
  const item=make('select',{id:'devItem'}),qty=make('input',{id:'devQty',type:'number',min:'1',max:'20',value:'1'});
  for(const it of api.items)item.append(make('option',{value:it.id,textContent:`${it.icon} ${it.name}`}));
  const spawn=make('button',{id:'devSpawn',textContent:'Spawn',onclick:()=>{const r=api.giveItem(item.value,Number(qty.value));say(r.added?`Added ${r.added} × ${r.name}.${r.error?' '+r.error:''}`:r.error,r.added?'':'error');refresh()}});
@@ -115,7 +119,7 @@ export function installDevMode(api){
   make('h3',{},'Teleport'),make('div',{className:'dev-row'},place,goButton),make('div',{className:'dev-row'},x,z,goCustom),
   make('h3',{},'Time of day'),make('div',{className:'dev-row'},slider,timeLabel,make('button',{id:'devSetTime',textContent:'Set',onclick:()=>setTime(Number(slider.value))})),make('div',{className:'dev-row'},...quick),
   make('h3',{},'Money'),make('div',{className:'dev-row'},...money),
-  make('h3',{},'Spawn items'),make('div',{className:'dev-row'},item,qty,spawn),
+  make('h3',{},'Stat drain'),make('div',{className:'dev-row'},drain),make('h3',{},'Spawn items'),make('div',{className:'dev-row'},item,qty,spawn),
   make('h3',{},'Drivable vehicles'),make('div',{className:'dev-row'},vsel,vSpawn,vRemove),make('p',{className:'dev-note'},'Spawn puts the vehicle a few metres in front of you (or the nearest free spot). Remove takes it out of the world; neither works while you are in it.'),
   make('h3',{},'Rendering'),make('div',{className:'dev-row'},shadows,fade),
   make('h3',{},'Furniture'),interiorToggle,
@@ -130,10 +134,21 @@ export function installDevMode(api){
  function close(){panel.hidden=true;interiorBody.hidden=true;interiorToggle.textContent='Interior editor ▸';clearInterval(timer);timer=null}
  function toggle(){if(panel.hidden)open();else close()}
 
- // ── The way in: a Dev Mode button on the main menu, then F2 ────────────────────────────────────────────────────────────
+ // ── The way in: a Dev Mode button on the main menu (hidden until unlocked), then F2 ──────────────────────────────────────
  const button=make('button',{id:'menuDev',className:'menu-button',textContent:'Dev Mode',onclick:()=>{entered=true;api.start();if(api.active())open()}}); // with no character yet the creator opens first; F2 then shows the panel
- $('menuHome').append(button);
+ button.style.flex='1';
+ const off=make('button',{id:'menuDevOff',className:'menu-button',textContent:'Turn off',title:'Hide Dev Mode again (press D four times on the menu to bring it back)'});
+ const row=make('div',{id:'menuDevRow',className:'menu-row'});row.append(button,off);$('menuHome').append(row);
  window.addEventListener('keydown',e=>{if(entered&&e.code==='F2'){e.preventDefault();toggle()}});
+ // Hidden until unlocked: press D four times on the main menu (each within 1.5 s of the last; not while typing in a field). Remembered in this browser (UNLOCK_KEY).
+ // This only hides the button from casual players: anyone reading the source can find it. Set DEV_MODE=false for a build with no dev mode at all.
+ let unlocked=false,presses=0,last=-1e9;try{unlocked=localStorage.getItem(UNLOCK_KEY)==='1'}catch{}
+ const show=on=>{unlocked=on;row.hidden=!on;button.hidden=!on;off.hidden=!on;try{if(on)localStorage.setItem(UNLOCK_KEY,'1');else localStorage.removeItem(UNLOCK_KEY)}catch{}};
+ row.hidden=button.hidden=off.hidden=!unlocked;
+ off.onclick=()=>{show(false);presses=0};
+ window.addEventListener('keydown',e=>{if(unlocked||e.code!=='KeyD'||e.repeat)return;const t=e.target,typing=!!t&&(t.tagName==='INPUT'||t.tagName==='TEXTAREA'||t.tagName==='SELECT'||t.isContentEditable);if(typing||$('welcome').hidden)return;
+  const now=performance.now();presses=now-last<1500?presses+1:1;last=now;if(presses<4)return;
+  show(true)});
 
  return {panel,button,open,close,toggle,get entered(){return entered}};
 }

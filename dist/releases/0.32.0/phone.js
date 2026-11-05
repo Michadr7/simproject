@@ -1,5 +1,4 @@
 import {levelOf,perkText,perksText} from './skills.js';
-import {ITEMS} from './items.js';
 import {CONTRACTS,availableContracts} from './contracts.js';
 import {money} from './jobs.js';
 import {clockText} from './routine.js';
@@ -9,16 +8,15 @@ import {MAP} from './map-definition.js';
 import {CLASSES} from './vehicle.js';
 import {GALLON,mph,fuelName,fuelText,priceLabel,canText} from './fuel.js';
 import {canOf} from './inventory.js';
+import {createPhoneStore} from './phone-store.js';
+import {vehicleCapacity,vehicleCount,vehicleLabel} from './orders.js';
 
 // UI only: transactions and movement/cursor ownership stay in game.js.
-export function createPhone({document:doc,getState,canOpen,onOpen,onClose,onAccept,onRefresh,onDrainChange,onGrantItem,onHomeAction}){
+export function createPhone({document:doc,getState,canOpen,onOpen,onClose,onAccept,onRefresh,onHomeAction,onOrder,onOrderVehicle,onSetMain}){
   const $=id=>doc.getElementById(id);
   let opened=false,screen='home',previousFocus=null;
   $('phoneOverlay').hidden=true;
-  for(const item of ITEMS){const option=doc.createElement('option');option.value=item.id;option.textContent=item.icon+' '+item.name;$('phoneTestItem').append(option)}
-  $('phoneTestItem').value=ITEMS[0].id;
-  $('phoneDrainMultiplier').onchange=()=>{onDrainChange($('phoneDrainMultiplier').value);refresh()};
-  $('phoneGrantItem').onclick=()=>{const result=onGrantItem($('phoneTestItem').value);$('phoneMessage').textContent=result.error||result.message;refresh()};
+  const store=createPhoneStore({document:doc,getState,onOrderVehicle:(model,colour,home)=>onOrderVehicle?.(model,colour,home)||{error:'Ordering is not available.'},onOrder:(cart,home)=>onOrder?.(cart,home)||{error:'Ordering is not available.'},onSetMain:id=>onSetMain?.(id)||{error:'Not available.'},say:text=>{$('phoneMessage').textContent=text}});
   const cards=CONTRACTS.map(job=>{
     const card=doc.createElement('article');card.className='phone-contract';
     const title=doc.createElement('h3');title.textContent=job.title;
@@ -33,7 +31,7 @@ export function createPhone({document:doc,getState,canOpen,onOpen,onClose,onAcce
     card.append(title,description,terms,button);$('phoneContracts').append(card);
     return {job,button,card};
   });
-  // The Homes app: one card per home for rent or sale (built once, updated in place): a status line and the buttons that apply to where you stand with it.
+  // The Housing app: one card per home for rent or sale (built once, updated in place): a status line and the buttons that apply to where you stand with it.
   const homeCards=LISTED.map(h=>{
     const card=doc.createElement('article');card.className='phone-contract phone-home';
     const title=doc.createElement('h3');title.textContent=h.name;
@@ -51,14 +49,8 @@ export function createPhone({document:doc,getState,canOpen,onOpen,onClose,onAcce
   });
   // The Player screen's Vehicles list (built once, updated in place): name, tier, mileage, top speed and how much fuel is in the tank. A vehicle with no saved fuel entry is full.
   const TIER_NAME={low:'Starter',mid:'Mid-range',high:'High-end'};
-  const garage=(MAP.vehicles||[]).filter(v=>CLASSES[v.model]).map(v=>{
-    const cls=CLASSES[v.model],card=doc.createElement('article');card.className='phone-contract';
-    const title=doc.createElement('h3');title.textContent=v.name;
-    const specs=doc.createElement('p');specs.textContent=`${TIER_NAME[cls.tier]||cls.tier} · ${cls.mpg} mpg · top ${mph(cls.top)} mph · ${(v.fuel.tankMgal/GALLON).toFixed(0)} gal ${fuelName(v.fuel.type)} tank`;
-    const level=doc.createElement('p');level.className='phone-home-status';
-    card.append(title,specs,level);$('phoneGarage').append(card);
-    return {v,level};
-  });
+  let garageKey='';const garageLevels=new Map();
+  const noVehicles=doc.createElement('p');noVehicles.className='phone-home-status';noVehicles.textContent='You do not own a vehicle yet. Buy one at the Eastbank lot, or order it in the Store.';$('phoneGarage').append(noVehicles);
   function refresh(){
     onRefresh?.();const state=getState(),progress=state.progress;
     const available=new Set(availableContracts(progress).map(job=>job.id));
@@ -67,7 +59,17 @@ export function createPhone({document:doc,getState,canOpen,onOpen,onClose,onAcce
     $('phoneGreeting').textContent=state.me.name?`Hello, ${state.me.name}.`:'Your life, in reach.';
     $('phoneBalance').textContent=money(progress.cash);
     $('phoneFuelPrices').textContent=`Eastbank gas station: gas ${priceLabel('gas')} · diesel ${priceLabel('diesel')}.`;
-    for(const {v,level} of garage){const saved=progress.vehicles?.find(s=>s.uid===v.id),mgal=saved?.fuelMgal??v.fuel.tankMgal;level.textContent=`Fuel: ${fuelText(mgal,v.fuel.tankMgal)}`}
+    {const owned=progress.vehicles||[],key=owned.map(v=>v.uid+v.colour).join();
+     if(key!==garageKey){garageKey=key;garageLevels.clear();const cards=[];
+      for(const v of owned){const slot=MAP.vehicles.find(s=>s.model===v.model),cls=CLASSES[v.model];if(!slot||!cls)continue;
+       const card=doc.createElement('article');card.className='phone-contract';
+       const title=doc.createElement('h3');title.textContent=vehicleLabel(v.model,v.colour);
+       const specs=doc.createElement('p');specs.textContent=`${TIER_NAME[cls.tier]||cls.tier} · ${cls.mpg} mpg · top ${mph(cls.top)} mph · ${(slot.fuel.tankMgal/GALLON).toFixed(0)} gal ${fuelName(slot.fuel.type)} tank`;
+       const level=doc.createElement('p');level.className='phone-home-status';garageLevels.set(v.uid,level);
+       card.append(title,specs,level);cards.push(card)}
+      $('phoneGarage').replaceChildren(...cards,noVehicles)}
+     for(const v of owned){const slot=MAP.vehicles.find(s=>s.model===v.model),level=garageLevels.get(v.uid);if(slot&&level)level.textContent=`Fuel: ${fuelText(v.fuelMgal??slot.fuel.tankMgal,slot.fuel.tankMgal)}`}
+     noVehicles.hidden=owned.length>0;$('phoneVehicleSpace').textContent=`Vehicle space: ${vehicleCount(progress)} of ${vehicleCapacity(progress)} used (apartment 1, small house 1, medium 2, large 3).`}
     {const can=canOf(progress);$('phoneCan').textContent=can?`Gas can: ${canText(can)}.`:'No gas can. Buy one ($15) from the store.'}
     $('phonePlayerName').textContent=state.me.name||'New neighbor';
     {const xp=progress.skills.lumberjack.xp,{level,into,next}=levelOf(xp);
@@ -78,7 +80,6 @@ export function createPhone({document:doc,getState,canOpen,onOpen,onClose,onAcce
     $('phoneFood').textContent=Math.round(progress.life.food)+' / 100';
     $('phoneEnergyMeter').value=progress.life.energy;$('phoneFoodMeter').value=progress.life.food;
     $('phoneThirst').textContent=Math.round(progress.life.thirst)+' / 100';$('phoneThirstMeter').value=progress.life.thirst;
-    $('phoneDrainMultiplier').value=String(progress.settings.statDrainMultiplier);
     $('phoneActiveJob').textContent=progress.activeJob?`Active: ${progress.activeJob.title}. Follow the gold marker.`:available.size?'No upfront energy charge. Offers refresh every 30 game minutes.': 'No offers right now. Check back after the board refreshes.';
     for(const {h,status,buttons} of homeCards){
       const held=progress.properties?.[h.id],renting=held?.tenure==='rent',owning=held?.tenure==='own';
@@ -86,6 +87,7 @@ export function createPhone({document:doc,getState,canOpen,onOpen,onClose,onAcce
       buttons.rent.hidden=!!held;buttons.buy.hidden=owning;buttons.pay.hidden=!(renting&&held.rentDue>0);buttons.leave.hidden=!renting;
       buttons.buy.textContent=renting?`Buy · ${money(h.priceCents-held.deposit)}`:`Buy · ${money(h.priceCents)}`;
     }
+    store.refresh();
     for(const {job,button,card} of cards){
       card.hidden=!available.has(job.id);
       const current=progress.activeJob?.id===job.id;
@@ -95,9 +97,9 @@ export function createPhone({document:doc,getState,canOpen,onOpen,onClose,onAcce
   }
   function showScreen(next){
     screen=next;
-    for(const name of ['home','gigs','bank','homes','player','settings'])$('phoneScreen-'+name).hidden=name!==screen;
-    $('phoneTitle').textContent=screen==='home'?'Your phone':screen[0].toUpperCase()+screen.slice(1);
-    $('phoneHome').disabled=screen==='home';$('phoneMessage').textContent='';refresh();
+    for(const name of ['home','gigs','bank','homes','player','store'])$('phoneScreen-'+name).hidden=name!==screen;
+    $('phoneTitle').textContent=screen==='home'?'Your phone':({homes:'Housing'})[screen]||screen[0].toUpperCase()+screen.slice(1);
+    if(screen!=='store')store.reset();$('phoneHome').disabled=screen==='home';$('phoneBack').disabled=screen==='home';$('phoneMessage').textContent='';refresh();
   }
   function open(){
     if(opened||!canOpen())return;
@@ -109,8 +111,8 @@ export function createPhone({document:doc,getState,canOpen,onOpen,onClose,onAcce
     opened=false;$('phoneOverlay').hidden=true;onClose();
     previousFocus?.focus?.();
   }
-  for(const name of ['gigs','bank','homes','player','settings'])$('phoneApp-'+name).onclick=()=>showScreen(name);
-  $('phoneHome').onclick=()=>showScreen('home');$('phoneClose').onclick=close;
+  for(const name of ['gigs','bank','homes','player','store'])$('phoneApp-'+name).onclick=()=>showScreen(name);
+  $('phoneHome').onclick=()=>showScreen('home');$('phoneBack').onclick=()=>{if(screen==='store'&&store.back())return;showScreen('home')};$('phoneClose').onclick=close;
   $('phoneButton').onclick=()=>opened?close():open();
   return {open,close,toggle:()=>opened?close():open(),get isOpen(){return opened}};
 }

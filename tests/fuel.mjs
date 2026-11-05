@@ -60,14 +60,14 @@ for(const v of MAP.vehicles)assert(v.fuel.port.x>0,v.id+': the filler is on the 
  assert.equal(readoutLines({fuel:'gas'}).title,'GAS')}
 
 // ── The saved list keeps fuel (a part-empty tank at home is saved; a full one at home is not) ─────────────────
-{const specs=MAP.vehicles,home=Object.fromEntries(specs.map(v=>[v.id,{...v.home,fuelMgal:v.fuel.tankMgal}]));
- assert.deepEqual(vehiclesToSave(specs,home),[],'full and at home: nothing saved');
- const low={...home,'eastbank-worktruck':{...home['eastbank-worktruck'],fuelMgal:3000}};
- assert.deepEqual(vehiclesToSave(specs,low),[{uid:'eastbank-worktruck',model:'worktruck',x:84.25,z:-13,yaw:3.142,fuelMgal:3000}],'a part-empty tank at home is saved');
- const back=normalizeVehicles(vehiclesToSave(specs,low),specs,MAP.playable);assert.equal(back[0].fuelMgal,3000,'and loads back');
- const noFuel=normalizeVehicles([{uid:'eastbank-offroad',model:'offroad',x:100,z:10,yaw:1}],specs,MAP.playable);assert.equal(noFuel[0].fuelMgal,18000,'a save from before fuel: a full tank');
- const old=normalizeVehicles([{uid:'eastbank-offroad',model:'offroad',x:100,z:10,yaw:1,fuelMl:5000}],specs,MAP.playable);assert.equal(old[0].fuelMgal,18000,'the old millilitre field is ignored: a full tank');
- const bad=normalizeVehicles([{uid:'eastbank-worktruck',model:'worktruck',x:100,z:10,yaw:1,fuelMgal:999999}],specs,MAP.playable);assert.equal(bad[0].fuelMgal,21000,'more than the tank: full')}
+{const specs=MAP.vehicles,own=[{id:'v1',model:'worktruck',colour:'olive',fuel:specs[0].fuel}],at={v1:{x:84.25,z:-13,yaw:Math.PI,fuelMgal:21000}};
+ assert.deepEqual(vehiclesToSave(own,at),[{uid:'v1',model:'worktruck',colour:'olive',x:84.25,z:-13,yaw:3.142,fuelMgal:21000}],'an owned vehicle is always saved, with its tank');
+ const low={v1:{...at.v1,fuelMgal:3000}};
+ assert.deepEqual(vehiclesToSave(own,low),[{uid:'v1',model:'worktruck',colour:'olive',x:84.25,z:-13,yaw:3.142,fuelMgal:3000}],'a part-empty tank is saved');
+ const back=normalizeVehicles(vehiclesToSave(own,low),specs,MAP.playable);assert.equal(back[0].fuelMgal,3000,'and loads back');
+ const noFuel=normalizeVehicles([{uid:'v2',model:'offroad',x:100,z:10,yaw:1}],specs,MAP.playable);assert.equal(noFuel[0].fuelMgal,18000,'a save from before fuel: a full tank');
+ const old=normalizeVehicles([{uid:'v2',model:'offroad',x:100,z:10,yaw:1,fuelMl:5000}],specs,MAP.playable);assert.equal(old[0].fuelMgal,18000,'the old millilitre field is ignored: a full tank');
+ const bad=normalizeVehicles([{uid:'v1',model:'worktruck',x:100,z:10,yaw:1,fuelMgal:999999}],specs,MAP.playable);assert.equal(bad[0].fuelMgal,21000,'more than the tank: full')}
 assert(CLASSES.worktruck.gallonsPerMile>0&&CLASSES.offroad.gallonsPerMile>0,'both trucks burn fuel');
 
 // The canopy's four columns block, and the space under the roof between them and the island is walkable (the converted canopy has no box of its own).

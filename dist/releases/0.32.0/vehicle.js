@@ -5,6 +5,7 @@
 // so steer > 0 turns left. The hull is an oriented box from the converted model's footprint; a pose is free when every hull sample point passes the game's own `blocked()`.
 import {SURFACE} from './terrain.js';
 import {normalizeFuelMgal} from './fuel.js';
+import {validColour,defaultColour} from './paint.js';
 
 export const PLAYER_RADIUS=.33; // what blocked() adds around every solid box: the hull points are inset by it, so the inflation lands exactly on the hull edge
 export const SAMPLE_GAP=.5; // metres between hull sample points (a 0.16 m sign post cannot slip between two: the gap must stay under 2 x 0.49 m)
@@ -26,6 +27,8 @@ export const CLASSES=Object.freeze({
 // Top speed and acceleration multiplier by terrain surface. Water, banks and everything off the map are never driven on (blocked() refuses them as well).
 export const SURFACE_SPEED=Object.freeze({[SURFACE.GRASS]:.5,[SURFACE.STREET]:1,[SURFACE.ROAD]:1,[SURFACE.DIRT]:.8,[SURFACE.PAVEMENT]:.5,[SURFACE.WATER]:0,[SURFACE.BANK]:0,[SURFACE.BRIDGE]:1,[SURFACE.WHEAT]:.5,[SURFACE.PLOWED]:.5,[SURFACE.GREEN]:.5,[SURFACE.DRIVEWAY]:1,[SURFACE.PATH]:.5});
 // cls.rough (an off-road vehicle) lifts the rough-ground multipliers (grass 0.5, dirt 0.8 ...) by that much, never above 1; water and banks stay 0.
+// What the ground is called on the vehicle panel (grouped: a road, a track, rough ground, a pavement)
+export const SURFACE_LABEL=Object.freeze({[SURFACE.STREET]:'Road',[SURFACE.ROAD]:'Road',[SURFACE.BRIDGE]:'Road',[SURFACE.DRIVEWAY]:'Road',[SURFACE.DIRT]:'Dirt track',[SURFACE.PAVEMENT]:'Pavement',[SURFACE.PATH]:'Path',[SURFACE.GRASS]:'Grass',[SURFACE.WHEAT]:'Crop field',[SURFACE.PLOWED]:'Crop field',[SURFACE.GREEN]:'Crop field',[SURFACE.WATER]:'Water',[SURFACE.BANK]:'Mud bank'});
 export const surfaceSpeed=(surface,cls)=>{const base=SURFACE_SPEED[surface]??0;return base>0&&base<1&&cls?.rough?Math.min(1,base+cls.rough):base};
 
 export const freshVehicle=(home)=>({x:home.x,z:home.z,yaw:home.yaw,speed:0,steer:0});
@@ -70,6 +73,7 @@ export function poseFree(pose,cls,env){
 
 // The input: {throttle: -1..1 (W = 1, S = -1), steer: -1..1 (A = 1 left, D = -1 right), brake: bool (Space), }. dt must be small (the game's slices are at most 1/30 s).
 // Returns {state, hit} (a new state; hit is true when the hull met something and the pose was refused or slid).
+export const OFFROAD_DECEL=6; // m/s squared: how hard rough ground drags a vehicle that is faster than the ground allows
 export function stepVehicle(s,input,dt,cls,env){
  const surface=surfaceSpeed(env.surface(s.x,s.z),cls);
  const top=cls.top*surface,rev=cls.reverse*surface,accel=cls.accel*Math.max(.35,surface);
@@ -79,8 +83,8 @@ export function stepVehicle(s,input,dt,cls,env){
  else if(throttle>0){v=v<-.3?toward(v,0,cls.brake*dt):toward(v,top,accel*dt*(v<top?1:3))}
  else if(throttle<0){v=v>.3?toward(v,0,cls.brake*dt):toward(v,-rev,accel*dt*(v>-rev?1:3))}
  else v=toward(v,0,cls.drag*dt);
- if(v>top)v=toward(v,top,6*dt); // rougher ground slows you down to its own top speed
- if(v<-rev)v=toward(v,-rev,6*dt);
+ if(v>top)v=toward(v,top,OFFROAD_DECEL*dt); // leaving the road: rougher ground slows you down, firmly, to its own top speed
+ if(v<-rev)v=toward(v,-rev,OFFROAD_DECEL*dt);
  // steering ramps to full in 0.4 s and back to centre in 0.3 s
  const want=clamp(input.steer||0,-1,1),rate=(want===0?1/.3:1/.4)*dt;let steer=toward(s.steer,want,rate);
  // R(v) = max(Rmin, v^2 / aLat): fast corners are wider; yaw rate = steer x v / R (the sign of v makes reversing steer the right way round)
@@ -114,32 +118,30 @@ export function exitPoint(s,cls,free,side='driver'){
  return null;
 }
 
-// The saved list: one entry per MAP.vehicles id that has left its home bay. Unknown ids, unknown models and bad numbers are dropped; positions must be inside the playable rectangle.
+// The owned vehicles' saved list (0.34): one entry per vehicle you own, {uid, model, colour, x, z, yaw, fuelMgal}. A uid is "v" and a number, made when you buy or take delivery. Unknown models, bad uids and bad numbers
+// are dropped; positions must be inside the playable rectangle; a missing or unknown colour is the model's first. `known` is MAP.vehicles (the dealership's display slots): the tank size comes from the slot with the same model.
 // Fuel: normalizeFuelMgal (fuel.js) keeps a saved amount inside the tank; a missing one is a full tank.
+export const MAX_OWNED=12;
 export function normalizeVehicles(value,known,playable){
  if(!Array.isArray(value))return [];
  const out=[],seen=new Set();
  for(const v of value){
-  if(!v||typeof v!=='object'||seen.has(v.uid))continue;
-  const spec=known.find(k=>k.id===v.uid);if(!spec||v.model!==spec.model||!CLASSES[v.model])continue;
+  if(!v||typeof v!=='object'||typeof v.uid!=='string'||!/^v\d{1,6}$/.test(v.uid)||seen.has(v.uid))continue;
+  const spec=known.find(k=>k.model===v.model);if(!spec||!CLASSES[v.model])continue;
   if(![v.x,v.z,v.yaw].every(Number.isFinite))continue;
   if(playable&&(v.x<playable.x0||v.x>playable.x1||v.z<playable.z0||v.z>playable.z1))continue;
   seen.add(v.uid);
-  const entry={uid:v.uid,model:v.model,x:+v.x.toFixed(2),z:+v.z.toFixed(2),yaw:+v.yaw.toFixed(3)};
+  const entry={uid:v.uid,model:v.model,colour:validColour(v.model,v.colour)?v.colour:defaultColour(v.model),x:+v.x.toFixed(2),z:+v.z.toFixed(2),yaw:+v.yaw.toFixed(3)};
   if(spec.fuel)entry.fuelMgal=normalizeFuelMgal(v.fuelMgal,spec.fuel.tankMgal);
-  out.push(entry);
+  out.push(entry);if(out.length>=MAX_OWNED)break;
  }
  return out;
 }
-// What to save: vehicles that are not at home (a vehicle back in its exact home pose has no entry), or that have lost fuel from a full tank.
-// states[id] = {x, z, yaw, fuelMgal?}. A full vehicle at home is not saved at all.
+// What to save: every owned vehicle, where it stands. specs = [{id: uid, model, colour, fuel?}]; states[uid] = {x, z, yaw, fuelMgal?}.
 export function vehiclesToSave(specs,states){
  const out=[];for(const spec of specs){const s=states[spec.id];if(!s)continue;
-  const atHome=Math.hypot(s.x-spec.home.x,s.z-spec.home.z)<.05&&Math.abs(Math.atan2(sin(s.yaw-spec.home.yaw),cos(s.yaw-spec.home.yaw)))<.01;
-  const fuelled=spec.fuel?normalizeFuelMgal(s.fuelMgal,spec.fuel.tankMgal):null,full=fuelled===null||fuelled===spec.fuel.tankMgal;
-  if(atHome&&full)continue;
-  const entry={uid:spec.id,model:spec.model,x:+s.x.toFixed(2),z:+s.z.toFixed(2),yaw:+s.yaw.toFixed(3)};
-  if(fuelled!==null)entry.fuelMgal=fuelled;
+  const entry={uid:spec.id,model:spec.model,colour:spec.colour,x:+s.x.toFixed(2),z:+s.z.toFixed(2),yaw:+s.yaw.toFixed(3)};
+  if(spec.fuel)entry.fuelMgal=normalizeFuelMgal(s.fuelMgal,spec.fuel.tankMgal);
   out.push(entry)}
  return out;
 }

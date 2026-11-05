@@ -20,11 +20,11 @@ for(const s of houses.signs){
  assert.equal(T.surfaceAt(s.x,s.z),SURFACE.GRASS,`${s.id}: on grass`);
  for(const area of [plot.driveway,plot.path])if(area)assert(!(s.x>area.x0-1.1&&s.x<area.x1+1.1&&s.z>area.z0-1.1&&s.z<area.z1+1.1),`${s.id}: clear of the driveway and the front path`);
  const dx=s.x-door.x,dz=s.z-door.z;assert(Math.hypot(dx,dz)<8&&Math.hypot(dx,dz)>2,`${s.id}: a few metres from its own door (${Math.hypot(dx,dz).toFixed(1)} m)`);assert(dx*door.faceX+dz*door.faceZ>2,`${s.id}: in front of the house, not beside or behind it`);
- const board=s.group.children[1];assert(board.isMesh&&Array.isArray(board.material),'a board with a lettered face');
+ const board=s.group.children.find(c=>Array.isArray(c.material)),posts=s.group.children.filter(c=>c!==board);assert.equal(posts.length,2,'two posts');assert(posts.every(p=>p.position.z<-.05),'behind the board, so nothing crosses the lettering');assert(board.isMesh&&Array.isArray(board.material),'a board with a lettered face');
  const out=new THREE.Vector3(0,0,1).applyAxisAngle(new THREE.Vector3(0,1,0),s.group.rotation.y);assert(out.x*door.faceX+out.z*door.faceZ>.99,`${s.id}: the lettering faces the street`);
  assert(solids.includes(s.solid)&&s.solid.hx>0,`${s.id}: the post is solid`)}
 // what it says
-{const p=MAP.properties.find(x=>x.id==='house-r1'),l=signLines(p);assert.equal(l.address,'1 CEDAR LOOP');assert.equal(l.head,'FOR RENT OR SALE');assert.match(l.rent,/Rent \$160 a week .* deposit \$320/);assert.equal(l.buy,'Buy $12,500');assert.match(l.foot,/Homes app/);
+{const p=MAP.properties.find(x=>x.id==='house-r1'),l=signLines(p);assert.equal(l.address,'1 CEDAR LOOP');assert.equal(l.head,'FOR RENT OR SALE');assert.match(l.rent,/Rent \$160 a week .* deposit \$320/);assert.equal(l.buy,'Buy $12,500');assert.match(l.foot,/Housing app/);
  assert(drawn.includes('1 CEDAR LOOP')&&drawn.includes('FOR RENT OR SALE')&&drawn.includes('Buy $12,500'),'and it is drawn on the board')}
 // held homes hide their sign (and its post stops being solid); the rest stay
 houses.sync(['house-r3']);const by=id=>houses.signs.find(s=>s.id===id);

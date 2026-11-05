@@ -2,11 +2,25 @@ import {ZONES,WALKABLE,DIRT_ROADS,FIELDS} from './world.js';
 import {MAP,riverPath} from './map-definition.js';
 import {terrain,MINIMAP_COLOUR} from './terrain.js';
 import {propInfo} from './props.js';
+import {heightAt} from './height.js';
 
 // Whole-world map, north (-z) up: the city in the south, the river and bridge across the middle, Willow Fields (west) and Pine Ridge (east) north of it.
 // The static layer is drawn once (and again when a tree is felled); the
 // player and markers are drawn on top at ~12 fps.
 const VIEW=MAP.minimap.view;
+// Relief shading (0.34): a brightness for a world point from the ground's height (heightAt): slopes that face the north-west light are brighter, the others darker, higher ground a little lighter and the river valley darker. 1 on flat ground.
+const shade=(h,gx,gz)=>h===0&&gx===0&&gz===0?1:Math.max(.55,Math.min(1.5,1+(gx+gz)*2.2+Math.max(0,h)*.018+Math.min(0,h)*.12));
+export function relief(x,z){const d=1.5,h=heightAt(x,z);if(h===0&&heightAt(x+d,z+d)===0&&heightAt(x-d,z-d)===0)return 1;return shade(h,(heightAt(x+d,z)-heightAt(x-d,z))/(2*d),(heightAt(x,z+d)-heightAt(x,z-d))/(2*d))}
+// The shade is worked out once on a coarse grid (SHADE_STEP metres) and sampled per pixel: calling heightAt five times for every pixel of the big map took about 2.6 s on a 2x display.
+const SHADE_STEP=4;let shadeGrid=null;
+function shadeAt(x,z){
+ const gw=Math.ceil((VIEW.x1-VIEW.x0)/SHADE_STEP)+1,gh=Math.ceil((VIEW.z1-VIEW.z0)/SHADE_STEP)+1;
+ if(!shadeGrid){const hs=new Float32Array(gw*gh),at=(i,j)=>hs[Math.max(0,Math.min(gh-1,j))*gw+Math.max(0,Math.min(gw-1,i))];shadeGrid=new Float32Array(gw*gh);
+  for(let j=0;j<gh;j++)for(let i=0;i<gw;i++)hs[j*gw+i]=heightAt(VIEW.x0+i*SHADE_STEP,VIEW.z0+j*SHADE_STEP);
+  for(let j=0;j<gh;j++)for(let i=0;i<gw;i++){const h=hs[j*gw+i],gx=(at(i+1,j)-at(i-1,j))/(2*SHADE_STEP),gz=(at(i,j+1)-at(i,j-1))/(2*SHADE_STEP);shadeGrid[j*gw+i]=shade(h,gx,gz)}}
+ const fx=Math.max(0,Math.min(gw-1.001,(x-VIEW.x0)/SHADE_STEP)),fz=Math.max(0,Math.min(gh-1.001,(z-VIEW.z0)/SHADE_STEP)),i=Math.floor(fx),j=Math.floor(fz),u=fx-i,v=fz-j,o=j*gw+i;
+ return (shadeGrid[o]*(1-u)+shadeGrid[o+1]*u)*(1-v)+(shadeGrid[o+gw]*(1-u)+shadeGrid[o+gw+1]*u)*v;
+}
 const SIZES={small:{w:200,h:163},large:{w:600,h:490}};
 
 export function createMinimap(doc,{canvas,cityRoads=[],buildings=[],trees=()=>[]}){
@@ -31,7 +45,7 @@ export function createMinimap(doc,{canvas,cityRoads=[],buildings=[],trees=()=>[]
    const surfaceRgb=Object.fromEntries(Object.entries(MINIMAP_COLOUR).map(([k,c])=>[k,rgb(c)])),zoneRgb=MAP.zones.map(z=>rgb(z.color)),meadow=rgb('#3d5a3c');
    if(img?.data)for(let y=0;y<h;y++)for(let x=0;x<w;x++){const wx=VIEW.x0+(x+.5)/k,wz=VIEW.z0+(y+.5)/k,c=t.index(wx,wz);let col=meadow;
     if(c>=0){const s=t.surface[c];if(surfaceRgb[s])col=surfaceRgb[s];else if(t.walk[c]&&t.zone[c])col=zoneRgb[t.zone[c]-1]}
-    const o=(y*w+x)*4;img.data[o]=col[0];img.data[o+1]=col[1];img.data[o+2]=col[2];img.data[o+3]=255}
+    const o=(y*w+x)*4,s=shadeAt(wx,wz);img.data[o]=Math.max(0,Math.min(255,col[0]*s));img.data[o+1]=Math.max(0,Math.min(255,col[1]*s));img.data[o+2]=Math.max(0,Math.min(255,col[2]*s));img.data[o+3]=255}
    if(img?.data)ctx.putImageData(img,0,0)}
   for(const b of buildings)rect(ctx,{x0:b.x-b.hx,x1:b.x+b.hx,z0:b.z-b.hz,z1:b.z+b.hz},'#33383a');
   // Buildings placed from models (houses, shops, barns, the sawmill): their footprints, turned to face the way they stand. Vehicles and yard props are left off.

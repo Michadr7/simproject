@@ -9,7 +9,7 @@ export function createStoreUI({document:doc,getState,canOpen,onOpen,onClose,onBu
  function refresh(){
   const p=getState().progress;
   $('storeBalance').textContent=money(p.cash);
-  $('storeCapacity').textContent=`Bag ${p.inventory.slots.length} / ${inventoryCapacity(p.inventory)} slots`;
+  $('storeCapacity').textContent=`Inventory ${p.inventory.slots.length} / ${inventoryCapacity(p.inventory)} slots`;
   $('storeGroceries').disabled=p.cash<400||p.life.groceries>=20;
   const logs=countItem(p,'wood-log');$('storeSell').textContent=logs?`Sell ${logs} wood log${logs===1?'':'s'} · ${money(logs*itemById('wood-log').price)}`:'Sell wood logs';$('storeSell').disabled=!logs;
   $('storeItems').replaceChildren();

@@ -19,7 +19,7 @@ const zones=[
  // The south bank, north of Oak Street and east of the County Road: Alder Center (a town square), Cedar Heights (a quiet loop of homes) and Eastbank Works (workshops and freight).
  {id:'alder',name:'Alder Center',label:'ALDER CENTER',subtitle:'Town square',color:'#a39d8c',grid:false,bounds:{x0:-20,x1:58,z0:-125,z1:-48},minimap:{label:{x:19,z:-131}}},
  {id:'cedar',name:'Cedar Heights',label:'CEDAR HEIGHTS',subtitle:'Quiet homes',color:'#9aa57e',grid:false,bounds:{x0:70,x1:170,z0:-135,z1:-40},minimap:{label:{x:120,z:-141}}},
- {id:'eastbank',name:'Eastbank Works',label:'EASTBANK WORKS',subtitle:'Workshops & freight',color:'#8e8a82',grid:false,bounds:{x0:70,x1:190,z0:-20,z1:75},minimap:{label:{x:130,z:83}}},
+ {id:'eastbank',name:'Eastbank Works',label:'EASTBANK WORKS',subtitle:'Workshops & freight',color:'#8e8a82',grid:false,bounds:{x0:70,x1:190,z0:-38,z1:75},minimap:{label:{x:130,z:83}}},
  {id:'freight',name:'Freight Road',label:'FREIGHT ROAD',subtitle:'The cargo route',color:'#7a7f83',grid:false,bounds:{x0:190,x1:200,z0:n(-246),z1:75},minimap:{label:{x:218,z:-60}}}
 ];
 
@@ -149,7 +149,7 @@ const reserved=[
 // `paving`: asphalt you can walk and drive on (terrain surface DRIVEWAY), drawn as one merged mesh: truck yards (at least 8 m per truck, 12 m deep), aprons, the gas station's forecourt, the depot lot, and the 8 m
 // driveway cuts between a yard and its road. Paving never lies under a building. `kind: 'island'` is the pump island (a lighter slab, still drivable ground; its bollards and later its pumps are the solid parts).
 const paving=[
- {id:'depot',x0:80,x1:112,z0:-18,z1:-3},{id:'depot-cut',x0:96,x1:104,z0:-3,z1:0},
+ {id:'depot',x0:80,x1:114,z0:-18,z1:-3},{id:'depot-cut',x0:96,x1:104,z0:-3,z1:0},
  {id:'supply-apron',x0:72,x1:94,z0:14,z1:31.2},{id:'supply-cut',x0:76,x1:84,z0:12,z1:14},
  {id:'workshop-apron',x0:112,x1:142,z0:14,z1:27.5},{id:'workshop-cut-w',x0:112,x1:120,z0:12,z1:14},{id:'workshop-cut-e',x0:133,x1:141,z0:12,z1:14},
  {id:'warehouse-yard',x0:152,x1:174,z0:18,z1:31.5},{id:'warehouse-in',x0:156,x1:164,z0:12,z1:18},{id:'warehouse-out',x0:166,x1:174,z0:12,z1:18},
@@ -160,7 +160,7 @@ const paving=[
 // Painted parking bays: `count` bays `width` wide and `depth` deep from (x0, z0); lines between them and along the back (the side away from the way in).
 const bayRows=[
  {id:'supply-bays',x0:76.4,z0:22,count:6,width:2.7,depth:5,back:'south'},{id:'workshop-bays',x0:113,z0:21,count:2,width:2.7,depth:5,back:'south'},
- {id:'depot-car-bays',x0:93,z0:-18,count:6,width:2.7,depth:5,back:'north'},{id:'depot-truck-bays',x0:82,z0:-18,count:2,width:4.5,depth:10,back:'north'} // the depot's first bays are where the pickup (94.35, -15.5) and the flatbed (84.25, -13) start in Stage 3
+ {id:'depot-car-bays',x0:92,z0:-18,count:8,width:2.7,depth:5,back:'north'},{id:'depot-truck-bays',x0:82,z0:-18,count:2,width:4.5,depth:10,back:'north'} // the Riden Deals lot: 10 display slots (2 truck bays, where the worktruck (84.25) and the pickup (88.75) stand, and 8 car bays, 2 of them spare); the showroom stands behind the bays' back line
 ];
 // Yards: each is one chunk of props (one InstancedMesh per model, eastbank.js), drawn only within `cull` metres (80) of the yard's rectangle, with caps checked by validateMap (at most YARD_CAPS.perModel of one model
 // in a yard, YARD_CAPS.total in all of them). An item is {prop, x, z, yaw, y}: y > 0 is a stacked pallet (only the bottom one is solid).
@@ -208,14 +208,14 @@ const properties=[
  {id:'cafe',type:'shop',name:'Alder Coffee',access:'public',owner:{type:'city'}},
  {id:'studio',type:'apartment',name:'Studio 2B',access:'tenant',owner:{type:'landlord',name:'the landlord'}},
  // Cedar Heights: R1, R3, R5 and R7 are vacant (for sale); the others belong to residents.
- {id:'house-r1',type:'house',landmark:'house-r1',plot:'R1',name:'1 Cedar Loop',access:'owner',owner:null,listing:{rentCents:16000,depositCents:32000,priceCents:1250000}},
- {id:'house-r2',type:'house',landmark:'house-r2',plot:'R2',name:'2 Cedar Loop',access:'owner',owner:{type:'npc',name:'Marta Ellison'}},
- {id:'house-r3',type:'house',landmark:'house-r3',plot:'R3',name:'3 Cedar Loop',access:'owner',owner:null,listing:{rentCents:14000,depositCents:28000,priceCents:1100000}},
- {id:'house-r4',type:'house',landmark:'house-r4',plot:'R4',name:'4 Cedar Loop',access:'owner',owner:{type:'npc',name:'Tom Reyes'}},
- {id:'house-r5',type:'house',landmark:'house-r5',plot:'R5',name:'5 Cedar Loop',access:'owner',owner:null,listing:{rentCents:19000,depositCents:38000,priceCents:1500000}},
- {id:'house-r6',type:'house',landmark:'house-r6',plot:'R6',name:'6 Cedar Loop',access:'owner',owner:{type:'npc',name:'Priya Nair'}},
- {id:'house-r7',type:'house',landmark:'house-r7',plot:'R7',name:'7 Cedar Loop',access:'owner',owner:null,listing:{rentCents:17500,depositCents:35000,priceCents:1350000}},
- {id:'house-r8',type:'house',landmark:'house-r8',plot:'R8',name:'8 Cedar Loop',access:'owner',owner:{type:'npc',name:'Grace Whitfield'}},
+ {id:'house-r1',type:'house',size:'small',landmark:'house-r1',plot:'R1',name:'1 Cedar Loop',access:'owner',owner:null,listing:{rentCents:16000,depositCents:32000,priceCents:1250000}},
+ {id:'house-r2',type:'house',size:'small',landmark:'house-r2',plot:'R2',name:'2 Cedar Loop',access:'owner',owner:{type:'npc',name:'Marta Ellison'}},
+ {id:'house-r3',type:'house',size:'small',landmark:'house-r3',plot:'R3',name:'3 Cedar Loop',access:'owner',owner:null,listing:{rentCents:14000,depositCents:28000,priceCents:1100000}},
+ {id:'house-r4',type:'house',size:'small',landmark:'house-r4',plot:'R4',name:'4 Cedar Loop',access:'owner',owner:{type:'npc',name:'Tom Reyes'}},
+ {id:'house-r5',type:'house',size:'small',landmark:'house-r5',plot:'R5',name:'5 Cedar Loop',access:'owner',owner:null,listing:{rentCents:19000,depositCents:38000,priceCents:1500000}},
+ {id:'house-r6',type:'house',size:'small',landmark:'house-r6',plot:'R6',name:'6 Cedar Loop',access:'owner',owner:{type:'npc',name:'Priya Nair'}},
+ {id:'house-r7',type:'house',size:'small',landmark:'house-r7',plot:'R7',name:'7 Cedar Loop',access:'owner',owner:null,listing:{rentCents:17500,depositCents:35000,priceCents:1350000}},
+ {id:'house-r8',type:'house',size:'small',landmark:'house-r8',plot:'R8',name:'8 Cedar Loop',access:'owner',owner:{type:'npc',name:'Grace Whitfield'}},
  // Alder Center: shop and office interiors arrive with later updates.
  {id:'alder-store',type:'shop',landmark:'alder-store',plot:'C1',name:'Alder Store',enterable:false,reason:'Shop interiors arrive with the store jobs update (cashier shifts).'},
  {id:'alder-offices',type:'commercial',landmark:'alder-offices',plot:'C2',name:'Alder Offices',enterable:false,reason:'Office interiors arrive with a later update.'},
@@ -241,11 +241,15 @@ const properties=[
  {id:'eastbank-workshop',type:'industrial',landmark:'eastbank-workshop',plot:'I4',name:'Eastbank Vehicle Workshop',enterable:false,reason:'Repairs arrive with tool wear and repairs (0.37).'},
  {id:'eastbank-supply',type:'shop',landmark:'eastbank-supply',plot:'I3',name:'Eastbank Building Supplier',enterable:false,reason:"The supplier's counter (blades, tools, whetstones) arrives with 0.35-0.37; the plank dock is in the timber yard behind."},
  {id:'eastbank-gas-kiosk',type:'shop',landmark:'eastbank-gas-kiosk',plot:'I2',name:'Eastbank Gas Station',enterable:false,reason:'Paying for fuel arrives with the fuel system (0.35).'},
- {id:'eastbank-lumber-shed',type:'industrial',landmark:'eastbank-lumber-shed',plot:'I5',name:'Eastbank Lumber Shed',enterable:false,reason:'An open-sided shed; you can already walk around it.'}
+ {id:'eastbank-lumber-shed',type:'industrial',landmark:'eastbank-lumber-shed',plot:'I5',name:'Eastbank Lumber Shed',enterable:false,reason:'An open-sided shed; you can already walk around it.'},
+ {id:'riden-deals',type:'shop',landmark:'riden-deals',name:'Riden Deals',enterable:false,reason:'The showroom opens later: buy a vehicle on the lot (E at its driver door) or order one from the phone Store.'}
 ];
 // Drivable vehicles (0.33, DESIGN 4.13 D): the two depot vehicles, parked nose to the back wall (north, so yaw pi: a model's front is +z) in the depot's first truck and car bays. Anyone can drive them (no keys yet). `model` is a converted
 // prop and a vehicle class (vehicle.js CLASSES); the id is the save key (`progress.vehicles`). The parked scenery cars and trucks elsewhere are not drivable.
 export const DRIVABLE_MODELS=Object.freeze(['worktruck','offroad']);
+// RULE: every vehicle model needs a `sale` field (DESIGN 4.14). 'dealership': a display vehicle on the Riden Deals lot, bought there only. 'online': in the phone Store only, no display slot and no `home`. 'both': display slot and Store.
+// The lot holds one display vehicle per dealership or both model, in the depot's bays (validateMap checks there are enough bays).
+export const SALE_MODES=Object.freeze(['dealership','online','both']);
 // The forecourt canopy's four steel columns, from the canopy's origin when it is not turned (the 0.8 m column boxes the map adds, see eastbank.js, which turns them with the canopy: x and z offsets in metres).
 export const CANOPY_MODEL_X=5,CANOPY_COLUMN_X=0; // the model's columns stand 5 m from its centre (across the lanes), in pairs; eastbank.js moves each pair together onto the island's centre line, so one column stands at each end of the island and both lanes under the roof are open
 export const CANOPY_COLUMNS=Object.freeze([[CANOPY_COLUMN_X,3.2],[-CANOPY_COLUMN_X,3.2],[CANOPY_COLUMN_X,-3.2],[-CANOPY_COLUMN_X,-3.2]]);
@@ -263,11 +267,11 @@ const relief=Object.freeze({hills:Object.freeze([
  {id:'ridge-east-hill',x:264,z:-300,rx:22,rz:32,h:8},
  {id:'ridge-east-knoll',x:266,z:-356,rx:20,rz:16,h:6}
 ]),tracks:Object.freeze([
- {id:'west-hill-track',half:3,points:spiral(-192,5,52,48,.95,.2,1.8)} // a dirt track up the big west hill: drivable, DIRT underfoot (a declared trail: it starts in the meadow and is not joined to the paved network)
+ {id:'west-hill-track',half:3,points:Object.freeze([[-58.5,5],[-100,5],...spiral(-192,5,52,48,.95,.2,1.8)])} // a dirt track from the west end of Oak Street, out across the meadow and up the big west hill: drivable, DIRT underfoot, joined to the street at x = -55
 ])});
 const vehicles=[
- {id:'eastbank-worktruck',model:'worktruck',name:'Worktruck',home:{x:84.25,z:-13,yaw:PI},fuel:{type:'diesel',tankMgal:21000,port:{x:1.2,z:-2.2}}},
- {id:'eastbank-offroad',model:'offroad',name:'Pevrolet Off Road Pickup',home:{x:88.75,z:-13,yaw:PI},fuel:{type:'diesel',tankMgal:18000,port:{x:1.4,z:-2.2}}}
+ {id:'eastbank-worktruck',model:'worktruck',name:'Worktruck',sale:'both',home:{x:84.25,z:-13,yaw:PI},fuel:{type:'diesel',tankMgal:21000,port:{x:1.2,z:-2.2}}},
+ {id:'eastbank-offroad',model:'offroad',name:'Pevrolet Off Road Pickup',sale:'both',home:{x:88.75,z:-13,yaw:PI},fuel:{type:'diesel',tankMgal:18000,port:{x:1.4,z:-2.2}}}
 ];
 export const MAP=deepFreeze({
  id:'oak-and-alder',version:1,
@@ -310,7 +314,11 @@ export const MAP=deepFreeze({
  // The bus stop on Alder Street's east sidewalk, facing the road.
  busStop:{x:56.4,z:-72,yaw:-Math.PI/2},
  // The city's raised pavements (footing 0.165 m): either side of Oak Street, and beside Alder Avenue.
- pavements:[{x0:-38,x1:54,z0:-8.5,z1:-3.5},{x0:-38,x1:54,z0:15.5,z1:20.5},{x0:-21.5,x1:-16.5,z0:-60,z1:24},
+ // (0.34) rounded kerbs inside Westside: the inside corners where Alder Avenue and Alder Street meet Oak Street (x, z: the road corner; sx, sz: which side of it the pavement or ground lies; r: radius in metres).
+ // junctions.js cornerRegion gives the little quarter-round of asphalt that fills each; game.js cuts the pavement slabs around it and terrain.js paints it as street.
+ roundedCorners:[{id:'ave-oak-ne',x:-22,z:-3.5,sx:1,sz:-1,r:4},{id:'ave-oak-se',x:-22,z:15.5,sx:1,sz:1,r:4},{id:'ave-oak-nw',x:-38,z:-3.5,sx:-1,sz:-1,r:4},{id:'ave-oak-sw',x:-38,z:15.5,sx:-1,sz:1,r:4},{id:'street-oak-nw',x:45,z:-3.5,sx:-1,sz:-1,r:4}],
+ // (0.34) no pavement crosses a road: the pavements stop at the kerb of every street that meets them (Alder Avenue, Alder Street and Oak Street), so nothing stands or drives over a road on a slab.
+ pavements:[{x0:-22,x1:45,z0:-8.5,z1:-3.5},{x0:-22,x1:54,z0:15.5,z1:20.5},{x0:-21.5,x1:-16.5,z0:-60,z1:-8.5},{x0:-21.5,x1:-16.5,z0:20.5,z1:24},
   // Alder Center's own (drawn by world.js, `draw: true`): sidewalks 3 m wide along the cross street (the police station's side stops at the town square, which runs flush to the road),
   // 2 m wide along Alder Street, and the town square itself.
   {x0:-20,x1:43,z0:-84,z1:-80.7,draw:true},{x0:-20,x1:9,z0:-99.3,z1:-96,draw:true},{x0:38,x1:43,z0:-99.3,z1:-96,draw:true},{x0:9,x1:38,z0:-122,z1:-96,draw:true,plaza:true},
@@ -351,13 +359,16 @@ export const MAP=deepFreeze({
   // Eastbank Works (0.33): Kenney Industrial buildings (CC0), each standing at the back of its plot with its front (door side) on the yard; a plot facing north puts the front at -z (yaw pi). None can be entered.
   {id:'eastbank-warehouse',prop:'industrial-q',plot:'I1',zone:'eastbank',x:163,z:38.6,yaw:Math.PI},{id:'eastbank-workshop',prop:'industrial-t',plot:'I4',zone:'eastbank',x:126,z:33.5,yaw:Math.PI},
   {id:'eastbank-supply',prop:'industrial-s',plot:'I3',zone:'eastbank',x:83,z:35.4,yaw:Math.PI},{id:'eastbank-gas-kiosk',prop:'industrial-p',plot:'I2',zone:'eastbank',x:172,z:-14,yaw:0},
-  {id:'eastbank-lumber-shed',prop:'hut',plot:'I5',zone:'eastbank',x:76.5,z:54,yaw:0},{id:'eastbank-tank',prop:'tank-small',zone:'eastbank',x:137,z:34,yaw:0,decor:true}
+  {id:'eastbank-lumber-shed',prop:'hut',plot:'I5',zone:'eastbank',x:76.5,z:54,yaw:0},
+  {id:'riden-deals',prop:'store',zone:'eastbank',x:97,z:-28.5,yaw:0}, // the dealership showroom: a second copy of the Alder Store model (528 triangles), front to the south over the lot
+ {id:'eastbank-tank',prop:'tank-small',zone:'eastbank',x:137,z:34,yaw:0,decor:true}
  ], // Signposts: boards are read from the front (yaw 0 faces south, towards walkers arriving from the bridge).
  signs:[
   {id:'fork',zone:'county',x:-25.5,z:n(-170),yaw:0,boards:[{text:'← WILLOW FIELDS',y:2.1},{text:'PINE RIDGE →',y:2.9}]},
   {id:'alder-sign',zone:'alder',x:57,z:-56,yaw:0,boards:[{text:'ALDER CENTER',y:2.4}]},
   {id:'cedar-sign',zone:'cedar',x:127,z:-44,yaw:0,boards:[{text:'CEDAR HEIGHTS',y:2.4}]},
-  {id:'eastbank-sign',zone:'eastbank',x:74,z:-5,yaw:-1.5707963267948966,boards:[{text:'EASTBANK WORKS →',y:2.4}]}
+  {id:'eastbank-sign',zone:'eastbank',x:74,z:-5,yaw:-1.5707963267948966,boards:[{text:'EASTBANK WORKS →',y:2.4}]},
+  {id:'riden-deals-sign',zone:'eastbank',x:78,z:-1.5,yaw:0,boards:[{pictures:true,y:3.0,h:1.0,bg:'#111111'},{text:'RIDEN DEALS',y:2.1,bg:'#111111',fg:'#f5c518'},{text:'NEW & USED VEHICLES',y:1.45,bg:'#111111',fg:'#f1ebd9'}]} // on the grass at the lot's south-west side, beside Oak Street East, read from the road (keep it off the strip in front of the lot: trucks turning out of the bays swing over it)
  ],
  studio:{x:1,z:-6.3,doorZ:-8.25,interior:{entry:{x:0,z:3.3},exit:{x:0,z:4.45},bed:{x:-3.6,z:-2.3}}},
  minimap:{view:{x0:-200,x1:330,z0:-330,z1:110}},
@@ -471,6 +482,7 @@ export function validateMap(map=MAP){
    if(ids.has(p.id))bad(`duplicate property ${p.id}`);ids.add(p.id);
    if(!['shop','apartment','house','industrial','farm','civic','commercial'].includes(p.type))bad(`property ${p.id} has an unknown type`);
    if(p.landmark!==undefined&&!(map.landmarks||[]).some(l=>l.id===p.landmark))bad(`property ${p.id} names an unknown landmark ${p.landmark}`);
+   if(p.type==='house'&&!['small','medium','large'].includes(p.size))bad(`house ${p.id} needs a size (small, medium or large): it sets how many vehicles the home holds`);
    if(p.enterable===false){if(!p.reason)bad(`property ${p.id} is not enterable but gives no reason`);continue}
    if(!['public','tenant','owner'].includes(p.access))bad(`property ${p.id} has no valid access rule`);
    if(p.owner!==null&&!(p.owner&&owners.includes(p.owner.type)))bad(`property ${p.id} has an invalid owner`);
@@ -589,11 +601,15 @@ export function validateMap(map=MAP){
    total+=(yard.items||[]).length}
   if(total>YARD_CAPS.total)bad(`the yards hold ${total} props (the cap is ${YARD_CAPS.total})`)
   // drivable vehicles (0.33): a unique id, a known model, a finite home pose standing on paving (their bays) inside the playable rectangle
-  const carIds=new Set();
+  const carIds=new Set();let displays=0;
   for(const v of map.vehicles||[]){if(typeof v.id!=='string'||!v.id||carIds.has(v.id))bad(`vehicle ${v.id} has a missing or duplicate id`);carIds.add(v.id);
    if(!DRIVABLE_MODELS.includes(v.model))bad(`vehicle ${v.id} has an unknown model ${v.model}`);
+   if(!SALE_MODES.includes(v.sale)){bad(`vehicle ${v.id} needs a sale field: dealership, online or both`);continue}
+   if(v.sale==='online')continue; // online-only: no display slot, so no home pose
+   displays++;
    if(!v.home||![v.home.x,v.home.z,v.home.yaw].every(Number.isFinite)){bad(`vehicle ${v.id} has no valid home pose`);continue}
    if(!onPaving(v.home.x,v.home.z))bad(`vehicle ${v.id} does not start on paving`);
-   if(v.home.x<map.playable.x0||v.home.x>map.playable.x1||v.home.z<map.playable.z0||v.home.z>map.playable.z1)bad(`vehicle ${v.id} starts outside the playable rectangle`)}}
+   if(v.home.x<map.playable.x0||v.home.x>map.playable.x1||v.home.z<map.playable.z0||v.home.z>map.playable.z1)bad(`vehicle ${v.id} starts outside the playable rectangle`)}
+  const slots=(map.bayRows||[]).filter(r=>r.id.startsWith('depot-')).reduce((s,r)=>s+r.count,0);if(displays>slots)bad(`the dealership lot has ${slots} bays but ${displays} models have a display slot (sale: dealership or both): build another lot or sell the newest online only`)}
  return problems;
 }

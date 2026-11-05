@@ -17,6 +17,8 @@ export class MultiplayerClient {
   onPlayerJoined(cb) { return this.on('playerJoined', cb); }
   onPlayerMoved(cb) { return this.on('playerMoved', cb); }
   onPlayerLeft(cb) { return this.on('playerLeft', cb); }
+  // In a room with the server: sleeping never moves the clock then (sleep.js).
+  get online() { return this.socket?.readyState === 1 && !!this.id; }
   onConnected(cb) { return this.on('connected', cb); }
   onDisconnected(cb) { return this.on('disconnected', cb); }
   connect(url) {

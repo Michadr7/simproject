@@ -27,8 +27,8 @@ export function addItem(progress,id,{purchase=false}={}){
  const item=itemById(id);if(!item)return {error:'Unknown item.'};
  if(purchase&&progress.cash<item.price)return {error:'You do not have enough cash.'};
  const inventory=normalizeInventory(progress.inventory);
- if(!insert(inventory,item))return {error:'Your bag is full. Use an item or equip a larger bag.'};
- return {state:{...progress,inventory,cash:progress.cash-(purchase?item.price:0)},message:item.name+' added to your bag.'};
+ if(!insert(inventory,item))return {error:'Your inventory is full. Use an item or equip a larger bag.'};
+ return {state:{...progress,inventory,cash:progress.cash-(purchase?item.price:0)},message:item.name+' added to your inventory.'};
 }
 export function useItem(progress,index){
  const inventory=normalizeInventory(progress.inventory),slot=inventory.slots[index],item=itemById(slot?.id);
@@ -52,8 +52,8 @@ export function unequipItem(progress,type){
  const inventory=normalizeInventory(progress.inventory),id=inventory.equipment[type];
  if(!['jacket','backpack'].includes(type)||!id)return {error:'Nothing equipped here.'};
  inventory.equipment[type]=null;
- if(inventory.slots.length+1>inventoryCapacity(inventory)||!insert(inventory,itemById(id)))return {error:'Make room in your bag before removing this equipment.'};
- return {state:{...progress,inventory},message:itemById(id).name+' put in your bag.'};
+ if(inventory.slots.length+1>inventoryCapacity(inventory)||!insert(inventory,itemById(id)))return {error:'Make room in your inventory before removing this equipment.'};
+ return {state:{...progress,inventory},message:itemById(id).name+' put in your inventory.'};
 }
 export function quickItems(progress){
  // One button per consumable type, even when there are multiple stacks.
@@ -64,7 +64,7 @@ export function quickItems(progress){
 }
 export const countItem=(progress,id)=>(progress.inventory?.slots||[]).reduce((n,slot)=>n+(slot.id===id?slot.quantity:0),0);
 export const hasItem=(progress,id)=>countItem(progress,id)>0;
-// The hotbar lists every tool and consumable you own (one slot each, bag order), up to six.
+// The hotbar lists every tool and consumable you own (one slot each, inventory order), up to six.
 export function hotbarItems(progress){
  const seen=new Set();
  return (progress.inventory?.slots||[]).flatMap((slot,index)=>{
@@ -80,7 +80,7 @@ export function equipTool(progress,id){
  const equipped=progress.equipped===id?null:id;
  return {state:{...progress,equipped},equipped,message:equipped?`${item.name} equipped.`:`${item.name} put away.`};
 }
-// The gas can in the bag (the first one): {fuel, mgal} or null; and setting what is in it (a new progress; null when you have no can).
+// The gas can in the inventory (the first one): {fuel, mgal} or null; and setting what is in it (a new progress; null when you have no can).
 export function canOf(progress){const slot=(progress.inventory?.slots||[]).find(s=>s.id==='gas-can');return slot?{fuel:slot.fuelMgal>0?slot.fuelType:null,mgal:slot.fuelMgal||0}:null}
 export function setCan(progress,can){
  const inventory=normalizeInventory(progress.inventory),slot=inventory.slots.find(s=>s.id==='gas-can');if(!slot)return null;

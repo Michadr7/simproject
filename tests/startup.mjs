@@ -78,7 +78,7 @@ for(const saved of [false,true]){
   enter(19);go(0,-2);doc.pointerLockElement=null;click('mousedown');click('mouseup');pump(.1);assert(ids.get('dialog').hidden,'uncaptured click does not act');
   doc.pointerLockElement=ids.get('world');const down=click('mousedown');assert(down.defaultPrevented);pump(.1);assert.equal(ids.get('dialogKicker').textContent,'Noah','captured left click acts like E');click('mouseup');doc.pointerLockElement=null;
   ids.get('closeDialog').click();pump(.1);leave();assert.equal(ids.get('locationName').textContent,'WESTSIDE');}
- enter(36);assert.equal(ids.get('locationName').textContent,'ALDER COFFEE');go(0,-2);pressE();ids.get('extraAction').click();ids.get('jobAction').click();pump(.1);assert.equal(ids.get('cash').textContent,'$30.00');leave();go(1,-6.3);pressE();pump(.1);assert.equal(ids.get('locationName').textContent,'STUDIO 2B','rented home opens directly');go(3,-3.5);pressE();ids.get('jobAction').click();ids.get('bagButton').click();assert(ids.get('inventoryGroceries').textContent.startsWith('0 grocery packs'));ids.get('inventoryClose').click();
+ enter(36);assert.equal(ids.get('locationName').textContent,'ALDER COFFEE');go(0,-2);pressE();ids.get('extraAction').click();ids.get('jobAction').click();pump(.1);assert.equal(ids.get('cash').textContent,'$30.00');leave();go(1,-6.3);pressE();pump(.1);assert.equal(ids.get('locationName').textContent,'STUDIO 2B','rented home opens directly');go(3,-3.5);pressE();ids.get('jobAction').click();{const e=new Event('keydown',{cancelable:true});e.code='KeyI';e.repeat=false;win.dispatchEvent(e)}assert(ids.get('inventoryGroceries').textContent.startsWith('0 grocery packs'));ids.get('inventoryClose').click();
  const wheel=new Event('wheel',{cancelable:true});wheel.deltaY=-400;wheel.deltaMode=0;ids.get('world').dispatchEvent(wheel);pump(4);assert(globalThis.__renderCamera.position.distanceTo(person.position)<5);
  go(roomModule.EXIT.x,roomModule.EXIT.z);pressE();enter(36);const shopRoot=globalThis.__renderScene.getObjectByName('cafe-interior');assert.equal(person.parent,shopRoot);assert(shopRoot.children.filter(m=>m.name==='storefront-glass').every(m=>m.material.transparent&&m.material.opacity<.2));
  go(0,-2);pressE();ids.get('jobAction').click();ids.get('jobAction').click();pressE();ids.get('jobAction').click();ids.get('jobAction').click();pump(10);
@@ -165,17 +165,11 @@ for(const saved of [false,true]){
  assert(mesh.position.x>0&&mesh.position.x<5,'frame interpolates remote movement');
  __testSocket.receive({type:'playerLeft',id:remote.id});assert.equal(mesh.parent,null);
  // Survival/settings/inventory UI share live state, without advancing the clock.
- key('KeyP');ids.get('phoneApp-settings').click();assert(!ids.get('phoneScreen-settings').hidden);
+ // the phone has no Settings app any more: the stat drain is a dev tool (devDrain) and items are spawned from the dev panel; the survival rules are checked in survival.mjs
  const clockBeforeSetting=state.progress.routine.minutes;
- ids.get('phoneDrainMultiplier').value='50';ids.get('phoneDrainMultiplier').onchange();
- assert.equal(state.progress.settings.statDrainMultiplier,50);
- assert.equal(state.progress.routine.minutes,clockBeforeSetting,'drain setting does not change time');
- assert.equal(JSON.parse(store.get('citylife.profile.v1')).progress.settings.statDrainMultiplier,50);
- ids.get('phoneTestItem').value='water';ids.get('phoneGrantItem').click();
- ids.get('phoneTestItem').value='apple';ids.get('phoneGrantItem').click();
- ids.get('phoneTestItem').value='small-backpack';ids.get('phoneGrantItem').click();
- assert.equal(state.progress.inventory.slots.length,3);
- ids.get('phoneDrainMultiplier').value='1';ids.get('phoneDrainMultiplier').onchange();key('KeyP');
+ (await import(pathToFileURL(join(dir,'state.js')).href)).setStatDrainMultiplier(50);assert.equal(state.progress.settings.statDrainMultiplier,50);assert.equal(state.progress.routine.minutes,clockBeforeSetting,'drain setting does not change time');
+ for(const id of ['water','apple','small-backpack']){const r=addItem(state.progress,id);state.progress=r.state}
+ assert.equal(state.progress.inventory.slots.length,3);(await import(pathToFileURL(join(dir,'state.js')).href)).setStatDrainMultiplier(1);
  state.progress.life.thirst=10;state.progress.life.food=10;state.progress.life.energy=10;
  key('KeyI');assert(!ids.get('inventoryOverlay').hidden);assert(!ids.get('inventoryPanel').hidden);
  const slotButtons=ids.get('inventoryGrid').children;

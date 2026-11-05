@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import {MAP,riverZAt} from '../dist/map-definition.js';
 import {buildTerrain,terrain,validateTerrain,roadCenterline,SURFACE,FOOTING} from '../dist/terrain.js';
 import {isWalkable,footingAt} from '../dist/world.js';
+import {cornerRegion,inPolygon} from '../dist/junctions.js';
 
 // ── Built once, quickly ───────────────────────────────────────────────────────
 const t0=performance.now(),built=buildTerrain(MAP),ms=performance.now()-t0;
@@ -10,9 +11,11 @@ assert.equal(terrain(),terrain(),'the shipped terrain is built once and shared')
 assert.deepEqual(validateTerrain(terrain()),[],'every district is reachable on foot from the spawn point, over both bridges, and no water is walkable');
 const T=terrain(),at=(x,z)=>T.surfaceAt(x,z);
 
-// ── The city is exactly as it was: walking and footing match the old rectangle rules at every sampled point of the city zone ────────────────────
-const oldFooting=(px,pz)=>{const sidewalk=(px>=-38&&px<=54&&((pz>=-8.5&&pz<=-3.5)||(pz>=15.5&&pz<=20.5)))||(px>=-21.5&&px<=-16.5&&pz>=-74&&pz<=24),road=(Math.abs(px)<=55&&pz>=-3.5&&pz<=15.5)||(px>=-38&&px<=-22&&Math.abs(pz)<=60);return sidewalk?.165:road?.01:-.095};
-let cityPoints=0,bad=[];for(let x=-60.9;x<44.9;x+=.37)for(let z=-47.9;z<48;z+=.43){cityPoints++;if(!isWalkable(x,z)||Math.abs(footingAt(x,z)-oldFooting(x,z))>1e-9){if(bad.length<5)bad.push([+x.toFixed(2),+z.toFixed(2),footingAt(x,z),oldFooting(x,z)])}}
+// ── The city is as it was, except that no pavement crosses a road any more (0.34): walking and footing match the old rectangle rules at every sampled point of the city zone ────────────────────
+const oldFooting=(px,pz)=>{const sidewalk=(px>=-22&&px<=54&&((pz>=-8.5&&pz<=-3.5&&px<=45)||(pz>=15.5&&pz<=20.5)))||(px>=-21.5&&px<=-16.5&&((pz>=-74&&pz<=-8.5)||(pz>=20.5&&pz<=24))),road=(Math.abs(px)<=55&&pz>=-3.5&&pz<=15.5)||(px>=-38&&px<=-22&&Math.abs(pz)<=60);const corner=MAP.roundedCorners.some(c=>inPolygon(cornerRegion(c),px,pz));return corner?.01:sidewalk?.165:road?.01:-.095};
+let cityPoints=0,bad=[];const nearArc=(x,z)=>MAP.roundedCorners.some(c=>cornerRegion(c).some(([ax,az])=>Math.hypot(ax-x,az-z)<.6)); // the mask is made of 0.5 m cells: a point that close to a curved kerb may fall either side
+for(let x=-60.9;x<44.9;x+=.37)for(let z=-47.9;z<48;z+=.43){cityPoints++;if(nearArc(x,z)||(x<-54.9&&Math.abs(z-5)<3.6))continue; // the dirt track (0.34) joins the end of Oak Street: its first metres lie in the city's west edge
+ if(!isWalkable(x,z)||Math.abs(footingAt(x,z)-oldFooting(x,z))>1e-9){if(bad.length<5)bad.push([+x.toFixed(2),+z.toFixed(2),footingAt(x,z),oldFooting(x,z)])}}
 assert(cityPoints>60000&&bad.length===0,`the city (up to where Alder Street, at x = 45, and Oak Street East, at x = 55, take over): ${cityPoints} points sampled, differences ${JSON.stringify(bad)}`);
 
 // ── Open country: everything inside the playable area is walkable except water; nothing outside it is; no invisible walls where the green starts ─────────────────

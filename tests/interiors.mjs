@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import * as THREE from '../dist/vendor/three.module.js';
 import {PROPS} from '../dist/props-assets.js';
 import {MAP} from '../dist/map-definition.js';
-import {houseLayout,buildHouseRoom,collidersOf,footprintOf,face,FLOORS,USES,FLOOR_HEIGHT} from '../dist/interiors.js';
+import {houseLayout,buildHouseRoom,collidersOf,footprintOf,face,FLOORS,USES,FLOOR_HEIGHT,ROOM_GROWTH} from '../dist/interiors.js';
 globalThis.document={createElement:()=>({width:0,height:0,getContext:()=>new Proxy({},{get:()=>()=>{}})})};
 
 const HOUSE_PROPS=[...new Set(MAP.landmarks.filter(l=>l.plot&&/^house-/.test(l.prop)).map(l=>l.prop).concat('house-t'))];
@@ -13,7 +13,7 @@ let rooms=0,pieces=0;
 for(const prop of HOUSE_PROPS){
  const L=houseLayout(prop),hw=L.W/2,hd=L.D/2,info=PROPS[prop];
  assert.equal(L.floors,FLOORS[prop],prop+' floors');assert.equal(L.items.length,L.floors);
- assert(Math.abs(L.W-(info.width-.8))<.3&&Math.abs(L.D-(info.depth-.8))<.3,`${prop}: the room is the house less its walls (${L.W} x ${L.D})`);
+ assert(Math.abs(L.W-(info.width-.8)*ROOM_GROWTH)<.3&&Math.abs(L.D-(info.depth-.8)*ROOM_GROWTH)<.3,`${prop}: the room is the house less its walls, grown by ${ROOM_GROWTH} (${L.W} x ${L.D})`);assert(L.W>=info.width-.8&&L.D>=info.depth-.8,`${prop}: never smaller than the house`);
  // every piece is a known furniture model, inside the room, and no two solid pieces overlap; the door zone is clear
  L.items.forEach((list,f)=>{const fps=list.map(i=>({i,r:footprintOf(i)}));
   for(const {i,r} of fps){assert(PROPS[i.id]&&i.id.startsWith('f-'),`${prop}: ${i.id} is a furniture model`);assert(r.x0>=-hw-1e-6&&r.x1<=hw+1e-6&&r.z0>=-hd-1e-6&&r.z1<=hd+1e-6,`${prop} f${f}: ${i.id} is inside the room`);pieces++;

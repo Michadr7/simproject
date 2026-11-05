@@ -37,3 +37,19 @@ export function junctionPatches(map=MAP){
     out.push({kind:'taper',roads:[wide.id,thin.id],points:p})}}}
  return out.filter(p=>!touchesBuilt(map,p));
 }
+
+// ── Rounded kerbs inside the towns (MAP.roundedCorners) ─────────────────────────────────────────────────────────────────────────────────────────
+// A corner {x, z, sx, sz, r} is an inside corner of the road shape at (x, z); the ground it rounds lies on the (sx, sz) side. cornerArc(c) is the quarter-round arc from the point r along
+// the vertical kerb to the point r along the horizontal one; cornerRegion(c) is the little patch of asphalt between the corner and the arc.
+export function cornerArc(c,steps=ARC_STEPS){const cx=c.x+c.sx*c.r,cz=c.z+c.sz*c.r,out=[];for(let i=0;i<=steps;i++){const t=i/steps*Math.PI/2;out.push([+(cx-c.sx*c.r*Math.cos(t)).toFixed(3),+(cz-c.sz*c.r*Math.sin(t)).toFixed(3)])}return out}
+export const cornerRegion=c=>[[c.x,c.z],...cornerArc(c)];
+export const inPolygon=(P,x,z)=>{let inside=false;for(let i=0,j=P.length-1;i<P.length;j=i++){const [xi,zi]=P[i],[xj,zj]=P[j];if((zi>z)!==(zj>z)&&x<(xj-xi)*(z-zi)/(zj-zi)+xi)inside=!inside}return inside};
+// The outline of a pavement slab {x0, x1, z0, z1} with the corners that lie on its own corners cut away: a polygon [[x, z], ...] in order round the slab.
+export function slabOutline(r,corners){
+ const K=[[r.x0,r.z0],[r.x1,r.z0],[r.x1,r.z1],[r.x0,r.z1]],out=[];
+ K.forEach((k,i)=>{const prev=K[(i+3)%4],c=corners.find(q=>Math.abs(q.x-k[0])<1e-6&&Math.abs(q.z-k[1])<1e-6&&((q.sx>0)===(k[0]===r.x0))&&((q.sz>0)===(k[1]===r.z0)));
+  if(!c){out.push(k);return}
+  const arc=cornerArc(c),arrivesVertically=Math.abs(prev[0]-k[0])<1e-6; // the edge that arrives at this corner runs along x = const
+  out.push(...(arrivesVertically?arc:arc.slice().reverse()))});
+ return out;
+}

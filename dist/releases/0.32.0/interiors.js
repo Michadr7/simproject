@@ -7,6 +7,8 @@ import {PROPS} from './props-assets.js';
 import {INTERIOR_LAYOUTS} from './interior-layouts.js';
 
 export const FLOOR_HEIGHT=3.4,WALL_HEIGHT=3.1;
+// An interior is its own scene, so it need not be as small as the model's outline: every room is this much bigger than the house's footprint minus its walls (0.34: the rooms felt cramped).
+export const ROOM_GROWTH=1.3;
 // How many floors each house model has (its look from outside).
 export const FLOORS={'house-a':1,'house-h':1,'house-j':1,'house-c':2,'house-e':2,'house-l':2,'house-o':2,'house-r':2,'house-t':2};
 // What E does at a piece. 'sleep' and 'cook' are the studio's own actions; the rest is furniture to look at until the furniture update.
@@ -25,7 +27,7 @@ const sizeOf=(id,yaw=0)=>{const f=footprintOf({id,x:0,z:0,yaw});return {w:f.x1-f
 
 // The layout of one house as plain data: room size, door, partition walls and, for each floor, the furniture. Nothing here touches three.js.
 export function houseLayout(prop,{saved=true}={}){
- const info=propInfo(prop),floors=FLOORS[prop]??1,W=Math.round((info.width-.8)*4)/4,D=Math.round((info.depth-.8)*4)/4,hw=W/2,hd=D/2,
+ const info=propInfo(prop),floors=FLOORS[prop]??1,W=Math.round((info.width-.8)*ROOM_GROWTH*4)/4,D=Math.round((info.depth-.8)*ROOM_GROWTH*4)/4,hw=W/2,hd=D/2,
   doorX=Math.max(-hw+1.5,Math.min(hw-1.5,info.door?.x??0)),ground=[],upper=[];
  const add=(list,id,x,z,yaw,y=0)=>list.push({id,x:+x.toFixed(3),z:+z.toFixed(3),yaw,y});
  const look=(list,id,x,z,toward,y=0)=>add(list,id,x,z,face(toward[0],toward[1]),y);
@@ -150,9 +152,11 @@ export function buildHouseRoom(prop){
  const furnish=f=>{const group=floors[f];for(const old of group.children.filter(c=>c.name?.startsWith('f:')))group.remove(old);layout.items[f].forEach((item,i)=>{const m=createProp(item.id,fade);m.position.set(item.x,item.y,item.z);m.rotation.y=item.yaw;m.name='f:'+item.id;m.userData.index=i;m.castShadow=false;group.add(m)})};
  layout.items.forEach((_,f)=>furnish(f));
  let floor=0,colliders=layout.items.map((_,f)=>collidersOf(layout,f));
+ // A cutaway: only the floors up to the one you are on are drawn, so the storey above never hides the room you are in (its slab and walls were in the way of every high camera).
+ const showFloors=()=>floors.forEach((g,i)=>{g.visible=i<=floor});showFloors();
  const blocked=(x,z)=>Math.abs(x)>hw-.3||Math.abs(z)>hd-.3||colliders[floor].some(c=>Math.abs(x-c.x)<c.hx+.32&&Math.abs(z-c.z)<c.hz+.32);
  const marker=new THREE.Box3Helper(new THREE.Box3(),0xffc83d);marker.visible=false;marker.name='selection';scene.add(marker);
- const room={scene,occluders,layout,blocked,get floor(){return floor},setFloor(n){floor=n;return n},FLOOR_HEIGHT,
+ const room={scene,occluders,layout,blocked,get floor(){return floor},setFloor(n){floor=n;showFloors();return n},FLOOR_HEIGHT,
   ENTRY:{x:layout.entry.x,z:layout.entry.z},EXIT:{x:layout.exit.x,z:layout.exit.z},BED:{x:layout.bed.x,z:layout.bed.z},BED_FLOOR:layout.bed.floor,KITCHEN:layout.kitchen,STAIRS:layout.stairs,
   // Rebuild every piece and every collision box from layout.items, and move the bed and kitchen spots to where the bed and stove are now.
   refresh(){layout.items.forEach((_,f)=>furnish(f));colliders=layout.items.map((_,f)=>collidersOf(layout,f));const spots=deriveSpots(layout);if(spots.kitchen)Object.assign(layout.kitchen,spots.kitchen);if(spots.bed){layout.bed=spots.bed;Object.assign(room.BED,{x:spots.bed.x,z:spots.bed.z})}},

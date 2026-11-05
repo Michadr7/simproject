@@ -37,11 +37,11 @@ export function createEastbank({group,fade,groundLayer,asphalt,colliders}){
  const pave=MAP.paving.filter(p=>p.kind!=='island'),islands=MAP.paving.filter(p=>p.kind==='island');
  const paving=new THREE.Mesh(quads(pave,-.045),groundLayer(asphalt,-.045));paving.name='eastbank-paving';paving.receiveShadow=true;root.add(paving);
  if(islands.length){const slab=new THREE.Mesh(quads(islands,-.044),groundLayer(new THREE.MeshStandardMaterial({color:'#9b9b93',roughness:.95}),-.044));slab.name='eastbank-pump-island';slab.receiveShadow=true;root.add(slab)}
- // painted bays: a line between neighbours and at both ends, 0.12 m wide, and one along the back
+ // painted bays: a line between neighbours and at both ends, 0.12 m wide, and one along the back. The paint is a ground layer too (its own depth bias, above the asphalt's), or the biased paving hides it.
  const bars=[];for(const row of MAP.bayRows){const z=row.z0+row.depth/2;
   for(let i=0;i<=row.count;i++)bars.push({x:row.x0+i*row.width,z,w:.12,d:row.depth});
   bars.push({x:row.x0+row.count*row.width/2,z:row.back==='south'?row.z0+row.depth:row.z0,w:row.count*row.width+.12,d:.12})}
- const paint=new THREE.InstancedMesh(new THREE.BoxGeometry(1,.012,1),new THREE.MeshStandardMaterial({color:'#ecebe0',roughness:.9}),Math.max(1,bars.length)),m4=new THREE.Matrix4(),at=new THREE.Vector3(),q=new THREE.Quaternion(),s=new THREE.Vector3();
+ const paint=new THREE.InstancedMesh(new THREE.BoxGeometry(1,.012,1),groundLayer(new THREE.MeshStandardMaterial({color:'#ecebe0',roughness:.9}),-.037),Math.max(1,bars.length)),m4=new THREE.Matrix4(),at=new THREE.Vector3(),q=new THREE.Quaternion(),s=new THREE.Vector3();
  bars.forEach((b,i)=>paint.setMatrixAt(i,m4.compose(at.set(b.x,-.037,b.z),q.identity(),s.set(b.w,1,b.d))));paint.count=bars.length;paint.name='eastbank-bays';paint.receiveShadow=true;root.add(paint);
 
  const canopies=[]; // the forecourt roof(s): hidden while the player stands under one (the roof would block the view into the station)

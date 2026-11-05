@@ -26,7 +26,7 @@ html=html.replace(/<script type="module" src="[^"]+"><\/script>/,loader);
 html=html.replace(/href="(?:releases\/[^/"]+\/)?style\.css[^"]*"/,`href="releases/${version}/style.css"`);
 html=html.replace(/releases\/[^/'"]+\/game\.js/g,`releases/${version}/game.js`);
 // Version shown under the logo.
-html=html.replace(/(LIVING NEIGHBORHOOD \/ )\d+\.\d+\.\d+/,`$1${version}`);
+html=html.replace(/(LIVING NEIGHBORHOOD \/ )\d+\.\d+\.\d+/g,`$1${version}`);
 if(!html.includes(`releases/${version}/game.js`)||!html.includes(`releases/${version}/style.css`)){console.error('Could not update dist/index.html to the new release paths.');process.exit(1)}
 await writeFile('dist/index.html',html);
 await writeFile('dist/_headers','/\n  Cache-Control: no-cache\n/index.html\n  Cache-Control: no-cache\n/releases/*\n  Cache-Control: public, max-age=31536000, immutable\n');

@@ -191,6 +191,8 @@ float fadeBayer(vec2 p){ivec2 i=ivec2(mod(p,4.0));int n=i.x+i.y*4;
 }
 
 // options.label(text,x,y,z,width,rot,bg,fg,height) draws a sign (game.js's label helper).
+// The dealership sign's picture board: the two vehicle pictures side by side on the board's own canvas, drawn once they have loaded (the small module is imported only when this sign exists).
+async function paintSignPictures(mesh){try{const {SIGN_PICTURES}=await import('./sign-pictures.js'),c=mesh.material.map.image,ctx=c.getContext('2d'),imgs=(await Promise.all(SIGN_PICTURES.map(src=>new Promise(r=>{const i=new Image();i.onload=()=>r(i);i.onerror=()=>r(null);i.src=src})))).filter(Boolean),h=c.height*.94,w=h*1.6,gap=c.width*.04,x0=(c.width-imgs.length*w-(imgs.length-1)*gap)/2;imgs.forEach((i,k)=>ctx.drawImage(i,x0+k*(w+gap),(c.height-h)/2,w,h));mesh.material.map.needsUpdate=true}catch(e){console.warn('sign pictures',e)}}
 export function createWorld(scene,{label,cullRadius}={}){
  let fountainParts=null,townTime=0;
  const layout=worldLayout(),colliders=createColliders(),fade=createSightlineFade();
@@ -422,7 +424,7 @@ export function createWorld(scene,{label,cullRadius}={}){
  });
  for(const sign of MAP.signs){
   const post=new THREE.Mesh(new THREE.BoxGeometry(.18,3.4,.18),timber);post.position.set(sign.x,1.7,sign.z);post.castShadow=true;post.name='sign-post';group.add(post);colliders.circle(sign.x,sign.z,.16);
-  if(label)for(const board of sign.boards)label(board.text,sign.x,board.y,sign.z+.12,4.4,sign.yaw,'#3a2f22','#f1ebd9',.62);
+  if(label)for(const board of sign.boards){const mesh=label(board.text||'',sign.x,board.y,sign.z+.12,4.4,sign.yaw,board.bg||'#3a2f22',board.fg||'#f1ebd9',board.h||.62);if(board.pictures&&mesh&&typeof Image==='function')paintSignPictures(mesh)} // a board with `pictures` shows the two Riden Deals vehicle pictures (sign-pictures.js, imported only now)
  }
  // Driveways and front paths: flat concrete and paving just above the grass and just under the road they join.
  {const concrete=new THREE.MeshStandardMaterial({color:'#8f9396',roughness:.95}),paving=new THREE.MeshStandardMaterial({color:'#b9b3a4',roughness:.9});

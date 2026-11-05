@@ -1,6 +1,10 @@
 import {createStoreUI} from './store.js';
 import {createWorld,zoneAt,isWalkable,footingAt,standHeight} from './world.js';
 import {heightAt} from './height.js';
+import {slabOutline,cornerRegion} from './junctions.js';
+import {deliverDue,takeDelivery,placeOrder,setMainHome,waitingHomes,waiting,dropSpot,homesHeld,STUDIO_ID,buyVehicle,orderVehicle,displayColour,vehicleLabel,VEHICLE_PRICE} from './orders.js';
+import {createParcels} from './parcels.js';
+import {SURFACE_LABEL,surfaceSpeed} from './vehicle.js';
 import {worldDoors,doorOf,propertyById} from './properties.js';
 import {buildHouseRoom} from './interiors.js';
 import {propertyTransaction,heldIds,listingOf} from './ownership.js';
@@ -43,6 +47,8 @@ import {CARRY,CARRY_DIR,CARRY_POLE,GRIP,CHOP_TIMING,chopPose} from './chop-path.
 import {createPedestrians,createVehicles} from './neighborhood.js';
 import {createDriving} from './driving.js';
 import {createVehicleHud,vehicleHudModel} from './vehicle-hud.js';
+import {defaultColour} from './paint.js';
+import {sleepThrough} from './sleep.js';
 import {createFuelStation} from './fuel-station.js';
 import {sell,fillCan,pour,canText,CAN_CAPACITY_MGAL,STEP_MGAL,FLOW_MGAL_PER_S,REACH_M,USE_RANGE_M,fuelText,fuelTitle,fuelName,gallons} from './fuel.js';
 import * as THREE from './vendor/three.module.js';
@@ -75,7 +81,12 @@ function label(text,x,y,z,width=5,rot=0,bg='#243e3b',fg='#f1ebd9',height=width/4
  sign.position.set(x,y,z);sign.rotation.y=rot;scene.add(sign);return sign;
 }
 
-box(110,.12,19,0,-.03,6,'#535d60');box(16,.13,120,-30,-.02,0,'#535d60');box(92,.25,5,8,.06,-6,'#b7b6a8');box(92,.25,5,8,.06,18,'#b7b6a8');box(5,.26,84,-19,.06,-18,'#b7b6a8');
+box(110,.12,19,0,-.03,6,'#535d60');box(16,.13,120,-30,-.02,0,'#535d60');// The city's own pavements (the first MAP.pavements entries, the ones world.js does not draw): raised slabs whose inside corners are rounded where MAP.roundedCorners say so, and the little
+// patches of street that fill those corners (junctions.js). The slab is 0.25 m thick, its top 0.185 m up, as before.
+{const pavementColour=mat('#b7b6a8'),streetColour=mat('#535d60'),outline=pts=>new THREE.Shape(pts.map(([x,z])=>new THREE.Vector2(x,-z)));
+ const solid=(pts,y,depth,material,name)=>{const m=new THREE.Mesh(new THREE.ExtrudeGeometry(outline(pts),{depth,bevelEnabled:false}),material);m.rotation.x=-Math.PI/2;m.position.y=y;m.castShadow=false;m.receiveShadow=true;m.name=name;scene.add(m);return m};
+ for(const p of MAP.pavements.filter(p=>!p.draw))solid(slabOutline(p,MAP.roundedCorners),-.065,.25,pavementColour,'city-pavement');
+ for(const c of MAP.roundedCorners)solid(cornerRegion(c),-.1,.14,streetColour,'street-corner-'+c.id)}
 for(let x=-48;x<55;x+=8){if(x<-40||x>-20)box(3,.02,.14,x,.05,6,'#d9d5bb')}for(let z=-47;z<55;z+=8)if(z<-8||z>20)box(.14,.02,3,-30,.06,z,'#d9d5bb');for(let i=0;i<7;i++){box(.85,.025,7,-18+i*1.55,.06,6,'#dfdfd1');box(8,.025,.9,-30,.06,-7+i*1.6,'#dfdfd1')}
 function building(x,z,w,d,h,c,name,kind=null){const before=scene.children.length;if(kind){const shell=box(w,h-3.5,d,x,3.5+(h-3.5)/2,z,c);shopShells[kind].push(shell);{const gap=MAP.shops[kind].doorway.halfWidth;colliders.push({x:x-(w/2+gap)/2,z,hx:(w/2-gap)/2,hz:d/2},{x:x+(w/2+gap)/2,z,hx:(w/2-gap)/2,hz:d/2})} // the doorway is open ground
  for(const side of [-1,1])shopShells[kind].push(box(1.5,3.5,10,x+side*6.75,1.75,MAP.shops[kind].interior.origin.z,c));}else box(w,h,d,x,h/2,z,c,true);box(w+.35,.35,d+.35,x,h+.1,z,'#d6d2c4');box(w+.4,.22,d+.4,x,3.6,z,'#d6d2c4');const front=z+d/2+.025;for(let xx=x-w/2+1.4;xx<x+w/2-.7;xx+=2.5)for(let yy=5;yy<h-1;yy+=2.8){box(1.1,1.65,.08,xx,yy,front,'#435d68');box(1.32,.12,.22,xx,yy-.85,front+.08,'#d1c6b1')}if(name){if(name==='OAK STREET APARTMENTS')label(name,x,3.96,front+.24,7,0,'#243e3b','#f1ebd9',.42);else if(kind)label(name,x,3.96,front+.24,7,0,'#243e3b','#f1ebd9',.42);else label(name,x,3,front+.12,Math.min(w-1,7));if(!kind)for(let xx=x-w/2+1.5;xx<x+w/2;xx+=3)box(1.8,1.9,.1,xx,1.25,front,'#3d555a')}if(kind){shopShells[kind]=[...new Set([...shopShells[kind],...scene.children.slice(before)])];cameraSolids.push(shopShells[kind][0]);}}
@@ -85,7 +96,7 @@ for(const b of MAP.buildings)building(b.x,b.z,b.w,b.d,b.h,b.color,b.name,b.shop)
 const entrance={x:MAP.studio.x,z:MAP.studio.doorZ,radius:3.3};{const sx=MAP.studio.x,sz=MAP.studio.doorZ;box(2.2,2.7,.18,sx,1.35,sz-.11,'#213a3c');box(.08,2.3,.05,sx,1.3,sz+.02,'#aebeb5');box(.12,.25,.08,sx+.6,1.3,sz+.07,'#e3cf93');box(3.6,.18,1.8,sx,3.05,sz+.45,'#374e46');label('18',sx,2.83,sz+.09,.45,0,'#213a3c','#e3cf93',.16)} // the studio's door, placed by the map
 const trees=[],lampMeshes=[]; // trees: the camera's list of fading hand-built trees. Empty now: every tree is a Quaternius model that dissolves with the sightline shader (world.js).
 // Oak Street's trees. Kept clear of shop signs, doorways and the crosswalk approach. They are placed as models once the world exists (below).
-const OAK_TREES=[[-9,-4.5],[10,-4.5],[28,-4.5],[47,-4.5],[-14,19],[7,19],[32,19],[49,19],[-18,-31],[-18,-43],[-43,10]];
+const OAK_TREES=[[-9,-4.5],[10,-4.5],[28,-4.5],[43,-6.5],[-14,19],[7,19],[32,19],[49,19],[-18,-31],[-18,-43],[-43,18]]; // tests/street-trees.mjs: none may stand on a road
 function lamp(x,z){const post=box(.12,5,.12,x,2.5,z,'#354342');post.material=post.material.clone();post.material.transparent=true;lampMeshes.push(post);box(1,.15,.55,x+.35,5,z,'#394644');box(.75,.04,.4,x+.35,4.9,z,'#f2e4b7')}[-10,15,42].forEach(x=>{lamp(x,-4.6);lamp(x,17)});
 const pedestrians=createPedestrians(scene);
 for(let x of[9,27]){box(2,.18,.7,x,.65,17.5,'#876e50');box(2,.55,.13,x,1,17.85,'#876e50');box(.12,.7,.55,x-.8,.3,17.5,'#394a42');box(.12,.7,.55,x+.8,.3,17.5,'#394a42')}box(.8,1.2,.8,11,.6,-4.5,'#435c4f',true);
@@ -103,6 +114,7 @@ document.addEventListener('visibilitychange',()=>audio.setActive(!document.hidde
 const vehicles=createVehicles(scene,colliders,world.fade); // the parked cars are converted models; they need the world's sightline fade
 for(const t of world.addBroadleaves(OAK_TREES.map(([x,z])=>({x,z,y:standHeight(x,z)}))))colliders.push({x:t.x,z:t.z,hx:t.radius,hz:t.radius}); // trunks block walking
 // 'For rent or sale' signs on the lawns of the houses you can rent or buy; each disappears while you hold the house (synced from the ownership state in frame()).
+const parcels=createParcels(scene,{colliders}); // the drop spots for Store orders (orders.js): a parcel locker by the studio door, a parcel box in front of each house
 const houseSigns=createHouseSigns({scene,properties:MAP.properties,doorOf,surfaceAt:(x,z)=>terrain().surfaceAt(x,z),GRASS:SURFACE.GRASS,blocked:(x,z)=>!isWalkable(x,z)||world.blocked(x,z)||colliders.some(b=>Math.abs(x-b.x)<b.hx+.33&&Math.abs(z-b.z)<b.hz+.33),solids:colliders});let signsFor=null; // blocked: the outdoor test only, because the game's blocked() reads state that is set up further down
 sun.target.position.set(0,0,0);scene.add(sun.target);
 initializeState(loadProfile());
@@ -256,8 +268,8 @@ function candidates(){const all=[],add=(id,point,anchor,label,run,range=1.5,key)
  if(shop==='cafe'&&!['off','clockout'].includes(GameState.progress.cafe.stage)){const task=cafeTask(GameState.progress);add('cafe-task',task,()=>GameState.progress.cafe.stage==='order'||GameState.progress.cafe.stage==='serve'?entityPoint(shops.cafe.customer.group):worldPoint({...task,y:1.2}),task.title,showCafe,1.35)}return all}
  if(inside){const K=home.KITCHEN,B=home.BED,floor=home.room.floor||0,up=floor*(home.room.FLOOR_HEIGHT||0),st=home.STAIRS;
   if(floor===0){add('exit',home.EXIT,()=>worldPoint(home.kind==='studio'?{x:0,y:1.4,z:5.3}:{x:home.EXIT.x,y:1.4,z:home.EXIT.z+.15}),'Go outside',leaveHome);
-   add('cook',{x:K.x,z:K.z},()=>worldPoint({x:K.x,y:1.3,z:K.z-1}),'Prepare a meal',()=>station({x:K.x,y:1.4,z:K.z-1},'Kitchen',GameState.progress.life.groceries+' grocery packs in your bag.',[{label:'Cook a meal',run:()=>useLife('cook')}]))}
-  if(floor===(home.BED_FLOOR||0))add('bed',B,()=>worldPoint({...B,y:.8+up}),'Sleep',()=>station({...B,y:1+up},'Take a rest?','Restore your energy fully. The clock will stay where it is.',[{label:'Rest and recover',run:()=>changeHousing('rest')}]),1.4);
+   add('cook',{x:K.x,z:K.z},()=>worldPoint({x:K.x,y:1.3,z:K.z-1}),'Prepare a meal',()=>station({x:K.x,y:1.4,z:K.z-1},'Kitchen',GameState.progress.life.groceries+' grocery packs in your inventory.',[{label:'Cook a meal',run:()=>useLife('cook')}]))}
+  if(floor===(home.BED_FLOOR||0))add('bed',B,()=>worldPoint({...B,y:.8+up}),'Sleep',()=>station({...B,y:1+up},'Take a rest?',(multiplayer.online?'Restore your energy fully. The clock keeps running while you are online.':'Sleep until 6:00 AM and restore your energy fully. You wake a little hungry and thirsty.'),[{label:'Rest and recover',run:()=>changeHousing('rest')}]),1.4);
   if(st){if(floor===0)add('up',{x:st.x,z:st.footZ},()=>worldPoint({x:st.x,y:1.4,z:st.footZ}),'Go upstairs',()=>changeFloor(1),1.5);else add('down',{x:st.x,z:st.topZ},()=>worldPoint({x:st.x,y:1.4+up,z:st.topZ}),'Go downstairs',()=>changeFloor(0),1.5)}
   return all}
  const gig=GameState.progress.activeJob;
@@ -285,7 +297,9 @@ function candidates(){const all=[],add=(id,point,anchor,label,run,range=1.5,key)
      add('can-pour',pt,cap,empty?'Gas can empty':full?'Tank full':right?`Hold to pour · ${text}`:`Wrong fuel · takes ${fuelName(info.type)}`,()=>toast(say),REACH_M,!empty&&right&&!full?'F':'')}
     else add('fuel-info',pt,cap,text,()=>toast(`${text}. Take a ${fuelName(info.type)} nozzle at a pump first.`),REACH_M,'')}}
   if(!fuel.held)
-  for(const d of driving.doors())add('drive-'+d.id+'-'+d.seat,{x:d.x,z:d.z},()=>new THREE.Vector3(d.x,1.3,d.z),(d.seat==='driver'?'Drive the ':'Ride in the ')+d.name.replace(/^Eastbank /,''),()=>enterVehicle(d.id,d.seat),2);
+  for(const d of driving.doors()){const name=d.name.replace(/^Eastbank /,'');
+   if(!d.display)add('drive-'+d.id+'-'+d.seat,{x:d.x,z:d.z},()=>new THREE.Vector3(d.x,1.3,d.z),(d.seat==='driver'?'Drive the ':'Ride in the ')+name,()=>enterVehicle(d.id,d.seat),2);
+   else if(d.seat==='driver'&&d.colour)add('buy-'+d.id,{x:d.x,z:d.z},()=>new THREE.Vector3(d.x,1.3,d.z),'Buy the '+vehicleLabel(d.model,d.colour)+' · '+money(VEHICLE_PRICE[d.model]),()=>buyAtLot(d.id),2)}
   if(sawmillCtl?.ready){const pr=GameState.progress; // the switch, the bench (a carried log goes in), the belt's end (planks come off) and planks put down on the ground
    add('sawmill-switch',sawmillCtl.switchPoint,sawmillCtl.promptPoint,switchLabel(sawmillState),toggleSawmill,2.2);
    if(pr.carry?.kind==='log')add('sawmill-feed',sawmillCtl.logPoint,sawmillCtl.logPrompt,'Put the log on the bench',feedSawmill,2.4);
@@ -300,7 +314,8 @@ function candidates(){const all=[],add=(id,point,anchor,label,run,range=1.5,key)
   }
   for(const log of progress.logs)if(!pendingLogs.has(log.id)&&Math.hypot(log.x-me.position.x,log.z-me.position.z)<2.4)add('log-'+log.id,{x:log.x,z:log.z},()=>new THREE.Vector3(log.x,.5+heightAt(log.x,log.z)+(world.floorAt(log.x,log.z)??0),log.z),'Pick up wood log',()=>pickUpLog(log.id),1.8);
  }
- for(const car of vehicles)add(car.id,car,()=>new THREE.Vector3(car.x,1.3,car.z),'Inspect '+car.name,()=>showWorld(()=>new THREE.Vector3(car.x,1.4,car.z),car.name,'Parked · not owned. Driving will be available in a future update.'),1.6);return all;
+ for(const h of waitingHomes(GameState.progress)){const d=dropSpot(h),n=waiting(GameState.progress,h);if(d&&Math.hypot(d.x-me.position.x,d.z-me.position.z)<3)add('parcel-'+h,{x:d.x,z:d.z},()=>new THREE.Vector3(d.x,d.kind==='locker'?1.1:.5,d.z),'Collect your order · '+n+(n===1?' thing':' things'),()=>collectOrder(h),2.2)}
+  for(const car of vehicles)add(car.id,car,()=>new THREE.Vector3(car.x,1.3,car.z),'Inspect '+car.name,()=>showWorld(()=>new THREE.Vector3(car.x,1.4,car.z),car.name,'Parked · not owned. Driving will be available in a future update.'),1.6);return all;
 }
 function toggleSawmill(){if(sawmillCtl.cutting){toast('Wait for the cut to finish.');return}const r=switchSawmill(sawmillState,undefined,GameState.progress.belt);if(r.error){toast(r.error);return}sawmillState=r.state;sawmillCtl.setOn(sawmillState.on);audio.click(sawmillCtl.switchPoint,{x:me.position.x,z:me.position.z})}
 // A log goes into the saw only while it is on and the belt has room; the stack is counted at once and the Cut clip shows it (carry.js).
@@ -361,7 +376,7 @@ function updateNozzlePose(dt){
  if(nozzlePose>0){avatar.reach('R',NOZZLE_HAND,nozzlePose,NOZZLE_POLE);avatar.setHandCurl('R',nozzlePose*.85)}else if(was&&!GameState.progress.equipped)avatar.reach('R',null,0);
 }
 // Filling: while you HOLD F with a nozzle out and a stopped vehicle's filler cap within reach, fuel flows at FLOW_MGAL_PER_S, in whole steps, paid as it goes.
-// The gas can in hand: hold F at a pump to fill it (paid as it goes), or at a tank cap to pour it in (free). Rules: fillCan and pour (fuel.js); the can's fuel is saved on its bag slot.
+// The gas can in hand: hold F at a pump to fill it (paid as it goes), or at a tank cap to pour it in (free). Rules: fillCan and pour (fuel.js); the can's fuel is saved on its inventory slot.
 let canAt=null;
 function canTick(dt){
  if(inside||shop||driving.active||!active||modal)return;
@@ -409,6 +424,7 @@ function fuelTick(dt){
 function enterVehicle(id,seat='driver'){
  if(driving.active||inside||shop||consuming||putting||actionBusy())return;
  if(GameState.progress.carry){toast('Your hands are full. Put it down first (X).');return}
+ if(driving.byId.get(id)?.display){toast('It is not yours. Buy it at the dealership lot or order it on your phone.');return}
  if(!driving.enter(id,seat))return;fuel.putBack();if(driving.active.fuelMgal>0||!driving.active.spec.fuel){audio.ignition(me.position,listenerAt(),{tier:driving.active.cls.tier});const tip=driving.exhaust();if(tip)smoke.burst(tip,START_PUFFS[driving.active.cls.tier]??6)}
  const at=driving.seat();me.position.x=at.x;me.position.z=at.z;me.rotation.y=driving.yaw;keys.clear();look.resetMotion();
  yaw=driving.yaw+Math.PI;pitch=driving.cameraPitch();zoom=zoomTarget=driving.cameraZoom();driveIdle=9;persist();
@@ -422,7 +438,7 @@ function exitVehicle(){
  me.rotation.y=f.state.yaw+(driving.seatSide==='passenger'||seatWas==='passenger'?-Math.PI/2:Math.PI/2);keys.clear();look.resetMotion();pitch=.38;zoom=zoomTarget=7;persist();
 }
 function updateWorldUI(){
- vehicleHud(vehicleHudModel({driving:driving.active,seat:driving.seatSide,name:driving.active?.spec.name,speed:driving.speed,fuel:driving.active?driving.fuelOf(driving.active.spec.id):null}));
+ vehicleHud(vehicleHudModel({driving:driving.active,seat:driving.seatSide,name:driving.active?.spec.name,speed:driving.speed,fuel:driving.active?driving.fuelOf(driving.active.spec.id):null,ground:driving.active?(()=>{const s=terrain().surfaceAt(driving.active.state.x,driving.active.state.z);return {label:SURFACE_LABEL[s]||'Ground',factor:surfaceSpeed(s,driving.active.cls)}})():null}));
  camera.updateMatrixWorld(true);const hit=chooseInteraction(candidates(),me.position,me.rotation.y);selectedInteraction=hit;
  { const target=chopping?chopping.tree:hit?.id?.startsWith('tree-')?hit.point:null;world.setTarget(active&&!modal?target:null); }
  const p=hit?screenAnchor(hit.anchor(),camera,innerWidth,innerHeight,THREE.Vector3):null;$('prompt').hidden=!active||modal||!!busy||!!chopping||!p||!!driving.active;
@@ -458,7 +474,7 @@ function updateWork(dt){
  $('cash').textContent=money(GameState.progress.cash);$('objective').querySelector('.eyebrow').textContent=isCafe&&c.stage!=='off'?'ON SHIFT · ALDER COFFEE':'NEIGHBORHOOD';$('objective').querySelector('h2').textContent=isCafe?task.title:SHOPS[shop].name;$('objective').querySelector('p').textContent=isCafe?(c.stage==='off'?'Speak to Elena at the counter about café work. $24 per shift. Start 8 AM–4 PM.':'Orders served: '+c.served+'/2 · '+(c.stage==='brew'||c.stage==='serve'?'Ticket: '+ORDERS[c.customer].drink+'. ':'')+'Follow the floor marker. Clock out to collect wages.'):'Visit the cashier for groceries. Open 7 AM–10 PM.';$('distance').textContent=busy?'Working… '+Math.round(busy.elapsed/busy.duration*100)+'%':'Talk at the counter (E or click) · walk out the front door to leave';$('direction').style.transform='none';$('prompt').hidden=!active||modal||!!busy||(!exit&&!counter&&!atTask);$('prompt').querySelector('span').textContent=atTask?task.title:exit?'Go outside':isCafe?'Order lunch':'Buy groceries';marker.visible=false;workMarker.visible=isCafe;workMarker.position.set(task.x,.04,task.z);parcel.visible=carrying;return}
 
 
- if(inside){$('cash').textContent=money(GameState.progress.cash);const house=home.kind==='house',held=GameState.progress.properties?.[home.id];$('objective').querySelector('.eyebrow').textContent=house?'YOUR HOME':'YOUR FIRST HOME';$('objective').querySelector('h2').textContent=house?home.name:'Make yourself at home.';$('objective').querySelector('p').textContent=house?'Rest, cook, and make yourself at home. '+(held?.tenure==='rent'?'Rent '+money(listingOf(home.id).rentCents)+' every 7 days; next due in '+Math.max(0,held.nextBillDay-GameState.progress.housing.day)+' days. Pay or leave in the Homes app.':'You own this home.'):'Rest, cook, and make yourself at home. Rent: $60 / week. Next bills: '+weekday(GameState.progress.housing.nextBillDay)+' in '+dueIn(GameState.progress.housing)+' days.';$('distance').textContent=house&&home.STAIRS?'Bed: rest · Stairs: go up or down · Door: go outside':'Bed: rest · Door: go outside';$('direction').style.transform='none';
+ if(inside){$('cash').textContent=money(GameState.progress.cash);const house=home.kind==='house',held=GameState.progress.properties?.[home.id];$('objective').querySelector('.eyebrow').textContent=house?'YOUR HOME':'YOUR FIRST HOME';$('objective').querySelector('h2').textContent=house?home.name:'Make yourself at home.';$('objective').querySelector('p').textContent=house?'Rest, cook, and make yourself at home. '+(held?.tenure==='rent'?'Rent '+money(listingOf(home.id).rentCents)+' every 7 days; next due in '+Math.max(0,held.nextBillDay-GameState.progress.housing.day)+' days. Pay or leave in the Housing app.':'You own this home.'):'Rest, cook, and make yourself at home. Rent: $60 / week. Next bills: '+weekday(GameState.progress.housing.nextBillDay)+' in '+dueIn(GameState.progress.housing)+' days.';$('distance').textContent=house&&home.STAIRS?'Bed: rest · Stairs: go up or down · Door: go outside':'Bed: rest · Door: go outside';$('direction').style.transform='none';
   const floor=home.room.floor||0,st=home.STAIRS,exit=floor===0&&Math.hypot(me.position.x-home.EXIT.x,me.position.z-home.EXIT.z)<1.5,bed=floor===(home.BED_FLOOR||0)&&Math.hypot(me.position.x-home.BED.x,me.position.z-home.BED.z)<1.4,kitchen=floor===0&&Math.hypot(me.position.x-home.KITCHEN.x,me.position.z-home.KITCHEN.z)<1.5,stairs=!!st&&Math.hypot(me.position.x-st.x,me.position.z-(floor===0?st.footZ:st.topZ))<1.5;$('prompt').hidden=!active||modal||(!exit&&!bed&&!kitchen&&!stairs);$('prompt').querySelector('span').textContent=exit?'Go outside':kitchen?'Prepare a meal':stairs?(floor===0?'Go upstairs':'Go downstairs'):'Rest and recover';marker.visible=false;parcel.visible=carrying;return}
  $('cash').textContent=money(GameState.progress.cash);$('deliveryCount').textContent=GameState.progress.completed+' '+(GameState.progress.completed===1?'delivery':'deliveries')+' completed';
  $('objective').querySelector('.eyebrow').textContent=carrying?'ORDER COLLECTED':'DELIVERY WORK';
@@ -566,6 +582,15 @@ function drawCreator(){
 }
 
 
+// Store orders (orders.js): a parcel moves from the queue to its home's drop spot when its time comes, and is collected there into the inventory.
+let orderClock=0;
+function tickOrders(dt){orderClock+=dt;if(orderClock<.5)return;orderClock=0;const had=driving.fleet.length,before=new Set(waitingHomes(GameState.progress)),next=deliverDue(GameState.progress);
+ if(next!==GameState.progress){GameState.progress=next;driving.sync(next.vehicles||[]);persist();const fresh=waitingHomes(next).filter(h=>!before.has(h))[0];if(fresh)toast('Your order has arrived: collect it from the '+(fresh===STUDIO_ID?'parcel locker by the studio door.':'parcel box in front of the door.'))}
+ // vehicles: owned ones come into the world (a delivery just made one), the lot's display vehicles show a colour that is in stock, and a bought vehicle takes its place on the lot
+ {driving.sync(GameState.progress.vehicles||[]);if(driving.fleet.length>had){const v=driving.fleet[driving.fleet.length-1];toast('Your '+vehicleLabel(v.spec.model,v.colour)+' has been delivered: it is parked on your driveway.')}
+  for(const f of driving.fleet)if(f.display){const standing=driving.fleet.some(o=>!o.display&&o.present&&Math.hypot(o.state.x-f.spec.home.x,o.state.z-f.spec.home.z)<8);driving.setDisplay(f.spec.id,standing?null:displayColour(GameState.progress,f.spec.model))}} parcels.update(GameState.progress)}
+function buyAtLot(id){const f=driving.byId.get(id);if(!f?.display||!f.colour)return;const r=buyVehicle(GameState.progress,f.spec.model,f.colour);if(r.error){toast(r.error);return}GameState.progress=r.state;driving.sync(r.state.vehicles);persist();toast(r.message)}
+function collectOrder(home){const r=takeDelivery(GameState.progress,home);if(r.error){toast(r.error);return}GameState.progress=r.state;persist();toast(r.message)}
 function commitInventory(result){
  if(result.error)return result;
  GameState.progress=result.state;persist();return result;
@@ -626,7 +651,7 @@ function chopNext(){
  const next=world.cuttableNear(me.position.x,me.position.z,CHOP_RANGE).sort((a,b)=>Math.hypot(a.x-me.position.x,a.z-me.position.z)-Math.hypot(b.x-me.position.x,b.z-me.position.z))[0];
  if(next)startChop(next,{quiet:true});
 }
-// Whatever is picked up goes in the hands or on the shoulder, so the tool in the hand is put away first (it stays in the bag and on the hotbar).
+// Whatever is picked up goes in the hands or on the shoulder, so the tool in the hand is put away first (it stays in your inventory and on the hotbar).
 function stowTool(){const id=GameState.progress.equipped;if(id)toggleEquip(id,{silent:true})}
 function pickUpLog(id){
  beginBend(()=>{
@@ -663,7 +688,7 @@ function updateEquipped(dt){
  if(idle){carryWeight=Math.min(1,carryWeight+dt*4);avatar.reach('R',CARRY,carryWeight,CARRY_POLE)}else if(!chopping)carryWeight=0;
  avatar.setTwoHanded(chopping?1:carryWeight); // both hands are on the handle while carrying and swinging
 }
-// Hotbar: every tool and consumable you own, in bag order. Number keys (or a click) equip a tool or use food and drink.
+// Hotbar: every tool and consumable you own, in inventory order. Number keys (or a click) equip a tool or use food and drink.
 function refreshHotbar(){
  const p=GameState.progress,items=hotbarItems(p),signature=items.map(h=>h.item.id+':'+h.quantity).join()+'|'+p.equipped;
  if(signature===hotbarSignature)return;
@@ -747,12 +772,10 @@ storeUI=createStoreUI({document,getState:()=>GameState,
  onWork:marketWork
 });
 // Phone owns only its overlay; existing modal guards stop WASD and mouse look.
-phone=createPhone({document,getState:()=>GameState,onHomeAction:(action,id)=>{const r=propertyTransaction(GameState.progress,action,id);if(r.error)return {error:r.error};GameState.progress=r.state;persist();return {message:r.message}},
+phone=createPhone({document,getState:()=>GameState,onOrder:(cart,home)=>{const r=placeOrder(GameState.progress,cart,home);if(r.error)return {error:r.error};GameState.progress=r.state;persist();return {message:r.message}},onOrderVehicle:(model,colour,home)=>{const r=orderVehicle(GameState.progress,model,colour,home);if(r.error)return {error:r.error};GameState.progress=r.state;persist();return {message:r.message}},onSetMain:id=>{const r=setMainHome(GameState.progress,id);if(r.error)return {error:r.error};GameState.progress=r.state;persist();return {message:r.message}},onHomeAction:(action,id)=>{const r=propertyTransaction(GameState.progress,action,id);if(r.error)return {error:r.error};GameState.progress=r.state;persist();return {message:r.message}},
  canOpen:()=>active&&!modal&&!creatorOpen&&!actionBusy(),
  onOpen:()=>{clearWorldPanel();modal=true;keys.clear();look.release()},
  onClose:()=>{modal=false;keys.clear();look.resetMotion()},
- onDrainChange:value=>{setStatDrainMultiplier(value);persist()},
- onGrantItem:id=>commitInventory(addItem(GameState.progress,id)),
  onRefresh:()=>{const next=refreshGigBoard(GameState.progress);if(next!==GameState.progress){GameState.progress=next;persist()}},
  onAccept:id=>{
    const result=acceptContract(GameState.progress,id);
@@ -875,8 +898,8 @@ function updateSleep(dt){
  // Fade in, hold black for one second, then fade out. Clock/life ticks are paused.
  $('sleepFade').style.opacity=String(sleepElapsed<.25?sleepElapsed/.25:sleepElapsed<1.25?1:Math.max(0,(1.5-sleepElapsed)/.25));
  if(sleepElapsed>=1.5){
-   GameState.progress.life={...normalizeLife(GameState.progress.life),energy:100};
-   sleepElapsed=null;$('sleepFade').hidden=true;modal=false;keys.clear();look.resetMotion();persist();toast('Rested · Energy restored');
+   const slept=sleepThrough(GameState.progress,{online:multiplayer.online,drainMultiplier:GameState.progress.settings?.statDrainMultiplier});GameState.progress=expireCafe(slept.state);
+   sleepElapsed=null;$('sleepFade').hidden=true;modal=false;keys.clear();look.resetMotion();persist();toast(slept.message);
  }
 }
 
@@ -973,7 +996,7 @@ look.tick(view);
 if(worldPanel?.actor&&!$('dialog').hidden){const actor=worldPanel.actor,pa=getMeWorldPosition(new THREE.Vector3()),pb=actor.getWorldPosition(new THREE.Vector3()),mid=pa.clone().add(pb).multiplyScalar(.5);const angle=Math.atan2(pa.x-pb.x,pa.z-pb.z);actor.rotation.y=angle;me.rotation.y=angle+Math.PI;worldPlayer.position.copy(mid);if(shop)shops[shop].camera(worldPlayer,angle+.45,.32,5.8,view);else updateCamera(worldPlayer,angle+.45,.32,5.8,view)}else if(shop){getMeWorldPosition(worldPlayer.position);shops[shop].camera(worldPlayer,yaw,pitch,zoom,view);}else if(inside)(home.camera||indoorCamera)(me,yaw,pitch,zoom,view);else updateCamera(me,yaw,pitch,zoom,view);
 const daylight=Math.max(.12,Math.sin((GameState.progress.routine.minutes-360)/1440*Math.PI*2));sun.intensity=.2+daylight*2.9;scene.background.setRGB(.08+daylight*.65,.12+daylight*.67,.2+daylight*.62);scene.fog.color.copy(scene.background);
 
-updateEquipped(modal?0:view);updateCarryPose(view);updateNozzlePose(view);avatar.update(modal?0:view);if(shop)shops[shop].clerk.update(modal?0:view);updateZones(view);updateSleep(real);updateWork(view);updateGig(view);updateObjective(view);updateWorldUI();updateHomeNotices();updateRing();updateMultiplayer(now,moving,view);syncPlayerMesh();fuelHose();{const dv=driving.active,on=!!dv&&(dv.fuelMgal>0||!dv.spec.fuel)&&!modal;{const tip=dv&&on?driving.exhaust(dv):null;if(tip)smoke.emit(dv.spec.id,view,tip,exhaustRate({running:true,throttle:driving.driving&&(keys.has('KeyW')||keys.has('ArrowUp'))?1:0,speed:dv.state.speed,top:dv.cls.top,tier:dv.cls.tier}));smoke.update(view,!inside)}audio.engine(engineVoice({speed:dv?dv.state.speed:0,top:dv?dv.cls.top:10,throttle:dv&&driving.driving&&(keys.has('KeyW')||keys.has('ArrowUp'))?1:0,tier:dv?dv.cls.tier:'low',running:on}))}audio.fuel({listener:listenerAt(),at:fuel.held?fuel.held.use:canAt,level:fuelFlow,fullness:fuelFull});fuelFlow=0;canAt=null;renderer.render(inside?home.room.scene:scene,camera)}requestAnimationFrame(frame);
+updateEquipped(modal?0:view);updateCarryPose(view);updateNozzlePose(view);avatar.update(modal?0:view);if(shop)shops[shop].clerk.update(modal?0:view);updateZones(view);updateSleep(real);updateWork(view);updateGig(view);updateObjective(view);updateWorldUI();updateHomeNotices();tickOrders(real);updateRing();updateMultiplayer(now,moving,view);syncPlayerMesh();fuelHose();{const dv=driving.active,on=!!dv&&(dv.fuelMgal>0||!dv.spec.fuel)&&!modal;{const tip=dv&&on?driving.exhaust(dv):null;if(tip)smoke.emit(dv.spec.id,view,tip,exhaustRate({running:true,throttle:driving.driving&&(keys.has('KeyW')||keys.has('ArrowUp'))?1:0,speed:dv.state.speed,top:dv.cls.top,tier:dv.cls.tier}));smoke.update(view,!inside)}audio.engine(engineVoice({speed:dv?dv.state.speed:0,top:dv?dv.cls.top:10,throttle:dv&&driving.driving&&(keys.has('KeyW')||keys.has('ArrowUp'))?1:0,tier:dv?dv.cls.tier:'low',running:on}))}audio.fuel({listener:listenerAt(),at:fuel.held?fuel.held.use:canAt,level:fuelFlow,fullness:fuelFull});fuelFlow=0;canAt=null;renderer.render(inside?home.room.scene:scene,camera)}requestAnimationFrame(frame);
 
 // Development hook: open the game with ?debug to inspect state from the console (window.__city).
 if(typeof location!=='undefined'&&new URLSearchParams(location.search).has('debug'))window.__city={GameState,world,scene,camera,avatar,pedestrians,audio,sawmillCtl,holdBend:a=>{bendNow=a;avatar.setLean(a*.87);avatar.setCrouch(a*.22)},
@@ -997,9 +1020,10 @@ if(DEV_MODE){try{
   setShadows(on){renderer.shadowMap.enabled=!!on;scene.traverse(m=>{if(m.material)m.material.needsUpdate=true})}, // for finding what causes a glitch on your GPU
   setTreeFade(on){world.fade.uniforms.uFadeEnabled.value=on?1:0},
   vehicles:{ // the drivable vehicles: spawn one in front of the player (or the nearest free spot), or take it out of the world; never the one the player is in
-   list:()=>MAP.vehicles.map(v=>({id:v.id,name:v.name,present:driving.present(v.id)})),
+   list:()=>MAP.vehicles.filter(v=>v.sale!=='online').map(v=>({id:v.id,name:v.name,present:driving.present(v.id)})),
    spawn(id){const f=driving.byId.get(id);if(!f)return {error:'Unknown vehicle.'};if(driving.active===f)return {error:'You are in it.'};if(inside||shop)return {error:'Go outdoors first.'};
     const d=f.cls.hz+3.2,pose=driving.place(id,{x:me.position.x+Math.sin(me.rotation.y)*d,z:me.position.z+Math.cos(me.rotation.y)*d,yaw:me.rotation.y});if(!pose)return {error:'No free spot near you.'};persist();return {message:`${f.spec.name} is ${Math.hypot(pose.x-me.position.x,pose.z-me.position.z).toFixed(1)} m away.`}},
+   own(model,colour){const c=colour||defaultColour(model),r=buyVehicle({...GameState.progress,cash:GameState.progress.cash+(VEHICLE_PRICE[model]||0)},model,c);if(r.error)return {error:r.error};GameState.progress={...r.state,cash:GameState.progress.cash};driving.sync(GameState.progress.vehicles);persist();return {message:'ok',uid:r.vehicle.uid}},
    remove(id){const f=driving.byId.get(id);if(!f)return {error:'Unknown vehicle.'};if(driving.active===f)return {error:'You are in it. Get out first.'};if(!driving.present(id))return {error:'It is not in the world.'};driving.setPresent(id,false);persist();return {message:`${f.spec.name} removed. Spawn brings it back.`}}},
   // The interior editor: move the furniture of any house about (you do not have to rent it), see what is wrong with the layout, and save it into the code (needs `npm run dev`).
   interior:{
@@ -1045,6 +1069,8 @@ if(DEV_MODE){try{
    if(!Number.isSafeInteger(cents)||cents<=0||cents>1e9)return {error:'Money is added in whole cents, from 1 to 1,000,000,000.'};
    const cash=Math.min(1e10,GameState.progress.cash+cents);GameState.progress={...GameState.progress,cash};persist();return {cash};
   },
+  statDrain(){return GameState.progress.settings.statDrainMultiplier},
+  setStatDrain(value){setStatDrainMultiplier(value);persist();return {value:GameState.progress.settings.statDrainMultiplier}}, // the old phone Settings app's one real control, now a dev tool
   giveItem(id,quantity){
    const item=itemById(id);if(!item)return {added:0,error:'Unknown item.'};
    const count=Math.max(1,Math.min(20,Math.floor(Number(quantity))||1));let progress=GameState.progress,added=0,error=null;

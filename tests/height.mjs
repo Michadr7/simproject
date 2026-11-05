@@ -20,6 +20,12 @@ const {createDriving}=await import('../dist/driving.js'),{MAP}=await import('../
 const d=createDriving({scene:new THREE.Scene(),surface:()=>1,footing:at.standHeight,baseBlocked:()=>false,saved:[]}),v=d.fleet[0];
 assert(v&&Math.abs(v.y-(5+at.footingAt(MAP.vehicles[0].home.x,MAP.vehicles[0].home.z)))<1e-9,'a vehicle parks on the raised ground');
 setHeightFunction(null);assert.equal(heightAt(1,2),0,'reset');
+// on a bridge a vehicle follows the deck's arch, not the river valley under it: level on the crown, nose up on the ramp, riding at the deck's height
+{const {createDriving}=await import('../dist/driving.js'),w=await import('../dist/world.js'),{MAP}=await import('../dist/map-definition.js'),{bridgeRise}=await import('../dist/height.js'),b=MAP.water.bridges[0],cx=(b.x0+b.x1)/2;
+ const d=createDriving({scene:new THREE.Scene(),surface:()=>1,footing:w.standHeight,baseBlocked:()=>false,saved:[]}),f=d.fleet[0];
+ const at=z=>{f.state={x:cx,z,yaw:0,speed:0,steer:0};f.y=w.standHeight(cx,z);for(let i=0;i<120;i++)d.update(1/60)};
+ at((b.z0+b.z1)/2);assert(Math.abs(f.pitch)<.02,'level on the crown: '+f.pitch);assert(Math.abs(f.y-(BRIDGE_RISE_CHECK()-.01))<.05,'riding on the deck: y '+f.y);
+ at(b.z0+7);assert(f.pitch<-.03&&f.pitch>-.2,'facing +z on the rising north ramp the nose is up (negative pitch): '+f.pitch);function BRIDGE_RISE_CHECK(){return bridgeRise(b,(b.z0+b.z1)/2)}}
 // the river valley and the bridges: the ground dips along the river (flat bed across the water, a gentle bank, a walkable shoulder), fades out at the map ends; bridges arch over it
 {const {MAP}=await import('../dist/map-definition.js'),{valleyAt,RIVER_DEPTH,RIVER_PATHS,RIVER_WATER_Y,deckAt,bridgeRise,BRIDGE_RISE,valleyFade,distanceToRiver}=await import('../dist/height.js'),R=RIVER_PATHS[0];
  const at=(x,d)=>{const p=R.path.reduce((b,q)=>Math.abs(q.x-x)<Math.abs(b.x-x)?q:b);return [p.x-p.tz*d,p.z+p.tx*d]};

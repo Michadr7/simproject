@@ -17,3 +17,12 @@ for(const p of P){assert(p.points.length>=3,'a polygon');for(const [x,z] of p.po
 // tapers join two roads of different widths
 for(const t of P.filter(p=>p.kind==='taper')){const [a,b]=t.roads.map(id=>MAP.roads.edges.find(e=>e.id===id));assert(a.width!==b.width,'a taper is between roads of different width')}
 console.log(`Junctions: ${P.length} patches (${P.filter(p=>p.kind==='fillet').length} rounded corners, ${P.filter(p=>p.kind==='taper').length} width tapers), all road on the terrain mask, none inside a town, on paving, a plot, a building or a field.`);
+
+// Rounded kerbs inside Westside (MAP.roundedCorners): the pavement slabs lose the corner, the street gains it, and nothing overlaps.
+{const {slabOutline,cornerRegion,inPolygon}=await import('../dist/junctions.js');
+ assert(MAP.roundedCorners.length>=5);
+ for(const c of MAP.roundedCorners){const region=cornerRegion(c);assert(region.length>=8&&region[0][0]===c.x&&region[0][1]===c.z,c.id+': the region starts at the corner');
+  assert.equal(T.surfaceAt(c.x+c.sx*.6,c.z+c.sz*.6),SURFACE.STREET,c.id+': the corner is street on the terrain mask');
+  assert.notEqual(T.surfaceAt(c.x+c.sx*(c.r+1),c.z+c.sz*(c.r+1)),SURFACE.STREET,c.id+': beyond the arc it is not')}
+ for(const p of MAP.pavements.filter(p=>!p.draw)){const o=slabOutline(p,MAP.roundedCorners);assert(o.length>=4);for(const c of MAP.roundedCorners){const inside=inPolygon(o,c.x+c.sx*.5,c.z+c.sz*.5);if(o.length>4&&Math.abs(c.x-(c.sx>0?p.x0:p.x1))<1e-6)assert(!inside,'a slab does not cover its own rounded corner')}}
+ const full=slabOutline({x0:0,x1:10,z0:0,z1:5},[]);assert.deepEqual(full,[[0,0],[10,0],[10,5],[0,5]],'a slab with no rounded corners is its rectangle')}

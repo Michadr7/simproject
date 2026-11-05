@@ -58,6 +58,7 @@ export function installDevMode(api){
  const money=MONEY_STEPS.map(c=>make('button',{textContent:'+'+dollars(c).replace('.00',''),dataset:{cents:c},onclick:()=>{const r=api.addMoney(c);say(r.error||`You have ${dollars(r.cash)}.`,r.error?'error':'');refresh()}}));
 
  // Items
+ const drain=make('select',{id:'devDrain'});for(const [v,label] of [[1,'1× Normal'],[5,'5× Fast'],[10,'10× Faster'],[50,'50× Stress test']])drain.append(make('option',{value:String(v),textContent:label}));drain.value=String(api.statDrain());drain.onchange=()=>{const r=api.setStatDrain(Number(drain.value));say('Stat drain '+r.value+'×. Put it back to 1× after testing.','')}; // was the phone Settings app's one real control
  const item=make('select',{id:'devItem'}),qty=make('input',{id:'devQty',type:'number',min:'1',max:'20',value:'1'});
  for(const it of api.items)item.append(make('option',{value:it.id,textContent:`${it.icon} ${it.name}`}));
  const spawn=make('button',{id:'devSpawn',textContent:'Spawn',onclick:()=>{const r=api.giveItem(item.value,Number(qty.value));say(r.added?`Added ${r.added} × ${r.name}.${r.error?' '+r.error:''}`:r.error,r.added?'':'error');refresh()}});
@@ -115,7 +116,7 @@ export function installDevMode(api){
   make('h3',{},'Teleport'),make('div',{className:'dev-row'},place,goButton),make('div',{className:'dev-row'},x,z,goCustom),
   make('h3',{},'Time of day'),make('div',{className:'dev-row'},slider,timeLabel,make('button',{id:'devSetTime',textContent:'Set',onclick:()=>setTime(Number(slider.value))})),make('div',{className:'dev-row'},...quick),
   make('h3',{},'Money'),make('div',{className:'dev-row'},...money),
-  make('h3',{},'Spawn items'),make('div',{className:'dev-row'},item,qty,spawn),
+  make('h3',{},'Stat drain'),make('div',{className:'dev-row'},drain),make('h3',{},'Spawn items'),make('div',{className:'dev-row'},item,qty,spawn),
   make('h3',{},'Drivable vehicles'),make('div',{className:'dev-row'},vsel,vSpawn,vRemove),make('p',{className:'dev-note'},'Spawn puts the vehicle a few metres in front of you (or the nearest free spot). Remove takes it out of the world; neither works while you are in it.'),
   make('h3',{},'Rendering'),make('div',{className:'dev-row'},shadows,fade),
   make('h3',{},'Furniture'),interiorToggle,

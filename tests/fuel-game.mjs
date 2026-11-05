@@ -24,7 +24,7 @@ try{
  // A worktruck saved in the south lane of the drive-through, heading east, its tank cap beside the diesel pump, with a low tank (5 of 21 gallons). The player starts beside it.
  const truckPose={x:159.5,z:-5,yaw:Math.PI/2,fuelMgal:5000};
  store.set('citylife.character.v1',JSON.stringify({version:1,appearance:{name:'Tester'}}));
- store.set('citylife.progress.v1',JSON.stringify({version:1,progress:{cash:5000,completed:5,phase:'available',position:{x:157.3,z:-6.95},vehicles:[{uid:'eastbank-worktruck',model:'worktruck',...truckPose}]}}));
+ store.set('citylife.progress.v1',JSON.stringify({version:1,progress:{cash:5000,completed:5,phase:'available',position:{x:157.3,z:-6.95},vehicles:[{uid:'v1',model:'worktruck',...truckPose}],orders:{nextVehicle:2}}}));
  let nextFrame;Object.assign(globalThis,{document:doc,window:win,localStorage:{getItem:k=>store.get(k)||null,setItem:(k,v)=>store.set(k,v)},innerWidth:1400,innerHeight:900,devicePixelRatio:1,requestAnimationFrame:fn=>{nextFrame=fn}});
  await import(pathToFileURL(join(dir,'game.js')).href);nextFrame(performance.now()+16);
  ids.get('start').click();assert(ids.get('welcome').hidden,'Play starts the game');
@@ -37,8 +37,8 @@ try{
  pump(1);
  const gasUse={x:155.7,z:-6.95},dieselUse={x:157.3,z:-6.95},nearCap={x:157.3,z:-6.95};
  const profile=()=>JSON.parse(store.get('citylife.profile.v1')).progress;
- const truck=()=>profile().vehicles.find(v=>v.uid==='eastbank-worktruck');
- const truckMesh=scene.getObjectByName('vehicle-eastbank-worktruck'),marker=truckMesh.getObjectByName('filler-marker');
+ const truck=()=>profile().vehicles.find(v=>v.uid==='v1');
+ const truckMesh=scene.getObjectByName('vehicle-v1'),marker=truckMesh.getObjectByName('filler-marker');
  assert(scene.getObjectByName('nozzle-eastbank-gas-1')&&scene.getObjectByName('nozzle-eastbank-gas-0'),'both nozzles are in the scene, in their holsters');
  assert(scene.getObjectByName('hose-idle-eastbank-gas-1'),'and their hoses are drawn, idle');assert(scene.getObjectByName('readout-eastbank-gas-1')&&scene.getObjectByName('readout-eastbank-gas-0'),'each pump has a readout screen');
  assert(marker&&!marker.visible,'the tank cap glow is off while no nozzle is in hand');
@@ -92,7 +92,7 @@ try{
  Object.assign(me.position,{x:138,z:-20});pump(.6);
  assert(/hose is at its limit/.test(toast()),'walking away past 3.5 m puts the nozzle back ('+toast()+')');
  // 8. the save keeps the truck's tank (it is away from home, so it is saved), in milli-gallons
- assert(profile().vehicles.some(v=>v.uid==='eastbank-worktruck'&&v.fuelMgal===after.fuelMgal&&v.fuelMl===undefined),'the saved tank is the one the game shows');
+ assert(profile().vehicles.some(v=>v.uid==='v1'&&v.fuelMgal===after.fuelMgal&&v.fuelMl===undefined),'the saved tank is the one the game shows');
  // 9. the gas can: equipped, hold F at the gas pump fills it (paid, one fuel); a can with gas is not for the diesel truck; a can with diesel pours into it (free)
  {const {canOf}=await import(pathToFileURL(join(dir,'inventory.js')).href);
   GameState.progress={...GameState.progress,inventory:{slots:[{id:'gas-can',quantity:1,fuelMgal:0,fuelType:null}],equipment:{jacket:null,backpack:null}},equipped:'gas-can'};

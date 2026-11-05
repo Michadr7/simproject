@@ -16,7 +16,7 @@ assert(Object.isFrozen(MAP)&&Object.isFrozen(MAP.zones[0].bounds)&&Object.isFroz
 // ── The map: the city exactly where it was, the river and two bridges, the north bank shifted 70 m, and three new districts on the south bank ────────────
 assert.equal(WORLD_SEED,7301);assert.deepEqual(GROUND,{x0:-260,x1:300,z0:-390,z1:110});assert.deepEqual([CITY_WEST,CITY_EAST],[-61,58]);
 assert.deepEqual(WALKABLE.map(({zone,x0,x1,z0,z1})=>({zone,x0,x1,z0,z1})),[{zone:'city',x0:-61,x1:58,z0:-48,z1:48},{zone:'county',x0:-35,x1:-25,z0:-316,z1:-48},{zone:'farm',x0:-170,x1:-35,z0:-286,z1:-178},{zone:'forest',x0:-25,x1:190,z0:-316,z1:-216},
- {zone:'alder',x0:-20,x1:58,z0:-125,z1:-48},{zone:'cedar',x0:70,x1:170,z0:-135,z1:-40},{zone:'eastbank',x0:70,x1:190,z0:-20,z1:75},{zone:'freight',x0:190,x1:200,z0:-316,z1:75}]);
+ {zone:'alder',x0:-20,x1:58,z0:-125,z1:-48},{zone:'cedar',x0:70,x1:170,z0:-135,z1:-40},{zone:'eastbank',x0:70,x1:190,z0:-38,z1:75},{zone:'freight',x0:190,x1:200,z0:-316,z1:75}]);
 assert.deepEqual(WALKABLE.map(w=>w.grid),[false,false,true,true,false,false,false,false]);
 assert.deepEqual(ZONES.farm,{id:'farm',name:'Willow Fields',label:'WILLOW FIELDS',subtitle:'Fields & plots',color:'#c9ae63'});assert.equal(ZONES.city.label,'WESTSIDE');assert.equal(ZONES.forest.name,'Pine Ridge');assert.equal(ZONES.county.label,'COUNTY ROAD');
 assert.deepEqual([ZONES.alder.label,ZONES.cedar.label,ZONES.eastbank.label,ZONES.freight.label],['ALDER CENTER','CEDAR HEIGHTS','EASTBANK WORKS','FREIGHT ROAD']);
@@ -28,7 +28,7 @@ assert.deepEqual(FIELDS.map(f=>[f.id,f.surface,f.x0,f.x1,f.z0,f.z1]),[['field-wh
 for(const f of FIELDS)assert((f.x1-f.x0)>=50&&(f.z1-f.z0)>=36,'big enough for a tractor to turn in: '+f.id);
 assert.equal(fenceSegments().length,240);
 const layout=worldLayout();let hash=0;for(const t of layout.cuttable)hash=(hash*31+Math.round(t.x*100)*7919+Math.round(t.z*100)*104729)%2147483647;for(const d of layout.decor)hash=(hash*31+Math.round(d.x*100)*7919+Math.round(d.z*100)*104729)%2147483647;
-assert.deepEqual([layout.cuttable.length,layout.decor.length,hash],[395,547,-2072080592],'the generated forest and scenery are unchanged (a deliberate change to the map means updating these numbers; 0.32.0 took 2 pines and 2 decor trees out of the way of the truck, the small barn and the windmill; 0.33 removed the timber yard flatbed, which gave those 2 pines back: 393 -> 395)');
+assert.deepEqual([layout.cuttable.length,layout.decor.length,hash],[395,536,-1876312671],'the generated forest and scenery are unchanged (a deliberate change to the map means updating these numbers; 0.34 dealership: Eastbank grew north to z -38, 9 scenery trees left; 0.32.0 took 2 pines and 2 decor trees out of the way of the truck, the small barn and the windmill; 0.33 removed the timber yard flatbed, which gave those 2 pines back: 393 -> 395; 0.34 laid the dirt track from Oak Street across the west meadow, which took 2 scenery trees off it)');
 // No tree stands in or against a placed prop: the yard's truck had two pines growing through it.
 {const keep=2.5-1e-6;for(const l of MAP.landmarks){const f=propInfo(l.prop).footprint,c=Math.round(Math.cos(l.yaw)),s=Math.round(Math.sin(l.yaw));for(const t of [...layout.cuttable,...layout.decor]){const dx=t.x-l.x,dz=t.z-l.z,lx=dx*c-dz*s,lz=dx*s+dz*c;assert(!(lx>f.x0-keep&&lx<f.x1+keep&&lz>f.z0-keep&&lz<f.z1+keep),`a tree at ${t.x.toFixed(1)}, ${t.z.toFixed(1)} is within 2.5 m of ${l.id}`)}}}
 const forestTrees=layout.cuttable.length+layout.decor.filter(t=>zoneAtPoint(t.x,t.z)?.id==='forest').length;assert(forestTrees>=400&&forestTrees<=500,'Pine Ridge has '+forestTrees+' trees');
@@ -50,7 +50,7 @@ for(const [x,z] of [[-35.1,-160],[-24.9,-160],[-100,-146],[100,-185],[0,-164],[2
 assert.deepEqual(MAP.reserved.map(p=>[p.id,p.kind,p.facing]),[['C1','commercial','north'],['C2','commercial','north'],['C3','commercial','north'],['C4','commercial','north'],['C5','commercial','north'],['C6','commercial','north'],['C7','commercial','north'],['C8','commercial','south'],['C9','commercial','south'],['C10','commercial','south'],['R1','residential','south'],['R2','residential','south'],['R3','residential','south'],['R4','residential','south'],['R5','residential','south'],['R6','residential','south'],['R7','residential','north'],['R8','residential','north'],['I1','industrial','north'],['I2','industrial','south'],['I3','industrial','north'],['I4','industrial','north'],['I5','industrial','south'],['I6','industrial','south']]);
 for(const plot of MAP.reserved){const want={commercial:'alder',residential:'cedar',industrial:'eastbank'}[plot.kind];for(const [x,z] of [[plot.x0,plot.z0],[plot.x1,plot.z1]])assert.equal(zoneAtPoint(x,z)?.id,want,`${plot.id} lies in ${want}`)}
 // Signposts: one for the fork and one for each new district.
-assert.deepEqual(MAP.signs.map(g=>g.id),['fork','alder-sign','cedar-sign','eastbank-sign']);
+assert.deepEqual(MAP.signs.map(g=>g.id),['fork','alder-sign','cedar-sign','eastbank-sign','riden-deals-sign']);
 assert.deepEqual(SHOPS,{market:{name:'Corner Market',x:19,z:-6.3},cafe:{name:'Alder Coffee',x:36,z:-6.3}});assert.deepEqual(MARKET,{name:'Corner Market',x:19,z:-6.3});assert.deepEqual([STUDIO.x,STUDIO.z],[1,-6.3]);
 assert.deepEqual(MAP.spawn,{x:-5,y:.2,z:15});assert.deepEqual(MAP.minimap.view,{x0:-200,x1:330,z0:-330,z1:110});assert.equal(MAP.buildings.length,9,'nine city buildings (the backdrop row is gone: Alder Center replaces it)');
 assert.deepEqual(MAP.buildings.filter(b=>b.shop).map(b=>[b.name,b.shop,b.x,b.z,b.w,b.d]),[['CORNER MARKET','market',19,-13.5,15,10],['ALDER COFFEE','cafe',36,-16,15,15]]);
@@ -76,6 +76,11 @@ assert(isWalkable(0,0)&&isWalkable(0,60)&&isWalkable(-170.1,-230)&&isWalkable(-3
 // ── The validator catches broken maps ──────────────────────────────────────────
 const broken=edit=>{const map=structuredClone(MAP);edit(map);return validateMap(map)};
 const has=(problems,pattern)=>assert(problems.some(p=>pattern.test(p)),`expected ${pattern}, got ${JSON.stringify(problems)}`);
+// Vehicle sale modes (DESIGN 4.14): every model has one; online-only models need no display slot; the lot (10 bays) caps the display models.
+assert(MAP.vehicles.every(v=>['dealership','online','both'].includes(v.sale)),'every vehicle model has a sale field');
+has(broken(m=>{delete m.vehicles[0].sale}),/needs a sale field/);has(broken(m=>{m.vehicles[0].sale='shop'}),/needs a sale field/);
+assert.deepEqual(broken(m=>{m.vehicles[1].sale='online';delete m.vehicles[1].home}),[],'an online-only model has no display slot and needs no home');
+has(broken(m=>{for(let i=0;i<9;i++)m.vehicles.push({...m.vehicles[0],id:'extra'+i})}),/lot has 10 bays but 11 models/);
 has(broken(m=>{m.zones[2].bounds.x1=-30}),/zones county and farm overlap/);
 has(broken(m=>{m.zones[0].id='farm'}),/duplicate zone id/);
 has(broken(m=>{m.zones[3].bounds.x1=999}),/outside the ground/);

@@ -1,0 +1,9 @@
+// Cloudflare Worker config (DEPLOY.md). The game is static files: the Worker serves dist/ as-is, honouring dist/_headers
+// (index.html never cached, releases/* cached forever). No script yet; the hosted multiplayer relay (Durable Objects) will be added here later.
+{
+  "name": "simproject",
+  "compatibility_date": "2026-11-01",
+  "assets": {
+    "directory": "./dist"
+  }
+}
