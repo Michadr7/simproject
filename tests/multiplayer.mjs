@@ -3,6 +3,7 @@ import {once} from 'node:events';
 import {WebSocket} from 'ws';
 import {startServer} from '../server.js';
 import {MultiplayerClient} from '../dist/multiplayer.js';
+import {PROTOCOL,REFUSED} from '../dist/relay-protocol.js';
 import {createRemotePlayer,updateRemotePlayer,disposeRemotePlayer} from '../dist/remote-player.js';
 
 const server=startServer({port:0});
@@ -42,7 +43,15 @@ try{
  updateRemotePlayer(mesh,.05);assert(mesh.position.x>0&&mesh.position.x<10,'movement is interpolated');
  for(let i=0;i<100;i++)updateRemotePlayer(mesh,.05);
  assert(Math.abs(mesh.position.x-10)<.001);disposeRemotePlayer(mesh);
- console.log('Real WebSocket clients: joins, snapshot, movement, ID spoof rejection, malformed messages, leave, and mesh smoothing passed.');
+ // Inside a house is a room too (it was dropped before 0.34.2).
+ const inHouse=received(c,'playerMoved');b.sendPosition({x:1,y:0,z:2},'house:cedar-3');assert.equal((await inHouse).room,'house:cedar-3');
+ // An old client (lower protocol) is refused with 'update' and closed; one that never says hello gets nothing.
+ const old=new WebSocket(url);await once(old,'open');old.send(JSON.stringify({type:'hello',protocol:PROTOCOL-1,version:'0.34.1'}));
+ const [reply]=await once(old,'message');assert.deepEqual(JSON.parse(reply.toString()),{type:'refused',reason:REFUSED.update,protocol:PROTOCOL});
+ const [closeCode]=await once(old,'close');assert.equal(closeCode,4001);
+ const refusedSeen=new MultiplayerClient();const why=received(refusedSeen,'refused');const gone=received(refusedSeen,'disconnected');
+ const RealWS=globalThis.WebSocket;globalThis.WebSocket=class extends RealWS{send(d){super.send(String(d).replace('"protocol":'+PROTOCOL,'"protocol":0'))}};
+ refusedSeen.connect(url);assert.equal(await why,REFUSED.update);await gone;assert.equal(refusedSeen.refused,REFUSED.update);globalThis.WebSocket=RealWS; console.log('Real WebSocket clients: joins, snapshot, movement, ID spoof rejection, malformed messages, house rooms, version refusal, leave, and mesh smoothing passed.');
 }finally{
  a.disconnect();b.disconnect();c.disconnect();
  for(const socket of server.clients)socket.terminate();

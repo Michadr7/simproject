@@ -1,46 +1,27 @@
 // Local development relay. Run: npm install && npm run server
+// One lobby for everyone who connects (no codes); the rules are the hosted relay's (dist/relay-protocol.js), so the two cannot drift apart.
 import {randomUUID} from 'node:crypto';
 import {pathToFileURL} from 'node:url';
 import {WebSocketServer, WebSocket} from 'ws';
+import {createLobby, HELLO_TIMEOUT_MS, MAX_MESSAGE_BYTES, CLOSE_REFUSED, REFUSED, PROTOCOL} from './dist/relay-protocol.js';
 
-const validPosition = p => p && ['x', 'y', 'z'].every(k =>
-  Number.isFinite(p[k]) && Math.abs(p[k]) <= 10000);
-const validRoom = room => ['street', 'market', 'cafe', 'home'].includes(room);
-
-export function startServer({port = 8080, host = '127.0.0.1'} = {}) {
-  const server = new WebSocketServer({port, host, maxPayload: 4096});
-  const players = new Map();
-  function send(socket, message) {
-    if (socket.readyState === WebSocket.OPEN && socket.bufferedAmount < 65536)
-      socket.send(JSON.stringify(message));
-  }
-  function broadcast(message, except) {
-    for (const socket of players.keys()) if (socket !== except) send(socket, message);
-  }
+export function startServer({port = 8080, host = '127.0.0.1', maxPlayers} = {}) {
+  const server = new WebSocketServer({port, host, maxPayload: MAX_MESSAGE_BYTES});
+  const send = (socket, message) => {
+    if (socket.readyState === WebSocket.OPEN && socket.bufferedAmount < 65536) socket.send(JSON.stringify(message));
+  };
+  const lobby = createLobby({send, close: (socket, code, reason) => socket.close(code, reason), newId: randomUUID, maxPlayers});
   server.on('connection', socket => {
-    const player = {id: randomUUID(), position: {x: -5, y: .2, z: 15}, room: 'street'};
-    send(socket, {type: 'welcome', id: player.id});
-    // A new client must also see everyone already connected.
-    for (const other of players.values()) send(socket, {type: 'playerJoined', ...other});
-    players.set(socket, player);
-    broadcast({type: 'playerJoined', ...player}, socket);
+    // A socket that never says hello is dropped.
+    const helloTimer = setTimeout(() => {
+      if (!lobby.has(socket)) { send(socket, {type: 'refused', reason: REFUSED.bad, protocol: PROTOCOL}); socket.close(CLOSE_REFUSED, REFUSED.bad); }
+    }, HELLO_TIMEOUT_MS);
     socket.on('message', (data, binary) => {
       if (binary) return;
-      let message;
-      try { message = JSON.parse(data.toString()); } catch { return; }
-      if (message?.type !== 'position' || !validPosition(message.position)) return;
-      const room = message.room ?? 'street';
-      if (!validRoom(room)) return;
-      // Trust the socket's ID, never a client-supplied identity.
-      player.position = {x: message.position.x, y: message.position.y, z: message.position.z};
-      player.room = room;
-      broadcast({type: 'playerMoved', ...player}, socket);
+      lobby.receive(socket, data.toString());
     });
     socket.on('error', () => {});
-    socket.on('close', () => {
-      players.delete(socket);
-      broadcast({type: 'playerLeft', id: player.id}, socket);
-    });
+    socket.on('close', () => { clearTimeout(helloTimer); lobby.leave(socket); });
   });
   return server;
 }
