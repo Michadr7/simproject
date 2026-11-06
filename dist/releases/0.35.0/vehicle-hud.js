@@ -5,7 +5,16 @@ export const STOP_SPEED=1; // m/s: below this you may get out (the same rule as 
 
 // fuel: {mgal, capacityMgal, type} of the vehicle you are in, or null.
 // ground: {label, factor} (the surface under the wheels and the share of top speed it allows), or null.
-export function vehicleHudModel({driving=null,seat=null,name=null,speed=0,fuel=null,ground=null}={}){
+// forklift: {speed, lift, load, hint} while you drive the warehouse forklift: the panel names it, shows the fork height and the load in the fuel slot, lists every control (always on screen while driving)
+// and says in its note why the forks are stopped or what to do next (fork-pallets.js forkHint).
+export function forkliftHudModel({speed=0,lift=0,load=0,hint=''}){
+ const stopped=Math.abs(speed)<STOP_SPEED;
+ return {state:'driving',name:'Forklift · indoor',speed:`${mph(speed)} mph`,fuel:`${lift.toFixed(2)} m · ${load?load+' planks':'empty'}`,fuelLabel:'Forks',
+  keys:[{kbd:'W S',text:'Drive and reverse'},{kbd:'A D',text:'Steer (rear wheels: the back swings out)'},{kbd:'R F',text:'Raise and lower the forks'},{kbd:'Shift',text:'Hold for slow forks'},{kbd:'E',text:stopped?'Get off':'Stop to get off',muted:!stopped}],
+  note:hint||'Slide the forks into a pallet, raise to lift it, lower to set it down. Indoor only.'};
+}
+export function vehicleHudModel({driving=null,seat=null,name=null,speed=0,fuel=null,ground=null,forklift=null}={}){
+ if(forklift)return forkliftHudModel(forklift);
  const fuelShown=fuel?`${fuelTitle(fuel.type)} · ${fuelText(fuel.mgal,fuel.capacityMgal)}`:'—',empty=!!fuel&&fuel.mgal<=0;
  if(!driving)return {state:'off',name:'Not in a vehicle',speed:'—',fuel:'—',
   keys:[],note:'Walk up to a vehicle’s door and press E to get in.'};
@@ -26,7 +35,7 @@ export function createVehicleHud($){
   if(key===last)return;last=key;
   const panel=$('vehiclePanel');if(!panel)return;
   panel.dataset.state=model.state;
-  $('vpName').textContent=model.name;$('vpSpeed').textContent=model.speed;$('vpFuel').textContent=model.fuel;
+  $('vpName').textContent=model.name;$('vpSpeed').textContent=model.speed;$('vpFuel').textContent=model.fuel;{const l=$('vpFuelLabel');if(l)l.textContent=model.fuelLabel||'Fuel'}
   const keys=$('vpKeys');keys.replaceChildren();
   for(const k of model.keys){
    const row=document.createElement('div');row.className='vp-key';row.dataset.muted=String(!!k.muted);

@@ -7,9 +7,11 @@ import {createCharacter} from './character.js';
 import {outfit} from './appearance.js';
 import {createDoubleDoor,createSlidingDoor} from './doors.js';
 import {createNameBoard} from './office.js';
-import {HALL,RACK_SLOTS,UNITS,BAYS,LEVELS,BAY_PITCH,LEVEL_Y,FRAME_HEIGHT,WAREHOUSE_PILE,WAREHOUSE_TABLE,WAREHOUSE_STAGING,DOCK_DOOR} from './warehouse-layout.js';
+import {createPalletTags} from './pallet-tags.js';
+import {PALLET,PALLET_CAP,MAX_FLOOR} from './pallets.js';
+import {HALL,RACK_SLOTS,UNITS,BAYS,LEVELS,BAY_PITCH,LEVEL_Y,FRAME_HEIGHT,WAREHOUSE_TABLE,WAREHOUSE_STAGING,DOCK_DOOR} from './warehouse-layout.js';
 
-export {RACK_SLOTS,WAREHOUSE_PILE,WAREHOUSE_TABLE,WAREHOUSE_STAGING};
+export {RACK_SLOTS,WAREHOUSE_TABLE,WAREHOUSE_STAGING};
 export const RACK_CAP=40,PILE_CAP=40;
 const BOARD={w:.22,t:.088,l:1.2},COLS=4,TONES=['#c99f63','#bf9358','#d3ab6e','#b78a50'].map(c=>new T.Color(c));
 // board i of a pile: 4 across and as many high as it takes; local to the pile's centre, the height above the surface it lies on
@@ -43,18 +45,21 @@ export function createWarehouse({name,spec}){
   for(const [list,colour,nm] of [[posts,'#d28a1e','shelf-posts'],[beams,'#c46a1c','shelf-beams'],[slats,'#8a6a40','shelf-slats']]){const m=instanced(list,colour,nm+'-'+u.id);occluders.push(m)}
   const cap=u.faces.length*BAYS*LEVELS*RACK_CAP,bm=new T.InstancedMesh(new T.BoxGeometry(BOARD.w,BOARD.t,BOARD.l),new T.MeshStandardMaterial({color:'#ffffff',roughness:.9}),cap);bm.name='warehouse-boards-'+u.id;bm.count=0;bm.castShadow=bm.receiveShadow=true;bm.frustumCulled=false;
   bm.boundingBox=new T.Box3(new T.Vector3(x0-.1,0,u.z-u.depth/2),new T.Vector3(x0+span+.1,FRAME_HEIGHT,u.z+u.depth/2));scene.add(bm);occluders.push(bm);unitMeshes.set(u.id,{mesh:bm,faces:u.faces});
-  blocks.push({x:0,z:u.z,hx:span/2+.05,hz:u.depth/2});
+  blocks.push({x:0,z:u.z,hx:span/2+.05,hz:u.depth/2,kind:'shelf'});
  }
  const stagingBoards=new T.InstancedMesh(new T.BoxGeometry(BOARD.w,BOARD.t,BOARD.l),new T.MeshStandardMaterial({color:'#ffffff',roughness:.9}),WAREHOUSE_STAGING.length*PILE_CAP);stagingBoards.name='warehouse-boards-staging';stagingBoards.count=0;stagingBoards.castShadow=stagingBoards.receiveShadow=true;stagingBoards.frustumCulled=false;scene.add(stagingBoards); // the planks staged on the three pallets
  const unitOfFace=face=>UNITS.find(u=>u.faces.includes(face)).id;
- const pileBoards=new T.InstancedMesh(new T.BoxGeometry(BOARD.w,BOARD.t,BOARD.l),new T.MeshStandardMaterial({color:'#ffffff',roughness:.9}),PILE_CAP);pileBoards.name='warehouse-boards-pile';pileBoards.count=0;pileBoards.castShadow=pileBoards.receiveShadow=true;pileBoards.frustumCulled=false;scene.add(pileBoards); // the delivery pile: a pallet by the roller door
- box(1.4,.14,1.25,WAREHOUSE_PILE.x,.07,WAREHOUSE_PILE.z,'#7c5d38',true);
+ // a wooden pallet under every stack in the racks (one instanced mesh); the tags above the pallets say what they hold (pallet-tags.js)
+ const slabs=new T.InstancedMesh(new T.BoxGeometry(PALLET.w,PALLET.h,PALLET.d),new T.MeshStandardMaterial({color:'#7c5d38',roughness:.9}),RACK_SLOTS.length+MAX_FLOOR);slabs.name='warehouse-pallets';slabs.count=0;slabs.castShadow=slabs.receiveShadow=true;slabs.frustumCulled=false;scene.add(slabs);
+ const tags=createPalletTags();scene.add(tags.mesh);let tagSpots=[];
+ const floorBoards=new T.InstancedMesh(new T.BoxGeometry(BOARD.w,BOARD.t,BOARD.l),new T.MeshStandardMaterial({color:'#ffffff',roughness:.9}),MAX_FLOOR*PALLET_CAP);floorBoards.name='warehouse-boards-floor';floorBoards.count=0;floorBoards.castShadow=floorBoards.receiveShadow=true;floorBoards.frustumCulled=false;scene.add(floorBoards);
+ const floorBlocks=[]; // pallets set down on the floor: solid to a walker (a rectangle that holds the turned pallet)
  // the order table (tickets arrive in step 3): a counter with a printer, a clipboard and a lamp; a yard hand stands behind it
  box(2.4,.95,.9,WAREHOUSE_TABLE.x,.475,WAREHOUSE_TABLE.z,'#5a4430',true);box(2.55,.08,1.05,WAREHOUSE_TABLE.x,.98,WAREHOUSE_TABLE.z,'#d8c8a8');box(.5,.24,.4,WAREHOUSE_TABLE.x-.6,1.14,WAREHOUSE_TABLE.z,'#2f3d3b');box(.34,.02,.26,WAREHOUSE_TABLE.x+.6,1.03,WAREHOUSE_TABLE.z,'#efe6cf');
  const lamp=box(.05,.14,.14,WAREHOUSE_TABLE.x-.3,1.3,WAREHOUSE_TABLE.z-.3,'#3a9a52');lamp.material=new T.MeshStandardMaterial({color:'#3a9a52',emissive:new T.Color('#2f9a4a'),emissiveIntensity:.8});
  box(.9,2.2,.5,-16.2,1.1,11.5,'#5f7a72',true);box(.9,2.2,.5,-15.2,1.1,11.5,'#5f7a72',true); // two lockers
  // staging: three pallets on painted squares (a ticket's planks wait here until the order is loaded)
- for(const p of WAREHOUSE_STAGING){box(1.7,.004,1.6,p.x,.004,p.z,'#d9b82c');box(1.4,.14,1.25,p.x,.07,p.z,'#7c5d38',true)}
+ for(const p of WAREHOUSE_STAGING){box(1.7,.004,1.6,p.x,.004,p.z,'#d9b82c');box(1.4,.14,1.25,p.x,.07,p.z,'#7c5d38',true);blocks[blocks.length-1].kind='staging'}
  // the company name on the back wall, a bench and a hard hat by the door, a plant, a stack of empty pallets in the back-left corner
  const board=createNameBoard({text:name,width:7,height:1.3});board.mesh.position.set(0,5.6,-D+.1);scene.add(board.mesh);
  box(.5,.5,2.2,-3.6,.25,10.4,'#7a5f3e',true);box(.3,.2,.34,-3.6,.6,10,'#d8b429');box(.55,.7,.55,3.6,.35,10.6,'#8c6a4c');box(.45,.55,.45,3.6,.95,10.6,'#4f7d4c');
@@ -62,16 +67,31 @@ export function createWarehouse({name,spec}){
  const clerk=createCharacter(outfit('male','Worker',{hair:'#3a2a1c',skin:'#c99a78'}));clerk.group.name='warehouse-hand';clerk.group.position.set(WAREHOUSE_TABLE.x,.02,WAREHOUSE_TABLE.z-.95);scene.add(clerk.group);
  const exitSpec=spec?.exitDoor||{kind:'double',z:11.96,width:2.2,height:2.7,near:{halfWidth:2.4,z:9.7},trigger:{halfWidth:.9,z:11.3}},exitDoor=(exitSpec.kind==='double'?createDoubleDoor:createSlidingDoor)({width:exitSpec.width,height:exitSpec.height});exitDoor.group.position.set(0,0,exitSpec.z);scene.add(exitDoor.group);
 
- // the planks on the shelves and on the delivery pile: one board per plank (racks: {B4-1: n, ...}; pile: the yard stock, at most PILE_CAP drawn)
+ // the planks on the pallets in the racks and on the staging squares: one board per plank (racks: {B4-1: n, ...} from the pallets; staged: planks per staging square)
  const pos=new T.Vector3(),q=new T.Quaternion(),one=new T.Vector3(1,1,1);let shown='';
- function set(racks,pile,staged){
-  const key=JSON.stringify([racks,pile,staged]);if(key===shown)return;shown=key;
-  const fill=(mesh,spots)=>{let n=0;for(const {cx,cz,base,count,seed} of spots)for(let i=0;i<count;i++){const b=boardAt(i),wob=(i*7+seed)%5-2;pos.set(cx+b.x+wob*.004,base+b.y,cz);m4.compose(pos,q,one);mesh.setMatrixAt(n,m4);mesh.setColorAt(n,TONES[(i+seed)%TONES.length]);n++}mesh.count=n;mesh.instanceMatrix.needsUpdate=true;if(mesh.instanceColor)mesh.instanceColor.needsUpdate=true};
-  for(const [id,{mesh}] of unitMeshes)fill(mesh,RACK_SLOTS.map((s,k)=>({s,k})).filter(({s})=>unitOfFace(s.face)===id&&(racks?.[s.id]||0)>0).map(({s,k})=>({cx:s.x,cz:s.z,base:s.y,count:Math.min(RACK_CAP,racks[s.id]),seed:k})));
-  fill(pileBoards,[{cx:WAREHOUSE_PILE.x,cz:WAREHOUSE_PILE.z,base:.14,count:Math.min(PILE_CAP,pile||0),seed:3}]);
+ const upAxis=new T.Vector3(0,1,0),qy=new T.Quaternion();
+ function set(racks,staged,floor=[]){
+  const key=JSON.stringify([racks,staged,floor]);if(key===shown)return;shown=key;
+  // spots: {cx, cz, base, count, seed, yaw}: one board per plank, lying across the pallet (the pallet turned by yaw)
+  const fill=(mesh,spots)=>{let n=0;for(const {cx,cz,base,count,seed,yaw=0} of spots){const c=Math.cos(yaw),s=Math.sin(yaw);qy.setFromAxisAngle(upAxis,yaw);for(let i=0;i<count;i++){const b=boardAt(i),wob=(i*7+seed)%5-2,ox=b.x+wob*.004;pos.set(cx+ox*c,base+b.y,cz-ox*s);m4.compose(pos,qy,one);mesh.setMatrixAt(n,m4);mesh.setColorAt(n,TONES[(i+seed)%TONES.length]);n++}}mesh.count=n;mesh.instanceMatrix.needsUpdate=true;if(mesh.instanceColor)mesh.instanceColor.needsUpdate=true};
+  // a pallet is 0.14 m high: on the floor level its top is the deck height already (LEVEL_Y[0]), on a shelf it stands on the deck. The planks lie on top of it.
+  const stacks=RACK_SLOTS.map((s,k)=>({s,k,count:Math.min(RACK_CAP,racks?.[s.id]||0)})).filter(x=>x.count>0).map(x=>({...x,pad:x.s.level===1?0:x.s.y}));
+  for(const [id,{mesh}] of unitMeshes)fill(mesh,stacks.filter(({s})=>unitOfFace(s.face)===id).map(({s,k,count,pad})=>({cx:s.x,cz:s.z,base:pad+.14,count,seed:k})));
   fill(stagingBoards,WAREHOUSE_STAGING.map((p,i)=>({cx:p.x,cz:p.z,base:.14,count:Math.min(PILE_CAP,staged?.[i]||0),seed:i+5})));
+  const loose=floor.slice(0,MAX_FLOOR);fill(floorBoards,loose.map((f,i)=>({cx:f.x,cz:f.z,base:.14,count:Math.min(PALLET_CAP,f.count),seed:i+9,yaw:f.yaw})));
+  let n=0;for(const {s,pad} of stacks){m4.compose(pos.set(s.x,pad+.07,s.z),qy.identity(),one);slabs.setMatrixAt(n++,m4)}
+  for(const f of loose){qy.setFromAxisAngle(upAxis,f.yaw);m4.compose(pos.set(f.x,.07,f.z),qy,one);slabs.setMatrixAt(n++,m4)}
+  slabs.count=n;slabs.instanceMatrix.needsUpdate=true;
+  floorBlocks.length=0;for(const f of loose){const c=Math.abs(Math.cos(f.yaw)),s=Math.abs(Math.sin(f.yaw));floorBlocks.push({x:f.x,z:f.z,hx:c*PALLET.w/2+s*PALLET.d/2,hz:s*PALLET.w/2+c*PALLET.d/2,kind:'floor'})}
+  // the tags: one per pallet in the racks, on the floor and on a staging square holding planks, just above the top board
+  const top=(base,count)=>base+Math.ceil(count/COLS)*(BOARD.t+.004);
+  tagSpots=[...stacks.map(({s,pad,count})=>({x:s.x,y:top(pad+.14,count)+.2,z:s.z,count,product:'planks'})),
+   ...loose.map(f=>({x:f.x,y:top(.14,Math.min(PALLET_CAP,f.count))+.2,z:f.z,count:Math.min(PALLET_CAP,f.count),product:'planks'})),
+   ...WAREHOUSE_STAGING.flatMap((p,i)=>(staged?.[i]||0)>0?[{x:p.x,y:top(.14,Math.min(PILE_CAP,staged[i]))+.2,z:p.z,count:Math.min(PILE_CAP,staged[i]),product:'planks'}]:[])];
  }
- set({},0,[0,0,0]); return {scene,occluders,glass:[],clerk,exitDoor,board,lamp,blocked(x,z){return Math.abs(x)>W-.45||Math.abs(z)>D-.45||blocks.some(b=>Math.abs(x-b.x)<b.hx+.32&&Math.abs(z-b.z)<b.hz+.32)},setStock:set,boards:()=>[...unitMeshes.values()].reduce((n,u)=>n+u.mesh.count,pileBoards.count+stagingBoards.count)};
+ set({},[0,0,0]); return {tags,updateTags:(camera,near,extra=[])=>tags.update([...tagSpots,...extra],camera,near),scene,occluders,glass:[],clerk,exitDoor,board,lamp,blocked(x,z){return Math.abs(x)>W-.45||Math.abs(z)>D-.45||blocks.some(b=>Math.abs(x-b.x)<b.hx+.32&&Math.abs(z-b.z)<b.hz+.32)||floorBlocks.some(b=>Math.abs(x-b.x)<b.hx+.32&&Math.abs(z-b.z)<b.hz+.32)},
+  // for the forks (fork-pallets.js): what is solid to them other than shelving, the order squares and pallets (they have their own rules), and what is solid to a pallet set down on the floor (no margin)
+  blockedOther(x,z){return Math.abs(x)>W-.45||Math.abs(z)>D-.45||blocks.some(b=>!b.kind&&Math.abs(x-b.x)<b.hx+.32&&Math.abs(z-b.z)<b.hz+.32)},solidAt(x,z){return Math.abs(x)>W-.1||Math.abs(z)>D-.1||blocks.some(b=>!b.kind&&Math.abs(x-b.x)<b.hx&&Math.abs(z-b.z)<b.hz)||floorBlocks.some(b=>Math.abs(x-b.x)<b.hx&&Math.abs(z-b.z)<b.hz)},setStock:set,boards:()=>[...unitMeshes.values()].reduce((n,u)=>n+u.mesh.count,stagingBoards.count+floorBoards.count)};
 }
 
 // The person door on the warehouse's outside wall (the building model has only the loading door): a steel frame and a door slab with a small window, a canopy and a lamp. Local frame:

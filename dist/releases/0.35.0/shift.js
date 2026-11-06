@@ -45,8 +45,8 @@ export function normalizeShift(value,careers,map=MAP){
  const n=(x,max)=>Number.isSafeInteger(x)&&x>=0&&x<=max?x:0;
  const tasks=(Array.isArray(v.tasks)?v.tasks:[]).filter(t=>TASKS[t?.kind]).slice(0,6).map(t=>{const target=Math.max(1,n(t.target,1000));return {kind:t.kind,piece:TASKS[t.kind].piece,target,done:Math.min(target,n(t.done,1000))}});
  const pieces={};for(const k of Object.keys(PIECE_PAY))if(n(v.pieces?.[k],1e6))pieces[k]=n(v.pieces[k],1e6);
- const truck=normalizeTruck(v.truck),gathered=(Array.isArray(v.gathered)?v.gathered:[]).filter(id=>Number.isSafeInteger(id)&&id>0).slice(-300);
- return {employer:e.id,day:Math.max(1,n(v.day,1e7)),startedAt:n(v.startedAt,1439),last:n(v.last,1e10),paidMinutes:n(v.paidMinutes,1440),offSiteMinutes:n(v.offSiteMinutes,1440),tasks,pieces,...(truck?{truck}:{}),...(gathered.length?{gathered}:{})};
+ const truck=normalizeTruck(v.truck),gathered=(Array.isArray(v.gathered)?v.gathered:[]).filter(id=>Number.isSafeInteger(id)&&id>0).slice(-300),stacked=(Array.isArray(v.stacked)?v.stacked:[]).filter(id=>typeof id==='string'&&/^[A-E][1-8]-[1-3]$/.test(id)).slice(-120); // stacked: rack cells already paid the Stack piece this shift
+ return {employer:e.id,day:Math.max(1,n(v.day,1e7)),startedAt:n(v.startedAt,1439),last:n(v.last,1e10),paidMinutes:n(v.paidMinutes,1440),offSiteMinutes:n(v.offSiteMinutes,1440),tasks,pieces,...(truck?{truck}:{}),...(gathered.length?{gathered}:{}),...(stacked.length?{stacked}:{})};
 }
 export function normalizePayStubs(value){
  if(!Array.isArray(value))return [];const n=x=>Number.isSafeInteger(x)&&x>=0&&x<=1e10?x:0;

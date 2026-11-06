@@ -496,7 +496,172 @@ Tree marks: one InstancedMesh (≤ 400 instances), 1 draw call. Cargo: two Insta
 - **Shared co-op (a later multiplayer build, Opus):** the lobby's host (or the hosted relay's Durable Object) owns the company state: tickets, racks, stock, the marked trees, the customer trucks, the forklift. Rules then: one ticket board for everyone; a taken ticket is locked to the player who took it ("Taken by Sam") but anyone on the same shift may help pick and stage it; each player is paid their own pieces and wage, and the order pay goes to whoever loads or delivers it; one forklift seat (E is refused while someone is on it); a tree, a log or a plank stack can only be taken once (the server answers who got it). This needs server-authoritative transactions, which is its own design: the **co-op server update** in the roadmap (section 6), after the warehouse.
 - **The seam, built now (decided 2026-11-06):** every change to company state made by the warehouse work goes through one function, `applyCompany(action)` in `game.js`. An action is plain data `{type, playerId, ...}` (take a ticket, pick, stage, load, deliver, stack a rack, move the forklift's pallet). Offline it runs the pure rule from `tickets.js` on the local save at once, so play is unchanged; in co-op it will send the action to the authority and apply the answer. Every ticket records `takenBy` (a player id; the local player is `'me'` offline). The pure rules never read the clock or the player themselves: both come in the action, so the server can run the same code.
 
-**Open questions for the user:** how many tickets a day (placeholder three pickups and one delivery), and whether the forklift should ever leave the warehouse (into the truck yard) in a later version.
+**Open questions for the user:** how many tickets a day (placeholder three pickups and one delivery), and whether the forklift should ever leave the warehouse (into the truck yard) in a later version. (Answered 2026-11-06: tickets are random and scaled, 4.17 J; the forklift goes outdoors when larger trucks need loading, 4.17 K.)
+
+#### H. Play-test round 5 decisions (2026-11-06)
+- **Forklift driving (done):** rear-wheel steering (the body pivots about the front axle, so the tail swings out), 5 m/s top speed, wheels split out of the model that spin and steer, the driver shown seated with both hands on the wheel, and the vehicle panel in forklift mode ("Forklift · indoor", fork height and load, every control listed while driving).
+- **Pallets are physical (decided, no shortcut):** the E prompts to lift or set down a pallet go. Pallets become objects. You lower the forks to pocket height, drive the tines in, and raise to lift. Lowering onto a shelf deck, the floor, a staging square or the pile sets the pallet there. The forks must be level with the pocket and lined up within a few centimetres.
+- **The warehouse supply follows demand (decided; built 2026-11-06 as `supply.js`, `tests/supply.mjs`):** an order has to come from somewhere. When a ticket is released and the yard stock plus the racks cannot cover the open orders, a Ridgeline NPC crew brings the shortfall: a supply delivery appears on the pile within about a game hour. Planks the player mills and docks still add to the stock. As built: while orders are open or taken, if the yard stock, racks, forks and hands hold fewer planks than they still need, a crew order of 40, 80 or 120 planks is placed (one at a time, 6 AM to 6 PM) and lands on the pile one game hour later (`company.supply = {at, planks}`, saved); the phone is told when it is sent and when it lands, and the warehouse card says what to do next (`warehouseHint` in game.js). When the player owns a company and plays alone, this becomes a job they hire NPCs for. Not built: the crew is not seen arriving (planks just appear on the pile).
+- **Real sounds for everything (decided):** the agent searches for free-licence sounds (CC0 first) and converts them, asking the user to find a sound when it is unsure. Each file goes in `ASSETS.md` and `credits.js`. Files load lazily.
+- **Phone:** each app icon gets an unread badge with a count, like a real phone.
+
+#### I. Pallets, the supply truck and put-away (design by Opus 5.5, 2026-11-06; decided with the user)
+This replaces plank counts in the warehouse with pallet objects, and it replaces the instant crew delivery (`supply.js`, H) with a truck you can see.
+
+**Pallets are objects.**
+- A pallet is `{id, product, count, at}`. `product` is `'planks'` today; other products later. `count` is at most 40. `at` is one of:
+  - `{rack: 'B4-2'}`: a rack cell (one pallet per cell);
+  - `{fork: true}`: on the forklift's forks;
+  - `{inbound: 0..5}`: an outdoor staging spot;
+  - `{staging: 0..2}`: an order's staging square inside;
+  - `{floor: {x, z, yaw}}`: set down anywhere on the warehouse floor;
+  - `{truck: uid}`: on a vehicle's bed.
+- Saved as `companies.ridgeline.pallets` (at most 200). On load, the old `racks` counts become one pallet per cell and `forkload` becomes a pallet on the forks; both old fields are then dropped. This adds a field and converts old data, so no schema bump is needed.
+- **An empty pallet disappears** (the crew collects the empties). This applies to a rack pallet picked empty by hand and to a staged order's pallet once it ships.
+- **The inside delivery pile is removed** (decided). `stock.planks` is the **lumberyard's** stock again: what the sawmill and players produce at the dock. The supply truck draws from it.
+- **Picking by hand stays:** E at a floor-level rack pallet takes a stack of 4; E at an order's staging square puts it on that order's pallet (the pallet is created when the first stack goes down).
+
+**Every pallet shows what it holds (decided).**
+- A small tag above the pallet shows the product icon and the count (for example, a plank icon and "40").
+- Tags are drawn only within 10 m, for the nearest 24 pallets. They are **one InstancedMesh** with an icon-and-number atlas (one draw call, not a sprite per pallet).
+- The prompt line also names the pallet the forks or your hands are at: "Pallet · 40 planks · rack B4-2".
+
+**Physical forks (decided: no E shortcut).** The rules are pure, in `forklift.js`:
+- **Pocket:** a pallet is 1.2 m deep, 1.0 m wide and 0.14 m high, with a fork pocket from 0.03 to 0.11 m above its base. The tines can enter only when:
+  - their top is inside the pocket band;
+  - they are within 0.08 m of the pallet's centre line, sideways;
+  - the forklift is within 6° of square to the pallet.
+
+  Otherwise a pallet is solid to the tines: the forklift stops, and the prompt says why ("Forks too high", "Line up with the pallet").
+- **Engaged:** the tines are in at least 0.6 m. Raising the forks then lifts the pallet (`at` becomes `{fork: true}`), and it rides with the carriage. Backing out without raising simply leaves the pallet where it is.
+- **Setting down:** lowering a carried pallet stops when its base meets a surface.
+  - Over a rack cell at deck height, within 0.15 m and 8° of the cell, it snaps square into the cell. Outside that, the forks will not lower further ("Line up with the bay").
+  - Over a staging square, it snaps to the square.
+  - Anywhere else on the floor, it stays where it is (`floor`).
+- **Over-full staging:** if a pallet set on an order's staging square holds more than the order needs, the yard crew splits it at once. The order keeps what it needs; the rest becomes a **surplus pallet** on the nearest inbound spot (inside, see put-away) and joins the put-away queue.
+- **One pallet on the forks at a time.** Two pallets cannot share a cell or square.
+
+**The supply truck (decided: visible; a player may drive it, an NPC otherwise).**
+- When orders need planks the warehouse does not have (the `supply.js` shortfall, now counting pallets everywhere, plus pallets on their way), a **supply run** is created: 1 to 3 pallets of 40.
+- **Who drives it:**
+  - It is offered for 30 game minutes as an optional job (decided) to a Sawyer (rank 5) on shift, on the order table and the phone.
+  - Taking it means driving the Ridgeline flatbed (or your own truck with a bed) to the lumberyard. E at the lumberyard stack loads pallets from its stock. Then you drive to the outdoor staging and unload with E. It pays a piece (`supply`) and must be done within 2 game hours, or it fails like a delivery and falls back to the NPC.
+  - If nobody takes it, an NPC flatbed does the run (`customer-truck.js` routes).
+  - In co-op, another player on that shift can take it (4.17).
+- **Where the planks come from:** the lumberyard stock first. When it is empty, the NPC truck brings them from a mill off the map, entering from the map edge like the customer truck. A player run is offered only when the lumberyard has the planks.
+- **Unloading:** the truck parks alongside the **outdoor staging**: 6 painted pallet spots beside the warehouse's roller door. The exact place is chosen in the build step, clear of the customer truck's route and the dock bay. Its pallets go onto free spots one every 3 seconds, sliding off the bed (no NPC forklift).
+- **If the outdoor staging is full,** the run waits and no truck comes until a spot frees (decided). Pallets on the outdoor staging count as held, so a full staging never orders more.
+
+**Put-away (decided: a player first, the NPC crew as the fallback).**
+- Pallets on the outdoor staging (and surplus pallets inside) go into the racks.
+- **A Yard hand on shift gets the task** "Put away N pallets", paying a piece (`putaway`) per pallet. They do it with the forklift, which drives out through the roller door (below).
+- **If no Yard hand is on shift,** or a pallet has waited 30 game minutes, the crew moves one pallet every 5 game minutes. The pallet disappears from its spot and appears in the **most sensible free cell**: the free cell nearest the roller door at level 1 (reachable by hand), then level 2, then level 3. Players may put pallets anywhere they like.
+- **When every rack cell is full** (120 cells, 4,800 planks: hard to reach), put-away stops, the outdoor staging stays full, and no new supply comes (decided).
+
+**The roller door is a drive-through for the forklift.** This is needed for put-away now and for loading larger trucks later (4.17 K).
+- Interiors are separate scenes, so driving up to the open roller door from inside fades you outside, at the door, on the same forklift (and the other way).
+- The forklift's state gains `where: 'inside' | 'outside'`. Outside it uses the outdoor collision and `heightAt` (flat there), stays within Eastbank Works (it refuses to leave the paving: "The forklift stays in the yard"), and is drawn in the outdoor scene.
+- **Performance:** +14,000 triangles outdoors, drawn only within 60 m of it, and loaded lazily when you first go to Eastbank. That is inside the budget.
+
+**Seam and co-op:** every pallet change is an `applyCompany` action (`palletLift`, `palletSet`, `pick`, `stage`, `supplyTake`, `supplyLoad`, `supplyUnload`, `putaway`, `crewTick`), so the co-op server (4.17) runs the same rules. A pallet on one forklift's forks is locked to that driver.
+
+**Build order (each step ends with `npm test` passing and a stop for the user):**
+1. **Pallet objects (Sonnet) - DONE 2026-11-06** (`pallets.js`, `pallet-tags.js`, tests `pallets.mjs`, `supply.mjs`, `warehouse.mjs`): pallets saved on the company (old `racks` and `forkload` migrate on load and are dropped), drawn on wooden pallets with one-draw-call tags (plank icon and count, 24 nearest within 10 m), the inside pile removed, the crew supply landing as pallets in the racks (lumberyard stock first). Built differently from the plan: (a) order staging squares are still derived from the tickets, not pallet objects (step 2 makes them objects, needed to split surplus); (b) a player can take a stack from any floor-level pallet (not only for an order) so the Yard hand's Stack task has a source, and a cell pays the Stack piece **once per cell per shift** (`shift.stacked`) so moving planks back and forth cannot be farmed; moving a whole pallet with the forklift pays nothing; (c) the forklift still lifts and sets down with E until step 2 replaces it with physical forks. Crew put-away (instant placement into the sensible cell) stands in for the truck until step 3.
+2. **Physical forks (Sonnet) - DONE 2026-11-06** (`fork-pallets.js`, `forklift.js`, tests `fork-pallets.mjs`, `forklift-game.mjs`): no E to lift or set down. Tine tops 5 to 16 cm above a pallet's base, within 8 cm of its middle and 8 degrees square, from either end; a pallet at any other height or crooked is solid to the tines (the forklift stops and the vehicle panel says why: "Forks too high", "Line up with the pallet"); in a shelf cell the tines must be square, off the uprights and at a level's height (5 cm to 1.2 m above its deck), so between levels the shelf stops them. Raising the forks to 14 cm above the base with the tines in 45 cm lifts the pallet (it rides 9 cm under the tine tops, 1.42 m ahead of the body); lowering it until its base meets what is under it sets it down: in a free cell (within 15 cm and 8 degrees, level by level), on an order's staging square (the order takes its planks, the rest stays on the forks) or on the floor (any free place in the hall, turned the way the forklift faces; `at.floor {x,z,yaw}`, at most 40, drawn with boards and a tag, solid to a walker). Shift is the slow lift (15 cm/s). The lowest fork height is now 8 cm so the tines fit a floor pallet's pocket. Differences from the plan: the surplus on an over-full staging square stays on the forks instead of splitting onto an inbound pallet (that needs the outdoor staging of step 3); order staging squares are still derived from the tickets, not pallet objects; the carried pallet is drawn as one plain wooden block, not board by board. The rules still write the company directly rather than through `applyCompany` (a co-op step, 4.17).
+3. **Outdoor staging and the NPC supply truck (Sonnet):** the route, unloading, the full-staging block, crew put-away from outside.
+4. **The forklift through the roller door and the player put-away task (Sonnet).**
+5. **The optional player supply run (Sonnet).**
+6. **In co-op, another player drives it:** with the co-op server (4.17 L).
+### 4.17 Co-op server update (design by Opus 5.5, 2026-11-06; decided with the user where marked; numbers are placeholders for Haiku to tune)
+Goal: two to four players (eight at most) share one world. What one player sees, the others see. Single player stays as it is: fully offline, local save.
+
+#### A. Two kinds of lobby (decided)
+- **World lobby (the default):** the world is stored on the server, owned by the account that created it, joined with its code. It runs only while someone is connected: the first player to join wakes it and the clock moves; when the last one leaves it is saved and frozen (no clock, no tickets). It is never wiped for being empty. Placeholder: three worlds per account.
+- **Host lobby:** a player opens their own game to others. **The host's save is the world**, and the authority runs in the host's browser (the same pure code the server would run). The relay only forwards. When the host leaves, the lobby closes.
+- In both kinds **everything in the world is shared** (decided): an open server is always shared.
+- **Settings, chosen by whoever creates the lobby** (decided: the host decides), shown to everyone who joins:
+  - **Characters:** *Bring your own* (your character, money, inventory, skills, career and vehicles come from your own save, and changes are written back to it) or *Made in this world* (each player starts a new character inside the world; the world stores it under their account). This is one switch for money, inventory and career together, because mixing them (for example your own money with a world career) opens duplication exploits.
+  - **Max players:** 2 to 8 (decided). Above 4 the menu warns: "Designed for 4 players; more may be slow."
+  - **Sleep:** time skips only when everyone is in bed (default), or never.
+- Sign-in: a Google account is required to create or join a World lobby (decided; more sign-in options later). Host lobbies need it too, because the player id has to be stable for pay and ownership.
+- `server:lan` (the local Node relay) stays positions-only in this update. Because the authority is pure, it can later run the World code in Node with a file store.
+
+#### B. What is world state and what is player state
+- **World (one copy, held by the authority):** the clock (day, minutes); companies (tickets, racks, yard stock, the forklift's load, cut blocks and marks); forest plots (damage, felled, stump, cleared, sapling, regrowth); logs on the ground, plank drops, the sawmill belt; **every vehicle** (owner, model, colour, pose, fuel, cargo, tailgate, who sits in it); the customer and dock trucks (derived from tickets); house ownership and rent; the dealership's stock; parcels waiting at houses.
+- **Player:** character, money, inventory, vitals, career (rank, XP, reputation), shift, pay stubs, orders, what you carry (a log on the shoulder, planks in the hands), the apartment.
+- With *Bring your own*, player state lives in the player's save and the server **trusts** it, because a save can be edited; the lobby is labelled "trusted (friends)". With *Made in this world*, the world holds player state too and the server is fully authoritative.
+- The world is a set of **keyed documents** (`clock`, `company:ridgeline`, `plot:<key>`, `log:<id>`, `vehicle:<uid>`, `property:<id>`, `drops`). Each is small. A change replaces whole documents, which keeps the wire format and storage simple.
+
+#### C. The authority and the protocol (PROTOCOL 2)
+- `dist/authority.js` (pure, new): `createAuthority({world, rules})` with `act(playerId, action, now) -> {ok|error, changed: [docs], effects: [{playerId, money, piece, rep, item...}]}`. It runs in the World Durable Object and in the host's browser, and its tests run in Node. It never touches the DOM, Three.js or `Date`.
+- Messages (on top of the existing hello and positions): `snapshot {rev, docs}` on join; `act {seq, action}` from a client; `result {seq, ok|error}` back to that client; `patch {rev, docs}` broadcast to everyone, including the actor. A client that sees a gap in `rev` asks for a new snapshot.
+- **Discrete actions wait for the answer** (an E press, a ticket, a sale): nothing changes on screen until `result` arrives, usually within 50 to 150 ms. There is no prediction and no rollback, so a refusal is just a toast.
+- **Continuous things are streams, not actions:** your walking position (as today) and the pose of the vehicle or forklift you sit in. The driver streams the pose; the authority keeps the latest and saves it when you get out.
+- The relay's position stream drops from 20 to 10 a second, and nothing is sent while standing still (see cost, section I). Other clients interpolate between updates.
+
+#### D. The seam: every world change goes through `applyWorld(action)`
+- `applyCompany` (4.16 G) becomes `applyWorld`. Offline it runs the rule on the local save at once, as today. In a lobby it sends `act` and applies the result.
+- **Actions to move onto the seam (the largest part of the build):**
+  - tickets (done);
+  - the warehouse: `stackPlanks`, `takeReceiving`, `takeFromRack`, `forkTake`, `forkPut`, `forkTakePile`, forklift enter and exit;
+  - the forest: a chop hit, felling, bucking, picking up and dropping a log, gather, `clearStump`, `plantSapling`, the day's marks;
+  - the sawmill (belt in, planks out) and plank drops;
+  - vehicles: enter and exit (seat lock), buy on the lot, delivery, fuel fill, can pour, cargo add and remove, the tailgate;
+  - the dock sale and company stock;
+  - houses: rent, buy, sell (section H).
+- Every rule takes `playerId` and `now` in the action and reads no globals, so the server can run the same code. A test imports every rule module with no DOM and fails if one reaches for `window`, `document`, `Date.now` or `Math.random`. Randomness comes from a seed in the action.
+- Chop hits are frequent (a few a second at most), so they are sent one by one. They are rate-limited, not batched.
+
+#### E. Conflicts
+- **The first to reach the authority wins.** The loser gets a refusal ("Sam got there first") and nothing changes. This applies to a tree, a log, a plank stack, a rack cell, a ticket, a vehicle seat and the forklift.
+- **Locks:** a taken ticket is locked to its taker ("Taken by Sam"), but anyone on a Ridgeline shift may pick and stage for it (decided in 4.16 G). A seat belongs to whoever sits in it until they get out. Only a vehicle's owner can drive it; others can ride later, not in this update. Anything you carry is player state, so nobody else can take it.
+
+#### F. Pay and anti-cheat
+- **Each player is paid their own pieces and wage. The order pay goes to whoever loads or delivers.**
+- *Made in this world:* the authority pays. The wage is counted from the server clock and the player's last streamed position (on site or not). Pieces come only from actions the authority ran. Checks: **reach** (the player's last position is within 4 m of the target, 6 m for vehicles), **rank** (from the world's copy), and **rate** (per action type, for example 4 chop hits a second).
+- *Bring your own:* the effects are sent to the player's client, which applies them to its own save. The same reach and rate checks run, but money and rank cannot be verified, which is why the lobby is labelled trusted.
+- **Money moving between players** (a house sold from one player to another) is only allowed with *Made in this world*, or between two trusted players who both accept.
+
+#### G. Joining and dropping
+- **Join:** snapshot, then the world's clock. A *Bring your own* player keeps their own clock in single player only; in the lobby the world's clock rules.
+- **Drop (connection lost):** what you carried falls at your feet as world objects. Your seat and the forklift are freed (the load stays on the forks). A vehicle stays parked where it stopped. Your taken tickets are held for 15 real minutes for a rejoin (the relay already retries at 2, 5 and 10 s). After that they go back on the board **without** the reputation penalty. A failure from a missed deadline still counts.
+- **Shift:** it continues across a rejoin; the existing hour-off-site rule clocks you out if you stay away. Leaving the lobby on purpose clocks you out.
+- **The world's clock:** 30 game minutes per real minute while anyone is present. Sleep skips to 6 AM only when everyone is in bed (the setting above), and runs rent, bills and deliveries for every player.
+
+#### H. Houses (decided: a bought house is the buyer's)
+- Ownership is world state: `property:<id>.owner`. Rent works the same way, and one house has one tenant or owner.
+- **Selling:** sell back to the world for 80% of the price paid (placeholder), or list it for a player at a price you set. The buyer accepts while both are online, and money and deed swap in one authority action.
+- **Visiting other players' houses (recommended yes):** the owner sets a door rule: *Locked* (default), *Knock* (E at the door sends the owner a phone prompt; Accept lets you in) or *Open*. Only the owner moves furniture. Apartments stay personal and instanced (room `apartment:<playerId>`), so everyone can have the same apartment, and nobody can visit them (decided).
+- Visiting reuses the existing `house:<id>` rooms. Shared furniture layouts become a world document per house.
+
+#### I. Cost (decided: stay on the free plan as long as possible)
+- The free plan allows, per day: 100,000 Durable Object requests (incoming WebSocket messages count 20 to 1), 13,000 GB-s of duration (128 MB billed while awake), 100,000 SQLite row writes, and 5 GB stored.
+- **Estimate for a 4-player lobby, 1 hour:** about 40 position messages a second in, about 7,200 billed requests, about 450 GB-s. **The free plan holds about 14 to 25 lobby-hours a day in total, across all players** (requests run out first at 20 positions a second; at 10 a second and nothing while standing still, duration runs out first, at about 28 hours). When a limit is reached, new actions fail until 00:00 UTC, so the game must say "the server is busy today" instead of breaking.
+- **Storage writes:** changed documents are kept in memory and written every 10 s, and when the last player leaves. That is about 1,500 row writes per lobby-hour, comfortably inside the limit.
+- **For a public release:** the Workers Paid plan ($5 a month, more included usage, pay as you go beyond it) is needed. The estimate is about a cent or less per 4-player lobby-hour; check the pricing page at the time. A Host lobby costs the same relay traffic as a World lobby; only the storage is saved. A peer-to-peer (WebRTC) Host lobby would cost almost nothing but is a separate project; note it and do not build it now.
+
+#### J. Tickets: random and scaled (decided: no fixed number)
+- This replaces the fixed 7/9/10/13 releases in `tickets.js`. Every game hour from 7:00 to 16:00 a seeded roll (seed: world id + day + hour, so the server and tests agree) releases tickets.
+- Expected per hour: 0.4 + 0.35 × the eligible players on shift (Yard hand or higher). A quarter are deliveries.
+- Open (untaken) tickets are capped at 2 + 2 × the eligible players, so a busy crew always has work and a lone player is not buried.
+- The same rule runs in single player with one player. All numbers are placeholders for Haiku.
+
+#### K. Later, not in this update
+- The forklift leaves the warehouse: needed for outdoor loading of larger trucks (decided). It becomes an ordinary world vehicle with the same seat rule.
+- Riding as a passenger, kicking or banning players from a world, a friends list, peer-to-peer Host lobbies, World code on the LAN server.
+
+#### L. Build order (each step ends with `npm test` passing)
+1. **The seam, offline (Sonnet):** move every action in D onto `applyWorld`, with `playerId`, `now` and a seed passed in, plus the no-globals test. Nothing about networking yet; play is unchanged.
+2. **World documents and `authority.js` (Sonnet):** split the save into world and player state as in B; snapshot and patch; tests with two fake clients in Node (conflicts, locks, reach and rate).
+3. **PROTOCOL 2 and the Host lobby (Sonnet):** the authority in the host's browser, the relay forwarding `act`, `result` and `patch`; the lobby settings panel; positions at 10 a second.
+4. **The shared clock, the sleep rule, join and drop (Sonnet).**
+5. **The World lobby (Opus reviews the storage layout, Sonnet builds):** a `World` Durable Object with SQLite; the world list in the Multiplayer menu (create, join by code, delete); *Made in this world* characters; the "server busy today" message.
+6. **Server-side pay and checks (Sonnet).**
+7. **Houses: selling and visiting (Opus for the money swap, Sonnet builds).**
+8. **Random tickets (Sonnet builds, Haiku tunes).**
+
+Open questions: the sell-back percentage; how long a dropped player's tickets are held (15 min is a guess); whether a world owner can kick players in the first build.
+
 ## 5. Economy progression (existing numbers; placeholders marked)
 | Stage | Player can do | Money in | Money out | Core loop |
 |---|---|---|---|---|
@@ -515,7 +680,7 @@ Gaps: no wage figures for cashier or gigs; crop and shop prices undefined; no in
 | 0.33 | Eastbank Works (Kenney Industrial) + Vehicle Driving (kinematic driving, enter/exit, collisions for pickup and flatbed) + `heightAt` prep | Next | Opus design, Sonnet build |
 | 0.34 | Logging Chain: carry system and animations, bucking (Hand Saw, trunks), sawmill chain (planks pile) | Planned | Opus design, Sonnet build |
 | 0.35 | **Lumberjack career** (4.15): employers and ranks, Jobs app, shifts (6 AM to 6 PM, clock in on the phone), daily tasks, cut blocks, Ridgeline office interior on I5, axe ladder, company and own flatbed, cargo, plank dock, lumber warehouse (fuel system already built) | Designed | Opus design, Sonnet build |
-| 0.35.x / next | **Co-op server update** (decided 2026-11-06, after the warehouse): the lobby host or the hosted relay owns each company's state (tickets, racks, stock, marked trees, logs, customer trucks, the forklift); every company action goes through `applyCompany` (4.16 G) and is answered by the authority; conflict rules (a log, stack or ticket goes to one player); the older 0.35 actions (felling, logs, landing, dock, cargo) are moved onto the same seam. Joining mid-shift, dropping out, and anti-cheat for pay are part of the design | Planned | Opus design, Sonnet build |
+| 0.35.x / next | **Co-op server update** (decided 2026-11-06, after the warehouse): the lobby host or the hosted relay owns each company's state (tickets, racks, stock, marked trees, logs, customer trucks, the forklift); every company action goes through `applyCompany` (4.16 G) and is answered by the authority; conflict rules (a log, stack or ticket goes to one player); the older 0.35 actions (felling, logs, landing, dock, cargo) are moved onto the same seam. Joining mid-shift, dropping out, and anti-cheat for pay are part of the design. **Designed in 4.17** (World and Host lobbies, build order in 4.17 L) | Designed | Opus design, Sonnet build |
 | 0.36 | Furniture edit mode, storage, Furnish app, sink/fridge/sofa/TV uses, mortgages | Planned | Sonnet (Opus for save/delivery) |
 | 0.37 | Tools: axe/chainsaw ladder, wear (incl. Hand Saw wear), chainsaw bucking fuel, repairs, blade tiers; schema 3 | Planned | Opus numbers, Sonnet build |
 | 0.38 | Cashier shift and POS | Planned | Opus economy, Sonnet build |

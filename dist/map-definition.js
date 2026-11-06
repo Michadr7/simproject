@@ -286,7 +286,7 @@ const vehicles=[
 // door: where you stand outside, and the yaw you face leaving; sign: the company's name board above the door. The room is the shops' layout (market interior numbers), so its entry, exit and counter are the same.
 const offices=[
  {id:'ridgeline-office',employer:'ridgeline',building:'ridgeline-office',door:{x:80.9,z:58.3,out:{x:81.5,z:58.3},yaw:Math.PI/2},sign:{x:78.66,y:3.2,z:53.5,yaw:Math.PI/2},interior:{...interior('double'),origin:{x:420,y:.165,z:300}}},
- {id:'ridgeline-warehouse',kind:'warehouse',name:'Ridgeline Warehouse',employer:'ridgeline',building:'eastbank-warehouse',door:{x:166.9,z:31.5,out:{x:166.9,z:30.2},yaw:Math.PI},sign:{x:166.9,y:3.1,z:31.46,yaw:Math.PI},interior:{origin:{x:440,y:.165,z:300},...WAREHOUSE_INTERIOR}} // the lumber warehouse (4.16): a person door on the north wall beside the loading door (the model has no person door: it is drawn there), open in the employer's hours
+ {id:'ridgeline-warehouse',kind:'warehouse',name:'Ridgeline Warehouse',employer:'ridgeline',building:'eastbank-warehouse',door:{x:166.9,z:31.5,face:32.52,out:{x:166.9,z:30.2},yaw:Math.PI},sign:{x:166.9,y:3.1,z:32.62,yaw:Math.PI},interior:{origin:{x:440,y:.165,z:300},...WAREHOUSE_INTERIOR}} // the lumber warehouse (4.16): a person door on the north wall beside the loading door (the model has no person door: it is drawn there), open in the employer's hours
 ];
 // Map exits (0.35, DESIGN 4.15 K): where NPC vehicles (customer trucks) come onto the map and leave it. `path` runs from the far end (off the map, where a vehicle appears and is
 // removed) inward; its first point must lie outside the playable rectangle (validateMap), so making the map bigger means moving the exit too. Lanes: Freight South is centred on

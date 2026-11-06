@@ -31,7 +31,7 @@ try{
  // nothing to take or stage until you stand at a rack with planks
  const A1=slotById('A1-1'),S1=WAREHOUSE_STAGING[0];
  for(let trip=1;trip<=3;trip++){
-  me().x=A1.stand.x;me().z=A1.stand.z;pump(.6);assert(/Take planks from rack A1-1 · \d+ · for your order/.test(prompt()),'the rack offers planks for the order: '+prompt());press('KeyE',1.2);
+  me().x=A1.stand.x;me().z=A1.stand.z;pump(.6);assert(/Take a stack from rack A1-1 · \d+ · for your order/.test(prompt()),'the rack offers planks for the order: '+prompt());press('KeyE',1.2);
   assert.deepEqual(p().carry,{kind:'planks',count:4},'a stack of four in your hands');assert.equal(racksOf(p())['A1-1'],40-4*trip);
   me().x=S1.x;me().z=S1.z+1.3;pump(.6);assert(new RegExp(`Stage the planks on order #${t.id} · ${(trip-1)*4} / 12`).test(prompt()),'the pallet offers it: '+prompt());press('KeyE',1.2);
   assert.equal(p().carry,null);assert.equal(list()[0].staged,trip*4);assert.equal(stagedBoards(),trip*4,'the planks stand on the pallet')}

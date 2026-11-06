@@ -25,7 +25,9 @@ try{
  // a Yard hand on shift: the 7 AM pickup arrives, the phone shakes, the toast names it
  rankUp(4);assert.equal(careerOf(p(),'ridgeline').rank,4);at(DAY,430);GameState.progress=clockIn(p(),'ridgeline').state;pump(1.2);
  assert.equal(list().length,1,'the 7 AM pickup is released: '+JSON.stringify(list().map(k=>k.id)));const t1=list()[0];assert.equal(t1.status,'open');assert.equal(t1.kind,'pickup');
- assert(/New order #1 · /.test(ids.get('jobToast').textContent),'the toast names it: '+ids.get('jobToast').textContent);assert(phoneBtn().classList.contains('has-unread'),'and the phone is shaking with an unread badge');
+ assert(/New order #1 · |crew is bringing 40 planks/.test(ids.get('jobToast').textContent),'the toast names the order or the crew sent for its planks: '+ids.get('jobToast').textContent);assert(p().companies.ridgeline.supply?.planks>0,'the warehouse is empty, so a crew is sent with the planks the order needs');assert(phoneBtn().classList.contains('has-unread'),'and the phone is shaking with an unread badge');
+ // an hour later the crew's pallets are in the racks
+ {at(DAY,500);pump(1.2);assert(!p().companies.ridgeline.supply,'the delivery has landed');const pal=p().companies.ridgeline.pallets;assert(pal?.length>0&&pal.every(x=>x.at.rack&&x.product==='planks'),'pallets of planks in the racks: '+JSON.stringify(pal));assert(pal.reduce((s,x)=>s+x.count,0)>=t1.planks,'at least what the order needs')}
  // the phone lists it (Jobs, Shift)
  phoneBtn().click();ids.get('phoneApp-jobs').click();const jobsText=()=>{const t=e=>[e.textContent||'',...(e.children||[]).map(t)].join(' | ');return t(ids.get('phoneJobs'))};
  assert(/Customer orders/.test(jobsText())&&/#1 · /.test(jobsText())&&/Open/.test(jobsText()),'the phone lists the order: '+jobsText().slice(0,300));ids.get('phoneClose').click();
