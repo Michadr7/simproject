@@ -9,7 +9,9 @@ import {LEVEL_Y} from '../dist/warehouse-layout.js';
 const open=()=>false,run=(s,input,seconds,blocked=open)=>{for(let i=0;i<Math.round(seconds*30);i++)s=F.step(s,input,1/30,blocked);return s};
 // driving
 {let s=F.fresh();assert.equal(s.lift,F.LIFT_MIN);assert.equal(s.yaw,F.BAY.yaw);
- s=run(s,{throttle:1},3);assert(Math.abs(s.speed-F.TOP)<1e-6&&F.TOP===5,'top speed 5 m/s (11 mph): '+s.speed);assert(s.x>F.BAY.x+4,'it drove east: '+s.x);
+ s=run(s,{throttle:1},3);assert(Math.abs(s.speed-F.TOP)<1e-6&&F.TOP===2.6,'normal top speed 2.6 m/s (6 mph): '+s.speed);assert(s.x>F.BAY.x+4,'it drove east: '+s.x);
+ // Shift (boost) takes it to 5 m/s (11 mph), and letting go eases it back down rather than snapping
+ {let b=run(F.fresh(),{throttle:1,boost:true},4);assert(Math.abs(b.speed-F.TOP_FAST)<1e-6&&F.TOP_FAST===5,'boost: '+b.speed);const mid=F.step(b,{throttle:1},1/30,open);assert(mid.speed<b.speed&&mid.speed>F.TOP,'eases down, no snap: '+mid.speed);b=run(b,{throttle:1},2);assert(Math.abs(b.speed-F.TOP)<1e-6,'back to normal: '+b.speed);const rb=run(F.fresh(),{throttle:-1,boost:true},4);assert(Math.abs(rb.speed+F.REVERSE_FAST)<1e-6,'fast reverse: '+rb.speed)}
  s=run(s,{},2);assert.equal(s.speed,0,'it rolls to a stop');
  const r=run(F.fresh(),{throttle:-1},3);assert(Math.abs(r.speed+F.REVERSE_TOP)<1e-6,'reverse is slower: '+r.speed);
  // a full turn at top speed is a circle under 4.8 m across: it turns round in a 4 m aisle (slower, it turns tighter)
@@ -34,4 +36,4 @@ assert(F.LIFT_MAX>=LEVEL_Y[2]&&F.LIFT_MIN<=LEVEL_Y[0]+.35);
  assert.deepEqual(m.keys.map(k=>k.kbd),['W S','A D','R F','Shift','E']);assert.equal(vehicleHudModel({forklift:{speed:3,lift:.2,load:0}}).keys[4].muted,true,'stop to get off');assert.match(m.note,/Slide the forks into a pallet/);assert.equal(vehicleHudModel({forklift:{speed:0,lift:.2,load:0,hint:'Forks too high for the pallet.'}}).note,'Forks too high for the pallet.','the panel says why the forks are stopped')}
 // an old save's fork load is read as a pallet on the forks
 {const load=raw=>forkLoadOf({companies:normalizeCompanies(raw)});assert.equal(load({ridgeline:{forkload:25}}),25);assert.equal(load({ridgeline:{forkload:900}}),40);assert.equal(load({ridgeline:{forkload:-3,name:'x'}}),0)}
-console.log('PASS forklift.mjs: arcade drive (5 m/s, rear-wheel steering with the tail swinging out, wheels that roll, slower in reverse, under 4.8 m turning circle, no spinning on the spot, stops at walls), forks 0.08 to 3.05 m reaching all three levels (and a slow lift), an old save with a fork load becoming a pallet, the converted 14,000-triangle model with its four wheels on their axles, and the vehicle panel in forklift mode.');
+console.log('PASS forklift.mjs: arcade drive (2.6 m/s, 5 m/s with Shift easing back down when released, rear-wheel steering with the tail swinging out, wheels that roll, slower in reverse, under 4.8 m turning circle, no spinning on the spot, stops at walls), forks 0.08 to 3.05 m reaching all three levels, an old save with a fork load becoming a pallet, the converted 14,000-triangle model with its four wheels on their axles, and the vehicle panel in forklift mode.');

@@ -13,6 +13,8 @@ import {hire,quit,collectOwed,employerName,careerOf,promote,nextRank,ownerOf,emp
 import {tickSupply,supplyOf} from './supply.js';
 import {totalPlanks,palletsOf,floorPallets,liftPallet,setPallet} from './pallets.js';
 import * as fp from './fork-pallets.js';
+import {forkGoal,forkGhost} from './fork-guide.js';
+import {fillIcon} from './item-icon.js';
 import {tickTickets,takeTicket,stagePlanks,shipTicket,loadTicket,deliverTicket,openTickets,takenBy,ticketText,dueText,stagingOf,ticketsOf,TAKE_RANK} from './tickets.js';
 import {createOffice,createNameBoard,OFFICE_CLOCK,OFFICE_BOARD,OFFICE_COUNTER,OFFICE_STORE} from './office.js';
 import {dockRoute,DOCK_BAY} from './customers.js';
@@ -231,9 +233,9 @@ function stageOnOrder(id){const c=GameState.progress.carry;if(c?.kind!=='planks'
 function shipOrder(id){const k=ticketsOf(GameState.progress.companies?.ridgeline).list.find(t=>t.id===id),r=applyCompany({type:'ship',id});if(r.error){toast(r.error);return}if(k)dockGoing=k.planks;syncWarehouse();notifyPhone(r.message+' Paid '+money(PIECE_PAY.orders)+'.')}
 // The forklift (4.16 D): parked in its bay in the warehouse; E at it (Yard hand or better, on shift) to drive: W S A D, R raises the forks and F lowers them. At a rack bay, a staging pallet or the delivery pile, E lifts or sets down a pallet
 // of up to 40 planks (the forks' load is saved on the company, forest.js forkLoadOf). The model is about 14,000 triangles and only loaded (and drawn) in the warehouse.
-const fork={on:false,state:forklift.fresh()};let forkView=null,forkLoading=false,forkHips=.95;const FORK_SIT=.08; // forkHips: your hips' height when standing (measured as you get on); FORK_SIT: hip joint above the cushion
-function loadForklift(room){if(forkView||forkLoading)return;forkLoading=true;import('./forklift-view.js').then(m=>{forkView=m.buildForklift();room.scene.add(forkView.group);updateFork()})}
-function updatePalletTags(){const o=shop&&officeByKey(shop);if(!o||o.kind!=='warehouse'||!o.room.updateTags)return;const extra=[],fl=forkLoadOf(GameState.progress);if(fl>0&&forkView){const at=forklift.toWorld(fork.state,0,fp.CARRY_Z);extra.push({x:at.x,y:forkView.pallet.position.y+forkView.pallet.scale.y/2+.25,z:at.z,count:fl,product:'planks'})}o.room.updateTags(camera,{x:me.position.x,z:me.position.z},extra)} // the tags above the pallets (pallet-tags.js), the one on the forks too
+const fork={on:false,state:forklift.fresh()};let forkView=null,forkGuide=null,forkLoading=false,forkHips=.95;const FORK_SIT=-.04; // forkHips: your hips' height when standing (measured as you get on); FORK_SIT: hip joint above the cushion
+function loadForklift(room){if(forkView||forkLoading)return;forkLoading=true;Promise.all([import('./forklift-view.js'),import('./fork-guide-view.js')]).then(([m,g])=>{forkView=m.buildForklift();room.scene.add(forkView.group);forkGuide=g.createForkGuide();room.scene.add(forkGuide.group);updateFork()})}
+function updatePalletTags(){const o=shop&&officeByKey(shop);if(!o||o.kind!=='warehouse'||!o.room.updateTags)return;const extra=[],fl=forkLoadOf(GameState.progress);if(fl>0&&forkView){const at=forklift.toWorld(fork.state,0,fp.CARRY_Z);extra.push({x:at.x,y:forkView.topY+.25,z:at.z,count:fl,product:'planks'})}o.room.updateTags(camera,{x:me.position.x,z:me.position.z},extra)} // the tags above the pallets (pallet-tags.js), the one on the forks too
 function updateFork(){if(forkView)forkView.set(fork.state,forkLoadOf(GameState.progress))}
 const forkBlocks=(x,z)=>{if(fork.on||!forkView)return false;const s=fork.state,dx=x-s.x,dz=z-s.z,c=Math.cos(s.yaw),n=Math.sin(s.yaw);return Math.abs(dx*c-dz*n)<.85&&Math.abs(dx*n+dz*c)<1.9} // a parked forklift is solid to a walker
 function getOnFork(){const pr=GameState.progress;if(!onRidgeline()||careerOf(pr,'ridgeline').rank<4){toast('The forklift is for Ridgeline Yard hands (rank 4) and up, on shift.');return}if(pr.carry){toast('Put down what you are carrying first.');return}
@@ -249,11 +251,17 @@ function forkCtx(){
  const o=shop&&officeByKey(shop),co=GameState.progress.companies?.ridgeline,list=palletsOf(co);
  if(list!==forkListKey){forkListKey=list;forkBoxes=fp.boxesOf(list);forkCells=new Set(list.filter(q=>q.at.rack).map(q=>q.at.rack))}
  const slots=stagingOf(co);
- return {boxes:forkBoxes,carried:forkLoadOf(GameState.progress),blockedOther:(x,z)=>o.room.blockedOther(x,z),solidAt:(x,z)=>o.room.solidAt(x,z),occupied:slot=>forkCells.has(slot),stagingTaken:i=>slots[i]?.status==='taken'}
+ return {boxes:forkBoxes,carried:forkLoadOf(GameState.progress),cellOf:slot=>RACK_SLOTS.find(c=>c.id===slot),blockedOther:(x,z)=>o.room.blockedOther(x,z),solidAt:(x,z)=>o.room.solidAt(x,z),occupied:slot=>forkCells.has(slot),stagingTaken:i=>slots[i]?.status==='taken'}
 }
 function forkCompany(company,message){const pr=GameState.progress;GameState.progress={...pr,companies:{...(pr.companies||{}),ridgeline:company}};persist();syncWarehouse();updateFork();if(message)toast(message)}
 function stageFromForks(id){const load=forkLoadOf(GameState.progress),r=applyCompany({type:'stage',id,count:load});if(r.error)return r;GameState.progress=forkUsed(GameState.progress,r.used);persist();syncWarehouse();updateFork();return r}
 // after each drive step: lift a pallet the tines are in and raised, or set down the one the forks carry when it meets what is under it
+// the guide: what to do next (a line in the panel) and the markers in the room (fork-guide.js, fork-guide-view.js)
+let forkClock=0;
+function forkGuideTick(ctx,dt){
+ if(!forkGuide)return;forkClock+=dt;if(!fork.on){forkGuide.update(null,null);return}
+ const g=forkGoal({carried:ctx.carried,boxes:ctx.boxes,staging:stagingOf(GameState.progress.companies?.ridgeline),pos:fork.state});fork.goal=g.text;forkGuide.update(g.target,forkGhost(fork.state,ctx),forkClock)
+}
 function forkTick(ctx,raise){
  const s=fork.state,co=GameState.progress.companies?.ridgeline;fork.hint=fp.forkHint(s,ctx);
  if(ctx.carried>0){
@@ -661,7 +669,7 @@ function exitVehicle(){
  me.rotation.y=f.state.yaw+(driving.seatSide==='passenger'||seatWas==='passenger'?-Math.PI/2:Math.PI/2);keys.clear();look.resetMotion();pitch=.38;zoom=zoomTarget=7;persist();
 }
 function updateWorldUI(){
- vehicleHud(fork.on?vehicleHudModel({forklift:{speed:fork.state.speed,lift:fork.state.lift,load:forkLoadOf(GameState.progress),hint:fork.hint||''}}):vehicleHudModel({driving:driving.active,seat:driving.seatSide,name:driving.active?.spec.name,speed:driving.speed,fuel:driving.active?driving.fuelOf(driving.active.spec.id):null,ground:driving.active?(()=>{const s=terrain().surfaceAt(driving.active.state.x,driving.active.state.z);return {label:SURFACE_LABEL[s]||'Ground',factor:surfaceSpeed(s,driving.active.cls)}})():null}));
+ vehicleHud(fork.on?vehicleHudModel({forklift:{speed:fork.state.speed,lift:fork.state.lift,load:forkLoadOf(GameState.progress),hint:fork.hint||'',goal:fork.goal||''}}):vehicleHudModel({driving:driving.active,seat:driving.seatSide,name:driving.active?.spec.name,speed:driving.speed,fuel:driving.active?driving.fuelOf(driving.active.spec.id):null,ground:driving.active?(()=>{const s=terrain().surfaceAt(driving.active.state.x,driving.active.state.z);return {label:SURFACE_LABEL[s]||'Ground',factor:surfaceSpeed(s,driving.active.cls)}})():null}));
  camera.updateMatrixWorld(true);const hit=chooseInteraction(candidates(),me.position,me.rotation.y);selectedInteraction=hit;
  { const target=chopping?chopping.tree:hit?.id?.startsWith('tree-')?hit.point:null;world.setTarget(active&&!modal?target:null); }
  const p=hit?screenAnchor(hit.anchor(),camera,innerWidth,innerHeight,THREE.Vector3):null;$('prompt').hidden=!active||modal||!!busy||!!chopping||!p||!!driving.active;
@@ -967,7 +975,7 @@ function refreshHotbar(){
   const button=document.createElement('button');button.type='button';button.className='hotbar-slot';button.title=entry.item.name;
   button.setAttribute('aria-label',`${entry.item.name}, slot ${i+1}`);button.setAttribute('aria-pressed',String(p.equipped===entry.item.id));
   const key=document.createElement('span');key.className='hotbar-key';key.textContent=String(i+1);
-  const icon=document.createElement('span');icon.textContent=entry.item.icon;button.append(key,icon);
+  const icon=document.createElement('span');fillIcon(icon,entry.item);button.append(key,icon);
   if(entry.item.type!=='tool'){const count=document.createElement('span');count.className='hotbar-count';count.textContent='×'+entry.quantity;button.append(count)}
   button.onclick=e=>{e.preventDefault();hotbarUse(i)};
   bar.append(button);
@@ -1272,7 +1280,7 @@ let prev=performance.now(),frames=0,elapsed=0,menuDrawn=false,stuckTime=0;
 function stepWorld(step){
  let startX=me.position.x,startZ=me.position.z;
  let pressed=false;
- if(fork.on){if(active&&!modal&&!document.hidden){const k=c=>keys.has(c),ctx=forkCtx();fork.state=forklift.step(fork.state,{throttle:Number(k('KeyW')||k('ArrowUp'))-Number(k('KeyS')||k('ArrowDown')),steer:Number(k('KeyA')||k('ArrowLeft'))-Number(k('KeyD')||k('ArrowRight')),raise:Number(k('KeyR'))-Number(k('KeyF')),fine:k('ShiftLeft')||k('ShiftRight')},step,blocked,{forksClear:s=>fp.forksClear(s,ctx),liftRange:s=>fp.liftRange(s,ctx)});forkTick(forkCtx(),Number(k('KeyR'))-Number(k('KeyF')));const seat=forklift.seatOf(fork.state);me.position.x=seat.x;me.position.z=seat.z;me.rotation.y=fork.state.yaw;startX=seat.x;startZ=seat.z}}else if(driving.active){ // driving: the keys steer the vehicle and you ride at its seat (nothing paused is simulated: a paused game leaves the vehicle where it is)
+ if(fork.on){if(active&&!modal&&!document.hidden){const k=c=>keys.has(c),ctx=forkCtx();fork.state=forklift.step(fork.state,{throttle:Number(k('KeyW')||k('ArrowUp'))-Number(k('KeyS')||k('ArrowDown')),steer:Number(k('KeyA')||k('ArrowLeft'))-Number(k('KeyD')||k('ArrowRight')),raise:Number(k('KeyR'))-Number(k('KeyF')),boost:k('ShiftLeft')||k('ShiftRight')},step,blocked,{forksClear:s=>fp.forksClear(s,ctx),liftRange:s=>fp.liftRange(s,ctx)});{const c2=forkCtx(),held=k('KeyR')||k('KeyF'),a=fp.assist(fork.state,c2,step,{forksHeld:held});if(a!==fork.state&&forklift.clear(a,blocked,{forksClear:s=>fp.forksClear(s,c2)}))fork.state=a;forkTick(c2,Number(k('KeyR'))-Number(k('KeyF')))}const seat=forklift.seatOf(fork.state);me.position.x=seat.x;me.position.z=seat.z;me.rotation.y=fork.state.yaw;startX=seat.x;startZ=seat.z}}else if(driving.active){ // driving: the keys steer the vehicle and you ride at its seat (nothing paused is simulated: a paused game leaves the vehicle where it is)
   if(active&&!modal&&!document.hidden){driving.step(step,{throttle:Number(keys.has('KeyW')||keys.has('ArrowUp'))-Number(keys.has('KeyS')||keys.has('ArrowDown')),steer:Number(keys.has('KeyA')||keys.has('ArrowLeft'))-Number(keys.has('KeyD')||keys.has('ArrowRight')),brake:keys.has('Space')},pedestrians.people.map(p=>({x:p.group.position.x,z:p.group.position.z,r:.45})));
    const seat=driving.seat();me.position.x=seat.x;me.position.z=seat.z;me.rotation.y=driving.yaw;startX=seat.x;startZ=seat.z; // riding is not walking: no walked distance, no stuck check
    driveSave+=step;if(driveSave>=5){driveSave=0;persist()}}
@@ -1314,7 +1322,7 @@ look.tick(view);
 if(worldPanel?.actor&&!$('dialog').hidden){const actor=worldPanel.actor,pa=getMeWorldPosition(new THREE.Vector3()),pb=actor.getWorldPosition(new THREE.Vector3()),mid=pa.clone().add(pb).multiplyScalar(.5);const angle=Math.atan2(pa.x-pb.x,pa.z-pb.z);actor.rotation.y=angle;me.rotation.y=angle+Math.PI;worldPlayer.position.copy(mid);if(shop)shops[shop].camera(worldPlayer,angle+.45,.32,5.8,view);else updateCamera(worldPlayer,angle+.45,.32,5.8,view)}else if(shop){getMeWorldPosition(worldPlayer.position);shops[shop].camera(worldPlayer,yaw,pitch,zoom,view);}else if(inside)(home.camera||indoorCamera)(me,yaw,pitch,zoom,view);else updateCamera(me,yaw,pitch,zoom,view);
 const daylight=Math.max(.12,Math.sin((GameState.progress.routine.minutes-360)/1440*Math.PI*2));sun.intensity=.2+daylight*2.9;scene.background.setRGB(.08+daylight*.65,.12+daylight*.67,.2+daylight*.62);scene.fog.color.copy(scene.background);
 
-updateEquipped(modal?0:view);updateCarryPose(view);updateNozzlePose(view);updateForkPose();avatar.update(modal?0:view);if(shop)shops[shop].clerk.update(modal?0:view);updatePalletTags();updateZones(view);updateSleep(real);updateWork(view);updateGig(view);updateObjective(view);updateWorldUI();updateTracker(real);updateHomeNotices();tickOrders(real);tickShifts(real);updateRing();updateMultiplayer(now,moving,view);syncPlayerMesh();fuelHose();{const dv=driving.active,on=!!dv&&(dv.fuelMgal>0||!dv.spec.fuel)&&!modal;{const tip=dv&&on?driving.exhaust(dv):null;if(tip)smoke.emit(dv.spec.id,view,tip,exhaustRate({running:true,throttle:driving.driving&&(keys.has('KeyW')||keys.has('ArrowUp'))?1:0,speed:dv.state.speed,top:dv.cls.top,tier:dv.cls.tier}));smoke.update(view,!inside)}audio.engine(engineVoice({speed:dv?dv.state.speed:0,top:dv?dv.cls.top:10,throttle:dv&&driving.driving&&(keys.has('KeyW')||keys.has('ArrowUp'))?1:0,tier:dv?dv.cls.tier:'low',running:on}))}audio.fuel({listener:listenerAt(),at:fuel.held?fuel.held.use:canAt,level:fuelFlow,fullness:fuelFull});fuelFlow=0;canAt=null;renderer.render(inside?home.room.scene:scene,camera)}requestAnimationFrame(frame);
+updateEquipped(modal?0:view);updateCarryPose(view);updateNozzlePose(view);updateForkPose();if(forkGuide)forkGuideTick(fork.on?forkCtx():null,view);avatar.update(modal?0:view);if(shop)shops[shop].clerk.update(modal?0:view);updatePalletTags();updateZones(view);updateSleep(real);updateWork(view);updateGig(view);updateObjective(view);updateWorldUI();updateTracker(real);updateHomeNotices();tickOrders(real);tickShifts(real);updateRing();updateMultiplayer(now,moving,view);syncPlayerMesh();fuelHose();{const dv=driving.active,on=!!dv&&(dv.fuelMgal>0||!dv.spec.fuel)&&!modal;{const tip=dv&&on?driving.exhaust(dv):null;if(tip)smoke.emit(dv.spec.id,view,tip,exhaustRate({running:true,throttle:driving.driving&&(keys.has('KeyW')||keys.has('ArrowUp'))?1:0,speed:dv.state.speed,top:dv.cls.top,tier:dv.cls.tier}));smoke.update(view,!inside)}audio.engine(engineVoice({speed:dv?dv.state.speed:0,top:dv?dv.cls.top:10,throttle:dv&&driving.driving&&(keys.has('KeyW')||keys.has('ArrowUp'))?1:0,tier:dv?dv.cls.tier:'low',running:on}))}audio.fuel({listener:listenerAt(),at:fuel.held?fuel.held.use:canAt,level:fuelFlow,fullness:fuelFull});fuelFlow=0;canAt=null;renderer.render(inside?home.room.scene:scene,camera)}requestAnimationFrame(frame);
 
 // Development hook: open the game with ?debug to inspect state from the console (window.__city).
 if(typeof location!=='undefined'&&new URLSearchParams(location.search).has('debug'))window.__city={GameState,world,scene,camera,avatar,driving,pedestrians,audio,sawmillCtl,enterOffice:key=>{const o=officeByKey(key);if(o)enterOffice(o);return !!o},holdBend:a=>{bendNow=a;avatar.setLean(a*.87);avatar.setCrouch(a*.22)},

@@ -346,3 +346,12 @@ select:hover,select:focus-visible,.phone-nav button:hover:not(:disabled){box-sha
 body:has(#welcome:not([hidden])) #phoneButton,body:has(#credits:not([hidden])) #phoneButton{display:none}
 /* The phone icon sits right above the tracker card (it is inside the card's container, so it follows the card's height). */
 #objective #phoneButton{position:absolute;left:0;top:auto;bottom:calc(100% + 10px)}
+
+#vpNote{white-space:pre-line}
+
+/* item pictures (item-icon.js): a rendered picture of the real tool or material instead of an emoji */
+.has-picture{display:inline-block;width:1.45em;height:1.45em;vertical-align:middle;background:var(--icon) center/contain no-repeat}
+.item-icon.has-picture{width:2.1em;height:2.1em}
+.hotbar-slot .has-picture{width:1.35em;height:1.35em}
+.store-item-icon.has-picture{width:2.4em;height:2.4em}
+.has-icon::before{content:"";display:inline-block;width:1.5em;height:1.5em;margin-right:.35em;vertical-align:-.4em;background:var(--icon) center/contain no-repeat}

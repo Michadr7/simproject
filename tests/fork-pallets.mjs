@@ -4,7 +4,7 @@ import {POCKET,CARRY_Z,CARRY_DROP,levelBase,heightOf,boxesOf,probe,engagedBox,li
 import {PALLET} from '../dist/pallets.js';
 import {bayX,FACE_ROWS,WAREHOUSE_STAGING,RACK_SLOTS} from '../dist/warehouse-layout.js';
 
-// The physical forks (DESIGN 4.16 I step 2): pockets, alignment, shelf lanes, what a carried pallet rests on. Poses are worked out from the layout, not by feel.
+// The physical forks (DESIGN 4.16 I step 2, made more forgiving after the first play-test): pockets, alignment, shelf lanes, what a carried pallet rests on, and the assists. Poses are worked out from the layout, not by feel.
 const open=()=>false;
 const ctxFor=(pallets=[],carried=0,extra={})=>({boxes:boxesOf(pallets),carried,blockedOther:open,solidAt:open,occupied:slot=>pallets.some(p=>p.at.rack===slot),stagingTaken:()=>false,...extra});
 const floorPallet=(x,z,yaw=0,count=12,id=1)=>({id,product:'planks',count,at:{floor:{x,z,yaw}}});
@@ -17,13 +17,13 @@ assert.equal(levelBase(1),0);assert.equal(levelBase(2),1.5);assert.equal(levelBa
 assert(Math.abs(CARRY_Z-1.42)<1e-9&&CARRY_Z-PALLET.d/2>=.79,'a carried pallet starts at the carriage');assert(F.LIFT_MIN<=.1,'the tines rest low enough for a floor pallet\'s pocket');
 assert.equal(Math.round(axisError(Math.PI,0)*1e6),0,'a pallet is entered from either end');assert(Math.abs(axisError(1.6,0))<=Math.PI/2);
 
-// the pocket: tine tops 5 to 16 cm above the base, within 8 cm of the middle, within 8 degrees
+// the pocket: tine tops 2 to 18 cm above the base, within 18 cm of the middle, within 11 degrees
 {const at=(depth,lift,over)=>probe(facing(depth,lift,over),pallet);
  assert.equal(at(-.5,.1).state,'clear','not touching yet');
  let r=at(.6,.1);assert.equal(r.state,'pocket');assert(Math.abs(r.depth-.6)<1e-6,'depth '+r.depth);assert.equal(r.aligned,true);
- assert.equal(at(.6,.05).state,'pocket');assert.equal(at(.6,.16).state,'pocket','the band includes the lift height');
- r=at(.6,.3);assert.equal(r.state,'blocked');assert.match(r.reason,/too high/);r=at(.6,.03);assert.equal(r.state,'blocked');assert.match(r.reason,/too low/);
- assert.match(at(.6,.1,{x:.2}).reason,/Line up/,'20 cm off to the side');assert.equal(at(.6,.1,{x:.07}).state,'pocket','7 cm is fine');assert.match(at(.6,.1,{yaw:.3,x:0}).reason,/Line up/,'17 degrees off');assert.equal(at(.6,.1,{yaw:.04}).state,'pocket','a couple of degrees is fine');assert.match(at(.6,.1,{yaw:.1}).reason,/Line up/,'but the tips have swung 15 cm sideways');
+ assert.equal(at(.6,.03).state,'pocket');assert.equal(at(.6,.18).state,'pocket','the band includes the lift height');assert.match(at(.6,.19).reason,/too high/,'but not 19 cm');
+ r=at(.6,.3);assert.equal(r.state,'blocked');assert.match(r.reason,/too high/);r=at(.6,.01);assert.equal(r.state,'blocked');assert.match(r.reason,/too low/);
+ assert.match(at(.6,.1,{x:.2}).reason,/Line up/,'20 cm off to the side');assert.equal(at(.6,.1,{x:.15}).state,'pocket','15 cm is fine');assert.match(at(.6,.1,{yaw:.3,x:0}).reason,/Line up/,'17 degrees off');assert.equal(at(.6,.1,{yaw:.04}).state,'pocket','a couple of degrees is fine');assert.equal(at(.6,.1,{yaw:.1}).state,'pocket','so is 6 degrees (the tips swing 15 cm)');assert.match(at(.6,.1,{yaw:.15}).reason,/Line up/,'but 9 degrees swings the tips 23 cm sideways');
  assert.equal(at(.6,.7).state,'clear','tines above a 12-plank pallet pass over it: '+at(.6,.7).state);assert.equal(probe(facing(.6,.4),pallet).state,'blocked','but not through the planks (a 12-plank pallet is 42 cm high)');
  assert.match(at(.9,.1).reason,/all the way in/,'the carriage stops at the pallet');
  // from the other end (turned half round)
@@ -60,7 +60,7 @@ assert.equal(Math.round(axisError(Math.PI,0)*1e6),0,'a pallet is entered from ei
  const taken=ctxFor([{id:1,product:'planks',count:40,at:{rack:'B4-1'}}],40);assert.equal(forksClear(carry(row,.09),taken),false,'a cell holds one pallet');assert.equal(forksClear(carry(row,.09),c40),true);
  // the floor: anywhere free, in the middle of the aisle
  s={x:0,z:2,yaw:.7,speed:0,lift:.5,steer:0,roll:0};const fc=ctxFor([],12);r=restingOn(s,fc);assert.equal(r.kind,'floor');assert.equal(r.surface,0);assert.deepEqual(liftRange(s,fc),[.09,F.LIFT_MAX]);
- assert.equal(settles({...s,lift:.09},fc).kind,'floor','lowered to the floor: set down there');assert.equal(settles({...s,lift:.09},fc).yaw,.7,'in the direction the forklift is facing');
+ assert.match(forkHint(s,fc),/Lower the forks \(F\) to set the pallet down here/,'over open floor the panel says lowering sets it down');assert.equal(settles({...s,lift:.09},fc).kind,'floor','lowered to the floor: set down there');assert.equal(settles({...s,lift:.09},fc).yaw,.7,'in the direction the forklift is facing');
  assert.equal(restingOn(s,ctxFor([],12,{solidAt:(x,z)=>z>2.5})).kind,'blocked','not into a wall');
  // staging squares: an order that is waiting takes the planks; an empty square does not take a pallet
  const sq=WAREHOUSE_STAGING[1],sqc=(o={})=>({x:sq.x,z:sq.z-CARRY_Z,yaw:Math.PI,...o});const place=(lift)=>({...sqc(),z:sq.z+CARRY_Z,yaw:Math.PI,speed:0,lift,steer:0,roll:0});
@@ -79,5 +79,5 @@ assert.equal(Math.round(axisError(Math.PI,0)*1e6),0,'a pallet is entered from ei
  // backing out is always allowed
  let b=facing(.6,.1);for(let i=0;i<60;i++)b=F.step(b,{throttle:-1},1/30,open,ctx);assert(probe(b,pallet).state==='clear'||b.z<facing(.6,.1).z,'it backs out');
  // the slow lift moves slower
- const slow=F.step(F.fresh({x:0,z:-9,yaw:0}),{raise:1,fine:true},1,open);const fast=F.step(F.fresh({x:0,z:-9,yaw:0}),{raise:1},1,open);assert(Math.abs(slow.lift-(F.LIFT_MIN+F.LIFT_FINE))<1e-9&&fast.lift>slow.lift*3)}
-console.log('PASS fork-pallets.mjs: pocket (tine tops 5 to 16 cm above the base, within 8 cm and 8 degrees, from either end), engage at 45 cm and lift at 14 cm, tines blocked by a pallet at the wrong height or crooked, shelf lanes (square, off the uprights, at a level\'s height), a carried pallet resting in a free cell, on an order\'s square or on the floor, not going through other pallets, the drive step stopping short and backing out, and the slow lift.');
+ const up=F.step(F.fresh({x:0,z:-9,yaw:0}),{raise:1},1,open);assert(Math.abs(up.lift-(F.LIFT_MIN+F.LIFT_SPEED))<1e-9&&F.LIFT_SPEED===.5,'the forks rise at a steady 0.5 m/s')}
+console.log("PASS fork-pallets.mjs: pocket (tine tops 2 to 18 cm above the base, within 18 cm and 11 degrees, from either end), engage at 35 cm and lift at 14 cm, tines blocked by a pallet at the wrong height or crooked, shelf lanes (square, off the uprights, at a level height), a carried pallet resting in a free cell, on an order square or on the floor, not going through other pallets, the drive step stopping short and backing out.");

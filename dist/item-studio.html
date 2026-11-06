@@ -1,0 +1,28 @@
+<!doctype html>
+<meta charset="utf-8">
+<title>Item studio</title>
+<!-- Dev tool, not part of the game: scripts/render-item-icons.mjs opens this page in headless Edge and calls renderItem(id) for every tool and material, then writes dist/item-icons.js
+     (the pictures the inventory, the hotbar and the stores show instead of an emoji). The held models are the real ones (item-models.js createHeldItem). Run `npm run icons` with `npm run dev` serving the site. -->
+<body style="margin:0;background:#00000000">
+<script type="module">
+import * as THREE from './vendor/three.module.js';
+import {createHeldItem} from './item-models.js';
+import {itemById} from './items.js';
+const S=128;
+const renderer=new THREE.WebGLRenderer({antialias:true,alpha:true,preserveDrawingBuffer:true});
+renderer.setPixelRatio(1);renderer.setSize(S,S);renderer.setClearColor(0x000000,0);document.body.append(renderer.domElement);
+const scene=new THREE.Scene(),camera=new THREE.PerspectiveCamera(24,1,.05,50);
+scene.add(new THREE.HemisphereLight(0xfff3dc,0x8a8678,2.4));const sun=new THREE.DirectionalLight(0xffffff,2.6);sun.position.set(-2,4,5);scene.add(sun);
+// how each kind of item is turned to face the camera: handles (axes, saws) run along +z in the model, so they are turned to lie across the picture and tilted up to the right
+const pose={axe:(o,h)=>{o.rotation.y=Math.PI/2;h.rotation.z=.8;h.rotation.x=.25},saw:(o,h)=>{o.rotation.y=Math.PI/2;h.rotation.z=.45;h.rotation.x=.25},can:(o,h)=>{h.rotation.set(.12,-.7,0)},log:(o,h)=>{h.rotation.set(.3,-.5,0)}};
+const kindOf=item=>/axe/.test(item.id)?'axe':/saw/.test(item.id)?'saw':item.id==='gas-can'?'can':'log';
+window.renderItem=async id=>{
+ const item=itemById(id),obj=createHeldItem(item);const holder=new THREE.Group();holder.add(obj);pose[kindOf(item)](obj,holder);scene.add(holder);
+ holder.updateMatrixWorld(true);const box=new THREE.Box3().setFromObject(holder),size=box.getSize(new THREE.Vector3()),centre=box.getCenter(new THREE.Vector3());
+ const span=Math.max(size.x,size.y,size.z)*1.08,dist=span/2/Math.tan(THREE.MathUtils.degToRad(camera.fov/2));
+ camera.position.set(centre.x+dist*.12,centre.y+dist*.1,centre.z+dist);camera.lookAt(centre);camera.updateProjectionMatrix();
+ await new Promise(r=>requestAnimationFrame(()=>requestAnimationFrame(r)));
+ renderer.render(scene,camera);const url=renderer.domElement.toDataURL('image/png');scene.remove(holder);return url;
+};
+window.studioReady=true;
+</script>

@@ -1,6 +1,6 @@
 {
   "name": "city-life-local-multiplayer",
-  "version": "0.35.0",
+  "version": "0.35.1",
   "private": true,
   "type": "module",
   "scripts": {
@@ -9,6 +9,7 @@
     "server:lan": "node server.js --lan",
     "release": "node scripts/package-release.mjs",
     "pictures": "node scripts/render-vehicle-pictures.mjs",
+    "icons": "node scripts/render-item-icons.mjs",
     "test": "node scripts/run-tests.mjs"
   },
   "dependencies": {

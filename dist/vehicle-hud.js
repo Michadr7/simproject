@@ -5,13 +5,13 @@ export const STOP_SPEED=1; // m/s: below this you may get out (the same rule as 
 
 // fuel: {mgal, capacityMgal, type} of the vehicle you are in, or null.
 // ground: {label, factor} (the surface under the wheels and the share of top speed it allows), or null.
-// forklift: {speed, lift, load, hint} while you drive the warehouse forklift: the panel names it, shows the fork height and the load in the fuel slot, lists every control (always on screen while driving)
-// and says in its note why the forks are stopped or what to do next (fork-pallets.js forkHint).
-export function forkliftHudModel({speed=0,lift=0,load=0,hint=''}){
+// forklift: {speed, lift, load, hint, goal} while you drive the warehouse forklift: the panel names it, shows the fork height and the load in the fuel slot, lists every control (always on screen while driving)
+// and says in its note what to do next and where (fork-guide.js forkGoal, one line) and why the forks are stopped or what to do with them (fork-pallets.js forkHint, the next line).
+export function forkliftHudModel({speed=0,lift=0,load=0,hint='',goal=''}){
  const stopped=Math.abs(speed)<STOP_SPEED;
  return {state:'driving',name:'Forklift · indoor',speed:`${mph(speed)} mph`,fuel:`${lift.toFixed(2)} m · ${load?load+' planks':'empty'}`,fuelLabel:'Forks',
-  keys:[{kbd:'W S',text:'Drive and reverse'},{kbd:'A D',text:'Steer (rear wheels: the back swings out)'},{kbd:'R F',text:'Raise and lower the forks'},{kbd:'Shift',text:'Hold for slow forks'},{kbd:'E',text:stopped?'Get off':'Stop to get off',muted:!stopped}],
-  note:hint||'Slide the forks into a pallet, raise to lift it, lower to set it down. Indoor only.'};
+  keys:[{kbd:'W S',text:'Drive and reverse'},{kbd:'A D',text:'Steer (rear wheels: the back swings out)'},{kbd:'R F',text:'Raise and lower the forks'},{kbd:'Shift',text:'Hold to drive faster'},{kbd:'E',text:stopped?'Get off':'Stop to get off',muted:!stopped}],
+  note:[goal,hint].filter(Boolean).join('\n')||'Slide the forks into a pallet, raise to lift it, lower to set it down. Indoor only.'};
 }
 export function vehicleHudModel({driving=null,seat=null,name=null,speed=0,fuel=null,ground=null,forklift=null}={}){
  if(forklift)return forkliftHudModel(forklift);

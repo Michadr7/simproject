@@ -35,20 +35,25 @@ try{
  {const pl=object('player');assert.equal(pl.visible,true,'you are seen on the forklift (an open cab)');assert(pl.position.y>.15&&pl.position.y<.5,'sitting on the seat, not standing on the floor: '+pl.position.y.toFixed(2));assert.match(ids.get('vpName').textContent,/Forklift/,'the vehicle panel names the forklift');assert.equal(ids.get('vpKeys').children.length,5,'and lists its controls')}
  // W drives it east, R raises the forks
  const x0=fork().state.x;send('keydown','KeyW');send('keydown','KeyR');pump(1);send('keyup','KeyW');send('keyup','KeyR');pump(1);
- assert(fork().state.x>x0+1,'it drove: '+fork().state.x);assert(Math.abs(object('forklift-wheelFL').rotation.x)>1,'the wheels turned: '+object('forklift-wheelFL').rotation.x.toFixed(2));assert(fork().state.lift>.7,'the forks rose: '+fork().state.lift);assert(object('forklift-carriage').position.y>.4,'and the drawing follows');assert(object('forklift-mast').scale.y>=1);
+ assert(fork().state.x>x0+.8,'it drove: '+fork().state.x);assert(Math.abs(object('forklift-wheelFL').rotation.x)>1,'the wheels turned: '+object('forklift-wheelFL').rotation.x.toFixed(2));assert(fork().state.lift>.5,'the forks rose: '+fork().state.lift);assert(object('forklift-carriage').position.y>.25,'and the drawing follows');assert(object('forklift-mast').scale.y>=1);
  assert.match(prompt(),/Get off the forklift|Stop to get off/,'E only gets you off: '+prompt());
 
- // the shelf will not take the tines between its levels: the forklift stops at its face
+ // the shelf will not take the tines between its levels (in a column with no pallet to level the forks to): the forklift stops at its face
  const row=FACE_ROWS.B.z,cx=bayX(4),mouth=row-.62; // face B looks toward -z: the forklift comes from the aisle at lower z, facing +z (yaw 0)
- place(cx,-6.8-TIP,0,1.4);hold('KeyW',1.5);assert(fork().state.z+TIP<-6.55,'stopped at the shelf: the tines are at '+(fork().state.z+TIP).toFixed(2)+' (the shelf face is -6.575)');
+ place(bayX(6),-6.8-TIP,0,1.4);hold('KeyW',1.5);assert(fork().state.z+TIP<-6.55,'stopped at the shelf: the tines are at '+(fork().state.z+TIP).toFixed(2)+' (the shelf face is -6.575)');
  // in line, level two, but too high for the pocket
- place(cx,mouth+.6-TIP,0,1.5+.4);pump(.3);assert.match(note(),/too high/,'the panel says why: '+note());assert.equal(load(),0);
+ place(cx,mouth+.6-TIP,0,1.5+.9);assert.match(note(),/too high/,'the panel says why: '+note());assert.equal(load(),0);
+ // closer to the pocket height the forks level themselves (the assist): 40 cm up they glide into the pocket without a key
+ place(cx,mouth-.5-TIP,0,1.5+.4);pump(1.2);assert(fork().state.lift<1.5+.19&&fork().state.lift>1.5+.02,'auto-level: the forks settled at '+fork().state.lift.toFixed(2));
  // the tines at pocket height: the panel says to raise
  place(cx,mouth+.6-TIP,0,1.5+.1);assert.match(note(),/Raise the forks to lift the pallet/,note());assert.equal(load(),0,'not lifted until the forks are raised');
  // raise: the pallet comes off the shelf and rides on the forks, with its tag
  hold('KeyR',.25);assert.equal(load(),40,'the pallet is on the forks');assert.equal(racks()['B4-2'],undefined,'and the cell is empty');assert.equal(object('forklift-load').visible,true,'drawn on the forks');
  assert(p().companies.ridgeline.pallets.some(q=>q.at.fork&&q.count===40),'saved as the pallet on the forks');assert.equal(p().companies.ridgeline.racks,undefined);assert.equal(forkTagShown(),40,'with a tag that says 40');
  assert.match(ids.get('vpFuel').textContent,/40 planks/);assert.match(toastText(),/Lifted a pallet · 40 planks/);
+ // the carried pallet is a real pallet with its planks board by board (not a block), and the guide marks where to take it
+ assert.equal(object('forklift-load-planks').count,40,'forty boards on the forks');assert(object('forklift-load-pallet'),'on a wooden pallet');
+ pump(.3);assert.equal(object('fork-beacon').visible,true,'a beam over the order square it is wanted at');assert.equal(object('fork-ghost').visible,true,'and a ghost outline of where it will rest');assert.match(note(),/Order #1 needs 12 more planks: take this pallet to square S1/,'the panel says where to take it: '+note());
  function toastText(){return ids.get('jobToast').textContent}
  // the top shelf of the back wall: line up with A1-3 (face A looks +z, so the forklift comes from the aisle and faces -z) and lower the pallet onto its deck
  const A=FACE_ROWS.A.z,ax=bayX(1);place(ax,A+CARRY_Z,Math.PI,levelBase(3)+.09+.2);assert.match(note(),/Lower the pallet into rack A1-3/,note());
@@ -56,12 +61,12 @@ try{
  // take it down again from the same shelf: the tines 60 cm into its pocket, level three, then raise
  place(ax,A+.62-.6+TIP,Math.PI,2.85+.1);assert.match(note(),/Raise the forks to lift the pallet/,note());hold('KeyR',.25);assert.equal(load(),40,'lifted again from the top shelf');assert.equal(racks()['A1-3'],undefined);
  // the order's staging square: lower the pallet onto it and the order takes its 12 planks; the rest stays on the forks
- const sq=WAREHOUSE_STAGING[0];place(sq.x,sq.z-CARRY_Z,0,.6);hold('KeyF',1);
+ const sq=WAREHOUSE_STAGING[0];place(sq.x,sq.z-CARRY_Z,0,.6);hold('KeyF',1.2);
  assert.equal(ticketsOf(p().companies.ridgeline).list[0].status,'staged','the order is staged');assert.equal(load(),28,'28 planks are still on the forks');
  // an empty square does not take a pallet
- const sq2=WAREHOUSE_STAGING[2];place(sq2.x,sq2.z-CARRY_Z,0,.6);pump(.3);assert.match(note(),/No order is waiting on that square/,note());hold('KeyF',1);assert.equal(load(),28,'it was not set down');
+ const sq2=WAREHOUSE_STAGING[2];place(sq2.x,sq2.z-CARRY_Z,0,.6);pump(.3);assert.match(note(),/No order is waiting on that square/,note());hold('KeyF',1.2);assert.equal(load(),28,'it was not set down');
  // the floor: in the aisle, set the rest down where the forklift faces
- place(0,5-0.0,.5,.6);hold('KeyF',1);assert.equal(load(),0,'set down on the floor');assert.equal(floorPallets(p().companies.ridgeline).length,1);
+ place(0,5-0.0,.5,.6);hold('KeyF',1.5);assert.equal(load(),0,'set down on the floor');assert.equal(floorPallets(p().companies.ridgeline).length,1);
  {const f=floorPallets(p().companies.ridgeline)[0],at=f.at.floor;assert.equal(f.count,28);assert(Math.abs(at.yaw-.5)<.01,'turned the way it was facing');assert.equal(object('warehouse-boards-floor').count,28,'28 boards drawn on it');assert(object('warehouse-pallets').count>=1,'on a wooden pallet');
   // lift it again from the floor: in front of the pallet, tines in 60 cm
   const sin=Math.sin(at.yaw),cos=Math.cos(at.yaw),back=(.62-.6)+TIP;place(at.x-sin*back,at.z-cos*back,at.yaw,.1);assert.match(note(),/Raise the forks to lift the pallet/,note());hold('KeyR',.25);assert.equal(load(),28,'a pallet on the floor can be lifted again');assert.equal(floorPallets(p().companies.ridgeline).length,0)}

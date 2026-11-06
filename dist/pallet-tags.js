@@ -4,19 +4,23 @@
 import * as T from './vendor/three.module.js';
 import {PALLET_CAP} from './pallets.js';
 
-export const TAG_MAX=24,TAG_RANGE=10,TAG_SIZE={w:.62,h:.31};
+export const TAG_MAX=24,TAG_RANGE=10,TAG_SIZE={w:.8,h:.4};
 const COLS=8,ROWS=5,CELL={w:64,h:32}; // 40 plates, 64 x 32 px each: 512 x 160
 const makeCanvas=()=>document.createElement('canvas');
 
-// plate `n` (1..PALLET_CAP) of the planks atlas: a dark plate with a honey edge, three boards on the left and the number on the right
+// plate `n` (1..PALLET_CAP) of the planks atlas: a dark plate with a honey edge, a stack of planks seen from the end on the left (three boards, each with its end grain and a light top edge)
+// and the number on the right in white with a dark outline so it reads against any background
 function drawAtlas(canvas){
  canvas.width=COLS*CELL.w;canvas.height=ROWS*CELL.h;const g=canvas.getContext('2d');if(!g)return false;
  g.clearRect(0,0,canvas.width,canvas.height);
  for(let n=1;n<=PALLET_CAP;n++){
   const i=n-1,x=(i%COLS)*CELL.w,y=Math.floor(i/COLS)*CELL.h;
-  g.fillStyle='rgba(21,19,14,.9)';g.fillRect(x+1,y+1,CELL.w-2,CELL.h-2);g.strokeStyle='#f5c518';g.lineWidth=2;g.strokeRect(x+2,y+2,CELL.w-4,CELL.h-4);
-  for(let b=0;b<3;b++){g.fillStyle=['#d3ab6e','#c99f63','#b78a50'][b];g.fillRect(x+7,y+8+b*6,20,5)} // the plank icon: three boards, one above the other
-  g.fillStyle='#fff7da';g.font='bold 20px Arial, Helvetica, sans-serif';g.textAlign='center';g.textBaseline='middle';g.fillText(String(n),x+45,y+17);
+  g.fillStyle='rgba(21,19,14,.92)';g.fillRect(x+1,y+1,CELL.w-2,CELL.h-2);g.strokeStyle='#f5c518';g.lineWidth=2;g.strokeRect(x+2,y+2,CELL.w-4,CELL.h-4);
+  // the plank icon: three boards stacked, each a light face over a darker end with a ring of grain
+  for(let b=0;b<3;b++){const by=y+6+b*7,tone=['#e0b878','#d3ab6e','#c29a5c'][b];
+   g.fillStyle='#3a2a18';g.fillRect(x+5,by,25,7);g.fillStyle=tone;g.fillRect(x+6,by+1,23,4);g.fillStyle='rgba(255,255,255,.35)';g.fillRect(x+6,by+1,23,1);
+   g.fillStyle='#8a6a40';g.fillRect(x+26,by+1,3,5);g.strokeStyle='#5c4426';g.lineWidth=1;g.beginPath();g.arc(x+27.5,by+3.5,1.1,0,6.3);g.stroke()}
+  g.font='bold 22px Arial, Helvetica, sans-serif';g.textAlign='center';g.textBaseline='middle';g.lineWidth=3;g.strokeStyle='#15130e';g.strokeText(String(n),x+47,y+17);g.fillStyle='#fff7da';g.fillText(String(n),x+47,y+17);
  }
  return true;
 }

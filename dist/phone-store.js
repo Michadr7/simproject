@@ -3,6 +3,7 @@
 // getState() -> the game state; onOrder(cart, homeId) and onOrderVehicle(model, colour, homeId) -> {message}|{error}; onSetMain(homeId) -> {message}|{error}; say(text) shows a message on the phone.
 import {vehicleLock,soldOnline,VEHICLE_PRICE,VEHICLE_ORDER,vehicleCapacity,vehicleCount,inStock,displayColour,restockMinutes,catalogue,quote,overview,arrivalText,etaText,nowMinutes,FEE_CENTS,BUNDLE,MAX_UNITS} from './orders.js';
 import {money} from './jobs.js';
+import {iconLabel} from './item-icon.js';
 import {requirementError} from './inventory.js';
 import {MAP} from './map-definition.js';
 import {coloursOf,colourOf,defaultColour} from './paint.js';
@@ -21,8 +22,8 @@ export function createPhoneStore({document:doc,getState,onOrder,onOrderVehicle,o
  $('phoneStoreCategory').onchange=()=>{category=categoryById($('phoneStoreCategory').value)?.id||'vehicles';refresh()};
  for(const {item,size} of catalogue()){
   const cat=categoryOf(item);if(!cat)continue;
-  const row=el('div','phone-store-row'),name=el('span','phone-store-name',`${item.icon} ${item.name}`),note=el('small','',`${money(item.price)} · ${SIZE_NOTE[size]}${item.requires?` · needs ${item.requires.skill} level ${item.requires.level}`:''}`),count=el('strong','phone-store-qty','0');
-  const minus=el('button','phone-store-step','−'),plus=el('button','phone-store-step','+');minus.id='phoneStoreSub-'+item.id;plus.id='phoneStoreAdd-'+item.id;minus.setAttribute('aria-label','One fewer '+item.name);plus.setAttribute('aria-label','One more '+item.name);
+  const row=el('div','phone-store-row'),name=el('span','phone-store-name',''),note=el('small','',`${money(item.price)} · ${SIZE_NOTE[size]}${item.requires?` · needs ${item.requires.skill} level ${item.requires.level}`:''}`),count=el('strong','phone-store-qty','0');
+  iconLabel(name,item);const minus=el('button','phone-store-step','−'),plus=el('button','phone-store-step','+');minus.id='phoneStoreSub-'+item.id;plus.id='phoneStoreAdd-'+item.id;minus.setAttribute('aria-label','One fewer '+item.name);plus.setAttribute('aria-label','One more '+item.name);
   minus.onclick=()=>{const q=(cart.get(item.id)||0)-1;if(q>0)cart.set(item.id,q);else cart.delete(item.id);refresh()};
   plus.onclick=()=>{const locked=requirementError(getState().progress,item);if(locked)return say(locked);if(quote(cartList()).units>=MAX_UNITS)return say(`One order can hold ${MAX_UNITS} things.`);cart.set(item.id,(cart.get(item.id)||0)+1);refresh()};
   const label=el('div','phone-store-label');label.append(name,note);row.append(label,minus,count,plus);$('phoneStoreItems').append(row);rows.set(item.id,{count,minus,row,category:cat});

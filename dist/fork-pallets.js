@@ -10,11 +10,12 @@ import {toWorld,tipOf,TIP,FORK_POINTS,LIFT_MIN,LIFT_MAX} from './forklift.js';
 import {RACK_SLOTS,LEVEL_Y,UNITS,BAYS,BAY_PITCH,WAREHOUSE_STAGING} from './warehouse-layout.js';
 import {PALLET} from './pallets.js';
 
-export const POCKET=Object.freeze({lo:.05,hi:.16,liftAt:.14,lateral:.08,yaw:.14,engage:.45}); // tine top above the pallet's base; liftAt: where a pallet comes off the ground; yaw: 8 degrees
+// More forgiving than the real thing (user feedback 2026-11-06: the first version was too hard to hit): the tine tops may be 2 to 18 cm above the base, the middle 18 cm off and 11 degrees crooked, and the assists below pull the forks into line.
+export const POCKET=Object.freeze({lo:.02,hi:.18,liftAt:.14,lateral:.18,yaw:.2,engage:.35}); // tine top above the pallet's base; liftAt: where a pallet comes off the ground; yaw: 11 degrees
 export const TINE=Object.freeze({x:.22,t:.05});
 export const CARRY_Z=.8+PALLET.d/2,CARRY_DROP=.09; // the middle of a carried pallet ahead of the body's middle; its base is this far below the tine tops
-export const LANE=Object.freeze({above:.05,height:1.2,post:.13,yaw:.14}); // tines in a shelf cell: at least 5 cm above the deck, at most 1.2 m (the beam is 1.35 m up), 13 cm from an upright, 8 degrees square
-export const SNAP=Object.freeze({along:.15,across:.15,yaw:.14}); // a carried pallet within this of a cell sets down square in it
+export const LANE=Object.freeze({above:.02,height:1.2,post:.1,yaw:.2}); // tines in a shelf cell: at least 2 cm above the deck, at most 1.2 m (the beam is 1.35 m up), 10 cm from an upright, 11 degrees square
+export const SNAP=Object.freeze({along:.45,across:.35,yaw:.26}); // a carried pallet within this of a free cell (and 15 degrees square to it) sets down in it, and is placed square in the cell
 export const STAGING_BOX=Object.freeze({hx:.7,hz:.625,top:.14}); // an order's staging square (warehouse.js: a 1.4 x 1.25 pallet, .14 high)
 export const levelBase=level=>level===1?0:LEVEL_Y[level-1]; // the base of a pallet in a cell of this level (on the floor, or on the shelf deck)
 export const planksHeight=count=>Math.ceil(Math.max(0,count)/4)*.092; // forty planks lie ten high
@@ -129,7 +130,7 @@ export function settles(s,ctx){const r=restingOn(s,ctx);return r.kind!=='blocked
 
 // A line for the vehicle panel: why the forks are stopped, or what to do next. '' when there is nothing to say.
 export function forkHint(s,ctx){
- if(ctx.carried>0){const r=restingOn(s,ctx);if(r.kind==='blocked')return r.reason;if(r.kind==='rack')return `Lower the pallet into rack ${r.slot}.`;if(r.kind==='staging')return 'Lower the pallet onto the order’s square.';return '';}
+ if(ctx.carried>0){const r=restingOn(s,ctx);if(r.kind==='blocked')return r.reason;if(r.kind==='rack')return `Lower the pallet into rack ${r.slot}.`;if(r.kind==='staging')return 'Lower the pallet onto the order’s square.';return 'Lower the forks (F) to set the pallet down here.';}
  for(const b of ctx.boxes){
   if(Math.hypot(b.x-s.x,b.z-s.z)>3.8)continue;
   const p=probe(s,b);
@@ -137,4 +138,48 @@ export function forkHint(s,ctx){
   if(p.state==='pocket')return p.depth>=POCKET.engage?'Raise the forks to lift the pallet.':'Drive in a little further.';
  }
  return '';
+}
+
+// ---- assists (user feedback 2026-11-06: hitting a pocket by hand was too hard) ----------------------------------------------------------------------------
+// Slow, small corrections applied while the forklift creeps (under ASSIST_SPEED): the forks glide to the pocket height of a pallet they are lined up with, the whole forklift is eased square and onto the
+// pallet's middle as the tines go in, and a carried pallet is eased into line with a free shelf cell. None of it fights the keys: the rates are far below what the driver can do, the forks only level themselves
+// while neither R nor F is held, and every correction is dropped by the caller if the result would not be clear (forklift.js clear).
+export const ASSIST={speed:2.2,lateral:.5,yaw:.7,level:.6,reach:3.6,approach:1.4,heightGap:.5};
+const clampTo=(v,m)=>Math.max(-m,Math.min(m,v));
+// the forklift eased so that the point `anchorZ` ahead of its middle moves toward the line through `target` (turned by target.yaw) and the forklift toward square with it; the anchor itself stays on that line's side
+function nudge(s,target,anchorZ,dt){
+ const r=across(target.yaw),anchor=toWorld(s,0,anchorZ),u=(anchor.x-target.x)*r.x+(anchor.z-target.z)*r.z,e=axisError(s.yaw,target.yaw);
+ const du=-clampTo(u,ASSIST.lateral*dt),de=-clampTo(e,ASSIST.yaw*dt),yaw=s.yaw+de,f=fwd(yaw),ax=anchor.x+r.x*du,az=anchor.z+r.z*du;
+ return {...s,yaw,x:ax-f.x*anchorZ,z:az-f.z*anchorZ};
+}
+// the pallet the forks are lined up with and approaching (or just in), loosely: {box, depth, gap}; the one whose pocket height is nearest the forks wins
+export function approaching(s,boxes){
+ let best=null;const f=fwd(s.yaw),tip=tipOf(s);
+ for(const b of boxes){
+  if(Math.hypot(b.x-s.x,b.z-s.z)>ASSIST.reach)continue;
+  const a=fwd(b.yaw),sign=Math.sign(f.x*a.x+f.z*a.z)||1,{u,v}=local(b,tip.x,tip.z),depth=sign*v+PALLET.d/2;
+  if(depth<-ASSIST.approach||depth>.8||Math.abs(u)>.45||Math.abs(axisError(s.yaw,b.yaw))>.3)continue;
+  const gap=Math.abs(s.lift-(b.base+.09));if(gap>ASSIST.heightGap)continue;
+  if(!best||gap<best.gap)best={box:b,depth,gap};
+ }
+ return best;
+}
+// a free shelf cell a carried pallet is being brought to (loosely in line with it, at its level): the cell, or null
+export function approachingCell(s,ctx){
+ const c=carriedBox(s,ctx.carried||1);let best=null;
+ for(const cell of RACK_SLOTS){
+  const dx=c.x-cell.x,dz=c.z-cell.z;if(Math.abs(dx)>.7||Math.abs(dz)>1.1||ctx.occupied(cell.id))continue;
+  const lvl=levelBase(cell.level);if(c.base<lvl-.05||c.base>lvl+LANE.height||Math.abs(axisError(s.yaw,0))>.32)continue;
+  const d=Math.hypot(dx,dz);if(!best||d<best.d)best={cell,d};
+ }
+ return best?best.cell:null;
+}
+// One step of assistance: returns the pose to use (the same object when there is nothing to do). `forksHeld`: R or F is down (the driver is working the forks themselves).
+export function assist(s,ctx,dt,{forksHeld=false}={}){
+ if(Math.abs(s.speed)>ASSIST.speed)return s;
+ if(ctx.carried>0){const cell=approachingCell(s,ctx);return cell?nudge(s,{x:cell.x,z:cell.z,yaw:0},CARRY_Z,dt):s}
+ const a=approaching(s,ctx.boxes);if(!a)return s;
+ let n=nudge(s,a.box,TIP,dt);
+ if(!forksHeld&&a.depth<POCKET.engage+.4){const goal=a.box.base+.09;n={...n,lift:s.lift+clampTo(goal-s.lift,ASSIST.level*dt)}}
+ return n;
 }
