@@ -15,21 +15,22 @@ const lengthOf=pts=>{let s=0;for(let i=1;i<pts.length;i++)s+=Math.hypot(pts[i][0
 function at(pts,d){for(let i=1;i<pts.length;i++){const [ax,az]=pts[i-1],[bx,bz]=pts[i],l=Math.hypot(bx-ax,bz-az);if(d<=l||i===pts.length-1){const u=l?Math.min(1,d/l):1;return {x:ax+(bx-ax)*u,z:az+(bz-az)*u,heading:Math.atan2(bx-ax,bz-az)}}d-=l}return {x:pts[0][0],z:pts[0][1],heading:0}}
 const wrap=a=>Math.atan2(Math.sin(a),Math.cos(a));
 
-export function createCustomerTruck({scene,exit,groundAt=()=>0}){
- const mesh=createProp('flatbed',{apply:m=>m});mesh.name='customer-truck';mesh.visible=false;applyPaint(mesh,'flatbed','white');scene.add(mesh);
+// route: {bay, inPath, backOut (optional), outPath}: the timber yard's by default; the warehouse dock has its own (customers.js DOCK_ROUTE). name: the mesh's name.
+export function createCustomerTruck({scene,exit,groundAt=()=>0,route=null,name='customer-truck'}){
+ const mesh=createProp('flatbed',{apply:m=>m});mesh.name=name;mesh.visible=false;applyPaint(mesh,'flatbed','white');scene.add(mesh);
  const view=createCargoView('flatbed');mesh.add(view.group);
- const inPath=[...exit.in,[92,65],[87.5,62],[BAY.x,BAY.z+3],[BAY.x,BAY.z]];
- const backOut=[[BAY.x,BAY.z],[BAY.x,66.5]],outPath=[[BAY.x,66.5],[93,71],...exit.out];
- let phase='away',legs=[],leg=0,d=0,state={x:BAY.x,z:BAY.z,yaw:BAY.yaw},spin=0,onDone=null;
+ const R=route||{bay:BAY,inPath:[...exit.in,[92,65],[87.5,62],[BAY.x,BAY.z+3],[BAY.x,BAY.z]],backOut:[[BAY.x,BAY.z],[BAY.x,66.5]],outPath:[[BAY.x,66.5],[93,71],...exit.out]},bay=R.bay;
+
+ let phase='away',legs=[],leg=0,d=0,state={x:bay.x,z:bay.z,yaw:bay.yaw},spin=0,onDone=null;
  const place=()=>{mesh.position.set(state.x,groundAt(state.x,state.z),state.z);mesh.rotation.set(0,state.yaw,0);for(const w of mesh.userData.wheels)w.spin.rotation.x=spin/w.radius};
  const drive=(list,done)=>{legs=list;leg=0;d=0;onDone=done;mesh.visible=true;const p=at(list[0].pts,0);state={x:p.x,z:p.z,yaw:list[0].back?wrap(p.heading+Math.PI):p.heading}};
  return {mesh,view,
   get phase(){return phase},
   // dt: seconds; truck: progress.shift.truck (or null); due: its time has come (customers.js truckDue); hooks: arrived() when it has parked, gone() when it has left the map
   update(dt,truck,{due=false,arrived,gone}={}){
-   if(truck?.stage==='waiting'&&phase!=='parked'&&phase!=='in'){phase='parked';state={x:BAY.x,z:BAY.z,yaw:BAY.yaw};mesh.visible=true}
-   if(phase==='away'&&truck?.stage==='coming'&&due)drive([{pts:inPath,back:false}],()=>{phase='parked';arrived?.()}),phase='in';
-   if(phase==='parked'&&(!truck||truck.stage==='gone'))drive([{pts:backOut,back:true},{pts:outPath,back:false}],()=>{phase='away';mesh.visible=false;gone?.()}),phase='out';
+   if(truck?.stage==='waiting'&&phase!=='parked'&&phase!=='in'){phase='parked';state={x:bay.x,z:bay.z,yaw:bay.yaw};mesh.visible=true}
+   if(phase==='away'&&truck?.stage==='coming'&&due)drive([{pts:R.inPath,back:false}],()=>{phase='parked';arrived?.()}),phase='in';
+   if(phase==='parked'&&(!truck||truck.stage==='gone'))drive(R.backOut?[{pts:R.backOut,back:true},{pts:R.outPath,back:false}]:[{pts:R.outPath,back:false}],()=>{phase='away';mesh.visible=false;gone?.()}),phase='out';
    if((phase==='in'||phase==='out')&&legs.length){const L=legs[leg],len=lengthOf(L.pts),v=L.back?REVERSE:SPEED;d+=v*dt;spin+=(L.back?-1:1)*v*dt;
     const p=at(L.pts,Math.min(d,len)),want=L.back?wrap(p.heading+Math.PI):p.heading;state.x=p.x;state.z=p.z;state.yaw+=wrap(want-state.yaw)*Math.min(1,dt*3);
     if(d>=len){leg++;d=0;if(leg>=legs.length){legs=[];onDone?.()}}}

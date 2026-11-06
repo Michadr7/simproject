@@ -8,6 +8,7 @@ import {weekday} from './housing.js';
 import {employerName,ownerOf,careerOf,nextRank} from './careers.js';
 import {canClockIn,shiftPay,taskText,OFF_SITE_LIMIT,BONUS_PER_RANK} from './shift.js';
 import {itemById} from './items.js';
+import {openTickets,takenBy,ticketText,dueText,TAKE_RANK} from './tickets.js';
 
 const TABS=[['shift','Shift'],['job','My job'],['employers','Employers'],['pay','Pay']];
 const hours=m=>{const h=Math.floor(m/60),r=Math.round(m%60);return h?`${h} h ${String(r).padStart(2,'0')} min`:`${r} min`};
@@ -31,6 +32,13 @@ export function createPhoneJobs({document:doc,getState,isOnSite,onClockIn,onCloc
       for(const t of sh.tasks){const row=el('div','phone-need'),done=t.done>=t.target;row.append(el('label',null,taskText(t)),el('strong',null,done?'Done':`${t.done} / ${t.target}`));const m=el('meter');m.min=0;m.max=t.target;m.value=t.done;row.append(m);out.push(row)}
       if(!sh.tasks.length)out.push(el('p','phone-subtitle','No tasks today: you are paid by the hour.'));
       if(sh.tasks.length)out.push(el('p','phone-subtitle',`Finish every task for the shift bonus (${money(BONUS_PER_RANK*careerOf(progress,sh.employer).rank)}).`));
+      if(sh.employer==='ridgeline'&&careerOf(progress,'ridgeline').rank>=4){ // customer orders (tickets.js): the phone shows them; you take them at the warehouse's order table
+        const co=progress.companies?.ridgeline,now=Math.floor((progress.housing.day-1)*1440+progress.routine.minutes),mine=takenBy(co,'me'),open=openTickets(co);
+        out.push(el('h4','phone-heading','Customer orders'));
+        for(const k of mine){const row=el('div','phone-need');row.append(el('label',null,ticketText(k)+' · '+dueText(k,now)),el('strong',null,`${k.staged} / ${k.planks}`));const m=el('meter');m.min=0;m.max=k.planks;m.value=k.staged;row.append(m);out.push(row)}
+        for(const k of open){const row=el('div','phone-need');row.append(el('label',null,ticketText(k)+' · '+dueText(k,now)),el('strong',null,careerOf(progress,'ridgeline').rank<TAKE_RANK[k.kind]?'Needs rank '+TAKE_RANK[k.kind]:'Open'));out.push(row)}
+        out.push(el('p','phone-subtitle',mine.length||open.length?'Take an open order at the order table in the warehouse.':'No orders right now: new ones come in during the shift.'));
+      }
       out.push(button('Clock out',()=>act(onClockOut),{id:'jobs-clockout'}));
       return out;
     }

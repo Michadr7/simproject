@@ -18,7 +18,7 @@ assert.deepEqual(items.map(i=>i.id),['task:fell','task:haul','task:load','task:s
 assert.equal(items[0].title,'Fell 6 marked pines');assert.equal(items[0].detail,'2 of 6 done');assert.equal(items[1].done,true,'a finished task is marked done');
 // places: the nearest marked block, the timber yard bay; the warehouse has no place yet
 const blocks=markedBlocks(3).map(blockCentre),near=blocks.reduce((a,b)=>Math.hypot(a.x,a.z)<=Math.hypot(b.x,b.z)?a:b);
-assert.deepEqual(items[0].pos,near,'felling points at the nearest marked block');assert.deepEqual(items[2].pos,{x:BAY.x,z:BAY.z});assert.equal(items[3].pos,null,'a task without a place has no arrow');
+assert.deepEqual(items[0].pos,near,'felling points at the nearest marked block');assert.deepEqual(items[2].pos,{x:BAY.x,z:BAY.z});assert.deepEqual(items[3].pos,{x:166.9,z:30.2},'the stack task points at the warehouse door');assert.equal(trackerItems({...p,shift:{...shift,tasks:[{kind:'unknown',piece:'x',target:1,done:0}]}},here).length,0,'an unknown task kind is not listed');
 assert.deepEqual(taskPlace('landing',p,here),{x:LANDING.x,z:LANDING.z});assert(taskPlace('mill',p,here)&&taskPlace('haul',p,here),'the sawmill and the lumberyard have points');
 assert.equal(distanceTo(here,{x:3,z:4}),5);assert.equal(distanceTo(here,null),null);
 

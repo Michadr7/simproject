@@ -6,6 +6,7 @@ import {MAP} from './map-definition.js';
 import {levelOf} from './skills.js';
 import {addItem,countItem,sellLogs,requirementError} from './inventory.js';
 import {itemById} from './items.js';
+import {normalizeTickets} from './tickets.js';
 
 export const REP_MAX=100,START_REP=10,LOCAL_PLAYER='me';
 export const employerById=(id,map=MAP)=>(map.employers||[]).find(e=>e.id===id)||null;
@@ -27,6 +28,9 @@ export function normalizeCompanies(value,map=MAP){
   if(c.owner&&['npc','player'].includes(c.owner.kind)&&typeof c.owner.id==='string'&&c.owner.id)entry.owner={kind:c.owner.kind,id:c.owner.id.slice(0,64)};
   const co=ids(c.coOwners,id=>id.length<=64);if(co.length)entry.coOwners=co;
   {const n=x=>Number.isSafeInteger(x)&&x>0&&x<=1e7?x:0,logs=n(c.stock?.logs),planks=n(c.stock?.planks);if(logs||planks)entry.stock={logs,planks}} // company stock (forest.js): logs in the landing pile, planks at the lumberyard
+  {const t=normalizeTickets(c.tickets);if(t)entry.tickets=t} // order tickets (tickets.js)
+  if(c.racks&&typeof c.racks==='object'){const racks={};for(const [slot,n] of Object.entries(c.racks))if(/^[A-E][1-8]-[1-3]$/.test(slot)&&Number.isSafeInteger(n)&&n>0)racks[slot]=Math.min(40,n);if(Object.keys(racks).length)entry.racks=racks} // warehouse racks (forest.js RACK_IDS, RACK_CAP 40)
+  {const f=c.forkload;if(Number.isSafeInteger(f)&&f>0)entry.forkload=Math.min(40,f)} // planks on the forklift's forks (forest.js forkTake)
   if(Object.keys(entry).length)out[e.id]=entry}
  return out;
 }

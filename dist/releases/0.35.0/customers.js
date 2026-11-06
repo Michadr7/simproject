@@ -52,3 +52,11 @@ export function sendOff(progress){
  const r=recordPiece(setTruck(progress,{stage:'gone'}),'shipped',t.loaded);
  return {state:r.state,finished:r.finished,message:r.finished.length?`Task done: ${r.finished[0]}.`:`The truck is on its way with ${t.loaded} planks.`};
 }
+
+// The warehouse dock (0.35 step 3b, DESIGN 4.16 C): the customer's flatbed for a staged pickup order. It comes in from the map edge along Freight South, Freight Road and Oak Street East, down the
+// inbound lane (x 156..164), parks along the warehouse's north wall with its bed against the loading door (heading east, the bed's middle at x 161.8), and leaves by the outbound lane (x 166..174),
+// forward only. Visual only: the order's planks move by the ticket (tickets.js), not by the truck.
+export const DOCK_BAY=Object.freeze({x:163.525,z:25.5,yaw:Math.PI/2});
+export const dockRoute=exit=>({bay:DOCK_BAY,
+ inPath:[...exit.in.slice(0,3),[196,62],[196,12],[192,8],[170,7.6],[162,9],[160,14],[160,20],[160.5,23.5],[162,25.5],[DOCK_BAY.x,DOCK_BAY.z]],
+ outPath:[[DOCK_BAY.x,DOCK_BAY.z],[169,25.5],[171.5,22],[171,16],[170,10],[173,7.8],[190,7.8],[194,9],[194,60],[198,69],...exit.out.slice(1)]});

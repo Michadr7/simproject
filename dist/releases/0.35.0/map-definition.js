@@ -1,4 +1,5 @@
-// The world as data. world.js, the minimap, the shops and game.js read this file; nothing else hard-codes zone edges, roads,
+
+import {WAREHOUSE_INTERIOR} from './warehouse-layout.js';// The world as data. world.js, the minimap, the shops and game.js read this file; nothing else hard-codes zone edges, roads,
 // fields, shop doors or building footprints. Coordinates are metres: +x east, -z north (the default camera looks north up
 // Oak Street). Adding a district means adding data here (and, later, scenery code that reads it), not editing the engine.
 // The map is flat: there is no elevation in version 1.
@@ -284,7 +285,8 @@ const vehicles=[
 // Company offices (0.35): a building with a door you walk up to (E, open during the employer's hours) and an interior room that sits far from the map and is shown only while you are inside (like a shop's).
 // door: where you stand outside, and the yaw you face leaving; sign: the company's name board above the door. The room is the shops' layout (market interior numbers), so its entry, exit and counter are the same.
 const offices=[
- {id:'ridgeline-office',employer:'ridgeline',building:'ridgeline-office',door:{x:80.9,z:58.3,out:{x:81.5,z:58.3},yaw:Math.PI/2},sign:{x:78.66,y:3.2,z:53.5,yaw:Math.PI/2},interior:{...interior('double'),origin:{x:420,y:.165,z:300}}}
+ {id:'ridgeline-office',employer:'ridgeline',building:'ridgeline-office',door:{x:80.9,z:58.3,out:{x:81.5,z:58.3},yaw:Math.PI/2},sign:{x:78.66,y:3.2,z:53.5,yaw:Math.PI/2},interior:{...interior('double'),origin:{x:420,y:.165,z:300}}},
+ {id:'ridgeline-warehouse',kind:'warehouse',name:'Ridgeline Warehouse',employer:'ridgeline',building:'eastbank-warehouse',door:{x:166.9,z:31.5,out:{x:166.9,z:30.2},yaw:Math.PI},sign:{x:166.9,y:3.1,z:31.46,yaw:Math.PI},interior:{origin:{x:440,y:.165,z:300},...WAREHOUSE_INTERIOR}} // the lumber warehouse (4.16): a person door on the north wall beside the loading door (the model has no person door: it is drawn there), open in the employer's hours
 ];
 // Map exits (0.35, DESIGN 4.15 K): where NPC vehicles (customer trucks) come onto the map and leave it. `path` runs from the far end (off the map, where a vehicle appears and is
 // removed) inward; its first point must lie outside the playable rectangle (validateMap), so making the map bigger means moving the exit too. Lanes: Freight South is centred on
@@ -647,7 +649,7 @@ export function validateMap(map=MAP){
   if(!x.in?.length||!x.out?.length||!outside(x.in[0])||!outside(x.out[x.out.length-1]))bad(`exit ${x.id} must start and end outside the playable map (enlarged the map? move the exit)`)}
  // offices (0.35): a known employer and building, a door on the plot that is outside the building, an interior origin far from the playable map
  for(const o of map.offices||[]){const e=(map.employers||[]).find(x=>x.id===o.employer),l=(map.landmarks||[]).find(x=>x.id===o.building),plot=l&&(map.reserved||[]).find(p=>p.id===l.plot);
-  if(!e)bad(`office ${o.id} has an unknown employer ${o.employer}`);if(!l)bad(`office ${o.id} has an unknown building ${o.building}`);if(e&&e.office!==o.id)bad(`office ${o.id} is not its employer's office (${e.office})`);
+  if(!e)bad(`office ${o.id} has an unknown employer ${o.employer}`);if(!l)bad(`office ${o.id} has an unknown building ${o.building}`);if(e&&e.office!==o.id&&o.kind!=='warehouse')bad(`office ${o.id} is not its employer's office (${e.office})`);
   if(plot&&!(o.door.x>=plot.x0&&o.door.x<=plot.x1&&o.door.z>=plot.z0&&o.door.z<=plot.z1))bad(`office ${o.id}'s door is outside plot ${plot.id}`);
   if(![o.door.x,o.door.z,o.door.yaw,o.sign.x,o.sign.z].every(Number.isFinite))bad(`office ${o.id} has a bad door or sign`);
   const oi=o.interior.origin;if(oi.x<=map.playable.x1&&oi.x>=map.playable.x0&&oi.z<=map.playable.z1&&oi.z>=map.playable.z0)bad(`office ${o.id}'s interior stands inside the playable map`)}

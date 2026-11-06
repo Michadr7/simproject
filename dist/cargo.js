@@ -75,3 +75,17 @@ export function unloadKind(carry,cargo,model,kind){
  const piece=cargo[i],left=[...cargo.slice(0,i),...cargo.slice(i+1)];
  return {carry:piece.k==='planks'?{kind:'planks',count:piece.n}:{kind:'log'},cargo:left.length?left:null,message:`Took ${piece.k==='planks'?`${piece.n} plank${piece.n===1?'':'s'}`:'a log'} off · ${left.length?cargoText(left)+' left':'the bed is empty'}`};
 }
+
+// Planks from the warehouse onto a bed (a delivery order, DESIGN 4.16): stacks of up to four. Returns {cargo} or {error}; nothing is changed.
+export function addPlanks(cargo,model,count){
+ if(!hasBed(model))return {error:'This vehicle has no bed.'};
+ const next=[...(cargo||[])];let n=Math.floor(count);while(n>0){const take=Math.min(PLANKS_PER_STACK,n);next.push({k:'planks',n:take});n-=take}
+ if(usedSpace(next)>spaceOf(model)||!fits(model,next))return {error:'The order does not fit on that bed.'};
+ return {cargo:next};
+}
+// Take `count` planks off a bed (a delivery is unloaded), last stacks first. Returns {cargo} or {error} if the bed holds fewer; nothing is changed.
+export function removePlanks(cargo,count){
+ if(countOf(cargo,'planks')<count)return {error:'The order is no longer on that truck.'};
+ let need=count;const out=[];for(let i=(cargo||[]).length-1;i>=0;i--){const p=cargo[i];if(p.k==='planks'&&need>0){const t=Math.min(p.n,need);need-=t;if(p.n>t)out.unshift({k:'planks',n:p.n-t})}else out.unshift(p)}
+ return {cargo:out.length?out:null};
+}

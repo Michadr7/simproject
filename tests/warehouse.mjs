@@ -1,0 +1,79 @@
+import assert from 'node:assert/strict';
+import {bootGame} from './support/boot-game.mjs';
+import {MAP} from '../dist/map-definition.js';
+import {hire} from '../dist/careers.js';
+import {clockIn} from '../dist/shift.js';
+import {freshProgress,normalizeProgress} from '../dist/jobs.js';
+import {RACK_IDS,RACK_CAP,racksOf,rackPlanks,takeReceiving,stackPlanks,addStock,stockOf} from '../dist/forest.js';
+import {RACK_SLOTS,boardAt} from '../dist/warehouse.js';
+import {HALL,FACE_ROWS,UNITS,BAYS,LEVELS,bayX,slotById,reachableByHand,WAREHOUSE_PILE,WAREHOUSE_STAGING,WAREHOUSE_TABLE,WAREHOUSE_INTERIOR} from '../dist/warehouse-layout.js';
+import {trackerItems} from '../dist/tracker.js';
+
+// The warehouse, step 2 (DESIGN 4.16): racks saved on the company, planks taken from the delivery pile and stacked bay by bay, a full bay counts as a rack (the Stack task),
+// and the room in the game: the person door, the racks drawn as boards, the prompts.
+const W=MAP.offices.find(o=>o.kind==='warehouse'),DAY=3;
+assert(W&&W.id==='ridgeline-warehouse','the map has the warehouse');assert.deepEqual(RACK_SLOTS.map(s=>s.id),RACK_IDS,'a drawn cell for every rack id');
+assert.equal(RACK_IDS.length,5*BAYS*LEVELS,'120 shelf cells: five faces, eight bays, three levels');assert(RACK_IDS.includes('B4-2')&&!RACK_IDS.includes('F1-1'));
+assert(HALL.halfW*2*HALL.halfD*2>=3*14*10*2,'the hall is far bigger than the first room (36 x 24 m against 14 x 10)');
+{ // the plan: aisles wide enough for a forklift (3.5 m to turn), everything inside the hall, the front-zone things clear of the shelving
+ const edges=UNITS.map(u=>({lo:u.z-u.depth/2,hi:u.z+u.depth/2})).sort((a,b)=>a.lo-b.lo);
+ for(let i=1;i<edges.length;i++)assert(edges[i].lo-edges[i-1].hi>=3.9,'aisle '+i+' is '+(edges[i].lo-edges[i-1].hi).toFixed(2)+' m');
+ assert(WAREHOUSE_STAGING[0].z-edges[2].hi>=3.9,'the aisle in front of the last unit');assert(edges[0].lo>=-HALL.halfD,'the back unit is inside the wall');
+ for(const f of Object.values(FACE_ROWS))assert(Math.abs(f.stand-f.z)>=1.3&&Math.abs(f.stand-f.z)<=2.3,'you stand 1.3 to 2.3 m from the shelf face');
+ assert.equal(bayX(1),-6.3);assert.equal(bayX(BAYS),6.3);assert(slotById('A1-3').y>2.5&&slotById('A1-1').y<.2,'three levels high');
+ assert(reachableByHand('A1-1')&&!reachableByHand('A1-2')&&!reachableByHand('A1-3'),'by hand only the floor level');
+ for(const p of [WAREHOUSE_PILE,WAREHOUSE_TABLE,...WAREHOUSE_STAGING])assert(Math.abs(p.x)<HALL.halfW-1&&p.z>edges[2].hi+3&&p.z<HALL.halfD-1,'the front-zone things stand clear of the shelving and the wall');
+ assert(WAREHOUSE_INTERIOR.exitDoor.near.z<WAREHOUSE_INTERIOR.exitDoor.trigger.z&&WAREHOUSE_INTERIOR.entry.z<WAREHOUSE_INTERIOR.exitDoor.z,'the exit door opens before its trigger line');
+ assert.deepEqual(W.interior.exitDoor,WAREHOUSE_INTERIOR.exitDoor,'the map uses the hall\'s interior spec');
+}
+assert(MAP.employers[0].sites.some(s=>s.room==='ridgeline-warehouse'),'it is one of the company\'s sites');
+
+// pure rules ----------------------------------------------------------------------------------------------------------------
+const base=hire(freshProgress(),'ridgeline').state,shifted=clockIn({...base,housing:{...base.housing,day:DAY},routine:{...base.routine,minutes:600}},'ridgeline').state;
+const withStock=n=>addStock({...shifted,shift:{...shifted.shift,tasks:[{kind:'stack',piece:'racks',target:1,done:0}]}},{planks:n});
+assert(/Too high/.test(stackPlanks({...withStock(8),carry:{kind:'planks',count:4}},'A1-2').error),'an upper shelf cannot be reached by hand');assert(/Clock in/.test(takeReceiving(addStock(base,{planks:9})).error),'off shift nothing moves');assert(/pile is empty/.test(takeReceiving(shifted).error));assert(/hands are full/.test(takeReceiving({...withStock(9),carry:{kind:'log'}}).error));
+{let p=withStock(10);let r=takeReceiving(p);assert(!r.error);p=r.state;assert.deepEqual(p.carry,{kind:'planks',count:4},'a stack of four');assert.equal(stockOf(p).planks,6,'from the yard stock');
+ assert(/Carry planks/.test(stackPlanks(withStock(5),'A1-1').error),'empty hands cannot stack');assert(/no such rack/.test(stackPlanks(p,'Z9').error));
+ r=stackPlanks(p,'A1-1');p=r.state;assert.equal(racksOf(p)['A1-1'],4);assert.equal(p.carry,null);assert.equal(r.filled,false);assert(/4 \/ 40/.test(r.message));
+ // fill a bay to 40: it counts as a rack once, pays, and finishes the task
+ let q=withStock(80);for(let i=0;i<10;i++){q=takeReceiving(q).state;const s=stackPlanks(q,'B2-1');q=s.state;if(i<9)assert.equal(s.filled,false);else{assert.equal(s.filled,true);assert(/Task done/.test(s.message),s.message)}}
+ assert.equal(racksOf(q)['B2-1'],RACK_CAP);assert.equal(q.shift.pieces.racks,1,'one rack stacked');assert.equal(q.shift.tasks[0].done,1);assert.equal(stockOf(q).planks,40,'forty planks left the pile');
+ q={...q,carry:{kind:'planks',count:4}};assert(/is full/.test(stackPlanks(q,'B2-1').error),'a full bay takes no more');
+ // a stack that does not fit in the bay: the rest stays in the hands
+ let z=withStock(8);z={...z,companies:{...z.companies,ridgeline:{...z.companies.ridgeline,racks:{'C1-1':38}}},carry:{kind:'planks',count:4}};const part=stackPlanks(z,'C1-1');assert.equal(part.put,2);assert.deepEqual(part.state.carry,{kind:'planks',count:2});assert.equal(racksOf(part.state)['C1-1'],40);assert.equal(part.state.shift.pieces.racks,1);
+ assert.equal(rackPlanks(q),40);
+ // saved: bays survive normalisation; junk and absurd numbers do not
+ const saved=normalizeProgress({careers:{ridgeline:{hired:true,rank:4}},companies:{ridgeline:{racks:{'A1-1':12,'B9-1':3,'A2-1':-1,'E8-3':9999,'F1-1':5,'A1':7}}}});assert.deepEqual(saved.companies.ridgeline.racks,{'A1-1':12,'E8-3':40},'only real cells, clamped to the cap');
+ assert.equal(normalizeProgress({companies:{ridgeline:{racks:{'A1-1':0}}}}).companies.ridgeline,undefined,'empty racks save nothing')}
+// the pile and the racks are drawn board by board
+assert.deepEqual(boardAt(0),{x:-.36,y:.044},'the first board');assert(boardAt(39).y>boardAt(0).y+.8,'forty boards stand about a metre high');
+// the tracker points at the warehouse for the stack task
+{const t=trackerItems({...withStock(3)},{x:0,z:0}).find(i=>i.id==='task:stack');assert.deepEqual(t.pos,{x:W.door.out.x,z:W.door.out.z});assert.equal(t.place,'Warehouse')}
+
+// in the packaged game -------------------------------------------------------------------------------------------------------
+const g=await bootGame({position:{x:W.door.out.x,z:W.door.out.z}});
+try{
+ const {GameState,pump,send,ids,scene}=g,p=()=>GameState.progress,me=()=>GameState.me.position,prompt=()=>ids.get('prompt').querySelector('span').textContent;
+ const press=(code='KeyE',seconds=1.5)=>{send('keydown',code);send('keyup',code);pump(seconds)};
+ const room=()=>scene().getObjectByName('warehouse-interior'),boards=()=>({count:room().children.filter(c=>/^warehouse-boards/.test(c.name)).reduce((n,c)=>n+c.count,0)}) // the planks are drawn per shelving unit (so a unit fades with its planks) plus the pile;
+ const at=minutes=>{GameState.progress={...p(),routine:{...p().routine,minutes}}};
+ assert.equal(room().visible,false,'the room is not drawn while you are outside');assert(scene().getObjectByName('warehouse-doorway'),'the person door is drawn on the wall');
+ at(330);pump(.5);assert(/closed/i.test(prompt()),'closed at 5:30 AM: '+prompt());press();assert.equal(room().visible,false);
+ at(540);pump(.6);assert(/Enter · Ridgeline Warehouse/.test(prompt()),'the door offers to go in: '+prompt());
+ press('KeyE',2.5);assert.equal(room().visible,true,'inside');assert(Math.abs(me().x)<2&&me().z>9,'just inside the door: '+me().x+','+me().z);assert(/WAREHOUSE/.test(ids.get('locationName').textContent),ids.get('locationName').textContent);
+ // not on shift: the pile cannot be touched
+ GameState.progress=addStock(p(),{planks:12});me().x=WAREHOUSE_PILE.x;me().z=WAREHOUSE_PILE.z-1.2;pump(.6);assert.equal(boards().count,12,'the delivery pile shows the 12 planks of yard stock');
+ // on shift: take a stack from the pile, put it in bay A2
+ GameState.progress={...hire(p(),'ridgeline').state};GameState.progress={...clockIn({...p(),routine:{...p().routine,minutes:540}},'ridgeline').state};
+ GameState.progress={...p(),shift:{...p().shift,tasks:[{kind:'stack',piece:'racks',target:1,done:0}]}};pump(.6);
+ assert(/Take planks from the delivery pile · 12/.test(prompt()),'the pile offers a stack: '+prompt());press('KeyE',1.2);assert.deepEqual(p().carry,{kind:'planks',count:4});assert.equal(stockOf(p()).planks,8);
+ const A2=RACK_SLOTS.find(s=>s.id==='A2-1');me().x=A2.stand.x;me().z=A2.stand.z;pump(.6);assert(/Stack the planks in rack A2-1 · 0 \/ 40/.test(prompt()),'a bay offers it: '+prompt());
+ press('KeyE',1.2);assert.equal(racksOf(p())['A2-1'],4);assert.equal(p().carry,null);pump(.6);assert.equal(boards().count,4+8,'four boards in the rack, eight still in the pile');
+ // fill a bay: ten stacks
+ GameState.progress=addStock({...p(),companies:{...p().companies,ridgeline:{...p().companies.ridgeline,racks:{'A2-1':36}}}},{planks:20});
+ const pile={x:WAREHOUSE_PILE.x,z:WAREHOUSE_PILE.z-1.2};for(let i=0;i<1;i++){me().x=pile.x;me().z=pile.z;pump(.6);press('KeyE',1.2);me().x=A2.stand.x;me().z=A2.stand.z;pump(.6);press('KeyE',1.2)}
+ assert.equal(racksOf(p())['A2-1'],RACK_CAP,'the bay is full');assert.equal(p().shift.pieces.racks,1,'and counted as a rack');assert(/Task done|full/.test(ids.get('jobToast').textContent),ids.get('jobToast').textContent);
+ // the door out: the double doors are opened by hand
+ me().x=0;me().z=10.9;pump(.4);assert(/Open the doors/.test(prompt()));press('KeyE',1);me().x=0;me().z=12.4;pump(3);assert.equal(room().visible,false,'outside again');assert(Math.abs(me().x-W.door.out.x)<1.5&&Math.abs(me().z-W.door.out.z)<1.5,'at the person door: '+me().x+','+me().z);
+ console.log('Warehouse: racks saved on the company, planks taken from the delivery pile and stacked bay by bay, a full bay counts as a rack, the leftover stays in the hands, the pile and the racks are drawn board by board, the person door and the room work in the game, and the tracker points at the warehouse.');
+}finally{g.close?.()}

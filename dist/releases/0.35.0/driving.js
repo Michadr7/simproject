@@ -105,6 +105,7 @@ const tilt=f=>{const s=f.state,sy=Math.sin(s.yaw),cy=Math.cos(s.yaw),at=(lx,lz)=
   setWalker(p){walker=p?{x:p.x,z:p.z}:null},
   // Cargo (cargo.js): the beds you can load or unload from where you stand (owned vehicles only, stopped, nobody driving), and the bed's contents.
   bedsNear(x,z){return fleet.filter(f=>f.present&&!f.display&&f!==driven&&hasBed(f.spec.model)&&Math.abs(f.state.speed)<.05).map(f=>{const pts=loadPoints(f.spec.model).map(pt=>({...pt,...toWorld(f.state,pt.x,pt.z)}));const near=pts.find(pt=>Math.hypot(pt.x-x,pt.z-z)<=LOAD_REACH);return near?{id:f.spec.id,model:f.spec.model,name:f.spec.name,cargo:f.cargo,point:near,x:f.state.x,z:f.state.z,hasGate:!!f.mesh.userData.tailgate,gateOpen:!!f.gateOpen}:null}).filter(Boolean)},
+  bedsWithin(x,z,r){return fleet.filter(f=>f.present&&!f.display&&f!==driven&&hasBed(f.spec.model)&&Math.abs(f.state.speed)<.05&&Math.hypot(f.state.x-x,f.state.z-z)<=r).map(f=>({id:f.spec.id,model:f.spec.model,name:f.spec.name,cargo:f.cargo,x:f.state.x,z:f.state.z})).sort((a,b)=>Math.hypot(a.x-x,a.z-z)-Math.hypot(b.x-x,b.z-z))}, // stopped vehicles with a bed within r of a point (a delivery is loaded onto one parked outside the loading door)
   cargoOf(id){return byId.get(id)?.cargo||null},
   setCargo(id,cargo){const f=byId.get(id);if(!f)return false;f.cargo=normalizeCargo(cargo,f.spec.model);f.view.set(f.cargo);return true},
   gateOf(id){return byId.get(id)?.gate||0},

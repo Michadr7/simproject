@@ -202,3 +202,5 @@ ode scripts/build-saws.mjs into dist/saw-assets.js: bar forward along +z, up +y,
 
 ## Tylan Flatbed (0.35, the project owner's own model)
 assets-src/Veichles/Logging Truck/flatbed.glb (FLATBED_SPEC_UPDATE_2.md): 5,796 triangles, 13 colour-only materials, separate wheels, steering pivots and a hinged tailgate, 19 anchors. Converted by `node scripts/build-flatbed.mjs` into `dist/flatbed-assets.js` (about 430 KB; nine parts with vertex colours) and built by `dist/flatbed.js` (9 draw calls per flatbed). The detail meshes are not hidden by distance yet.
+
+- **Forklift (0.35 step 5):** "48-forklift" (assets-src/Veichles/Forklifts/48-forklift/Forklift.obj, public domain, author and source page to be confirmed) converted by scripts/build-forklift.mjs into dist/forklift-assets.js (about 14,000 triangles, 550 KB, three parts: body, mast, carriage; colours chosen in the script because the OBJ has none). Loaded only when the warehouse is first entered. Not used: the CC-BY Forklift Truck (Kray Ewan) and the Industrial Forklift GLB (one lump, forks not separate).

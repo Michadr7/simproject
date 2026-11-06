@@ -1,4 +1,4 @@
-const movementCodes=new Set(['KeyW','KeyA','KeyS','KeyD','ArrowUp','ArrowDown','ArrowLeft','ArrowRight','ShiftLeft','ShiftRight','Space']); // Space is the vehicle brake
+const movementCodes=new Set(['KeyW','KeyA','KeyS','KeyD','ArrowUp','ArrowDown','ArrowLeft','ArrowRight','ShiftLeft','ShiftRight','Space','KeyR','KeyF']); // Space is the vehicle brake; R and F raise and lower the forklift's forks
 export function createMovementInput(win,doc,enabled){
  const keyboard=new Set(),pointers=new Map();
  const input={has:code=>keyboard.has(code)||[...pointers.values()].includes(code),clear(){keyboard.clear();pointers.clear()},pressPointer(id,code){if(enabled())pointers.set(id,code)},releasePointer(id){pointers.delete(id)}};
