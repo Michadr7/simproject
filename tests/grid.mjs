@@ -20,30 +20,32 @@ const empty=(()=>{for(let ix=60;ix<160;ix++)for(let iz=-50;iz<50;iz++){const k=i
 assert.deepEqual(normalizePlots({
  [pine.key]:{type:'forest',tree:'pine',hits:2},[farmKey]:{type:'farm',crop:'Wheat!!',tilled:'yes'},'0,0':{type:'farm',tilled:true},[empty]:{type:'forest',tree:null},'bad key':{},'-99,-10':null,
  [second]:{type:'forest',tree:'pine',hits:99},[worldLayout().cuttable[2].key]:{type:'forest',tree:null,felledAt:1200.7},[worldLayout().cuttable[3].key]:{type:'forest',tree:null,felledAt:-4}
-}),{[pine.key]:{type:'forest',tree:'pine',hits:2},[second]:{type:'forest',tree:'pine',hits:2},[worldLayout().cuttable[2].key]:{type:'forest',tree:null,hits:0,felledAt:1200},[worldLayout().cuttable[3].key]:{type:'forest',tree:null,hits:0,felledAt:null}});
+}),{[pine.key]:{type:'forest',tree:'pine',hits:2},[second]:{type:'forest',tree:'pine',hits:3},[worldLayout().cuttable[2].key]:{type:'forest',tree:null,hits:0,felledAt:1200},[worldLayout().cuttable[3].key]:{type:'forest',tree:null,hits:0,felledAt:null}});
 assert.deepEqual(normalizePlots('nope'),{});
 // ── Chopping: owned, equipped, in range ──────────────────────────────────────────
 assert.match(chopTree(fresh,pine.key,near).error,/need an axe/);
 assert.match(chopTree(withAxe(fresh,false),pine.key,near).error,/Equip your axe/);
 let s=withAxe();
 assert.match(chopTree(s,pine.key,{x:pine.x+5,z:pine.z}).error,/closer/);assert.match(chopTree(s,'0,0',near).error,/no tree/);
-// Level 1: three hits, 2 XP each, then 12 XP and 2 logs along the way the trunk falls.
-const hit1=chopTree(s,pine.key,near);assert.deepEqual([hit1.hits,hit1.need,hit1.felled,hit1.message],[1,TREE_HITS,false,'Chop 1 / 3']);s=hit1.state;assert.equal(s.skills.lumberjack.xp,2);
+// Level 1 with the starter Axe: four swings (2 XP each for the first three), then 12 XP and 2 logs along the way the trunk falls.
+const hit1=chopTree(s,pine.key,near);assert.deepEqual([hit1.hits,hit1.need,hit1.felled,hit1.message],[1,TREE_HITS,false,'Chop 1 / 4']);s=hit1.state;assert.equal(s.skills.lumberjack.xp,2);
 const hit2=chopTree(s,pine.key,near);s=hit2.state;assert.equal(plotAt(s,pine.key).hits,2);
 // Hits survive a save and load.
 let raw;const storage={getItem:()=>raw,setItem:(k,v)=>raw=v};saveProgress(storage,s);s=loadProgress(storage);assert.equal(plotAt(s,pine.key).hits,2);assert.equal(s.equipped,'axe');assert.equal(s.skills.lumberjack.xp,4);
-const fell=chopTree(s,pine.key,near);assert(fell.felled);assert.match(fell.message,/2 logs/);
+const hit3=chopTree(s,pine.key,near);assert.equal(hit3.felled,false);s=hit3.state;const fell=chopTree(s,pine.key,near);assert(fell.felled);assert.match(fell.message,/2 logs/);
 assert.deepEqual(plotAt(fell.state,pine.key),{type:'forest',tree:null,hits:0,felledAt:540});
-assert.equal(fell.state.skills.lumberjack.xp,16);assert.deepEqual(fell.state.stats,{treesFelled:1,logsCollected:0});assert.equal(countItem(fell.state,'wood-log'),0,'logs lie on the ground, not in the bag');
+assert.equal(fell.state.skills.lumberjack.xp,18);assert.deepEqual(fell.state.stats,{treesFelled:1,logsCollected:0});assert.equal(countItem(fell.state,'wood-log'),0,'logs lie on the ground, not in the bag');
 assert.equal(fell.logs.length,2);assert.deepEqual(fell.state.logs,fell.logs);assert.deepEqual(fell.logs.map(l=>l.id),[1,2]);assert.equal(fell.state.nextLogId,3);
 for(const log of fell.logs){assert(Math.hypot(log.x-pine.x,log.z-pine.z)<2.5,'near the stump');assert(log.x>pine.x,'fell away from the player (who stood to the west)')}
 assert.match(chopTree(fell.state,pine.key,near).error,/no tree/,'cannot chop a stump');assert.deepEqual(felledTrees(fell.state),[pine.key]);
-// Level-ups and perks: level 6 fells in two hits, level 3+ drops a third log.
-const swift={...withAxe(),skills:{lumberjack:{xp:levelXp(6)}}};const q1=chopTree(swift,pine.key,near);assert.equal(q1.need,2);const q2=chopTree(q1.state,pine.key,near);assert(q2.felled&&q2.logs.length===3);
+// Level-ups and perks: at level 6 the starter Axe still needs four swings (a better axe is what shortens it), level 3+ drops a third log.
+const swift={...withAxe(),skills:{lumberjack:{xp:levelXp(6)}}};let q=chopTree(swift,pine.key,near);assert.equal(q.need,4);for(let i=0;i<3;i++)q=chopTree(q.state,pine.key,near);assert(q.felled&&q.logs.length===3);
 const upLevel=chopTree({...withAxe(),skills:{lumberjack:{xp:levelXp(2)-2}}},pine.key,near);assert(upLevel.leveledUp&&upLevel.level===2);
 assert.equal(chopTree({...withAxe(),skills:{lumberjack:{xp:levelXp(6)}}},second,{x:0,z:0}).error,'Move closer to the tree.');
-// A tree left at 2 hits from before the perk needs only one more swing at level 6.
-assert(chopTree({...swift,plots:{[pine.key]:{type:'forest',tree:'pine',hits:2}}},pine.key,near).felled);
+// The Steel Axe at level 10 needs two swings: a tree already hit once falls on the next one. A Logging Axe at level 5 needs three.
+{const steel={...equipTool(addItem(freshProgress(),'steel-axe').state,'steel-axe').state,skills:{lumberjack:{xp:levelXp(10)}}};const s1=chopTree(steel,pine.key,near);assert.equal(s1.need,2);assert(chopTree(s1.state,pine.key,near).felled);
+ const mid={...equipTool(addItem(freshProgress(),'logging-axe').state,'logging-axe').state,skills:{lumberjack:{xp:levelXp(5)}}};assert.equal(chopTree(mid,pine.key,near).need,3)}
+assert.match(chopTree({...withAxe(),equipped:null},pine.key,near).error,/Equip your axe/);
 // ── Logs ──────────────────────────────────────────────────────────────────────
 let c=shoulderLog(fell.state,1);assert.equal(countItem(c.state,'wood-log'),0,'a picked-up log is on the shoulder, not in the bag');assert.deepEqual(c.state.carry,{kind:'log'});assert.deepEqual(c.state.stats,{treesFelled:1,logsCollected:1});assert.deepEqual(c.state.logs.map(l=>l.id),[2]);assert.match(c.message,/shoulder/);
 assert.match(shoulderLog({...c.state,carry:null},1).error,/gone/);assert.match(shoulderLog(c.state,2).error,/hands are full/,'one thing at a time');
@@ -64,7 +66,7 @@ const blocked=regrowTrees(grown,felledAt+MATURE_AFTER,key=>key===pine.key);asser
 r=regrowTrees(grown,felledAt+MATURE_AFTER);assert.deepEqual(r.restored,[pine.key]);assert.equal(r.state.plots[pine.key],undefined,'back to the default pine');assert.deepEqual(plotAt(r.state,pine.key),{type:'forest',tree:'pine',hits:0});
 assert.equal(regrowTrees(fresh,5).state,fresh,'nothing to do leaves the state alone');
 // ── Saves ─────────────────────────────────────────────────────────────────────
-saveProgress(storage,fell.state);const back=loadProgress(storage);assert.deepEqual(back.logs,fell.state.logs);assert.equal(back.nextLogId,3);assert.equal(back.skills.lumberjack.xp,16);assert.deepEqual(back.stats,{treesFelled:1,logsCollected:0});assert.equal(back.equipped,'axe');assert.deepEqual(felledTrees(back),[pine.key]);
+saveProgress(storage,fell.state);const back=loadProgress(storage);assert.deepEqual(back.logs,fell.state.logs);assert.equal(back.nextLogId,3);assert.equal(back.skills.lumberjack.xp,18);assert.deepEqual(back.stats,{treesFelled:1,logsCollected:0});assert.equal(back.equipped,'axe');assert.deepEqual(felledTrees(back),[pine.key]);
 assert.equal(normalizeProgress({equipped:'axe'}).equipped,null,'cannot equip a tool you do not own');assert.equal(normalizeProgress({equipped:'apple',inventory:withAxe().inventory}).equipped,null);
 assert.deepEqual(normalizeProgress({position:{x:120,z:-250}}).position,{x:120,z:-250});assert.deepEqual(normalizeProgress({position:{x:-150,z:-230}}).position,{x:-150,z:-230});assert.equal(normalizeProgress({position:{x:500,z:0}}).position,null);
 initializeState({progress:freshProgress()});assert.deepEqual(getPlot(pine.key),{type:'forest',tree:'pine',hits:0});setStatePlot(farmKey,{type:'farm',crop:null,tilled:true});assert.equal(GameState.progress.plots[farmKey].tilled,true);

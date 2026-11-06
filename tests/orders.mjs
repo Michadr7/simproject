@@ -54,7 +54,7 @@ assert.equal(dropSpot(STUDIO_ID).kind,'locker');assert.equal(dropSpot(house.id).
  assert.deepEqual(junk,{main:null,nextId:1,nextVehicle:1,queue:[],drops:{},stock:{}},'bad saved orders are dropped')}
 // Vehicles: bought on the lot or ordered to a home, in a colour; a sold colour restocks after 3 to 6 game days; they park on the driveway on arrival; each home holds some.
 {const models=Object.keys(VEHICLE_PRICE),rich={...studio,cash:5000000},m=models[0],c0=coloursOf(m)[0].id,c1=coloursOf(m)[1].id;
- assert.deepEqual([...models].sort(),['offroad','worktruck'],'both drivable models have a price');
+ assert.deepEqual([...models].sort(),['flatbed','offroad','worktruck'],'every drivable model has a price');
  assert.equal(vehicleCount(rich),0);assert(inStock(rich,m,c0));assert.equal(displayColour(rich,m),c0,'the lot shows the first colour in stock');
  const bought=buyVehicle(rich,m,c0);assert(!bought.error,bought.error);const own=bought.state;assert.equal(own.vehicles.length,1);assert.equal(own.vehicles[0].uid,'v1');assert.equal(own.vehicles[0].colour,c0);assert.equal(own.cash,rich.cash-VEHICLE_PRICE[m]);
  assert.deepEqual([own.vehicles[0].x,own.vehicles[0].z],[MAP.vehicles.find(v=>v.model===m).home.x,MAP.vehicles.find(v=>v.model===m).home.z],'a lot purchase stands where the display vehicle stood');

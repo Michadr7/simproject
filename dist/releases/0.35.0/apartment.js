@@ -1,5 +1,6 @@
 import {MAP} from './map-definition.js';
 import * as T from './vendor/three.module.js';
+import {createHingedDoor} from './doors.js';
 export const EXIT=MAP.studio.interior.exit,BED=MAP.studio.interior.bed,ENTRY=MAP.studio.interior.entry; // placed by map-definition.js
 export function createApartment(){
  const scene=new T.Scene();scene.background=new T.Color('#b8b5a4');scene.add(new T.HemisphereLight('#fff1da','#898878',1.9));const light=new T.DirectionalLight('#fff2da',2);light.position.set(2,6,1);scene.add(light);
@@ -8,7 +9,7 @@ export function createApartment(){
  // More circulation space, with distinct sleeping, living and kitchen zones.
  box(13,.2,11,0,-.1,0,'#b6a58c');for(let x=-6;x<=6;x+=.5)box(.012,.005,11,x,.003,0,'#a4937c');
  box(13,3.4,.18,0,1.7,-5.5,'#e2dbc8',true);box(.18,3.4,11,-6.5,1.7,0,'#cbd1bf',true);box(.18,3.4,11,6.5,1.7,0,'#dad4c3',true);box(13,3.4,.18,0,1.7,5.5,'#e2dbc8',true);
- box(1.3,2.5,.1,0,1.25,5.36,'#6e8073').name='front-door';box(.08,.12,.08,.45,1.2,5.27,'#c8af70');
+ const frontDoor=createHingedDoor({width:1.3,height:2.5,frame:false,handle:false});frontDoor.group.name='front-door';frontDoor.group.position.set(0,0,5.36);scene.add(frontDoor.group);frontDoor.group.traverse(m=>{if(m.isMesh){m.material=m.material.clone();occluders.push(m)}}); // a real hinged door
  // Bed and low shelf define the sleeping area without closing its aisle.
  box(1.8,.36,2.8,-5.15,.23,-2.4,'#73614e',true);box(1.76,.22,2.7,-5.15,.52,-2.4,'#e4e0cf');box(1.76,.12,1.8,-5.15,.68,-1.95,'#78918a');box(1.3,.12,.5,-5.15,.7,-3.4,'#f0e8d5');
  box(1.85,.85,.12,-5.15,.45,-3.9,'#8c785c');box(.65,.65,.6,-3.85,.325,-4,'#947d60',true);box(.3,.12,.3,-3.85,.74,-4,'#698377');
@@ -30,5 +31,5 @@ export function createApartment(){
  // Large window above the empty back-wall work area.
  box(2.6,1.4,.04,-.6,2,-5.39,'#9bb7b9');for(const x of [-1.92,-.6,.72])box(.05,1.5,.08,x,2,-5.32,'#f0ead8');box(2.85,.08,.3,-.6,1.25,-5.2,'#eee3cf');
  for(const z of [-5.35,5.35])box(12.7,.14,.08,0,.08,z,'#b7b49f');
- return {scene,solids,occluders,blocked(x,z){return Math.abs(x)>6.05||Math.abs(z)>5.05||colliders.some(b=>Math.abs(x-b.x)<b.hx+.3&&Math.abs(z-b.z)<b.hz+.3)}};
+ return {scene,solids,occluders,frontDoor,blocked(x,z){return Math.abs(x)>6.05||Math.abs(z)>5.05||colliders.some(b=>Math.abs(x-b.x)<b.hx+.3&&Math.abs(z-b.z)<b.hz+.3)}};
 }

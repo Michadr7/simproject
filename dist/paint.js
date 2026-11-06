@@ -10,6 +10,14 @@ export const PAINT=Object.freeze({
   {id:'yellow',name:'Site yellow',swatch:'#e0b21d',hue:48,sat:1.7,val:1.7},
   {id:'black',name:'Black',swatch:'#222222',hue:null,sat:.1,val:.4},
   {id:'white',name:'White',swatch:'#e8e8e4',hue:null,sat:.08,val:2}]},
+ // the Tylan Flatbed: its cab has its own paint material (flatbed.js), so a colour is set directly (swatch); its own colour is rust orange
+ flatbed:{direct:true,colours:[
+  {id:'orange',name:'Rust orange',swatch:'#ce6f3f'},
+  {id:'white',name:'Fleet white',swatch:'#e4e4de'},
+  {id:'blue',name:'Deep blue',swatch:'#24508f'},
+  {id:'red',name:'Signal red',swatch:'#b3302a'},
+  {id:'yellow',name:'Haul yellow',swatch:'#e3b21f'},
+  {id:'black',name:'Black',swatch:'#232323'}]},
  offroad:{src:118,band:45,colours:[
   {id:'green',name:'Trail green',swatch:'#2fb51a',hue:null},
   {id:'red',name:'Rally red',swatch:'#c4301f',hue:4,sat:1,val:1.05},

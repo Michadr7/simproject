@@ -3,15 +3,17 @@
 //   farm:   {type:'farm', crop:null|string, tilled:boolean}
 //   forest: {type:'forest', tree:'pine', hits:0..2}  a standing pine (the default)
 //           {type:'forest', tree:null, hits:0, felledAt:gameMinutes|null}  felled: stump, then sapling, then a pine again
+//           {type:'forest', tree:null, hits:0, felledAt, clearedAt:gameMinutes}  the stump was dug out (a Ridgeline task): bare ground until a sapling is planted, or until nature seeds it after CLEARED_HOLD
 // Felling a pine leaves logs on the ground (progress.logs) that the player picks up.
 import {gridZoneAt,parseCellKey,cuttableTreeAt,cellCenter,isWalkable} from './world.js';
 import {hasItem} from './inventory.js';
-import {addXp,levelOf,hitsNeeded,logsPerTree,XP,freshStats} from './skills.js';
+import {addXp,levelOf,logsPerTree,XP,freshStats} from './skills.js';
+import {isAxe,hitsFor} from './tools.js';
 
-export const TREE_HITS=3; // hits for a level 1 lumberjack (skills.js has the perks)
+export const TREE_HITS=4; // hits for a level 1 lumberjack with the starter Axe (tools.js hitsFor has the ladder); a saved tree can hold at most this minus one
 export const CHOP_RANGE=2.2;
 // Game minutes since felling: a sapling after 3 days, a full tree again after 7.
-export const SAPLING_AFTER=4320,MATURE_AFTER=10080;
+export const SAPLING_AFTER=4320,MATURE_AFTER=10080,CLEARED_HOLD=4320; // cleared ground left alone seeds itself after 3 more days
 export const MAX_LOGS=80,LOG_LIFETIME=2880; // logs left lying are gone after 2 game days
 const MAX_PLOTS=20000;
 // Same clock as contracts.js gameMinutes, repeated here to avoid an import cycle.
@@ -34,7 +36,7 @@ export function normalizePlots(value){
   if(base.type==='farm')plot={type:'farm',crop:typeof raw.crop==='string'&&/^[a-z][a-z-]{0,23}$/.test(raw.crop)?raw.crop:null,tilled:raw.tilled===true};
   else{
    if(base.tree===null)continue; // nothing generated here to remember
-   if(raw.tree===null)plot={type:'forest',tree:null,hits:0,felledAt:Number.isFinite(raw.felledAt)&&raw.felledAt>=0&&raw.felledAt<=1e9?Math.floor(raw.felledAt):null};
+   if(raw.tree===null){plot={type:'forest',tree:null,hits:0,felledAt:Number.isFinite(raw.felledAt)&&raw.felledAt>=0&&raw.felledAt<=1e9?Math.floor(raw.felledAt):null};if(Number.isFinite(raw.clearedAt)&&raw.clearedAt>=0&&raw.clearedAt<=1e9)plot.clearedAt=Math.floor(raw.clearedAt)}
    else plot={type:'forest',tree:'pine',hits:Number.isInteger(raw.hits)?Math.max(0,Math.min(TREE_HITS-1,raw.hits)):0};
   }
   // Only store plots that differ from their default.
@@ -68,6 +70,7 @@ export function expireLogs(progress,now){
  return logs.length===(progress.logs||[]).length?progress:{...progress,logs};
 }
 
+const hasAnyAxe=progress=>(progress.inventory?.slots||[]).some(slot=>isAxe(slot.id));
 // ── Chopping ──────────────────────────────────────────────────────────────────
 // One swing of the axe. Returns {error} or {state, hits, need, felled, logs, leveledUp, level, message}.
 // The axe must be owned and equipped; the lumberjack level sets how many hits a tree takes and how many logs it drops.
@@ -76,9 +79,9 @@ export function chopTree(progress,key,position){
  if(plot?.type!=='forest'||plot.tree!=='pine')return {error:'There is no tree to chop here.'};
  const c=parseCellKey(key),center=cellCenter(c.ix,c.iz);
  if(position&&Math.hypot(position.x-center.x,position.z-center.z)>CHOP_RANGE)return {error:'Move closer to the tree.'};
- if(!hasItem(progress,'axe'))return {error:'You need an axe. The Corner Market sells them.'};
- if(progress.equipped!=='axe')return {error:'Equip your axe first: press its hotbar number.'};
- const level=levelOf(progress.skills.lumberjack.xp).level,need=hitsNeeded(level),hits=plot.hits+1;
+ if(!hasAnyAxe(progress))return {error:'You need an axe. The Corner Market sells them.'};
+ if(!isAxe(progress.equipped))return {error:'Equip your axe first: press its hotbar number.'};
+ const level=levelOf(progress.skills.lumberjack.xp).level,need=hitsFor(progress.equipped,level),hits=plot.hits+1;
  if(hits<need){
   const gained=addXp(setPlot(progress,key,{type:'forest',tree:'pine',hits}),'lumberjack',XP.hit);
   return {state:gained.state,hits,need,felled:false,logs:[],leveledUp:gained.leveledUp,level:gained.level,message:`Chop ${hits} / ${need}`};
@@ -97,9 +100,33 @@ export function chopTree(progress,key,position){
  return {state:gained.state,hits,need,felled:true,logs:made,leveledUp:gained.leveledUp,level:gained.level,message:`Timber! ${count} logs on the ground.`};
 }
 
+// ── Clearing and replanting (0.35, Ridgeline tasks) ──
+// Dig out a fresh stump with the axe in your hand: the ground is then bare (stage 'cleared').
+export function clearStump(progress,key,position){
+ const plot=plotAt(progress,key);
+ if(plot?.type!=='forest'||plot.tree!==null)return {error:'There is no stump here.'};
+ if(plot.clearedAt!=null)return {error:'This ground is already cleared.'};
+ const now=Math.floor(minutesOf(progress));if(treeStage(plot,now)!=='stump')return {error:'This tree is already growing back: only a fresh stump can be dug out.'};
+ const c=parseCellKey(key),center=cellCenter(c.ix,c.iz);
+ if(position&&Math.hypot(position.x-center.x,position.z-center.z)>CHOP_RANGE)return {error:'Move closer to the stump.'};
+ if(!isAxe(progress.equipped))return {error:'Equip your axe first: press its hotbar number.'};
+ const gained=addXp(setPlot(progress,key,{type:'forest',tree:null,hits:0,felledAt:plot.felledAt,clearedAt:now}),'lumberjack',XP.hit*2);
+ return {state:gained.state,leveledUp:gained.leveledUp,level:gained.level,message:'Stump dug out.'};
+}
+// Plant a sapling in cleared ground: it starts as a sapling now and is a full pine again after four more game days.
+export function plantSapling(progress,key,position){
+ const plot=plotAt(progress,key);
+ if(plot?.type!=='forest'||plot.tree!==null||plot.clearedAt==null)return {error:'Saplings go in cleared ground: dig out a stump first.'};
+ const c=parseCellKey(key),center=cellCenter(c.ix,c.iz);
+ if(position&&Math.hypot(position.x-center.x,position.z-center.z)>CHOP_RANGE)return {error:'Move closer to the cleared ground.'};
+ const now=Math.floor(minutesOf(progress));
+ return {state:setPlot(progress,key,{type:'forest',tree:null,hits:0,felledAt:now-SAPLING_AFTER}),message:'Sapling planted.'};
+}
+
 // ── Regrowth ──────────────────────────────────────────────────────────────────
 export function treeStage(plot,now){
  if(plot.tree==='pine')return 'mature';
+ if(plot.clearedAt!=null)return 'cleared';
  if(plot.felledAt==null||now-plot.felledAt<SAPLING_AFTER)return 'stump';
  return now-plot.felledAt<MATURE_AFTER?'sapling':'mature';
 }
@@ -110,6 +137,7 @@ export function regrowTrees(progress,now,isBlocked=()=>false){
  const plots={...(progress.plots||{})},restored=[];let changed=false;
  for(const [key,plot] of Object.entries(plots)){
   if(plot.type!=='forest'||plot.tree!==null)continue;
+  if(plot.clearedAt!=null){if(now-plot.clearedAt>=CLEARED_HOLD){plots[key]={type:'forest',tree:null,hits:0,felledAt:now-SAPLING_AFTER};changed=true}continue} // bare ground: left alone, nature seeds it after a while
   if(plot.felledAt==null){plots[key]={...plot,felledAt:now};changed=true;continue}
   if(now-plot.felledAt>=MATURE_AFTER&&!isBlocked(key)){delete plots[key];restored.push(key);changed=true}
  }

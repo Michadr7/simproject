@@ -33,6 +33,9 @@ try{
  GameState.progress={...p(),housing:{...p().housing,day:p().housing.day+1}};pump(2);
  assert.equal(p().orders.queue.length,0);assert.equal(p().orders.drops[STUDIO_ID].reduce((n,l)=>n+l.qty,0),3,'three things wait at the studio locker');
  assert(/Your order has arrived/.test(ids.get('jobToast').textContent),'a toast says so: '+ids.get('jobToast').textContent);
+ // the phone notification: the button shakes and counts it; opening the phone clears the count; a rise in what you owe is a notification too
+ {const b=ids.get('phoneButton');assert(b.classList.contains('ring')&&b.classList.contains('has-unread'),'the arrival shakes the phone button');assert.equal(b.dataset.unread,'1','and counts one unread');b.click();assert.equal(b.dataset.unread,'','opening the phone clears the count');assert(!b.classList.contains('has-unread'));ids.get('phoneClose').click();
+  const h=p().housing;GameState.progress={...p(),housing:{...h,rentDue:(h.rentDue||0)+6000}};pump(1);assert.equal(b.dataset.unread,'1','new rent due is a notification');assert(/Rent and bills are due/.test(ids.get('jobToast').textContent),ids.get('jobToast').textContent);b.click();ids.get('phoneClose').click()}
  // walk to the locker and collect with E
  const d=dropSpot(STUDIO_ID);GameState.me.position.x=d.x;GameState.me.position.z=d.z+1.2;pump(1);
  assert(/Collect your order · 3 things/.test(ids.get('prompt').querySelector('span').textContent),'the prompt: '+ids.get('prompt').querySelector('span').textContent);

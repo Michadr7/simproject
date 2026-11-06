@@ -15,7 +15,7 @@ const at=g=>g.me.position,away=(p,o)=>Math.hypot(p.x-o.x,p.z-o.z);
  assert(away(p,CAR)>=1.5,`you are not left inside the car (${away(p,CAR).toFixed(2)} m from its centre)`);assert(away(p,CAR)<=8,`and you are near where you were (${away(p,CAR).toFixed(2)} m)`);
  assert(away(p,SPAWN)>3,'not teleported back to the spawn');
  // R: back to the spawn (which is clear)
- Object.assign(p,{x:40,z:20});g.send('keydown','KeyR');assert.deepEqual([at(g.GameState).x,at(g.GameState).z],[SPAWN.x,SPAWN.z],'R returns to the starting point');
+ Object.assign(p,{x:40,z:20});g.send('keydown','KeyR');assert.deepEqual([at(g.GameState).x,at(g.GameState).z],[40,20],'R no longer sends you back to the start');g.find('devSpawnPoint').click();assert.deepEqual([at(g.GameState).x,at(g.GameState).z],[SPAWN.x,SPAWN.z],'the dev panel still has Back to spawn');
  await g.done();
 }
 { // Stuck inside the car, holding W: after about a second you are moved out; nothing is teleported while you are simply walking

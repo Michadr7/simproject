@@ -22,6 +22,6 @@ assert(START_PUFFS.low>START_PUFFS.mid&&START_PUFFS.mid>START_PUFFS.high,'and th
  for(let i=0;i<120;i++)s.update(1/30);assert.equal(s.points.visible,false,'and gone again (hidden) a few seconds after the engine stops');assert.equal(scene.children.filter(c=>c.isPoints).length,1,'one draw call')}
 
 // the muffler tips are behind the vehicle, on its right (-x), low, and point straight back
-for(const c of Object.values(CLASSES)){assert(c.exhaust&&c.exhaust.z<-c.hz+.3&&c.exhaust.z>-c.hz-.3&&c.exhaust.x<0&&Math.abs(c.exhaust.x)<c.hx&&c.exhaust.y>.2&&c.exhaust.y<.7,c.id+': a muffler tip at the back, right, low');
+for(const c of Object.values(CLASSES)){if(c.exhaust?.stack){assert(c.exhaust.y>2&&c.exhaust.x<0&&Math.abs(c.exhaust.x)<c.hx+.1,c.id+': a stack, high up on the right of the cab');continue}assert(c.exhaust&&c.exhaust.z<-c.hz+.3&&c.exhaust.z>-c.hz-.3&&c.exhaust.x<0&&Math.abs(c.exhaust.x)<c.hx&&c.exhaust.y>.2&&c.exhaust.y<.7,c.id+': a muffler tip at the back, right, low');
  const s={...freshVehicle({x:10,z:10,yaw:Math.PI/2})},w=toWorld(s,c.exhaust.x,c.exhaust.z);assert(w.x<10,'turned to face +x ... the back is at -x ('+w.x.toFixed(1)+')')}
 console.log('Smoke: slight (idle 2 puffs a second, at most about 9 flat out), more from cheaper tiers, a key-turn burst, rising and fading puffs in one pool of 90 points (one draw call, hidden when none live), and each vehicle\'s muffler tip at its back right.');

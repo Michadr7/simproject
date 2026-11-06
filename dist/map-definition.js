@@ -32,7 +32,8 @@ const roads={
   farmGate:{x:-164,z:n(-160)},farmJoin:{x:-34,z:n(-160)},woodsJoin:{x:-26,z:n(-180)},woodsEnd:{x:195,z:n(-180)},woodsLaneNorth:{x:90,z:n(-246)},woodsLaneSouth:{x:90,z:n(-146)},
   alderStreetS:{x:50,z:-3.5},alderStreetN:{x:50,z:-125},alderCrossW:{x:-30,z:-90},alderCrossE:{x:84,z:-90},
   oakEastEnd:{x:195,z:6},cedarLinkS:{x:120,z:6},cedarLoopStart:{x:120,z:-57},
-  freightW:{x:72,z:68},freightS:{x:195,z:68},freightE:{x:199.5,z:68},freightN:{x:195,z:n(-180)-3.5},
+  freightW:{x:72,z:68},freightS:{x:195,z:68},freightE:{x:199.5,z:68},outEast:{x:290,z:68}, // outEast: Freight South carried on to the ground's east edge (0.35): the road customer trucks come and go by (MAP.exits)
+freightN:{x:195,z:n(-180)-3.5},
   worksN:{x:102,z:6},worksS:{x:102,z:68} // Works Lane (0.33): from Oak Street East's centreline to Freight South's
  },
  edges:[
@@ -55,6 +56,7 @@ const roads={
    path:[[101.0,-60.8],[87.1,-71.0],[82.0,-85.0],[87.1,-99.0],[101.0,-109.2],[120.0,-113.0],[139.0,-109.2],[152.9,-99.0],[158.0,-85.0],[152.9,-71.0],[139.0,-60.8]]},
   // The Freight Road: along the south side of Eastbank Works, then north up its own corridor, over the east bridge, to Pine Ridge.
   {id:'freight-south',from:'freightW',to:'freightE',width:12,surface:'asphalt',level:'rural',walkable:true,zone:'eastbank'}, // 12 m since 0.33 (was 9): every Eastbank yard opens onto it and the flatbed turns in from the Freight Road
+  {id:'freight-out',from:'freightE',to:'outEast',width:12,surface:'asphalt',level:'rural',walkable:true}, // 0.35: Freight South continued east to the playable edge (x 290; walkable ground stops there): trucks leave the map along it
   {id:'freight-road',from:'freightS',to:'freightN',width:9,surface:'asphalt',level:'rural',walkable:true,zone:'freight'},
   // Works Lane (0.33): Eastbank's own connector, a straight 12 m road closing the loop Oak Street East -> Works Lane -> Freight South -> Freight Road.
   {id:'works-lane',from:'worksN',to:'worksS',width:12,surface:'asphalt',level:'rural',walkable:true,zone:'eastbank'}
@@ -104,12 +106,12 @@ const doorway=()=>({halfWidth:1.3,approach:{halfWidth:2.6,z0:-9.2,z1:-5.4},thres
 //   origin    where the room sits in the world (x is the shop's door x); origin.z + frontWallZ must be the building's front
 //   entry     where you appear when you walk in; spawn / exit are used after a reset and for the exit prompt
 //   counter   the clerk's counter; exitDoor is the sliding door you leave by, with its approach zone and trigger line
-const interior=()=>({origin:{y:.165,z:-13.5},frontWallZ:5,entry:{x:0,z:3.9},spawn:{x:0,z:3.1},exit:{x:0,z:4},counter:{x:0,z:-2},exitDoor:{z:4.96,width:2.2,height:2.7,near:{halfWidth:2.4,z:2.7},trigger:{halfWidth:.9,z:4.3}}});
+const interior=(doorKind='sliding')=>({origin:{y:.165,z:-13.5},frontWallZ:5,entry:{x:0,z:3.9},spawn:{x:0,z:3.1},exit:{x:0,z:4},counter:{x:0,z:-2},exitDoor:{kind:doorKind,z:4.96,width:2.2,height:2.7,near:{halfWidth:2.4,z:2.7},trigger:{halfWidth:.9,z:4.3}}});
 // Shops you can walk into. x is the door centre, z is where you stand outside it, doorZ is the door plane on the building's
 // front, hours are [opens, closes) in minutes since midnight, sign is the text over the door.
 const shops={
  market:{name:'Corner Market',x:19,z:-6.3,doorZ:-8.46,door:{width:2.3,height:2.5},hours:[420,1320],sign:'MARKET 7AM–10PM',doorway:doorway(),interior:interior()},
- cafe:{name:'Alder Coffee',x:36,z:-6.3,doorZ:-8.46,door:{width:2.3,height:2.5},hours:[480,1080],sign:'CAFE 8AM–6PM',doorway:doorway(),interior:interior()}
+ cafe:{name:'Alder Coffee',x:36,z:-6.3,doorZ:-8.46,door:{width:2.3,height:2.5},hours:[480,1080],sign:'CAFE 8AM–6PM',doorway:doorway(),interior:interior('double')}
 };
 
 // Land set aside for later (ownership, preset buildings). Whole-cell rectangles; kind is 'residential', 'commercial' or
@@ -142,7 +144,7 @@ const reserved=[
  {id:'I1',name:'Industrial plot I1',kind:'industrial',facing:'north',x0:150,x1:176,z0:18,z1:46},{id:'I2',name:'Industrial plot I2',kind:'industrial',facing:'south',x0:150,x1:180,z0:-18,z1:-2},
  // Eastbank Works (0.33): I3 the building supplier and I4 the vehicle workshop front Oak Street East (facing north), I5 the timber yard fronts Freight South (facing south), I6 is the open freight yard (no building).
  {id:'I3',name:'Industrial plot I3',kind:'industrial',facing:'north',x0:72,x1:94,z0:14,z1:40},{id:'I4',name:'Industrial plot I4',kind:'industrial',facing:'north',x0:110,x1:142,z0:14,z1:40},
- {id:'I5',name:'Industrial plot I5',kind:'industrial',facing:'south',x0:72,x1:94,z0:42,z1:62},{id:'I6',name:'Industrial plot I6',kind:'industrial',facing:'south',x0:110,x1:188,z0:48,z1:62}
+ {id:'I5',name:'Industrial plot I5',kind:'industrial',facing:'east',x0:72,x1:94,z0:42,z1:62},{id:'I6',name:'Industrial plot I6',kind:'industrial',facing:'south',x0:110,x1:188,z0:48,z1:62}
 ];
 
 // ── Eastbank Works paving, bays and yards (0.33) ─────────────────────────────────────────────────────────────────────────────────────
@@ -160,7 +162,7 @@ const paving=[
 // Painted parking bays: `count` bays `width` wide and `depth` deep from (x0, z0); lines between them and along the back (the side away from the way in).
 const bayRows=[
  {id:'supply-bays',x0:76.4,z0:22,count:6,width:2.7,depth:5,back:'south'},{id:'workshop-bays',x0:113,z0:21,count:2,width:2.7,depth:5,back:'south'},
- {id:'depot-car-bays',x0:92,z0:-18,count:8,width:2.7,depth:5,back:'north'},{id:'depot-truck-bays',x0:82,z0:-18,count:2,width:4.5,depth:10,back:'north'} // the Riden Deals lot: 10 display slots (2 truck bays, where the worktruck (84.25) and the pickup (88.75) stand, and 8 car bays, 2 of them spare); the showroom stands behind the bays' back line
+ {id:'depot-car-bays',x0:95.5,z0:-18,count:6,width:2.7,depth:5,back:'north'},{id:'depot-truck-bays',x0:82,z0:-18,count:3,width:4.5,depth:10,back:'north'} // the Riden Deals lot: 10 display slots (2 truck bays, where the worktruck (84.25) and the pickup (88.75) stand, and 8 car bays, 2 of them spare); the showroom stands behind the bays' back line
 ];
 // Yards: each is one chunk of props (one InstancedMesh per model, eastbank.js), drawn only within `cull` metres (80) of the yard's rectangle, with caps checked by validateMap (at most YARD_CAPS.perModel of one model
 // in a yard, YARD_CAPS.total in all of them). An item is {prop, x, z, yaw, y}: y > 0 is a stacked pallet (only the bottom one is solid).
@@ -241,12 +243,12 @@ const properties=[
  {id:'eastbank-workshop',type:'industrial',landmark:'eastbank-workshop',plot:'I4',name:'Eastbank Vehicle Workshop',enterable:false,reason:'Repairs arrive with tool wear and repairs (0.37).'},
  {id:'eastbank-supply',type:'shop',landmark:'eastbank-supply',plot:'I3',name:'Eastbank Building Supplier',enterable:false,reason:"The supplier's counter (blades, tools, whetstones) arrives with 0.35-0.37; the plank dock is in the timber yard behind."},
  {id:'eastbank-gas-kiosk',type:'shop',landmark:'eastbank-gas-kiosk',plot:'I2',name:'Eastbank Gas Station',enterable:false,reason:'Paying for fuel arrives with the fuel system (0.35).'},
- {id:'eastbank-lumber-shed',type:'industrial',landmark:'eastbank-lumber-shed',plot:'I5',name:'Eastbank Lumber Shed',enterable:false,reason:'An open-sided shed; you can already walk around it.'},
+ {id:'ridgeline-office',type:'industrial',landmark:'ridgeline-office',plot:'I5',name:'Ridgeline Timber Office',enterable:false,reason:'The company office has its own door on the timber yard side (see MAP.offices); it opens from 6 AM to 6 PM.'},
  {id:'riden-deals',type:'shop',landmark:'riden-deals',name:'Riden Deals',enterable:false,reason:'The showroom opens later: buy a vehicle on the lot (E at its driver door) or order one from the phone Store.'}
 ];
 // Drivable vehicles (0.33, DESIGN 4.13 D): the two depot vehicles, parked nose to the back wall (north, so yaw pi: a model's front is +z) in the depot's first truck and car bays. Anyone can drive them (no keys yet). `model` is a converted
 // prop and a vehicle class (vehicle.js CLASSES); the id is the save key (`progress.vehicles`). The parked scenery cars and trucks elsewhere are not drivable.
-export const DRIVABLE_MODELS=Object.freeze(['worktruck','offroad']);
+export const DRIVABLE_MODELS=Object.freeze(['worktruck','offroad','flatbed']);
 // RULE: every vehicle model needs a `sale` field (DESIGN 4.14). 'dealership': a display vehicle on the Riden Deals lot, bought there only. 'online': in the phone Store only, no display slot and no `home`. 'both': display slot and Store.
 // The lot holds one display vehicle per dealership or both model, in the depot's bays (validateMap checks there are enough bays).
 export const SALE_MODES=Object.freeze(['dealership','online','both']);
@@ -271,22 +273,34 @@ const relief=Object.freeze({hills:Object.freeze([
 ])});
 const vehicles=[
  {id:'eastbank-worktruck',model:'worktruck',name:'Worktruck',sale:'both',home:{x:84.25,z:-13,yaw:PI},fuel:{type:'diesel',tankMgal:21000,port:{x:1.2,z:-2.2}}},
- {id:'eastbank-offroad',model:'offroad',name:'Pevrolet Off Road Pickup',sale:'both',home:{x:88.75,z:-13,yaw:PI},fuel:{type:'diesel',tankMgal:18000,port:{x:1.4,z:-2.2}}}
+ {id:'eastbank-offroad',model:'offroad',name:'Pevrolet Off Road Pickup',sale:'both',home:{x:88.75,z:-13,yaw:PI},fuel:{type:'diesel',tankMgal:18000,port:{x:1.4,z:-2.2}}},
+ // the Tylan Flatbed (0.35): the third truck bay; for sale from Lumberjack level 5 (shown, locked, before that). The fuel port is the model's anchor_fuel_port.
+ {id:'eastbank-flatbed',model:'flatbed',name:'Tylan Flatbed',sale:'both',requires:{skill:'lumberjack',level:5},home:{x:93.25,z:-13,yaw:PI},fuel:{type:'diesel',tankMgal:30000,port:{x:1.22,z:-.235}}}
 ];
 // Employers (0.35, DESIGN 4.15): a company with one owner (an NPC at the start), a skill, an office building, the places that count as "on site" (a zone, a plot or an
 // interior room), opening hours in game minutes (6 AM to 6 PM; the last clock-in half an hour before closing) and its ranks. A rank: what it needs (skill level,
 // shifts worked, reputation 0-100), its wage in cents per game hour on site, the tools handed over once when it is reached (item ids), the task kinds it adds.
 // Names are defaults: a save may rename a company (careers.js employerName). Placeholder numbers (Haiku tunes).
+// Company offices (0.35): a building with a door you walk up to (E, open during the employer's hours) and an interior room that sits far from the map and is shown only while you are inside (like a shop's).
+// door: where you stand outside, and the yaw you face leaving; sign: the company's name board above the door. The room is the shops' layout (market interior numbers), so its entry, exit and counter are the same.
+const offices=[
+ {id:'ridgeline-office',employer:'ridgeline',building:'ridgeline-office',door:{x:80.9,z:58.3,out:{x:81.5,z:58.3},yaw:Math.PI/2},sign:{x:78.66,y:3.2,z:53.5,yaw:Math.PI/2},interior:{...interior('double'),origin:{x:420,y:.165,z:300}}}
+];
+// Map exits (0.35, DESIGN 4.15 K): where NPC vehicles (customer trucks) come onto the map and leave it. `path` runs from the far end (off the map, where a vehicle appears and is
+// removed) inward; its first point must lie outside the playable rectangle (validateMap), so making the map bigger means moving the exit too. Lanes: Freight South is centred on
+// z 68, 12 m wide; westbound traffic keeps to z 65, eastbound to z 71 (drive on the right).
+const exits=[{id:'east',road:'freight-out',in:[[322,65],[296,65],[200,65],[120,65],[95,65]],out:[[95,71],[200,71],[296,71],[322,71]]}];
 const employers=[
- {id:'ridgeline',name:'Ridgeline Timber Co.',skill:'lumberjack',office:'eastbank-lumber-shed',owner:{kind:'npc',id:'walt-hargrove',name:'Walt Hargrove',title:'Owner'},
+ {id:'ridgeline',name:'Ridgeline Timber Co.',skill:'lumberjack',office:'ridgeline-office',owner:{kind:'npc',id:'walt-hargrove',name:'Walt Hargrove',title:'Owner'},
   hours:{from:360,to:1080,lastIn:1050},
+  store:[{item:'chainsaw',rank:6},{item:'logging-chainsaw',rank:6}], // the company store at the office: sold to this rank and above (an item may also need a skill level: items.js `requires`)
   sites:[{zone:'forest'},{plot:'I5'},{plot:'I1'},{room:'ridgeline-office'},{room:'ridgeline-warehouse'}],
   ranks:[
-   {id:'trainee',name:'Trainee',needs:{level:1,shifts:0,rep:0},wage:800,grants:['axe'],tasks:['fell','landing']},
-   {id:'feller',name:'Feller',needs:{level:3,shifts:3,rep:20},wage:1000,grants:[],tasks:['mill']},
-   {id:'hauler',name:'Hauler',needs:{level:5,shifts:6,rep:35},wage:1200,grants:[],tasks:['haul']}, // + the Steel Axe once it is an item (0.35 step 5)
+   {id:'trainee',name:'Trainee',needs:{level:1,shifts:0,rep:0},wage:800,grants:['axe'],tasks:['fell','landing','gather']},
+   {id:'feller',name:'Feller',needs:{level:3,shifts:3,rep:20},wage:1000,grants:[],tasks:['mill','stumps']},
+   {id:'hauler',name:'Hauler',needs:{level:5,shifts:6,rep:35},wage:1200,grants:['logging-axe'],tasks:['haul','load']},
    {id:'yard-hand',name:'Yard hand',needs:{level:7,shifts:10,rep:50},wage:1400,grants:[],tasks:['stack','pick']},
-   {id:'sawyer',name:'Sawyer',needs:{level:10,shifts:15,rep:60},wage:1600,grants:[],tasks:['deliver','replant']}, // + the Lumberjack Axe (step 5)
+   {id:'sawyer',name:'Sawyer',needs:{level:10,shifts:15,rep:60},wage:1600,grants:['steel-axe'],tasks:['deliver','replant']},
    {id:'foreman',name:'Foreman',needs:{level:15,shifts:25,rep:75},wage:1800,grants:[],tasks:[]}
   ]}
 ];
@@ -299,7 +313,7 @@ export const MAP=deepFreeze({
  // Where you can walk: everywhere inside this rectangle except water (and trees, fences and buildings, which are solid objects). The zones name and shape the districts; they no longer fence them in.
  playable:{x0:-250,x1:290,z0:-380,z1:100},
  openCountry:{id:'open',name:'Open Country',label:'OPEN COUNTRY',subtitle:'Meadows between districts',color:'#6e8a5c'}, // how far the ground is drawn (scenery fades into fog beyond the walkable zones)
- zones,roads,water,fields,buildings,shops,reserved,properties,paving,bayRows,yards,vehicles,relief,employers,
+ zones,roads,water,fields,buildings,shops,reserved,properties,paving,bayRows,yards,vehicles,relief,employers,offices,exits,
  // The marked parking lot behind the south row of shops: bays 2.7 m wide and 5 m deep along its north edge, an aisle to Alder Street, the lot's own asphalt.
  lots:[{id:'alder-lot',x0:-14,x1:45,z0:-63,z1:-52,bays:{x0:-13.5,z0:-63,count:20,width:2.7,depth:5}}],
  // Parking lanes on the cross street (6 m bays, nose in the direction of traffic: eastbound on the south side, westbound on the north), and the lane edge lines.
@@ -376,7 +390,7 @@ export const MAP=deepFreeze({
   // Eastbank Works (0.33): Kenney Industrial buildings (CC0), each standing at the back of its plot with its front (door side) on the yard; a plot facing north puts the front at -z (yaw pi). None can be entered.
   {id:'eastbank-warehouse',prop:'industrial-q',plot:'I1',zone:'eastbank',x:163,z:38.6,yaw:Math.PI},{id:'eastbank-workshop',prop:'industrial-t',plot:'I4',zone:'eastbank',x:126,z:33.5,yaw:Math.PI},
   {id:'eastbank-supply',prop:'industrial-s',plot:'I3',zone:'eastbank',x:83,z:35.4,yaw:Math.PI},{id:'eastbank-gas-kiosk',prop:'industrial-p',plot:'I2',zone:'eastbank',x:172,z:-14,yaw:0},
-  {id:'eastbank-lumber-shed',prop:'hut',plot:'I5',zone:'eastbank',x:76.5,z:54,yaw:0},
+  {id:'ridgeline-office',prop:'industrial-p',plot:'I5',zone:'eastbank',x:76,z:53.5,yaw:Math.PI/2}, // the company office (0.35): a small industrial building turned to face the timber yard (+x); it replaced the open-sided shed
   {id:'riden-deals',prop:'store',zone:'eastbank',x:97,z:-28.5,yaw:0}, // the dealership showroom: a second copy of the Alder Store model (528 triangles), front to the south over the lot
  {id:'eastbank-tank',prop:'tank-small',zone:'eastbank',x:137,z:34,yaw:0,decor:true}
  ], // Signposts: boards are read from the front (yaw 0 faces south, towards walkers arriving from the bridge).
@@ -628,6 +642,15 @@ export function validateMap(map=MAP){
    if(!onPaving(v.home.x,v.home.z))bad(`vehicle ${v.id} does not start on paving`);
    if(v.home.x<map.playable.x0||v.home.x>map.playable.x1||v.home.z<map.playable.z0||v.home.z>map.playable.z1)bad(`vehicle ${v.id} starts outside the playable rectangle`)}
   const slots=(map.bayRows||[]).filter(r=>r.id.startsWith('depot-')).reduce((s,r)=>s+r.count,0);if(displays>slots)bad(`the dealership lot has ${slots} bays but ${displays} models have a display slot (sale: dealership or both): build another lot or sell the newest online only`)}
+ // exits (0.35): a known road; the first point in and the last point out lie outside the playable rectangle, so the vehicle is gone before the map ends
+ for(const x of map.exits||[]){if(!map.roads.edges.some(e=>e.id===x.road))bad(`exit ${x.id} names an unknown road ${x.road}`);const outside=([px,pz])=>px<map.playable.x0||px>map.playable.x1||pz<map.playable.z0||pz>map.playable.z1;
+  if(!x.in?.length||!x.out?.length||!outside(x.in[0])||!outside(x.out[x.out.length-1]))bad(`exit ${x.id} must start and end outside the playable map (enlarged the map? move the exit)`)}
+ // offices (0.35): a known employer and building, a door on the plot that is outside the building, an interior origin far from the playable map
+ for(const o of map.offices||[]){const e=(map.employers||[]).find(x=>x.id===o.employer),l=(map.landmarks||[]).find(x=>x.id===o.building),plot=l&&(map.reserved||[]).find(p=>p.id===l.plot);
+  if(!e)bad(`office ${o.id} has an unknown employer ${o.employer}`);if(!l)bad(`office ${o.id} has an unknown building ${o.building}`);if(e&&e.office!==o.id)bad(`office ${o.id} is not its employer's office (${e.office})`);
+  if(plot&&!(o.door.x>=plot.x0&&o.door.x<=plot.x1&&o.door.z>=plot.z0&&o.door.z<=plot.z1))bad(`office ${o.id}'s door is outside plot ${plot.id}`);
+  if(![o.door.x,o.door.z,o.door.yaw,o.sign.x,o.sign.z].every(Number.isFinite))bad(`office ${o.id} has a bad door or sign`);
+  const oi=o.interior.origin;if(oi.x<=map.playable.x1&&oi.x>=map.playable.x0&&oi.z<=map.playable.z1&&oi.z>=map.playable.z0)bad(`office ${o.id}'s interior stands inside the playable map`)}
  // employers (0.35, DESIGN 4.15): unique ids, an office that is a property (a building with a name), sites that name a known zone or plot (or an interior room), sane hours, and ranks whose needs climb
  const employerIds=new Set();
  for(const e of map.employers||[]){if(typeof e.id!=='string'||!e.id||employerIds.has(e.id))bad(`employer ${e.id} has a missing or duplicate id`);employerIds.add(e.id);
@@ -636,6 +659,7 @@ export function validateMap(map=MAP){
   for(const s of e.sites||[])if(!(s.zone&&map.zones.some(z=>z.id===s.zone))&&!(s.plot&&(map.reserved||[]).some(p=>p.id===s.plot))&&!(typeof s.room==='string'&&s.room))bad(`employer ${e.id} has a site that names nothing known (${JSON.stringify(s)})`);
   const h=e.hours||{};if(![h.from,h.to,h.lastIn].every(Number.isInteger)||!(0<=h.from&&h.from<h.lastIn&&h.lastIn<h.to&&h.to<=1440))bad(`employer ${e.id} has bad hours`);
   if(!(e.ranks||[]).length)bad(`employer ${e.id} has no ranks`);
+  for(const s of e.store||[])if(!Number.isInteger(s.rank)||s.rank<1||s.rank>(e.ranks||[]).length||typeof s.item!=='string')bad(`employer ${e.id} sells ${s.item} to a rank that does not exist`);
   (e.ranks||[]).forEach((r,i)=>{const p=e.ranks[i-1];if(!r.id||!r.name||!Number.isSafeInteger(r.wage)||r.wage<=0||!Array.isArray(r.grants)||!Array.isArray(r.tasks))bad(`employer ${e.id} rank ${r.id} is incomplete`);
    if(p&&!(r.needs.level>=p.needs.level&&r.needs.shifts>=p.needs.shifts&&r.needs.rep>=p.needs.rep&&r.wage>=p.wage))bad(`employer ${e.id} rank ${r.id} needs or pays less than the rank below`)})}
  return problems;

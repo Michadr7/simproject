@@ -1,4 +1,5 @@
 import {levelOf,perkText,perksText} from './skills.js';
+import {isAxe,hitsFor,bestAxe} from './tools.js';
 import {CONTRACTS,availableContracts} from './contracts.js';
 import {money} from './jobs.js';
 import {clockText} from './routine.js';
@@ -9,14 +10,17 @@ import {CLASSES} from './vehicle.js';
 import {GALLON,mph,fuelName,fuelText,priceLabel,canText} from './fuel.js';
 import {canOf} from './inventory.js';
 import {createPhoneStore} from './phone-store.js';
+import {createPhoneJobs} from './phone-jobs.js';
 import {vehicleCapacity,vehicleCount,vehicleLabel} from './orders.js';
 
 // UI only: transactions and movement/cursor ownership stay in game.js.
-export function createPhone({document:doc,getState,canOpen,onOpen,onClose,onAccept,onRefresh,onHomeAction,onOrder,onOrderVehicle,onSetMain}){
+export function createPhone({document:doc,getState,canOpen,onOpen,onClose,onAccept,onRefresh,onHomeAction,onOrder,onOrderVehicle,onSetMain,isOnSite,onClockIn,onClockOut,onQuit,onCollect}){
   const $=id=>doc.getElementById(id);
-  let opened=false,screen='home',previousFocus=null;
+  let opened=false,screen='home',previousFocus=null,unread=0;
+  const badgeNow=()=>{const b=$('phoneButton');b.dataset.unread=unread?String(Math.min(unread,9)):'';b.classList.toggle('has-unread',unread>0)};
   $('phoneOverlay').hidden=true;
   const store=createPhoneStore({document:doc,getState,onOrderVehicle:(model,colour,home)=>onOrderVehicle?.(model,colour,home)||{error:'Ordering is not available.'},onOrder:(cart,home)=>onOrder?.(cart,home)||{error:'Ordering is not available.'},onSetMain:id=>onSetMain?.(id)||{error:'Not available.'},say:text=>{$('phoneMessage').textContent=text}});
+  const jobs=createPhoneJobs({document:doc,getState,isOnSite:id=>isOnSite?.(id)??false,onClockIn:id=>onClockIn?.(id)||{error:'Not available.'},onClockOut:()=>onClockOut?.()||{error:'Not available.'},onQuit:id=>onQuit?.(id)||{error:'Not available.'},onCollect:id=>onCollect?.(id)||{error:'Not available.'},say:text=>{$('phoneMessage').textContent=text}});
   const cards=CONTRACTS.map(job=>{
     const card=doc.createElement('article');card.className='phone-contract';
     const title=doc.createElement('h3');title.textContent=job.title;
@@ -74,7 +78,7 @@ export function createPhone({document:doc,getState,canOpen,onOpen,onClose,onAcce
     $('phonePlayerName').textContent=state.me.name||'New neighbor';
     {const xp=progress.skills.lumberjack.xp,{level,into,next}=levelOf(xp);
      $('phoneLumberLevel').textContent=level>=20?'Lv 20 · max':'Lv '+level;$('phoneLumberMeter').max=next||1;$('phoneLumberMeter').value=next?into:1;
-     $('phoneLumberPerks').textContent=perksText(level);$('phoneLumberNext').textContent=level>=20?'Every perk unlocked.':`${into} / ${next} XP to level ${level+1}: ${perkText(level+1)}`;
+     {const axe=isAxe(progress.equipped)?progress.equipped:bestAxe(progress);$('phoneLumberPerks').textContent=perksText(level,axe?hitsFor(axe,level):null)};$('phoneLumberNext').textContent=level>=20?'Every perk unlocked.':`${into} / ${next} XP to level ${level+1}: ${perkText(level+1)}`;
      $('phoneTrees').textContent=String(progress.stats.treesFelled);$('phoneLogs').textContent=String(progress.stats.logsCollected);$('phoneDeliveries').textContent=String(progress.completed)}
     $('phoneEnergy').textContent=Math.round(progress.life.energy)+' / 100';
     $('phoneFood').textContent=Math.round(progress.life.food)+' / 100';
@@ -87,7 +91,7 @@ export function createPhone({document:doc,getState,canOpen,onOpen,onClose,onAcce
       buttons.rent.hidden=!!held;buttons.buy.hidden=owning;buttons.pay.hidden=!(renting&&held.rentDue>0);buttons.leave.hidden=!renting;
       buttons.buy.textContent=renting?`Buy · ${money(h.priceCents-held.deposit)}`:`Buy · ${money(h.priceCents)}`;
     }
-    store.refresh();
+    store.refresh();if(screen==='jobs')jobs.render();
     for(const {job,button,card} of cards){
       card.hidden=!available.has(job.id);
       const current=progress.activeJob?.id===job.id;
@@ -97,13 +101,13 @@ export function createPhone({document:doc,getState,canOpen,onOpen,onClose,onAcce
   }
   function showScreen(next){
     screen=next;
-    for(const name of ['home','gigs','bank','homes','player','store'])$('phoneScreen-'+name).hidden=name!==screen;
+    for(const name of ['home','gigs','bank','homes','player','store','jobs'])$('phoneScreen-'+name).hidden=name!==screen;
     $('phoneTitle').textContent=screen==='home'?'Your phone':({homes:'Housing'})[screen]||screen[0].toUpperCase()+screen.slice(1);
-    if(screen!=='store')store.reset();$('phoneHome').disabled=screen==='home';$('phoneBack').disabled=screen==='home';$('phoneMessage').textContent='';refresh();
+    if(screen!=='store')store.reset();if(screen!=='jobs')jobs.reset();$('phoneHome').disabled=screen==='home';$('phoneBack').disabled=screen==='home';$('phoneMessage').textContent='';refresh();
   }
   function open(){
     if(opened||!canOpen())return;
-    previousFocus=doc.activeElement;opened=true;onOpen();
+    previousFocus=doc.activeElement;opened=true;unread=0;badgeNow();onOpen();
     $('phoneOverlay').hidden=false;showScreen('home');$('phoneApp-gigs').focus();
   }
   function close(){
@@ -111,8 +115,11 @@ export function createPhone({document:doc,getState,canOpen,onOpen,onClose,onAcce
     opened=false;$('phoneOverlay').hidden=true;onClose();
     previousFocus?.focus?.();
   }
-  for(const name of ['gigs','bank','homes','player','store'])$('phoneApp-'+name).onclick=()=>showScreen(name);
+  for(const name of ['gigs','bank','homes','player','store','jobs'])$('phoneApp-'+name).onclick=()=>showScreen(name);
   $('phoneHome').onclick=()=>showScreen('home');$('phoneBack').onclick=()=>{if(screen==='store'&&store.back())return;showScreen('home')};$('phoneClose').onclick=close;
   $('phoneButton').onclick=()=>opened?close():open();
-  return {open,close,toggle:()=>opened?close():open(),get isOpen(){return opened}};
+  // A notification: the button shakes (the class is taken off and put back so a second one shakes again) and shows how many are unread; opening the phone clears them.
+  const btn=$('phoneButton'),badge=badgeNow;let ringTimer=null;
+  function notify(){if(opened)return;unread++;badge();btn.classList.remove('ring');void btn.offsetWidth;btn.classList.add('ring');clearTimeout(ringTimer);ringTimer=setTimeout(()=>btn.classList.remove('ring'),900)}
+  return {open,notify,get unread(){return unread},close,toggle:()=>opened?close():open(),get isOpen(){return opened},showJobs(){if(opened&&screen==='jobs')jobs.render()}};
 }

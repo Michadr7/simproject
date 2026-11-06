@@ -543,6 +543,7 @@ export function createWorld(scene,{label,cullRadius}={}){
    const t=trees.get(key);if(!t||t.standing||t.anim||t.stage===stage)return false;
    t.stage=stage;
    if(stage==='sapling'){t.entry.off=false;dirty=true;stumps.setMatrixAt(t.index,hidden);poseTree(t,{shrink:.3});stumps.setMatrixAt(t.index,m4.compose(v.set(t.x,heightAt(t.x,t.z),t.z),yaw.setFromAxisAngle(yAxis,t.rot),s.set(t.scale*.8,.5,t.scale*.8)))}
+   else if(stage==='cleared'){hideTree(t);stumps.setMatrixAt(t.index,hidden)} // the stump was dug out: bare ground
    else hideTree(t);
    touch();return true;
   },

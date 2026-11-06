@@ -1,6 +1,6 @@
 // Vehicle paint in the shader (0.34): recolours the pixels of a model's body texture that are near its own paint hue (see paint.js). Shared by the game (driving.js) and the picture renderer (vehicle-studio.html).
 import * as THREE from './vendor/three.module.js';
-import {paintUniforms} from './paint.js';
+import {paintUniforms,colourOf,coloursOf} from './paint.js';
 // Paint (paint.js): the body material is patched once to recolour pixels near the model's paint hue; the numbers are per-material uniforms, so every vehicle has its own colour and all share one shader program.
 const bodyMaterial=material=>Array.isArray(material)?material[0]:material;
 function patchPaint(material){
@@ -16,6 +16,7 @@ if(m>0.){float nh=uPaint.x>=0.?fract(uPaint.x+(h.x-uPaint.w)*.4):h.x;diffuseColo
  material.customProgramCacheKey=()=>'vehicle-paint';material.needsUpdate=true;return u;
 }
 export function applyPaint(mesh,model,colourId){
+ if(mesh.userData?.paint){const c=colourOf(model,colourId)||coloursOf(model)[0];if(c)mesh.userData.paint.color.set(c.swatch);return} // a model with its own paint material (the flatbed): set the colour itself
  const m=bodyMaterial(mesh.material);if(!m||!m.userData)return;
  const n=paintUniforms(model,colourId),u=patchPaint(m);u.uPaint.value.set(n.hue,n.sat,n.val,n.src);u.uBand.value=n.band;
 }

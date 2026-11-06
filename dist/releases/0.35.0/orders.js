@@ -4,7 +4,8 @@
 //   {main: homeId | null, nextId, queue: [{id, home, items: [{id, qty}], subtotal, fee, placedAt, arrivesAt}], drops: {[homeId]: [{id, qty}]}}
 // Times are minutes of game time counted from the start of day 1 (nowMinutes).
 import {itemById,isBuyable,ITEMS} from './items.js';
-import {addItem} from './inventory.js';
+import {addItem,requirementError} from './inventory.js';
+import {levelOf} from './skills.js';
 import {normalizeProperties} from './ownership.js';
 import {MAP} from './map-definition.js';
 import {doorOf,propertyById} from './properties.js';
@@ -18,7 +19,7 @@ export const SIZES=Object.freeze(['small','medium','large']);
 export const FEE_CENTS=Object.freeze({small:300,medium:800,large:2500}),BUNDLE=Object.freeze({small:6,medium:2,large:1}),DELAY_MIN=Object.freeze({small:180,medium:720,large:1440});
 // Vehicles (0.34): the dealership on the Eastbank depot lot sells the two drivable models, each in six colours (paint.js). Buy on the lot (E at the door: yours at once, parked where it stands), or order from the phone: a delivery fee and
 // two game days later it is parked on your home's driveway. Prices in cents, per model. A sold colour is out of stock for 3 to 6 game days (restock), so one buyer cannot clear the lot; the lot's display vehicles show what is in stock.
-export const VEHICLE_PRICE=Object.freeze({worktruck:450000,offroad:1100000});export const RESTOCK_DAYS=Object.freeze({min:3,max:6});
+export const VEHICLE_PRICE=Object.freeze({worktruck:450000,offroad:1100000,flatbed:800000});export const RESTOCK_DAYS=Object.freeze({min:3,max:6});
 // How many vehicles a home holds (DESIGN 4.14): an apartment 1; a house by its size (MAP.properties size). The limit is the sum over the homes you rent or own; owned and on-the-way vehicles both count.
 export const VEHICLE_SLOTS=Object.freeze({apartment:1,small:1,medium:2,large:3});
 export const VEHICLE_ORDER=Object.freeze({fee:15000,delay:2880});
@@ -101,6 +102,7 @@ export function quote(cart){
 export function placeOrder(p,cart,home){
  const orders=normalizeOrders(p.orders),fail=error=>({state:p,error}),q=quote(cart);
  if(!q.units)return fail('Your cart is empty.');
+ for(const line of q.lines){const locked=requirementError(p,itemById(line.id));if(locked)return fail(locked)}
  if(q.units>MAX_UNITS)return fail(`One order can hold ${MAX_UNITS} things.`);
  const target=home||mainHome(p);
  if(!target||!holds(p,target))return fail('You need a home to receive an order. Rent a studio or a house first.');
@@ -155,8 +157,10 @@ export const displayColour=(p,model)=>coloursOf(model).find(c=>inStock(p,model,c
 // Where a model is sold (MAP.vehicles[].sale): 'dealership' on the lot only, 'online' from the phone only, 'both'.
 export const soldOnLot=model=>{const s=MAP.vehicles.find(v=>v.model===model)?.sale;return s==='dealership'||s==='both'};
 export const soldOnline=model=>{const s=MAP.vehicles.find(v=>v.model===model)?.sale;return s==='online'||s==='both'};
+// A model may need a skill level before it can be bought (MAP.vehicles[].requires): the sentence to show, or null.
+export function vehicleLock(p,model){const r=MAP.vehicles.find(v=>v.model===model)?.requires;if(!r)return null;const level=levelOf(p.skills?.[r.skill]?.xp||0).level;return level>=r.level?null:`Needs ${r.skill[0].toUpperCase()+r.skill.slice(1)} level ${r.level} (you are level ${level}).`}
 function checkBuyable(p,model,colour,where){
- if(!VEHICLE_PRICE[model])return 'That vehicle is not for sale.';if(where==='lot'&&!soldOnLot(model))return 'That vehicle is sold online only: order it from the phone Store.';if(where==='order'&&!soldOnline(model))return 'That vehicle is sold at the dealership only: buy it on the lot.';if(!validColour(model,colour))return 'That colour is not made.';
+ if(!VEHICLE_PRICE[model])return 'That vehicle is not for sale.';{const lock=vehicleLock(p,model);if(lock)return `The ${vehicleLabel(model,colour)}: ${lock[0].toLowerCase()+lock.slice(1)}`}if(where==='lot'&&!soldOnLot(model))return 'That vehicle is sold online only: order it from the phone Store.';if(where==='order'&&!soldOnline(model))return 'That vehicle is sold at the dealership only: buy it on the lot.';if(!validColour(model,colour))return 'That colour is not made.';
  if(!inStock(p,model,colour))return `The ${vehicleLabel(model,colour)} is sold out: it is back in ${Math.ceil(restockMinutes(p,model,colour)/1440)} game day(s).`;
  return noRoom(p);
 }

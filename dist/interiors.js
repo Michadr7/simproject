@@ -5,6 +5,7 @@ import * as THREE from './vendor/three.module.js';
 import {propInfo,createProp} from './props.js';
 import {PROPS} from './props-assets.js';
 import {INTERIOR_LAYOUTS} from './interior-layouts.js';
+import {createHingedDoor} from './doors.js';
 
 export const FLOOR_HEIGHT=3.4,WALL_HEIGHT=3.1;
 // An interior is its own scene, so it need not be as small as the model's outline: every room is this much bigger than the house's footprint minus its walls (0.34: the rooms felt cramped).
@@ -131,7 +132,7 @@ export function buildHouseRoom(prop){
  scene.add(new THREE.HemisphereLight('#fff1da','#898878',1.9));const sun=new THREE.DirectionalLight('#fff2da',1.8);sun.position.set(2,6,3);scene.add(sun);
  const materials=new Map(),occluders=[],fade={apply:m=>m};
  const mat=c=>{if(!materials.has(c))materials.set(c,new THREE.MeshStandardMaterial({color:c,roughness:.9}));return materials.get(c)};
- const floors=[];
+ const floors=[];let frontDoor=null;
  for(let f=0;f<layout.floors;f++){
   const group=new THREE.Group();group.name='floor-'+f;group.position.y=f*FLOOR_HEIGHT;scene.add(group);
   const box=(w,h,d,x,y,z,c,wall=false)=>{const m=new THREE.Mesh(new THREE.BoxGeometry(w,h,d),mat(c));m.position.set(x,y,z);m.receiveShadow=true;group.add(m);if(wall)occluders.push(m);return m};
@@ -140,7 +141,7 @@ export function buildHouseRoom(prop){
   // the south wall, with the door gap (1.4 m wide, 2.2 m high) at doorX on the ground floor; windows on every floor
   const g0=doorX-.75,g1=doorX+.75;
   if(f===0){box(g0+hw+.2,WALL_HEIGHT,.2,(-hw-.2+g0)/2,WALL_HEIGHT/2,hd+.1,'#e9e1cf',true);box(hw+.2-g1,WALL_HEIGHT,.2,(g1+hw+.2)/2,WALL_HEIGHT/2,hd+.1,'#e9e1cf',true);box(g1-g0,WALL_HEIGHT-2.2,.2,doorX,2.2+(WALL_HEIGHT-2.2)/2,hd+.1,'#e9e1cf',true);
-   const door=box(1.4,2.2,.06,doorX,1.1,hd+.1,'#6e8073',true);door.name='front-door'}
+   const door=createHingedDoor({width:1.4,height:2.2,frame:false,handle:false});door.group.name='front-door';door.group.position.set(doorX,0,hd+.1);group.add(door.group);door.group.traverse(m=>{if(m.isMesh){m.material=m.material.clone();occluders.push(m)}});frontDoor=door} // a real hinged door (it fades like the wall when the camera is outside)
   else box(W+.4,WALL_HEIGHT,.2,0,WALL_HEIGHT/2,hd+.1,'#e9e1cf',true);
   for(const [x,z,rot] of [[-hw*.5,-hd-.005,0],[hw*.3,hd+.205,0],[-hw-.005,hd*.45,Math.PI/2]]){const w=box(1.5,1.2,.04,0,1.7,0,'#b9d8e4');w.position.set(x,1.7,z);w.rotation.y=rot;w.material=new THREE.MeshStandardMaterial({color:'#b9d8e4',roughness:.2,transparent:true,opacity:.55})}
   // partitions (the bathroom) on the ground floor
@@ -156,7 +157,7 @@ export function buildHouseRoom(prop){
  const showFloors=()=>floors.forEach((g,i)=>{g.visible=i<=floor});showFloors();
  const blocked=(x,z)=>Math.abs(x)>hw-.3||Math.abs(z)>hd-.3||colliders[floor].some(c=>Math.abs(x-c.x)<c.hx+.32&&Math.abs(z-c.z)<c.hz+.32);
  const marker=new THREE.Box3Helper(new THREE.Box3(),0xffc83d);marker.visible=false;marker.name='selection';scene.add(marker);
- const room={scene,occluders,layout,blocked,get floor(){return floor},setFloor(n){floor=n;showFloors();return n},FLOOR_HEIGHT,
+ const room={scene,occluders,layout,frontDoor,blocked,get floor(){return floor},setFloor(n){floor=n;showFloors();return n},FLOOR_HEIGHT,
   ENTRY:{x:layout.entry.x,z:layout.entry.z},EXIT:{x:layout.exit.x,z:layout.exit.z},BED:{x:layout.bed.x,z:layout.bed.z},BED_FLOOR:layout.bed.floor,KITCHEN:layout.kitchen,STAIRS:layout.stairs,
   // Rebuild every piece and every collision box from layout.items, and move the bed and kitchen spots to where the bed and stove are now.
   refresh(){layout.items.forEach((_,f)=>furnish(f));colliders=layout.items.map((_,f)=>collidersOf(layout,f));const spots=deriveSpots(layout);if(spots.kitchen)Object.assign(layout.kitchen,spots.kitchen);if(spots.bed){layout.bed=spots.bed;Object.assign(room.BED,{x:spots.bed.x,z:spots.bed.z})}},

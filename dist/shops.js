@@ -2,7 +2,7 @@ import * as T from './vendor/three.module.js';
 import {createCharacter} from './character.js';
 import {outfit} from './appearance.js';
 import {MAP} from './map-definition.js';
-import {createSlidingDoor} from './doors.js';
+import {createSlidingDoor,createDoubleDoor} from './doors.js';
 // Where each shop's door is and where you stand outside it (see map-definition.js).
 export const SHOPS=Object.fromEntries(Object.entries(MAP.shops).map(([kind,shop])=>[kind,{name:shop.name,x:shop.x,z:shop.z}]));
 // Interior placements come from the map (both shops share one layout).
@@ -25,6 +25,6 @@ export function createShop(kind){const cafe=kind==='cafe',scene=new T.Group();sc
  const customer=cafe?createCharacter(outfit('female','Casual',{skin:'#d9ae8d',hair:'#bca06a'})):null;
  const usedCup=box(.13,.18,.13,-3.8,.97,-.7,'#eee5d1');usedCup.visible=false;
  if(customer){customer.group.name='cafe-customer';customer.group.visible=false;scene.add(customer.group)}
- const exitSpec=MAP.shops[kind].interior.exitDoor,exitDoor=createSlidingDoor({width:exitSpec.width,height:exitSpec.height});exitDoor.group.position.set(0,0,exitSpec.z);scene.add(exitDoor.group);
+ const exitSpec=MAP.shops[kind].interior.exitDoor,exitDoor=(exitSpec.kind==='double'?createDoubleDoor:createSlidingDoor)({width:exitSpec.width,height:exitSpec.height});exitDoor.group.position.set(0,0,exitSpec.z);scene.add(exitDoor.group);
  return {scene,occluders,glass,customer,usedCup,clerk,exitDoor,blocked(x,z){return Math.abs(x)>5.55||Math.abs(z)>4.55||blocks.some(b=>Math.abs(x-b.x)<b.hx+.32&&Math.abs(z-b.z)<b.hz+.32)}};
 }

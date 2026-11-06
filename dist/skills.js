@@ -20,10 +20,9 @@ export function addXp(progress,skill,amount){
 }
 // Lumberjack perks by level.
 export const swingTime=level=>Math.max(.5,.8-.03*(level-1)); // seconds per swing
-export const hitsNeeded=level=>level>=6?2:3;
 export const logsPerTree=level=>2+(level>=3?1:0)+(level>=8?1:0);
 export function perkText(level){
- return level===3||level===8?'One more log per tree.':level===6?'Trees fall in two hits.':'Faster swings.';
+ return level===3||level===8?'One more log per tree.':'Faster swings and harder hits.';
 }
 
 // Lifetime counters shown in the phone's Skills section.
@@ -32,4 +31,5 @@ export function normalizeStats(value){
  const n=x=>Number.isSafeInteger(x)&&x>=0&&x<=1e9?x:0;
  return {treesFelled:n(value?.treesFelled),logsCollected:n(value?.logsCollected)};
 }
-export const perksText=level=>`Swing ${swingTime(level).toFixed(2)} s · ${hitsNeeded(level)} hits per tree · ${logsPerTree(level)} logs per tree`;
+// hits: the swings a pine takes with the axe you have (tools.js hitsFor), or null when you have none
+export const perksText=(level,hits=null)=>`Swing ${swingTime(level).toFixed(2)} s · ${hits?hits+' swings per tree':'no axe'} · ${logsPerTree(level)} logs per tree`;

@@ -15,7 +15,8 @@ const scene=new THREE.Scene(),camera=new THREE.PerspectiveCamera(26,W/H,.1,200);
 scene.add(new THREE.HemisphereLight(0xfff3dc,0x5d5a50,1.5));const sun=new THREE.DirectionalLight(0xffffff,2.4);sun.position.set(-5,9,7);scene.add(sun);
 const fade={apply:m=>m};
 // Waits until the model's colour texture has loaded (props.js sets it from an Image).
-const ready=mesh=>new Promise(resolve=>{const map=mesh.material.map;const t=setInterval(()=>{if(!map||(map.image&&map.image.complete&&map.image.width)){clearInterval(t);resolve()}},30)});
+const ready=mesh=>new Promise(resolve=>{const map=mesh.material?.map; // a group (the flatbed) has no texture to wait for
+const t=setInterval(()=>{if(!map||(map.image&&map.image.complete&&map.image.width)){clearInterval(t);resolve()}},30)});
 window.renderVehicle=async(model,colour)=>{
  const mesh=createProp(model,fade);mesh.rotation.y=0;scene.add(mesh);applyPaint(mesh,model,colour);await ready(mesh);
  const box=new THREE.Box3().setFromObject(mesh),size=box.getSize(new THREE.Vector3()),centre=box.getCenter(new THREE.Vector3()),span=Math.max(size.x,size.z)*.8+size.y*.3;

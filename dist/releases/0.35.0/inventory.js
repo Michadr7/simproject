@@ -1,5 +1,6 @@
 import {ITEMS,itemById,isConsumable} from './items.js';
 import {normalizeLife} from './life.js';
+import {levelOf} from './skills.js';
 import {FUEL_TYPES} from './fuel.js';
 export const BASE_SLOTS=8;
 export const freshInventory=()=>({slots:[],equipment:{jacket:null,backpack:null}});
@@ -23,8 +24,11 @@ function insert(inv,item){
  if(inv.slots.length>=inventoryCapacity(inv))return false;
  inv.slots.push({id:item.id,quantity:1});return true;
 }
+// A purchase can need a skill level (item.requires): returns the sentence to show, or null.
+export function requirementError(progress,item){const r=item?.requires;if(!r)return null;const level=levelOf(progress.skills?.[r.skill]?.xp||0).level;return level>=r.level?null:`${item.name}: needs ${r.skill[0].toUpperCase()+r.skill.slice(1)} level ${r.level} (you are level ${level}).`}
 export function addItem(progress,id,{purchase=false}={}){
  const item=itemById(id);if(!item)return {error:'Unknown item.'};
+ if(purchase){const locked=requirementError(progress,item);if(locked)return {error:locked}}
  if(purchase&&progress.cash<item.price)return {error:'You do not have enough cash.'};
  const inventory=normalizeInventory(progress.inventory);
  if(!insert(inventory,item))return {error:'Your inventory is full. Use an item or equip a larger bag.'};

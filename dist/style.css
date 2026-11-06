@@ -296,3 +296,53 @@ select:hover,select:focus-visible,.phone-nav button:hover:not(:disabled){box-sha
 
 /* Character creator tabs (0.34.6) */
 .creator-tabs{display:flex;align-items:center;gap:6px;margin:22px 0 4px;border-bottom:1px solid #ffffff1c}.creator-tab{background:none;border:0;border-bottom:2px solid transparent;color:#c9c5ba;padding:9px 10px 8px;font-size:12px;font-weight:bold;letter-spacing:.3px;cursor:pointer;margin-bottom:-1px}.creator-tab[aria-selected=true]{color:var(--honey);border-bottom-color:var(--honey)}.creator-random{margin-left:auto;background:var(--ink-3);color:#e0ded8;border:1px solid #ffffff28;border-radius:5px;padding:6px 10px;font-size:11px;cursor:pointer}.creator-random:hover{border-color:var(--honey);color:var(--honey)}.option-hint{font-size:10px;color:#b9b5aa;margin:-4px 0 10px;line-height:1.4}
+
+/* Jobs app (0.35) */
+.jobs-icon{background:var(--honey);color:var(--ink)}.phone-tabs{display:flex;gap:4px;margin:6px 0 12px;border-bottom:1px solid #ffffff1c}.phone-tab{background:none;border:0;border-bottom:2px solid transparent;color:#c9c5ba;padding:7px 8px;font-size:12px;font-weight:bold;cursor:pointer;margin-bottom:-1px}.phone-tab[aria-selected=true]{color:var(--honey);border-bottom-color:var(--honey)}.phone-ranks{margin:8px 0 0;padding-left:18px;font-size:11px;color:#c9c5ba;line-height:1.6}.phone-ranks .phone-rank-now{color:var(--honey);font-weight:bold}
+.phone-accept.phone-quit{background:transparent;color:#dcd8cd;border:1px solid #ffffff30;margin-top:10px}.phone-accept.phone-quit-sure{border-color:#d9776a;color:#f0b8ae}
+/* Cargo panel (0.35) */
+#cargoOverlay{position:fixed;inset:0;z-index:90;display:grid;place-items:center;padding:16px;background:#0a090880;cursor:default}#cargoOverlay[hidden]{display:none}.cargo-shell{width:min(420px,100%);background:var(--ink-2);background-image:var(--comb);background-size:56px 100px;border:1px solid #ffffff22;border-radius:14px;padding:20px;color:#e9e7e2;box-shadow:0 20px 70px #0008}.cargo-note{font-size:11px;color:#b9b5aa;margin:6px 0 12px}#cargoRows{display:grid;gap:8px}.cargo-row{text-align:left;background:var(--ink-3);color:#e9e7e2;border:1px solid #ffffff26;border-radius:8px;padding:11px 12px;font-size:13px;cursor:pointer}.cargo-row:hover:not(:disabled){border-color:var(--honey)}.cargo-row:disabled{opacity:.45;cursor:default}.cargo-row.cargo-bulk{background:var(--honey);color:var(--ink);border-color:var(--honey);font-weight:bold}
+
+/* Phone button: lower left (the top-right corner is kept for the task tracker). A notification shakes it and counts the unread ones. */
+#phoneButton{position:fixed;left:34px;bottom:62px;z-index:6;display:flex;align-items:center;gap:8px;padding:11px 16px;pointer-events:auto;transform-origin:50% 100%}
+#phoneButton.has-unread{border-color:var(--honey,#f5c518);box-shadow:0 0 14px #f5c51855}
+#phoneButton.has-unread::after{content:attr(data-unread);position:absolute;top:-9px;right:-9px;min-width:20px;height:20px;padding:0 5px;box-sizing:border-box;border-radius:10px;background:var(--honey,#f5c518);color:#181712;font-size:11px;font-weight:bold;line-height:20px;text-align:center}
+#phoneButton.ring{animation:phone-shake .9s ease-in-out}
+@keyframes phone-shake{0%,100%{transform:rotate(0)}10%{transform:rotate(-14deg)}20%{transform:rotate(12deg)}30%{transform:rotate(-10deg)}40%{transform:rotate(9deg)}50%{transform:rotate(-6deg)}60%{transform:rotate(5deg)}75%{transform:rotate(-2deg)}}
+@media (pointer:coarse){#phoneButton{bottom:180px}}
+@media (prefers-reduced-motion:reduce){#phoneButton.ring{animation:none;outline:2px solid var(--honey,#f5c518)}}
+
+/* The phone button is a small drawn phone (inline SVG), not a labelled button. */
+#phoneButton{padding:0;border:0;background:none;box-shadow:none;border-radius:0;gap:0;flex-direction:column;align-items:center;filter:drop-shadow(0 4px 8px #0008);transition:transform .15s}
+#phoneButton:hover{transform:translateY(-3px)}
+#phoneButton .phone-icon{display:block;width:34px;height:56px}
+#phoneButton .pi-body{fill:#15130f;stroke:#f5c518;stroke-width:2.4}
+#phoneButton .pi-screen{fill:#2a2418}
+#phoneButton .pi-notch,#phoneButton .pi-bar{fill:#f5c518;opacity:.8}
+#phoneButton .pi-comb{fill:none;stroke:#f5c518;stroke-width:1.6;opacity:.75}
+#phoneButton .phone-key{margin-top:3px;font-size:10px;font-weight:bold;color:#f3f2f0;text-shadow:0 1px 4px #000}
+#phoneButton.has-unread{box-shadow:none}
+#phoneButton.has-unread .pi-screen{fill:#5a4710}
+#phoneButton.has-unread::after{top:-6px;right:-8px}
+#phoneButton.ring{transform-origin:50% 80%}
+#objective{bottom:150px}
+
+/* Task tracker: the card above is the focused task (its arrow points at it); below, every task in sections (Gigs, Jobs, Orders, Getting started). Click a row, or press Y, to focus it. */
+.tracker-list{margin:14px 0 0;padding:6px 0 0;border-top:1px solid #ffffff20;display:grid;gap:3px;max-height:230px;overflow-y:auto;scrollbar-width:thin;scrollbar-color:#706651 transparent}
+.tracker-group{margin:8px 0 2px;font-size:9px;letter-spacing:1.6px;text-transform:uppercase;color:var(--honey,#f5c518);font-weight:bold}
+.tracker-row{display:flex;align-items:center;gap:9px;width:100%;padding:6px 8px;border:1px solid transparent;border-radius:7px;background:#ffffff08;color:#e6e5e0;font:inherit;font-size:11px;line-height:1.3;text-align:left;cursor:pointer;pointer-events:auto}
+.tracker-row:hover,.tracker-row:focus-visible{border-color:#f5c51866;outline:none}
+.tracker-row.focus{border-color:var(--honey,#f5c518);background:#f5c51818}
+.tracker-row.done{opacity:.45;text-decoration:line-through;cursor:default}
+.tracker-dot{flex-shrink:0;width:16px;text-align:center;color:var(--honey,#f5c518);font-size:14px}
+.tracker-title{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.tracker-dist{flex-shrink:0;color:var(--honey,#f5c518);font-variant-numeric:tabular-nums}
+#objective.collapsed .tracker-list{display:none}
+
+/* Layout: the tracker card takes the lower-left corner; the phone icon sits under the location label (top left). Neither shows on the main menu or the credits. */
+#objective{bottom:62px}
+#phoneButton{left:34px;top:170px;bottom:auto}
+@media (pointer:coarse){#phoneButton{top:170px;bottom:auto}}
+body:has(#welcome:not([hidden])) #phoneButton,body:has(#credits:not([hidden])) #phoneButton{display:none}
+/* The phone icon sits right above the tracker card (it is inside the card's container, so it follows the card's height). */
+#objective #phoneButton{position:absolute;left:0;top:auto;bottom:calc(100% + 10px)}

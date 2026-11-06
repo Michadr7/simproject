@@ -4,21 +4,25 @@
 // Time comes from the save itself (housing.day, routine.minutes); call tickShift whenever the clock moves (every frame, or after a sleep skip).
 import {MAP} from './map-definition.js';
 import {employerById,careerOf,employerName,taskKinds,changeRep} from './careers.js';
+import {normalizeTruck} from './customers.js';
 
 export const OFF_SITE_LIMIT=60,MIN_COUNTED_SHIFT=60,STUBS_KEPT=7;
 // Task kinds: the piece they count and the amounts handed out (picked by counters, so a save always gets the same day). Placeholders.
 export const TASKS=Object.freeze({
  fell:{piece:'trees',amounts:[4,6,8],label:n=>`Fell ${n} marked pines`},
  landing:{piece:'logs',amounts:[8,12,16],label:n=>`Carry ${n} logs to the landing`},
+ gather:{piece:'gathered',amounts:[6,10,14],label:n=>`Gather ${n} fallen logs`}, // pick up logs lying on the ground (each log counts once a shift)
+ stumps:{piece:'stumps',amounts:[3,5,8],label:n=>`Dig out ${n} stump${n===1?'':'s'}`},
  mill:{piece:'planks',amounts:[20,30,40],label:n=>`Mill ${n} planks`},
- haul:{piece:'loads',amounts:[1,2],label:n=>`Haul ${n} load${n===1?'':'s'} to the timber yard`},
+ haul:{piece:'delivered',amounts:[12,24,40],label:n=>`Deliver ${n} planks to the lumberyard`},
+ load:{piece:'shipped',amounts:[20,40],label:n=>`Load a customer's truck with ${n} planks`},
  stack:{piece:'racks',amounts:[2,3],label:n=>`Stack ${n} racks in the warehouse`},
  pick:{piece:'orders',amounts:[1,2],label:n=>`Pick ${n} customer order${n===1?'':'s'}`},
  deliver:{piece:'deliveries',amounts:[1],label:n=>`Deliver ${n} plank order${n===1?'':'s'}`},
  replant:{piece:'saplings',amounts:[6,10],label:n=>`Plant ${n} saplings in a cleared block`}
 });
-// Piece pay in cents (trees pay through their logs). Placeholders.
-export const PIECE_PAY=Object.freeze({trees:0,logs:100,planks:25,loads:1500,racks:500,orders:800,deliveries:2500,saplings:50});
+// Piece pay in cents. Placeholders (DESIGN 4.15 K): the finished planks pay the most.
+export const PIECE_PAY=Object.freeze({trees:300,stray:75,logs:25,gathered:25,stumps:150,planks:0,delivered:100,shipped:50,racks:500,orders:800,deliveries:2500,saplings:50}); // trees: a marked pine felled; stray: an unmarked one; logs: stacked at the landing; planks: milled (counted, paid on delivery); delivered: a plank at the lumberyard
 export const BONUS_PER_RANK=2500;
 export const REP={allTasks:5,fullShift:2,unfinishedTask:-2};
 export const taskText=t=>TASKS[t.kind].label(t.target);
@@ -41,7 +45,8 @@ export function normalizeShift(value,careers,map=MAP){
  const n=(x,max)=>Number.isSafeInteger(x)&&x>=0&&x<=max?x:0;
  const tasks=(Array.isArray(v.tasks)?v.tasks:[]).filter(t=>TASKS[t?.kind]).slice(0,6).map(t=>{const target=Math.max(1,n(t.target,1000));return {kind:t.kind,piece:TASKS[t.kind].piece,target,done:Math.min(target,n(t.done,1000))}});
  const pieces={};for(const k of Object.keys(PIECE_PAY))if(n(v.pieces?.[k],1e6))pieces[k]=n(v.pieces[k],1e6);
- return {employer:e.id,day:Math.max(1,n(v.day,1e7)),startedAt:n(v.startedAt,1439),last:n(v.last,1e10),paidMinutes:n(v.paidMinutes,1440),offSiteMinutes:n(v.offSiteMinutes,1440),tasks,pieces};
+ const truck=normalizeTruck(v.truck),gathered=(Array.isArray(v.gathered)?v.gathered:[]).filter(id=>Number.isSafeInteger(id)&&id>0).slice(-300);
+ return {employer:e.id,day:Math.max(1,n(v.day,1e7)),startedAt:n(v.startedAt,1439),last:n(v.last,1e10),paidMinutes:n(v.paidMinutes,1440),offSiteMinutes:n(v.offSiteMinutes,1440),tasks,pieces,...(truck?{truck}:{}),...(gathered.length?{gathered}:{})};
 }
 export function normalizePayStubs(value){
  if(!Array.isArray(value))return [];const n=x=>Number.isSafeInteger(x)&&x>=0&&x<=1e10?x:0;

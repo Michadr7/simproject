@@ -21,7 +21,7 @@ try{
  const doc=new EventTarget();doc.getElementById=id=>ids.get(id)||null;doc.createElement=tag=>new El(tag);doc.body=new El();doc.querySelectorAll=()=>[];doc.hidden=false;
  const win=new EventTarget();win.matches=()=>false;const store=new Map();
  store.set('citylife.character.v1',JSON.stringify({version:1,appearance:{name:'Tester'}}));
- store.set('citylife.progress.v1',JSON.stringify({version:1,progress:{cash:5000,completed:5,phase:'available',position:{x:1,z:-6.3}}}));
+ store.set('citylife.progress.v1',JSON.stringify({version:1,progress:{cash:5000,completed:5,phase:'available',position:{x:1,z:-6.3},careers:{ridgeline:{hired:true,rank:1,rep:10,shifts:0,lastShiftDay:0,granted:[],owed:[]}},shift:{employer:'ridgeline',day:1,startedAt:540,last:540,paidMinutes:0,offSiteMinutes:0,tasks:[],pieces:{}}}}));
  let nextFrame;Object.assign(globalThis,{document:doc,window:win,localStorage:{getItem:k=>store.get(k)||null,setItem:(k,v)=>store.set(k,v)},innerWidth:1400,innerHeight:900,devicePixelRatio:1,requestAnimationFrame:fn=>{nextFrame=fn}});
  await import(pathToFileURL(join(dir,'game.js')).href);nextFrame(performance.now()+16);
  ids.get('start').click();assert(ids.get('welcome').hidden,'Play starts the game');

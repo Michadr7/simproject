@@ -3,8 +3,8 @@ import {ITEMS,itemById,isConsumable,isBuyable} from '../dist/items.js';
 import {addItem,useItem,unequipItem,inventoryCapacity,normalizeInventory,quickItems,countItem,hasItem,hotbarItems,equipTool,sellLogs} from '../dist/inventory.js';
 import {freshProgress,normalizeProgress,transactJob} from '../dist/jobs.js';
 assert.equal(ITEMS.filter(i=>i.type==='food').length,10);assert.equal(ITEMS.filter(i=>i.type==='drink').length,5);assert.equal(ITEMS.filter(i=>i.type==='equipment').length,3);
-assert.equal(ITEMS.filter(i=>i.type==='tool').length,2);assert.equal(ITEMS.filter(i=>i.type==='material').length,1);
-assert.equal(new Set(ITEMS.map(i=>i.id)).size,21);assert(isBuyable(itemById('axe'))&&!isBuyable(itemById('wood-log')));
+assert.equal(ITEMS.filter(i=>i.type==='tool').length,6);assert.equal(ITEMS.filter(i=>i.type==='material').length,1);
+assert.equal(new Set(ITEMS.map(i=>i.id)).size,25);assert(isBuyable(itemById('axe'))&&!isBuyable(itemById('wood-log')));
 for(const item of ITEMS){assert(item.icon);for(const field of ['foodRestore','thirstRestore','energyRestore'])assert(Number.isFinite(item[field]));if(item.type==='drink')assert(item.thirstRestore>0)}
 for(const item of ITEMS.filter(isConsumable)){
  let s=freshProgress();s.life={...s.life,food:90,thirst:90,energy:90};s=addItem(s,item.id).state;

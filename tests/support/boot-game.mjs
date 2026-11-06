@@ -4,14 +4,14 @@ import {mkdtemp,readFile,writeFile,cp,rm} from 'node:fs/promises';
 import {tmpdir} from 'node:os';import {join,resolve} from 'node:path';import {pathToFileURL} from 'node:url';
 
 export class El extends EventTarget{
- constructor(tag='div'){super();this.tag=tag;this.hidden=false;this.value='';this.children=[];this.dataset={};this.style={setProperty(){}};this.classList={add(){},remove(){},toggle(){}};this.selectors=new Map()}
+ constructor(tag='div'){super();this.tag=tag;this.hidden=false;this.value='';this.children=[];this.dataset={};this.style={setProperty(){}};{const set=new Set();this.classList={add:(...n)=>n.forEach(x=>set.add(x)),remove:(...n)=>n.forEach(x=>set.delete(x)),toggle:(n,force)=>{const on=force===undefined?!set.has(n):!!force;on?set.add(n):set.delete(n);return on},contains:n=>set.has(n)}}this.selectors=new Map()}
  append(...els){this.children.push(...els)}replaceChildren(...els){this.children=[...els]}setAttribute(k,v){this[k]=v}querySelector(s){if(!this.selectors.has(s))this.selectors.set(s,new El());return this.selectors.get(s)}focus(){}matches(s){return ['input','textarea','select'].includes(this.tag)}setCustomValidity(){}reportValidity(){}setPointerCapture(){}click(){this.onclick?.({preventDefault(){}})}
  getBoundingClientRect(){return {left:0,top:0,width:1400,height:900}}
  getContext(){return new Proxy({measureText:t=>({width:t.length*20})},{get:(o,k)=>o[k]??(()=>{})})}
 }
 
 // position: a saved player position, or null for none. play: press Play once the game has loaded. editRelease(dir): change the copied release before it loads.
-export async function bootGame({position=null,play=true,editRelease=async()=>{}}={}){
+export async function bootGame({position=null,play=true,editRelease=async()=>{},progress={}}={}){
  const html=await readFile('dist/index.html','utf8');
  const dir=await mkdtemp(join(tmpdir(),'city-boot-'));
  const release=html.match(/import\('\.\/(releases\/[^/]+)\/game\.js'/)[1];
@@ -24,7 +24,7 @@ export async function bootGame({position=null,play=true,editRelease=async()=>{}}
  doc.getElementById=id=>ids.get(id)||null;doc.createElement=tag=>{const e=new El(tag);created.push(e);return e};doc.body=new El();doc.querySelectorAll=()=>[];doc.hidden=false;
  const win=new EventTarget();win.matches=()=>false;const store=new Map();
  store.set('citylife.character.v1',JSON.stringify({version:1,appearance:{name:'Tester'}}));
- store.set('citylife.progress.v1',JSON.stringify({version:1,progress:{cash:1000,completed:0,phase:'available',...(position?{position}:{})}}));
+ store.set('citylife.progress.v1',JSON.stringify({version:1,progress:{cash:1000,completed:0,phase:'available',...(position?{position}:{}),...progress}}));
  let nextFrame;Object.assign(globalThis,{document:doc,window:win,localStorage:{getItem:k=>store.get(k)||null,setItem:(k,v)=>store.set(k,v)},innerWidth:1400,innerHeight:900,devicePixelRatio:1,requestAnimationFrame:fn=>{nextFrame=fn}});
  await import(pathToFileURL(join(dir,'game.js')).href);
  const {GameState}=await import(pathToFileURL(join(dir,'state.js')).href);

@@ -30,6 +30,6 @@ const named=re=>{const out=[];scene.traverse(o=>{if(re.test(o.name))out.push(o)}
 
 // ── The Worktruck has four real wheel meshes (the flatbed truck was removed in 0.33): each in a pivot at its axle, parented to the truck, so they spin and steer with it
 {const trucks=named(/^vehicle-eastbank-worktruck$/);assert.equal(trucks.length,1,'one Worktruck in the game scene');const wheels=trucks[0].userData.wheels;assert.equal(wheels.length,4);for(const w of wheels){assert(w.pivot.parent===trucks[0]&&w.spin.parent===w.pivot);assert(Math.abs(w.pivot.position.y-w.radius)<.02,'each stands on the ground')}
- assert.equal(named(/^wheels-tyres$/).length,0,'no generated tyres remain');assert.equal(named(/^prop-flatbed$/).length+named(/^vehicle-eastbank-flatbed$/).length,0,'no flatbed anywhere in the world');
+ assert.equal(named(/^wheels-tyres$/).length,0,'no generated tyres remain');assert.equal(named(/^vehicle-eastbank-flatbed$/).length,1,'the Tylan Flatbed (0.35, the owner\'s model) stands on the lot, once');
  assert.equal(createProp('car',{apply:x=>x}).userData.wheels,undefined,'a prop without split wheels gets none')}console.log('Real models: 24 street trees are the broadleaf models (no cylinder-and-blob trees left, about 29k triangles), the three Oak Street cars are converted car models and solid, and the Worktruck has four real wheel meshes.');
 await g.done();process.exit(0);

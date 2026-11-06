@@ -6,6 +6,7 @@
 import {SURFACE} from './terrain.js';
 import {normalizeFuelMgal} from './fuel.js';
 import {validColour,defaultColour} from './paint.js';
+import {normalizeCargo} from './cargo.js';
 
 export const PLAYER_RADIUS=.33; // what blocked() adds around every solid box: the hull points are inset by it, so the inflation lands exactly on the hull edge
 export const SAMPLE_GAP=.5; // metres between hull sample points (a 0.16 m sign post cannot slip between two: the gap must stay under 2 x 0.49 m)
@@ -17,10 +18,13 @@ export const SAMPLE_GAP=.5; // metres between hull sample points (a 0.16 m sign 
 // exhaust: where the muffler tip is, local (the pipe points straight back, -z): the smoke leaves from here (smoke.js).
 // Tiers (cheapest first): 'low' is the starter, 'mid', 'high' (none yet). Every class has a tier, a top speed (m/s) and an mpg. The map is tiny, so burn uses ARCADE_MILE_SCALE (8 mpg = 1 gal/mile):
 // gallonsPerMile = ARCADE_MILE_SCALE / mpg. Top speed and mpg are tuned per class; auto-shop parts will change them later (DESIGN roadmap 0.40).
+// A loaded vehicle (cargo.js loadOf, 0..1): up to 20% slower at the top and 35% slower off the mark when the bed is full. Burn grows by up to 30% (driving.js).
+export const withLoad=(cls,load)=>load>0?{...cls,top:cls.top*(1-.2*load),accel:cls.accel*(1-.35*load)}:cls;
 export const TIERS=Object.freeze(['low','mid','high']);export const ARCADE_MILE_SCALE=8;
 function makeClass(c){const L=c.hz*2;return {...c,gallonsPerMile:+(ARCADE_MILE_SCALE/c.mpg).toFixed(4),door:{x:+(c.hx+.6).toFixed(3),z:c.doorZ},passengerDoor:{x:-+(c.hx+.6).toFixed(3),z:c.doorZ},seat:{x:.45,z:c.doorZ},passengerSeat:{x:-.45,z:c.doorZ},camera:{back:+(3*L/2).toFixed(2),up:+(1.2*L/2).toFixed(2)}}}
 export const CLASSES=Object.freeze({
  worktruck:makeClass({id:'worktruck',tier:'low',mpg:8,name:'Worktruck',hx:1.09,hz:3,top:17.9,reverse:5,accel:3,brake:8,drag:.9,rMin:7,aLat:10,doorZ:.5,exhaust:{x:-.7,y:.35,z:-3.02}}), // the starter: about 40 mph, thirsty
+ flatbed:makeClass({id:'flatbed',tier:'low',mpg:6,name:'Tylan Flatbed',hx:1.45,hz:4.415,top:15.6,reverse:3.5,accel:1.6,brake:6,drag:.7,rMin:9,aLat:7,doorZ:1.765,exhaust:{x:-1.42,y:3.15,z:1,stack:true}}), // the timber truck (0.35): 35 mph, slow to get there, thirsty; the exhaust is the top of the stack
  offroad:makeClass({id:'offroad',tier:'mid',mpg:14.5,name:'Pevrolet Off Road Pickup',hx:1.255,hz:2.8,top:26.8,reverse:6,accel:4.5,brake:9,drag:1,rMin:6.5,aLat:14,doorZ:.5,rough:.35,exhaust:{x:-.75,y:.42,z:-2.95}}) // mid tier: about 60 mph, nearly twice the mileage; grass, fields, paths and dirt cost it 35 points less speed (rough)
 });
 
@@ -133,6 +137,7 @@ export function normalizeVehicles(value,known,playable){
   seen.add(v.uid);
   const entry={uid:v.uid,model:v.model,colour:validColour(v.model,v.colour)?v.colour:defaultColour(v.model),x:+v.x.toFixed(2),z:+v.z.toFixed(2),yaw:+v.yaw.toFixed(3)};
   if(spec.fuel)entry.fuelMgal=normalizeFuelMgal(v.fuelMgal,spec.fuel.tankMgal);
+  {const c=normalizeCargo(v.cargo,v.model);if(c)entry.cargo=c}
   out.push(entry);if(out.length>=MAX_OWNED)break;
  }
  return out;
@@ -142,6 +147,7 @@ export function vehiclesToSave(specs,states){
  const out=[];for(const spec of specs){const s=states[spec.id];if(!s)continue;
   const entry={uid:spec.id,model:spec.model,colour:spec.colour,x:+s.x.toFixed(2),z:+s.z.toFixed(2),yaw:+s.yaw.toFixed(3)};
   if(spec.fuel)entry.fuelMgal=normalizeFuelMgal(s.fuelMgal,spec.fuel.tankMgal);
+  {const c=normalizeCargo(s.cargo,spec.model);if(c)entry.cargo=c}
   out.push(entry)}
  return out;
 }

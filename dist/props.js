@@ -5,9 +5,12 @@ import {PROPS} from './props-assets.js';
 import {decode} from './nature.js';
 import {PLACEHOLDERS} from './placeholders.js';
 import {isRigged,riggedInfo,createRigged} from './rigged-props.js';
+import {FLATBED_INFO,buildFlatbed} from './flatbed.js';
+// Props built from their own parts (a group with moving pieces), not one converted mesh: the Tylan Flatbed (flatbed.js).
+const CUSTOM={flatbed:{info:FLATBED_INFO,build:buildFlatbed}};
 
 // A prop is a converted model (PROPS) or a placeholder (placeholders.js); both have width, depth, height, footprint, colliders and floor.
-export const propInfo=id=>{const p=PROPS[id]||PLACEHOLDERS[id]||(isRigged(id)?riggedInfo(id):null);if(!p)throw new Error('Unknown prop '+id);return p}; // rigged props (rigged-props.js) answer from data too
+export const propInfo=id=>{const p=PROPS[id]||CUSTOM[id]?.info||PLACEHOLDERS[id]||(isRigged(id)?riggedInfo(id):null);if(!p)throw new Error('Unknown prop '+id);return p}; // rigged props (rigged-props.js) answer from data too
 const geometries=new Map(),LINEAR=Float32Array.from({length:256},(_,i)=>{const c=i/255;return c<=.04045?c/12.92:Math.pow((c+.055)/1.055,2.4)});
 function buildGeometry(p){
  const geometry=new THREE.BufferGeometry();
@@ -49,6 +52,7 @@ function propMaterial(id,fade){
  return fade.apply(new THREE.MeshStandardMaterial({map,roughness:.9,side:THREE.DoubleSide}));
 }
 export function createProp(id,fade){
+ if(CUSTOM[id])return CUSTOM[id].build(fade);
  if(PLACEHOLDERS[id])return PLACEHOLDERS[id].build(fade);
  if(isRigged(id))return createRigged(id,fade); // a group, filled when the model has decoded (userData.ready)
  const material=propMaterial(id,fade);

@@ -4,7 +4,7 @@
 //   progress.companies[employerId] = {name?, owner?:{kind,id}, coOwners:[player ids]}  (overrides of the map's defaults)
 import {MAP} from './map-definition.js';
 import {levelOf} from './skills.js';
-import {addItem,countItem,sellLogs} from './inventory.js';
+import {addItem,countItem,sellLogs,requirementError} from './inventory.js';
 import {itemById} from './items.js';
 
 export const REP_MAX=100,START_REP=10,LOCAL_PLAYER='me';
@@ -26,6 +26,7 @@ export function normalizeCompanies(value,map=MAP){
   const name=typeof c.name==='string'?c.name.replace(/[\u0000-\u001f\u007f]/g,'').trim().slice(0,40):'';if(name)entry.name=name;
   if(c.owner&&['npc','player'].includes(c.owner.kind)&&typeof c.owner.id==='string'&&c.owner.id)entry.owner={kind:c.owner.kind,id:c.owner.id.slice(0,64)};
   const co=ids(c.coOwners,id=>id.length<=64);if(co.length)entry.coOwners=co;
+  {const n=x=>Number.isSafeInteger(x)&&x>0&&x<=1e7?x:0,logs=n(c.stock?.logs),planks=n(c.stock?.planks);if(logs||planks)entry.stock={logs,planks}} // company stock (forest.js): logs in the landing pile, planks at the lumberyard
   if(Object.keys(entry).length)out[e.id]=entry}
  return out;
 }
@@ -96,11 +97,25 @@ export function nextRank(progress,id,map=MAP){
  const have={level:skillLevel(progress,e.skill),shifts:c.shifts,rep:c.rep},met={level:have.level>=next.needs.level,shifts:have.shifts>=next.needs.shifts,rep:have.rep>=next.needs.rep};
  return {top:false,rank:next,needs:next.needs,have,met,ready:met.level&&met.shifts&&met.rep};
 }
-export function promote(progress,id,map=MAP){
+export function promote(progress,id,map=MAP,{force=false}={}){ // force: the dev panel skips the needs
  const n=nextRank(progress,id,map);if(!n)return {error:'You do not work there.'};if(n.top)return {error:'You are at the top rank.'};
- if(!n.ready)return {error:`Not yet: ${n.rank.name} needs level ${n.needs.level}, ${n.needs.shifts} shifts and ${n.needs.rep} reputation.`};
+ if(!n.ready&&!force)return {error:`Not yet: ${n.rank.name} needs level ${n.needs.level}, ${n.needs.shifts} shifts and ${n.needs.rep} reputation.`};
  const c=careerOf(progress,id),rank=c.rank+1;
  const g=grantTools({...progress,careers:{...progress.careers,[id]:{...c,rank}}},id,rank,map);
  return {state:g.state,rank:n.rank,handed:g.handed,owed:g.owed};
+}
+// The company store (DESIGN 4.15): things only the company sells (the chainsaws), to a rank and above and, if the item says so, a skill level. Pays cash like any purchase.
+export const storeItems=(id,map=MAP)=>(employerById(id,map)?.store||[]).map(s=>({...s,item:itemById(s.item)})).filter(s=>s.item);
+export function storeLine(progress,id,itemId,map=MAP){
+ const e=employerById(id,map),line=(e?.store||[]).find(s=>s.item===itemId),item=itemById(itemId),c=careerOf(progress,id);
+ if(!e||!line||!item)return {error:'The company does not sell that.'};
+ if(!c.hired)return {error:`Only ${employerName(progress,id,map)} staff can buy from the company store.`};
+ if(c.rank<line.rank)return {error:`${item.name}: sold from the ${e.ranks[line.rank-1].name} rank up.`};
+ return {item,line};
+}
+export function buyFromCompany(progress,id,itemId,map=MAP){
+ const l=storeLine(progress,id,itemId,map);if(l.error)return l;
+ const locked=requirementError(progress,l.item);if(locked)return {error:locked};
+ const r=addItem(progress,itemId,{purchase:true});return r.error?{error:r.error}:{state:r.state,item:l.item,message:`You bought the ${l.item.name}.`};
 }
 export function changeRep(progress,id,delta){const c=careerOf(progress,id);if(!c.hired)return progress;return {...progress,careers:{...progress.careers,[id]:{...c,rep:clampRep(c.rep+delta)}}}}

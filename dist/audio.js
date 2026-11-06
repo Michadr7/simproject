@@ -105,6 +105,14 @@ export function createAudio({AudioContextClass,storage,random=Math.random}){
    last.onended=()=>{clicks--};
    return true;
   },
+  // The phone's notification: two soft rising notes, not placed in the world (it is in your pocket). Shares the click limit.
+  ping(){
+   if(!ctx||settings.muted||clicks>=MAX_CLICKS)return false;
+   const t=ctx.currentTime;clicks++;let last=null;
+   [1175,1568].forEach((freq,i)=>{const o=ctx.createOscillator(),env=gain(0);o.type='sine';o.frequency.value=freq;const s=t+i*.12;env.gain.setValueAtTime(0,s);env.gain.linearRampToValueAtTime(.18,s+.01);env.gain.setTargetAtTime(.0001,s+.04,.09);o.connect(env);env.connect(master);o.start(s);o.stop(s+.4);last=o});
+   last.onended=()=>{clicks--};
+   return true;
+  },
   // The lever: a short click (a tick of noise and a falling blip). `at`: {x,z}. False if it was too far, muted or there are already three clicks playing.
   click(at,listener){
    if(!ctx||settings.muted||clicks>=MAX_CLICKS)return false;

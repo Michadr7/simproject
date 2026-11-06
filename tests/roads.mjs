@@ -24,7 +24,7 @@ for(const edge of MAP.roads.edges.filter(e=>e.walkable)){const line=roadCenterli
  for(let i=0;i<line.length;i+=3){const [x,z]=line[i];assert(T.walkable(x,z),`${edge.id} is walkable at ${x.toFixed(1)},${z.toFixed(1)}`);assert(!world.blocked(x,z),`${edge.id} is not blocked at ${x.toFixed(1)},${z.toFixed(1)}`);assert([SURFACE.ROAD,SURFACE.STREET,SURFACE.BRIDGE,SURFACE.PAVEMENT].includes(T.surfaceAt(x,z)),`${edge.id} has road under it at ${x.toFixed(1)},${z.toFixed(1)}`)}}
 
 // ── The joins: every road end is on another road, or is a declared dead end ───────────────────────────────────────────────
-const deadEnds=new Set(['oak-street:from','alder-avenue:to','county-road:to','alder-street:to','freight-south:from','farm-road:from','woods-lane:from','woods-lane:to']); // Oak Street's west end, Alder Avenue's south end, the County Road's north end, Alder Street's north end, the Freight Road's west end, the farm gate and both ends of the woods lane
+const deadEnds=new Set(['oak-street:from','alder-avenue:to','county-road:to','alder-street:to','freight-south:from','farm-road:from','woods-lane:from','woods-lane:to','freight-out:to']); // freight-out:to is the map's east edge: customer trucks drive on off the map (MAP.exits) // Oak Street's west end, Alder Avenue's south end, the County Road's north end, Alder Street's north end, the Freight Road's west end, the farm gate and both ends of the woods lane
 for(const edge of MAP.roads.edges){for(const [end,node] of [['from',MAP.roads.nodes[edge.from]],['to',MAP.roads.nodes[edge.to]]]){
  if(edge.closed||deadEnds.has(`${edge.id}:${end}`))continue;
  const others=MAP.roads.edges.filter(e=>e!==edge);let joined=false;

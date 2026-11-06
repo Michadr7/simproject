@@ -182,3 +182,23 @@ The red CGTrader pickup (ehicles/Pickup.fbx) was removed in 0.33; its credit an
 
 ## Gas can (0.35): `prop.fuel-can`
 The project owner's FBX (`assets-src/fuel_can/fuel_can.fbx`, centimetres, upright 0.50 m, 1,162 triangles) with its Albedo texture only (256 px JPEG, the AO, metallic, normal and roughness maps are not used). Authorship and licence still to be confirmed (credited as own work for now). No collider (a held and bagged item). Rebuild: `TOOL_DIR=<tools> node scripts/build-props.mjs assets-src prop.fuel-can`.
+
+## Axes (0.35, user-supplied, in assets-src/Tools/)
+| Model | Author | Triangles | Use |
+|---|---|---|---|
+| Simple_axe by Poly by Google.glb | Poly by Google via Poly Pizza (licence presumed CC-BY 3.0, to confirm) | 600 | the starter Axe (replaces the primitive) |
+| Logging_Axe by CreativeTrio.glb | CreativeTrio via Poly Pizza (presumed CC0, to confirm) | 256, one texture sampled into vertex colours | the Logging Axe (tier 2) |
+| Steel_Axe by Quaternius.glb | Quaternius via Poly Pizza (CC0) | 236 | the Steel Axe (tier 3) |
+Converted by 
+ode scripts/build-axes.mjs into dist/axe-assets.js (about 87 KB): handle along +z, head at the far end, edge down, no textures at run time.
+
+## Chainsaws (0.35, user-supplied, in assets-src/Tools/)
+| Model | Author | Triangles | Use |
+|---|---|---|---|
+| Chainsaw/Animated Chainsaw  Low-Poly Version_2.8x.glb | not recorded (to confirm) | 13,230 (the chain mesh, 8,362, is not used) | the Chainsaw (tier 1) |
+| Logging_Chainsaw.gltf (Chainsaw01, SKU0374 Petrol Chainsaw Free) | not recorded (to confirm) | 2,647 (the alpha plane is not used) | the Logging Chainsaw (tier 2) |
+Converted by 
+ode scripts/build-saws.mjs into dist/saw-assets.js: bar forward along +z, up +y, rear grip near the origin, no textures at run time.
+
+## Tylan Flatbed (0.35, the project owner's own model)
+assets-src/Veichles/Logging Truck/flatbed.glb (FLATBED_SPEC_UPDATE_2.md): 5,796 triangles, 13 colour-only materials, separate wheels, steering pivots and a hinged tailgate, 19 anchors. Converted by `node scripts/build-flatbed.mjs` into `dist/flatbed-assets.js` (about 430 KB; nine parts with vertex colours) and built by `dist/flatbed.js` (9 draw calls per flatbed). The detail meshes are not hidden by distance yet.

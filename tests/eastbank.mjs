@@ -34,7 +34,7 @@ assert.equal(MAP.paving.find(p=>p.id==='timber-in').z1-MAP.paving.find(p=>p.id==
 
 // Plots and buildings: five new landmarks, each inside its plot, facing the way the plot faces, with a front yard of at least the truck-yard depth (12 m) where trucks work.
 const L=id=>MAP.landmarks.find(l=>l.id===id),plot=id=>MAP.reserved.find(p=>p.id===id);
-for(const id of ['eastbank-warehouse','eastbank-workshop','eastbank-supply','eastbank-gas-kiosk','eastbank-lumber-shed']){const l=L(id),r=rotated(l),p=plot(l.plot);
+for(const id of ['eastbank-warehouse','eastbank-workshop','eastbank-supply','eastbank-gas-kiosk','ridgeline-office']){const l=L(id),r=rotated(l),p=plot(l.plot);
  assert(r.x0>=p.x0&&r.x1<=p.x1&&r.z0>=p.z0&&r.z1<=p.z1,`${id} stands inside plot ${l.plot}`);
  for(const q of MAP.paving)assert(!overlaps(r,q),`${id} does not stand on paving ${q.id}`);
  for(const e of MAP.roads.edges)assert(!overlaps(r,roadRect(e)),`${id} is clear of ${e.id}`);
