@@ -16,7 +16,7 @@ export const TINE=Object.freeze({x:.22,t:.05});
 export const CARRY_Z=.8+PALLET.d/2,CARRY_DROP=.09; // the middle of a carried pallet ahead of the body's middle; its base is this far below the tine tops
 export const LANE=Object.freeze({above:.02,height:1.2,post:.1,yaw:.2}); // tines in a shelf cell: at least 2 cm above the deck, at most 1.2 m (the beam is 1.35 m up), 10 cm from an upright, 11 degrees square
 export const SNAP=Object.freeze({along:.45,across:.35,yaw:.26}); // a carried pallet within this of a free cell (and 15 degrees square to it) sets down in it, and is placed square in the cell
-export const STAGING_BOX=Object.freeze({hx:.7,hz:.625,top:.14}); // an order's staging square (warehouse.js: a 1.4 x 1.25 pallet, .14 high)
+export const STAGING_BOX=Object.freeze({hx:.7,hz:.625,top:0}); // an order's staging square: painted on the floor (D1: the order's pallet is a real pallet standing on it)
 export const levelBase=level=>level===1?0:LEVEL_Y[level-1]; // the base of a pallet in a cell of this level (on the floor, or on the shelf deck)
 export const planksHeight=count=>Math.ceil(Math.max(0,count)/4)*.092; // forty planks lie ten high
 export const heightOf=count=>PALLET.h+planksHeight(count);
@@ -31,7 +31,8 @@ export function boxesOf(list){
  const out=[];
  for(const p of list){
   if(p.at.rack){const s=CELLS.get(p.at.rack);if(s)out.push({id:p.id,kind:'rack',slot:s.id,x:s.x,z:s.z,yaw:0,base:levelBase(s.level),count:p.count})}
-  else if(p.at.floor)out.push({id:p.id,kind:'floor',x:p.at.floor.x,z:p.at.floor.z,yaw:p.at.floor.yaw,base:0,count:p.count});
+  else if(p.at.floor)out.push({id:p.id,kind:'floor',x:p.at.floor.x,z:p.at.floor.z,yaw:p.at.floor.yaw,base:0,count:p.count,...(p.order?{order:p.order}:{})});
+  else if(Number.isInteger(p.at.staging)&&WAREHOUSE_STAGING[p.at.staging])out.push({id:p.id,kind:'staging',index:p.at.staging,x:WAREHOUSE_STAGING[p.at.staging].x,z:WAREHOUSE_STAGING[p.at.staging].z,yaw:0,base:0,count:p.count,order:p.order});
  }
  return out;
 }
@@ -89,8 +90,8 @@ export function forksClear(s,ctx){
   if(unitAt(w.x,w.z)&&!laneOk(s,w))return false;
  }
  if(ctx.carried>0){
-  const c=carriedBox(s,ctx.carried),top=c.base+heightOf(ctx.carried);
-  for(const b of ctx.boxes){if(Math.hypot(b.x-c.x,b.z-c.z)>2.2)continue;if(c.base<b.base+heightOf(b.count)-.01&&top>b.base+.01&&rectsOverlap(c,b))return false}
+  const c=carriedBox(s,ctx.carried),top=c.base+heightOf(ctx.carried),over=restingOn(s,ctx);
+  for(const b of ctx.boxes){if(Math.hypot(b.x-c.x,b.z-c.z)>2.2)continue;if(over.kind==='staging'&&b.kind==='staging'&&b.index===over.index)continue;if(c.base<b.base+heightOf(b.count)-.01&&top>b.base+.01&&rectsOverlap(c,b))return false}
   return true;
  }
  for(const b of ctx.boxes){if(Math.hypot(b.x-s.x,b.z-s.z)>3.6)continue;if(probe(s,b).state==='blocked')return false}
@@ -106,12 +107,12 @@ export function restingOn(s,ctx){
  for(const cell of RACK_SLOTS){
   const dx=c.x-cell.x,dz=c.z-cell.z;if(Math.abs(dx)>SNAP.across||Math.abs(dz)>SNAP.along)continue;
   const lvl=levelBase(cell.level);if(base<lvl-.05||base>lvl+LANE.height||ctx.occupied(cell.id))continue;
-  if(Math.abs(axisError(s.yaw,0))<=SNAP.yaw)return {kind:'rack',slot:cell.id,surface:lvl};
+  if(Math.abs(axisError(s.yaw,0))<=SNAP.yaw)return ctx.carriedOrder?{kind:'blocked',reason:'An order pallet stays on its square or the floor.',surface:lvl}:{kind:'rack',slot:cell.id,surface:lvl};
  }
- // an order's staging square (the carried pallet lowers onto it and the order takes its planks)
+ // an order's staging square (the carried pallet lowers onto it and the order takes its planks; an order's own pallet just stands there)
  for(let i=0;i<WAREHOUSE_STAGING.length;i++){
   const p=WAREHOUSE_STAGING[i];if(Math.abs(c.x-p.x)>STAGING_BOX.hx||Math.abs(c.z-p.z)>STAGING_BOX.hz)continue;
-  return ctx.stagingTaken(i)?{kind:'staging',index:i,surface:STAGING_BOX.top}:{kind:'blocked',reason:'No order is waiting on that square.',surface:STAGING_BOX.top};
+  return ctx.stagingTaken(i)?{kind:'staging',index:i,surface:ctx.stagingTop?.(i)||STAGING_BOX.top}:{kind:'blocked',reason:ctx.stagingNote?.(i)||'No order is waiting on that square.',surface:ctx.stagingTop?.(i)||STAGING_BOX.top};
  }
  // inside a shelving unit but not square to a free cell: it cannot be set down
  if(unitAt(c.x,c.z,.05))return {kind:'blocked',reason:'Line up with the bay.',surface:0};
@@ -130,7 +131,7 @@ export function settles(s,ctx){const r=restingOn(s,ctx);return r.kind!=='blocked
 
 // A line for the vehicle panel: why the forks are stopped, or what to do next. '' when there is nothing to say.
 export function forkHint(s,ctx){
- if(ctx.carried>0){const r=restingOn(s,ctx);if(r.kind==='blocked')return r.reason;if(r.kind==='rack')return `Lower the pallet into rack ${r.slot}.`;if(r.kind==='staging')return 'Lower the pallet onto the order’s square.';return 'Lower the forks (F) to set the pallet down here.';}
+ if(ctx.carried>0){const r=restingOn(s,ctx);if(r.kind==='blocked')return r.reason;if(r.kind==='rack')return `Lower the pallet into rack ${r.slot}.`;if(r.kind==='staging')return ctx.carriedOrder?'Lower the order’s pallet onto its square.':'Lower the pallet onto the order’s square.';return 'Lower the forks (F) to set the pallet down here.';}
  for(const b of ctx.boxes){
   if(Math.hypot(b.x-s.x,b.z-s.z)>3.8)continue;
   const p=probe(s,b);
@@ -166,7 +167,7 @@ export function approaching(s,boxes){
 }
 // a free shelf cell a carried pallet is being brought to (loosely in line with it, at its level): the cell, or null
 export function approachingCell(s,ctx){
- const c=carriedBox(s,ctx.carried||1);let best=null;
+ const c=carriedBox(s,ctx.carried||1);let best=null;if(ctx.carriedOrder)return null;
  for(const cell of RACK_SLOTS){
   const dx=c.x-cell.x,dz=c.z-cell.z;if(Math.abs(dx)>.7||Math.abs(dz)>1.1||ctx.occupied(cell.id))continue;
   const lvl=levelBase(cell.level);if(c.base<lvl-.05||c.base>lvl+LANE.height||Math.abs(axisError(s.yaw,0))>.32)continue;

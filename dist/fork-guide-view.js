@@ -12,15 +12,18 @@ export function createForkGuide(){
  const box=new THREE.BoxGeometry(1,1,1),fill=new THREE.MeshBasicMaterial({color:'#7fe08a',transparent:true,opacity:.2,depthWrite:false,fog:false}),edge=new THREE.LineBasicMaterial({color:'#7fe08a',fog:false});
  const ghost=new THREE.Group();ghost.name='fork-ghost';ghost.visible=false;
  const ghostFill=new THREE.Mesh(box,fill),ghostEdge=new THREE.LineSegments(new THREE.EdgesGeometry(box),edge);ghost.add(ghostFill,ghostEdge);
- group.add(beacon,ghost);
+ // the glow round the pallet you are meant to lift: honey edges that pulse
+ const glow=new THREE.LineSegments(new THREE.EdgesGeometry(box),new THREE.LineBasicMaterial({color:honey,fog:false,transparent:true,opacity:.9}));glow.name='fork-glow';glow.visible=false;
+ group.add(beacon,ghost,glow);
  const OK=new THREE.Color('#7fe08a'),WARN=new THREE.Color('#ffb347');
  // beacon: {x, y, z} the place to mark (y: its top) or null; ghost: {x, y, z, yaw, w, d, h, ok} or null; t: seconds (for the bobbing)
  function update(target,place,t=0){
   beacon.visible=!!target;
   if(target){beam.position.set(target.x,target.y+2.25,target.z);ring.position.set(target.x,target.kind==='staging'?.16:.03,target.z);diamond.position.set(target.x,target.y+.8+Math.sin(t*2.4)*.12,target.z);diamond.rotation.y=t*1.6}
+  const o=target?.outline;glow.visible=!!o;if(o){glow.position.set(o.x,o.y+o.h/2,o.z);glow.rotation.y=o.yaw;glow.scale.set(o.w+.12,o.h+.12,o.d+.12);glow.material.opacity=.55+.4*Math.sin(t*4)}
   ghost.visible=!!place;
   if(place){ghost.position.set(place.x,place.y+place.h/2,place.z);ghost.rotation.y=place.yaw;ghost.scale.set(place.w,place.h,place.d);const c=place.ok?OK:WARN;fill.color.copy(c);edge.color.copy(c)}
   group.visible=!!target||!!place;
  }
- return {group,beacon,ghost,update};
+ return {group,beacon,ghost,glow,update};
 }

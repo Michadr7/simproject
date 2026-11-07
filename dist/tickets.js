@@ -9,6 +9,7 @@
 import {MAP} from './map-definition.js';
 import {formatClock} from './routine.js';
 import {weekday} from './housing.js';
+import {palletsOf,orderPallet,squarePallet,stageByHand,setOnSquare,dropOrderPallet,withPallets,STAGING_SQUARES} from './pallets.js';
 
 export const CLOSE=1080,MAX_TAKEN=3,MAX_LIST=12,FAIL_REP=-3,DONE_REP=1,TAKE_RANK={pickup:4,delivery:5};
 // When tickets come in during a day (minutes of the day), and what kind. Placeholders: three pickups and one delivery a day (the user, 2026-11-06).
@@ -64,31 +65,61 @@ export function takeTicket(company,{id,playerId,rank,now}){
  if(now>=k.dueAt)return {error:'That order is past its time.'};
  if((rank||0)<TAKE_RANK[k.kind])return {error:k.kind==='delivery'?'Deliveries are for Sawyers (rank 5) and up.':'Picking orders is for Yard hands (rank 4) and up.'};
  if(takenBy(company,playerId).length>=MAX_TAKEN)return {error:`You hold ${MAX_TAKEN} tickets already. Finish one first.`};
- return {company:replace(company,{...k,status:'taken',takenBy:playerId}),effects:[],message:`Ticket ${ticketText(k)} is yours.`};
+ const square=freeSquare(company);
+ return {company:replace(company,{...k,status:'taken',takenBy:playerId,...(square>=0?{square}:{})}),effects:[],message:`Ticket ${ticketText(k)} is yours.`};
 }
-// Planks put on a ticket's staging pallet (by hand or by the forklift). Anyone may help stage a taken ticket (co-op later); returns how many it took.
+// The order's square (S1..S3 = 0..2) is kept on the ticket when it is taken, so it does not move when an older order finishes. A ticket without one (a save or a test from before) gets the first free square, oldest first.
+const live=k=>k.status==='taken'||k.status==='staged';
+function freeSquare(company){const used=new Set(ticketsOf(company).list.filter(k=>live(k)&&Number.isInteger(k.square)).map(k=>k.square));for(let i=0;i<STAGING_SQUARES;i++)if(!used.has(i))return i;return -1}
+// Planks put on an order's pallet by hand (stageByHand: the pallet appears with the first stack). Anyone may help stage a taken ticket (co-op later); returns how many it took.
 export function stagePlanks(company,{id,count,now}){
  const k=find(company,id);if(!k)return {error:'No such ticket.'};
  if(k.status!=='taken')return {error:k.status==='staged'?'That order is fully staged.':'Take the ticket first.'};
  if(now>=k.dueAt)return {error:'That order is past its time.'};
- const n=Math.max(0,Math.min(Math.floor(count),k.planks-k.staged));if(!n)return {error:'Nothing to stage.'};
- const staged=k.staged+n,full=staged>=k.planks;
- return {company:replace(company,{...k,staged,status:full?'staged':'taken'}),used:n,effects:[],message:full?`Order #${k.id} is staged: ${k.planks} planks.`:`Order #${k.id}: ${staged} / ${k.planks} planks staged.`};
+ const square=squareOf(company,k);if(square<0)return {error:'There is no free square for that order.'};
+ const r=stageByHand(company,{order:k.id,square,n:count,need:k.planks-k.staged});if(r.error)return {error:r.error};
+ return finishStage(r.company,k,square,r.put);
+}
+// A pallet from the forks set on the order's square (D1): the order takes what it still needs, the surplus is `surplus` for the caller to send back to the racks (restock).
+export function stagePallet(company,{id,now}){
+ const k=find(company,id);if(!k)return {error:'No such ticket.'};
+ const own=orderPallet(company,id);
+ if(k.status!=='taken'&&!(own&&own.at.fork))return {error:k.status==='staged'?'That order is fully staged.':'Take the ticket first.'};
+ if(now>=k.dueAt)return {error:'That order is past its time.'};
+ const square=squareOf(company,k);if(square<0)return {error:'There is no free square for that order.'};
+ const r=setOnSquare(company,{order:k.id,square,need:k.planks-k.staged});if(r.error)return {error:r.error};
+ const res=finishStage(r.company,k,square,r.used);res.surplus=r.surplus;return res;
+}
+// the ticket's staged count and status follow its pallet
+function finishStage(co,k,square,used){
+ const p=orderPallet(co,k.id),staged=Math.min(k.planks,p?p.count:0),full=staged>=k.planks;
+ return {company:replace(co,{...k,staged,square,status:full?'staged':'taken'}),used,effects:[],message:full?`Order #${k.id} is staged: ${k.planks} planks.`:`Order #${k.id}: ${staged} / ${k.planks} planks staged.`};
+}
+const squareOf=(company,k)=>stagingOf(company).findIndex(s=>s&&s.id===k.id);
+// A loaded order consumes its pallet: it must be on its square (an order with no pallet, from a save or a test before pallets, loads as before).
+function consume(company,k){
+ const p=orderPallet(company,k.id);if(!p)return {company};
+ if(!Number.isInteger(p.at.staging))return {error:`Order #${k.id}'s pallet is not on its square.`};
+ return {company:dropOrderPallet(company,k.id).company};
 }
 // A staged pickup order loaded onto the customer's truck: done. The order pay and the reputation go to whoever loads it.
 export function shipTicket(company,{id,playerId,now}){
  const k=find(company,id);if(!k||k.kind!=='pickup')return {error:'No such pickup order.'};
  if(k.status!=='staged')return {error:'Stage every plank of the order first.'};
  if(now>=k.dueAt)return {error:'That order is past its time.'};
- return {company:replace(company,{...k,status:'done',doneAt:now}),effects:[{playerId,piece:PIECE.pickup,rep:DONE_REP}],message:`Order #${k.id} shipped to ${k.customer}.`};
+ const c=consume(company,k);if(c.error)return {error:c.error};
+ return {company:replace(c.company,{...k,status:'done',doneAt:now}),effects:[{playerId,piece:PIECE.pickup,rep:DONE_REP}],message:`Order #${k.id} shipped to ${k.customer}.`};
 }
 // A staged delivery order loaded onto a vehicle at the loading door, then unloaded at its destination: done.
 export function loadTicket(company,{id,vehicle,now}){
  const k=find(company,id);if(!k||k.kind!=='delivery')return {error:'No such delivery.'};
  if(k.status!=='staged')return {error:'Stage every plank of the order first.'};
  if(now>=k.dueAt)return {error:'That order is past its time.'};
- return {company:replace(company,{...k,status:'loaded',vehicle:String(vehicle).slice(0,24)}),effects:[],message:`Order #${k.id} is on the truck: take it to ${k.dest||'the customer'}.`};
+ const c=consume(company,k);if(c.error)return {error:c.error};
+ return {company:replace(c.company,{...k,status:'loaded',vehicle:String(vehicle).slice(0,24)}),effects:[],message:`Order #${k.id} is on the truck: take it to ${k.dest||'the customer'}.`};
 }
+// A failed or expired order's pallet goes (wherever it is, the forks included); returns {company, planks} for the caller to send back to the racks.
+export function releaseOrderPallet(company,id){const r=dropOrderPallet(company,id);return {company:r.company,planks:r.count}}
 export function deliverTicket(company,{id,playerId,dest,now}){
  const k=find(company,id);if(!k||k.kind!=='delivery')return {error:'No such delivery.'};
  if(k.status!=='loaded')return {error:'Load the order onto your truck first.'};
@@ -100,9 +131,9 @@ export function deliverTicket(company,{id,playerId,dest,now}){
 // Saved on the company (progress.companies[id].tickets): bad entries are dropped, numbers clamped, at most MAX_LIST tickets.
 export function normalizeTickets(value){
  if(!value||typeof value!=='object')return null;
- const n=(x,max=1e9)=>Number.isSafeInteger(x)&&x>=0&&x<=max?x:0,STATUS=['open','taken','staged','loaded','done','failed','expired'];
+ const n=(x,max=1e9)=>Number.isSafeInteger(x)&&x>=0&&x<=max?x:0,SQUARES=[0,1,2],STATUS=['open','taken','staged','loaded','done','failed','expired'];
  const list=(Array.isArray(value.list)?value.list:[]).filter(k=>k&&typeof k==='object'&&Number.isSafeInteger(k.id)&&k.id>0&&['pickup','delivery'].includes(k.kind)&&STATUS.includes(k.status)&&typeof k.customer==='string')
-  .slice(-MAX_LIST).map(k=>{const planks=Math.max(1,Math.min(400,n(k.planks,400)));return {id:k.id,customer:k.customer.slice(0,40),kind:k.kind,planks,issuedAt:n(k.issuedAt),dueAt:n(k.dueAt),status:k.status,staged:Math.min(planks,n(k.staged,400)),
+  .slice(-MAX_LIST).map(k=>{const planks=Math.max(1,Math.min(400,n(k.planks,400)));return {id:k.id,customer:k.customer.slice(0,40),kind:k.kind,planks,issuedAt:n(k.issuedAt),dueAt:n(k.dueAt),status:k.status,staged:Math.min(planks,n(k.staged,400)),...(SQUARES.includes(k.square)?{square:k.square}:{}),
    ...(typeof k.takenBy==='string'&&k.takenBy?{takenBy:k.takenBy.slice(0,64)}:{}),...(typeof k.dest==='string'&&DESTINATIONS.includes(k.dest)?{dest:k.dest}:{}),...(typeof k.vehicle==='string'&&k.vehicle?{vehicle:k.vehicle.slice(0,24)}:{}),...(Number.isSafeInteger(k.doneAt)?{doneAt:k.doneAt}:{})}});
  const released=(Array.isArray(value.released)?value.released:[]).filter(i=>Number.isInteger(i)&&i>=0&&i<RELEASES.length);
  const nextId=Math.max(n(value.nextId)||1,1+Math.max(0,...list.map(k=>k.id)));
@@ -110,5 +141,20 @@ export function normalizeTickets(value){
  return {nextId,day:n(value.day,1e7),released:[...new Set(released)],list};
 }
 
-// The three staging pallets (S1..S3): the taken orders (pickups and deliveries) being filled or ready, oldest first. Derived from the tickets, never saved: [ticket|null, ticket|null, ticket|null].
-export const stagingOf=company=>{const mine=ticketsOf(company).list.filter(k=>k.status==='taken'||k.status==='staged').sort((a,b)=>a.id-b.id).slice(0,3);return [0,1,2].map(i=>mine[i]||null)};
+// The three staging squares (S1..S3): the taken orders (pickups and deliveries) being filled or ready. An order keeps the square stamped on its ticket when it was taken (`square`); a ticket without
+// one (a save or a test from before) takes the first free square, oldest first. Derived, never saved as a list: [ticket|null, ticket|null, ticket|null].
+export const stagingOf=company=>{
+ const mine=ticketsOf(company).list.filter(live).sort((a,b)=>a.id-b.id),out=[null,null,null];
+ for(const k of mine)if(Number.isInteger(k.square)&&k.square>=0&&k.square<STAGING_SQUARES&&!out[k.square])out[k.square]=k;
+ for(const k of mine)if(!out.includes(k)){const i=out.indexOf(null);if(i>=0)out[i]=k}
+ return out;
+};
+// A save (or a test) from before order pallets: a taken or staged order with planks counted on it but no pallet gets one on its square.
+export function migrateOrderPallets(company){
+ const list=palletsOf(company);let next=1+list.reduce((m,p)=>Math.max(m,p.id),0),out=list,made=false;
+ stagingOf(company).forEach((k,i)=>{
+  if(!k||!(k.staged>0)||out.some(p=>p.order===k.id||p.at.staging===i)||out.length>=200)return;
+  out=[...out,{id:next++,product:'planks',count:Math.min(40,k.staged),at:{staging:i},order:k.id}];made=true;
+ });
+ return made?withPallets(company,out):company;
+}

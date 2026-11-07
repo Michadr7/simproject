@@ -19,14 +19,14 @@ try{
  const {GameState,pump,send,ids,scene}=g,p=()=>GameState.progress,me=()=>GameState.me.position,prompt=()=>ids.get('prompt').querySelector('span').textContent;
  const press=(code='KeyE',seconds=1.2)=>{send('keydown',code);send('keyup',code);pump(seconds)};
  const co=()=>p().companies?.ridgeline,list=()=>ticketsOf(co()).list,truck=()=>scene().getObjectByName('dock-truck');
- const stagedBoards=()=>scene().getObjectByName('warehouse-interior').children.find(c=>c.name==='warehouse-boards-staging').count;
+ const stagedBoards=()=>scene().getObjectByName('warehouse-interior').children.find(c=>c.name==='warehouse-boards-floor').count;
  GameState.progress=hire(p(),'ridgeline').state;while(careerOf(p(),'ridgeline').rank<4)GameState.progress=promote(p(),'ridgeline',undefined,{force:true}).state;
  GameState.progress={...p(),housing:{...p().housing,day:DAY},routine:{...p().routine,minutes:430}};GameState.progress=clockIn(p(),'ridgeline').state;
  GameState.progress={...p(),companies:{...p().companies,ridgeline:{...co(),racks:{'A1-1':40,'B2-1':10}}}};pump(1.2);
  const t=list()[0];assert(t&&t.kind==='pickup'&&t.planks===12,'the 7 AM pickup is for 12 planks: '+JSON.stringify(t));assert.equal(truck().visible,false,'no truck yet');
  // in, to the table, take the order
  pump(.6);assert(/Enter · Ridgeline Warehouse/.test(prompt()),prompt());press('KeyE',2.5);
- me().x=WAREHOUSE_TABLE.x;me().z=WAREHOUSE_TABLE.z+1.4;pump(.6);press('KeyE',.4);ids.get('jobAction').click();pump(.4);assert.equal(list()[0].status,'taken','the order is yours');
+ me().x=WAREHOUSE_TABLE.x;me().z=WAREHOUSE_TABLE.z+1.4;pump(.6);press('KeyE',.4);ids.get('jobAction').click();pump(.2);ids.get('jobAction').click();pump(.4);assert.equal(list()[0].status,'taken','the order is yours (open its card, then Accept)');
  assert.deepEqual(stagingOf(co()).map(k=>k&&k.id),[t.id,null,null],'it has the first staging pallet');
  // nothing to take or stage until you stand at a rack with planks
  const A1=slotById('A1-1'),S1=WAREHOUSE_STAGING[0];
@@ -44,7 +44,7 @@ try{
  // load it
  pump(.6);assert(/Load order #\d+ onto the truck · 12 planks/.test(prompt()),'the dock offers the load: '+prompt());
  const cash0=p().cash,pieces0=p().shift.pieces.orders||0;press('KeyE',1.2);
- assert.equal(list()[0].status,'done','the order is done');assert.equal(p().shift.pieces.orders,pieces0+1,'and counted as an order');assert(/shipped/.test(ids.get('jobToast').textContent),ids.get('jobToast').textContent);assert.equal(stagedBoards(),0,'the pallet is empty again');
+ assert.equal(list()[0].status,'done','the order is done');assert.equal(p().shift.pieces.orders,pieces0+1,'and counted as an order');assert(p().messages.some(x=>x.app==='jobs'&&/shipped/.test(x.text)),'a Jobs message says it shipped: '+JSON.stringify(p().messages.map(x=>x.text)));assert.equal(stagedBoards(),0,'the pallet is empty again');
  pump(80);assert.equal(truck().visible,false,'the truck has left the map');
  console.log('Orders: planks out of a rack into your hands, onto the order\'s pallet (four at a time), the customer\'s truck drives in once it is staged and parks against the loading door, E at the dock loads it, the order counts and pays, and the truck leaves.');
 }finally{g.close?.()}

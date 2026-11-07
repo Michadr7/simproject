@@ -40,14 +40,20 @@ try{
  at(DAY,540);GameState.progress={...p(),shift:{...p().shift,last:abs(DAY,540),startedAt:430}};
  me().x=W.door.out.x;me().z=W.door.out.z;pump(.6);assert(/Enter · Ridgeline Warehouse/.test(prompt()),prompt());press('KeyE',2.5);assert(/WAREHOUSE/.test(ids.get('locationName').textContent),'inside: '+ids.get('locationName').textContent);
  me().x=WAREHOUSE_TABLE.x;me().z=WAREHOUSE_TABLE.z+1.4;pump(.6);assert(/Order table · \d+ open/.test(prompt()),'the table says how many are open: '+prompt());
- press('KeyE',.4);const dialog=()=>ids.get('dialogText').textContent;assert(/Order table|On the board/.test(dialog()+ids.get('dialog').textContent)||/On the board/.test(dialog()),'the table lists the orders: '+dialog());
- assert(/needs Sawyer, rank 5/.test(dialog()),'a Yard hand sees the delivery order and what rank it needs: '+dialog());ids.get('jobAction').click();pump(.4);
- assert.equal(takenBy(co(),'me').length,1,'the first order is yours');const mine=takenBy(co(),'me')[0];assert.equal(mine.status,'taken');assert.equal(mine.takenBy,'me');
+ press('KeyE',.4);const dialog=()=>ids.get('dialogText').textContent;assert(/to take/.test(dialog())&&/Pick one to see the details/.test(dialog()),'the table lists the orders as short buttons: '+dialog());
+  assert(/needs Sawyer/.test(ids.get('thirdAction').textContent),'a Yard hand sees the delivery order and what rank it needs: '+ids.get('thirdAction').textContent);
+  // click the first order: its card says who, what, where, when and what it pays, then offers Accept or Back
+  ids.get('jobAction').click();pump(.2);assert(/^Order #\d+/.test(ids.get('dialogKicker').textContent)&&/Pickup: their truck collects it at the loading door/.test(dialog())&&/Pays \$8\.00/.test(dialog())&&/Due by /.test(dialog()),'the card: '+dialog());assert.match(ids.get('jobAction').textContent,/Accept order #\d+/);
+  // a delivery card names the address, never the id, and a locked one cannot be accepted
+  ids.get('extraAction').click();pump(.2);assert(/to take/.test(dialog()),'Go back returns to the list of tasks');ids.get('thirdAction').click();pump(.2);assert(/Delivery: you take it to \d+ Cedar Loop, Cedar Heights/.test(dialog())&&!/house-/.test(dialog()),'the delivery card names the address: '+dialog());assert(/Needs a Sawyer \(rank 5\)/.test(dialog()),'and what it needs: '+dialog());assert(!/Accept/.test(ids.get('jobAction').textContent)&&/Go back/.test(ids.get('jobAction').textContent),'no Accept for a locked order, only Go back');
+  ids.get('closeDialog').click();pump(.2);press('KeyE',.4);ids.get('jobAction').click();pump(.2);ids.get('jobAction').click();pump(.4);
+  assert.equal(takenBy(co(),'me').length,1,'the first order is yours');const mine=takenBy(co(),'me')[0];assert.equal(mine.status,'taken');assert.equal(mine.takenBy,'me');
  // it is a task on the tracker, at the warehouse door
  {const item=trackerItems(p(),{x:0,z:0}).find(i=>i.id==='ticket:'+mine.id);assert(item&&item.group==='Orders'&&/Order #\d+/.test(item.title)&&item.pos.x===W.door.out.x,'the tracker lists it: '+JSON.stringify(item))}
  // a failed pickup: past its deadline it fails, costs 3 reputation, shakes the phone
- const rep=careerOf(p(),'ridgeline').rep;at(DAY,mine.dueAt%1440+1);pump(1.2);
- assert.equal(list().find(k=>k.id===mine.id).status,'failed','past its time it fails');assert.equal(careerOf(p(),'ridgeline').rep,Math.max(0,rep-3),'and costs reputation');assert(/failed/.test(ids.get('jobToast').textContent),ids.get('jobToast').textContent);
+ GameState.progress={...p(),companies:{...p().companies,ridgeline:{...co(),tickets:{...ticketsOf(co()),list:ticketsOf(co()).list.map(t=>t.id===mine.id?{...t,staged:5}:t)}}}};const racked=()=>(p().companies.ridgeline.pallets||[]).filter(q=>q.at.rack).reduce((s,q)=>s+q.count,0),racksBefore=racked(); // with 5 planks on its staging square: they go back to the racks, they do not vanish
+  const rep=careerOf(p(),'ridgeline').rep;at(DAY,mine.dueAt%1440+1);pump(1.2);assert.equal(racked(),racksBefore+5,'the 5 staged planks went back to the racks: '+racksBefore+' -> '+racked());
+ assert.equal(list().find(k=>k.id===mine.id).status,'failed','past its time it fails');assert.equal(careerOf(p(),'ridgeline').rep,Math.max(0,rep-3),'and costs reputation');assert(p().messages.some(x=>x.app==='jobs'&&/failed/.test(x.text)&&!x.read),'a Jobs message says it failed (notifications are saved, the toast may be waiting its turn): '+JSON.stringify(p().messages.map(x=>x.text)));
  // clocking out fails a taken pickup at once
  {const open=openTickets(co());assert(open.length>0);at(DAY,545);ids.get('jobToast').textContent='';
   const k=open.find(t=>t.kind==='pickup');GameState.progress={...p(),companies:{...p().companies,ridgeline:{...co(),tickets:{...ticketsOf(co()),list:ticketsOf(co()).list.map(t=>t.id===k.id?{...t,status:'taken',takenBy:'me'}:t)}}}};

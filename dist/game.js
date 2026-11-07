@@ -3,28 +3,32 @@ import {createWorld,zoneAt,isWalkable,footingAt,standHeight,worldLayout} from '.
 import {isMarked,LANDING,treeFelled,stackLog,planksMilled,stockOf,takeLogFromPile,inLumberyard,deliverPlanks,LUMBERYARD,logGathered,stumpCleared,saplingPlanted,racksOf,RACK_CAP,stackPlanks,takeFromRack,forkUsed,forkLoadOf} from './forest.js';
 import * as forklift from './forklift.js';
 import {createTreeMarks,createLandingRing,createStockPiles} from './marks.js';
-import {loadCarry,unloadOne,unloadKind,cargoText,LOAD_REACH,takeAll,countOf,addPlanks,removePlanks} from './cargo.js';
+import {loadCarry,unloadOne,unloadKind,cargoText,LOAD_REACH,takeAll,countOf,freeCount,orderCount,orderIdsOf,addPlanks,removePlanks,removeOrderPlanks} from './cargo.js';
 import {createCargoUI} from './cargo-ui.js';
 import {scheduleTruck,truckOf,truckWaiting,truckDue,truckArrived,loadFromHands,loadFromStock,loadFromBed,sendOff,BAY as TRUCK_BAY} from './customers.js';
 import {createCustomerTruck} from './customer-truck.js';
 import {heightAt} from './height.js';
 import {slabOutline,cornerRegion} from './junctions.js';
 import {hire,quit,collectOwed,employerName,careerOf,promote,nextRank,ownerOf,employerById,storeItems,storeLine,buyFromCompany,changeRep} from './careers.js';
-import {tickSupply,supplyOf} from './supply.js';
-import {totalPlanks,palletsOf,floorPallets,liftPallet,setPallet} from './pallets.js';
+import {tickSupply,supplyOf,returnPlanks} from './supply.js';
+import {addMessage,markRead} from './messages.js';
+import {totalPlanks,palletsOf,floorPallets,stagingPallets,orderPallet,liftPallet,setPallet} from './pallets.js';
 import * as fp from './fork-pallets.js';
 import {forkGoal,forkGhost} from './fork-guide.js';
 import {fillIcon} from './item-icon.js';
-import {tickTickets,takeTicket,stagePlanks,shipTicket,loadTicket,deliverTicket,openTickets,takenBy,ticketText,dueText,stagingOf,ticketsOf,TAKE_RANK} from './tickets.js';
-import {createOffice,createNameBoard,OFFICE_CLOCK,OFFICE_BOARD,OFFICE_COUNTER,OFFICE_STORE} from './office.js';
+import {boardEntries,boardText,boardPage,orderCard,destinationName} from './order-table.js';
+import {tickTickets,takeTicket,stagePlanks,stagePallet,releaseOrderPallet,shipTicket,loadTicket,deliverTicket,openTickets,takenBy,ticketText,dueText,stagingOf,ticketsOf,TAKE_RANK} from './tickets.js';
+import {createOffice,createNameBoard,OFFICE_CLOCK,OFFICE_BOARD,OFFICE_COUNTER,OFFICE_STORE,OFFICE_COOLER} from './office.js';
+import {useCooler,coolerWait} from './water-cooler.js';
 import {dockRoute,DOCK_BAY} from './customers.js';
 import {createWarehouse,createWarehouseDoorway,RACK_SLOTS,WAREHOUSE_TABLE,WAREHOUSE_STAGING} from './warehouse.js';
+import {WAREHOUSE_COOLER} from './warehouse-layout.js';
 import {HAND_LEVEL,DOCK_DOOR,HALL} from './warehouse-layout.js';
 import {clockIn,clockOut,tickShift,onSiteAt,taskText,recordPiece,PIECE_PAY} from './shift.js';
-import {deliverDue,takeDelivery,placeOrder,setMainHome,waitingHomes,waiting,dropSpot,homesHeld,STUDIO_ID,buyVehicle,orderVehicle,displayColour,vehicleLabel,VEHICLE_PRICE,vehicleLock} from './orders.js';
+import {deliverDue,takeDelivery,placeOrder,setMainHome,waitingHomes,waiting,dropSpot,homesHeld,mainHome,STUDIO_ID,buyVehicle,orderVehicle,displayColour,vehicleLabel,VEHICLE_PRICE,vehicleLock} from './orders.js';
 import {createParcels} from './parcels.js';
 import {SURFACE_LABEL,surfaceSpeed,CLASSES} from './vehicle.js';
-import {trackerItems,focusedItem,nextFocus,distanceTo} from './tracker.js';
+import {trackerItems,focusedItem,nextFocus,focusAfter,distanceTo} from './tracker.js';
 import {worldDoors,doorOf,propertyById} from './properties.js';
 import {buildHouseRoom} from './interiors.js';
 import {propertyTransaction,heldIds,listingOf} from './ownership.js';
@@ -46,6 +50,7 @@ import {addItem,useItem,unequipItem,hasItem,hotbarItems,equipTool,sellLogs,canOf
 import {createPhone} from './phone.js';
 import {acceptContract,completeContract,tickContract,gigTarget,atGigPoint,refreshGigBoard,gameMinutes} from './contracts.js';
 import {GameState,initializeState,setMePosition,tickLife,setStatDrainMultiplier} from './state.js';
+import {needsEffects} from './life.js';
 import {loadProfile,saveProfile} from './profile.js';
 import {MultiplayerClient} from './multiplayer.js';
 import {createMainMenu,relayBase,refusalText} from './main-menu.js';import {createSaveMenu} from './save-menu.js';import {createCloud,PUSH_EVERY_MS} from './cloud-save.js';import {createAccountMenu} from './account-menu.js';import {normalizeLobbyCode,REFUSED} from './relay-protocol.js';
@@ -69,7 +74,7 @@ import {createPedestrians,createVehicles} from './neighborhood.js';
 import {createDriving} from './driving.js';
 import {createVehicleHud,vehicleHudModel} from './vehicle-hud.js';
 import {defaultColour} from './paint.js';
-import {sleepThrough} from './sleep.js';
+import {sleepThrough,passOutThrough,PASS_OUT_ONLINE_SECONDS} from './sleep.js';
 import {createFuelStation} from './fuel-station.js';
 import {sell,fillCan,pour,canText,CAN_CAPACITY_MGAL,STEP_MGAL,FLOW_MGAL_PER_S,REACH_M,USE_RANGE_M,fuelText,fuelTitle,fuelName,gallons} from './fuel.js';
 import * as THREE from './vendor/three.module.js';
@@ -173,8 +178,9 @@ function custFromBed(id){const r=loadFromBed(GameState.progress,driving.cargoOf(
 function custSend(){const r=sendOff(GameState.progress);if(r.error){toast(r.error);return}GameState.progress=r.state;persist();toast(r.message)}
 // the Cargo panel: one row per kind on the bed, and the bulk moves that apply here
 function cargoRows(id){const f=driving.byId.get(id);if(!f)return [];const c=driving.cargoOf(id),hands=!!GameState.progress.carry,rows=[];
- for(const kind of ['log','planks']){const n=countOf(c,kind);if(n)rows.push({label:(kind==='log'?'Take a log · ':'Take planks · ')+n+' on the bed'+(hands?' (your hands are full)':''),disabled:hands,run:()=>{takeKind(id,kind);return {close:!!GameState.progress.carry}}})}
- const planks=countOf(c,'planks');
+ for(const kind of ['log','planks']){const n=freeCount(c,kind);if(n)rows.push({label:(kind==='log'?'Take a log · ':'Take planks · ')+n+' on the bed'+(hands?' (your hands are full)':''),disabled:hands,run:()=>{takeKind(id,kind);return {close:!!GameState.progress.carry}}})}
+ for(const oid of orderIdsOf(c)){const k=ridgelineTickets().find(t=>t.id===oid);rows.push({label:`Order #${oid} · ${orderCount(c,oid)} planks are the customer's${k?.dest?`: unload them at ${destinationName(k.dest)}`:''}`,disabled:true,run:()=>({})})} // an order's planks cannot be taken off by hand or sold
+ const planks=freeCount(c,'planks');
  if(planks&&onRidgeline()&&inLumberyard(f.state))rows.push({bulk:true,label:'Unload all '+planks+' planks at the lumberyard · $'+planks.toFixed(2),run:()=>{unloadAtDock(id);return {}}});
  if(planks&&truckWaiting(GameState.progress)&&Math.hypot(f.state.x-TRUCK_BAY.x,f.state.z-TRUCK_BAY.z)<25){const t=truckOf(GameState.progress);if(t.loaded<t.order)rows.push({bulk:true,label:'Move planks to the customer\'s truck · '+t.loaded+' / '+t.order,run:()=>{custFromBed(id);return {}}})}
  return rows}
@@ -190,11 +196,13 @@ function takeOffBed(id){const f=driving.byId.get(id);if(!f)return;const r=unload
 // The warehouse (4.16): the delivery pile inside is the company's yard stock; E takes a stack of planks from it, E at a rack bay puts it in (a full bay is a rack for the Stack task).
 // Company actions (DESIGN 4.16 G, the co-op seam): every change to the company's tickets goes through here as plain data {type, ...}. Offline it runs the pure rule from tickets.js on the local
 // save at once and applies the effects (piece pay, reputation) to this player; in co-op the same call will go to the authority and its answer will be applied the same way. The player is 'me' offline.
-const COMPANY_RULES={take:takeTicket,stage:stagePlanks,ship:shipTicket,load:loadTicket,deliver:deliverTicket};
+const COMPANY_RULES={take:takeTicket,stage:stagePlanks,stagePallet:stagePallet,ship:shipTicket,load:loadTicket,deliver:deliverTicket};
 const absoluteNow=p=>Math.floor((p.housing.day-1)*1440+p.routine.minutes);
 function applyCompany(action){
  const p=GameState.progress,id='ridgeline',co=p.companies?.[id]||{},rank=careerOf(p,id).rank,base={playerId:'me',rank,now:absoluteNow(p)},act={...base,...action};let r;
- if(action.type==='supply')r=tickSupply(co,{now:act.now,carried:p.carry?.kind==='planks'?p.carry.count:0}); // the crew's delivery runs with the clock, shift or not
+ if(action.type==='releaseOrder')r={...releaseOrderPallet(co,act.id),effects:[]}; // a failed order's pallet leaves wherever it is: no shift needed
+ else if(action.type==='restock')r=returnPlanks(co,act.planks); // planks coming back from a failed order: no shift needed
+ else if(action.type==='supply')r=tickSupply(co,{now:act.now,carried:p.carry?.kind==='planks'?p.carry.count:0}); // the crew's delivery runs with the clock, shift or not
  else if(action.type==='tick'){const on=p.shift?.employer===id;r=tickTickets(co,{now:act.now,release:on&&rank>=4,clockedOut:on?[]:[act.playerId]})}
  else{const rule=COMPANY_RULES[action.type];if(!rule)return {error:'Unknown company action.'};if(p.shift?.employer!==id)return {error:'Clock in to work orders for Ridgeline Timber.'};r=rule(co,act)}
  if(r.error)return {error:r.error};
@@ -213,29 +221,46 @@ const orderLine=(k,now)=>`#${k.id} · ${k.customer} · ${k.planks} planks · ${k
 // 0.5 s: release, expire and fail tickets (only a Yard hand or better has them); a new one shakes the phone
 function tickCompany(){
  const p=GameState.progress;if(!careerOf(p,'ridgeline').hired||careerOf(p,'ridgeline').rank<4)return;
- const sup=applyCompany({type:'supply'});if(!sup.error){const at=absoluteNow(GameState.progress);if(sup.delivered){notifyPhone(sup.message);syncWarehouse()}else if(sup.scheduled)notifyPhone('Ridgeline’s crew is bringing '+sup.scheduled.planks+' planks to the warehouse by '+formatClock(sup.scheduled.at%1440)+'.')}
+ const sup=applyCompany({type:'supply'});if(!sup.error){const at=absoluteNow(GameState.progress);if(sup.delivered){notifyPhone('jobs',sup.message);syncWarehouse()}else if(sup.scheduled)notifyPhone('jobs','Ridgeline’s crew is bringing '+sup.scheduled.planks+' planks to the warehouse by '+formatClock(sup.scheduled.at%1440)+'.')}
  const r=applyCompany({type:'tick'});if(r.error)return;const now=absoluteNow(GameState.progress);
- if(r.released?.length)notifyPhone('New order '+r.released.map(k=>orderLine(k,now)).join(' · '));
- else if(r.failed?.length)notifyPhone('Order '+r.failed.map(k=>'#'+k.id+' · '+k.customer).join(', ')+' failed: you lose reputation.');
+ if(r.released?.length)notifyPhone('jobs','New order '+r.released.map(k=>orderLine(k,now)).join(' · '));
+ if(r.failed?.length){
+   // planks that were on an order come back to open rack space as pallets: nothing just disappears (playtest 2026-11-06). A delivery already on a truck is taken off it (cargo.js: they were the customer's, selling them was an exploit); a staged order's planks come off its square.
+   const notes=[];let total=0;
+   for(const k of r.failed){
+    let back=0;if(k.status!=='loaded'){const rel=applyCompany({type:'releaseOrder',id:k.id});back=rel.planks||k.staged||0;updateFork()} // the order's pallet goes wherever it is (the forks too); an order from before pallets falls back to its count
+    if(k.status==='loaded'&&k.vehicle&&driving.byId.get(k.vehicle)){const bed=driving.cargoOf(k.vehicle),t=removeOrderPlanks(bed,k.id);if(t.count){driving.setCargo(k.vehicle,t.cargo);back=t.count}else{const old=removePlanks(bed,k.planks);if(!old.error){driving.setCargo(k.vehicle,old.cargo);back=k.planks}}} // the second try is for a save from before the tag
+    if(back>0){const res=applyCompany({type:'restock',planks:back});if(!res.error){total+=back;notes.push('#'+k.id+': '+back+' planks '+(res.toStock?(res.placed?'went back to the racks and the lumberyard':'went to the lumberyard (the racks are full)'):'went back to '+((res.cells||[]).length===1?'rack '+res.cells[0]:'the racks')))}}
+   }
+   if(total){syncWarehouse();persist()}
+   notifyPhone('jobs','Order '+r.failed.map(k=>'#'+k.id+' · '+k.customer).join(', ')+' failed: you lose reputation.'+(notes.length?' '+notes.join('; ')+'.':''));
+  }
 }
 // E at the order table: the open orders as choices (three at a time), taken with applyCompany
 function closeWorldDialog(){$('dialog').hidden=true;clearWorldPanel();modal=false;keys.clear();look.capture()} // what Esc does: a choice at a station is done, so the dialog goes away
-function orderTable(){
- const pr=GameState.progress,co=pr.companies?.ridgeline,now=absoluteNow(pr),rank=careerOf(pr,'ridgeline').rank,ranks=employerById('ridgeline').ranks,need=k=>TAKE_RANK[k.kind],locked=k=>rank<need(k);
- const open=openTickets(co).sort((a,b)=>locked(a)-locked(b)||a.dueAt-b.dueAt),mine=takenBy(co,'me');
- const tag=k=>locked(k)?` (needs ${ranks[need(k)-1].name}, rank ${need(k)})`:'';
- const lines=[mine.length?'Yours: '+mine.map(k=>`#${k.id} ${k.customer} (${k.staged}/${k.planks})`).join(', ')+'.':'',open.length?'On the board: '+open.map(k=>orderLine(k,now)+tag(k)).join(' · ')+'.':'No orders on the board right now: they come in during the shift.'].filter(Boolean);
- station({x:WAREHOUSE_TABLE.x,y:1.6,z:WAREHOUSE_TABLE.z},'Order table',lines.join(' '),open.slice(0,3).map(k=>locked(k)?{label:`#${k.id} · needs ${ranks[need(k)-1].name}`,run:()=>{closeWorldDialog();toast(`Order #${k.id} needs a higher rank: ${ranks[need(k)-1].name} (rank ${need(k)}). You are a ${ranks[rank-1].name}. Keep working shifts to get there.`)}}:{label:`Take #${k.id} · ${k.planks} planks`,run:()=>{closeWorldDialog();const r=applyCompany({type:'take',id:k.id});toast(r.error||r.message)}}));
-}function syncWarehouse(){const o=offices.find(x=>x.kind==='warehouse');if(o)o.room.setStock(racksOf(GameState.progress),stagingOf(GameState.progress.companies?.ridgeline).map(k=>k?k.staged:0),floorPallets(GameState.progress.companies?.ridgeline).map(q=>({x:q.at.floor.x,z:q.at.floor.z,yaw:q.at.floor.yaw,count:q.count})))}
+function orderTable(page){
+ page=typeof page==='number'?page:0;
+ const pr=GameState.progress,co=pr.companies?.ridgeline,rank=careerOf(pr,'ridgeline').rank,ranks=employerById('ridgeline').ranks,entries=boardEntries(co,{now:absoluteNow(pr),rank,ranks}),view=boardPage(entries,page);
+ const choices=view.items.map(e=>({label:e.label,run:()=>orderDetail(e.id)}));if(view.more)choices.push({label:view.more.label,run:()=>orderTable(view.more.page)});
+ station({x:WAREHOUSE_TABLE.x,y:1.6,z:WAREHOUSE_TABLE.z},'Tasks',boardText(entries),choices);
+}
+// One order's card (order-table.js orderCard): who it is for, what to do and where, when it is due, what it pays; then Accept (an open order you can take) or "Show me on my task list" (your own), and Back.
+function orderDetail(id){
+ const pr=GameState.progress,co=pr.companies?.ridgeline,k=ticketsOf(co).list.find(t=>t.id===id);if(!k){orderTable();return}
+ const rank=careerOf(pr,'ridgeline').rank,card=orderCard(k,{now:absoluteNow(pr),rank,ranks:employerById('ridgeline').ranks,company:co}),back={label:'Go back',run:()=>orderTable()};
+ const choices=card.canAccept?[{label:'Accept order #'+k.id,run:()=>{closeWorldDialog();const r=applyCompany({type:'take',id:k.id});if(r.error){toast(r.error);return}setFocus('ticket:'+k.id);toast(r.message+' It is on your task list with an arrow.')}},back]
+  :card.mine?[{label:'Show me on my task list',run:()=>{closeWorldDialog();setFocus('ticket:'+k.id);toast('Order #'+k.id+': follow the arrow.')}},back]:[back];
+ station({x:WAREHOUSE_TABLE.x,y:1.6,z:WAREHOUSE_TABLE.z},card.title,card.text,choices);
+}function syncWarehouse(){const o=offices.find(x=>x.kind==='warehouse');if(o){const co=GameState.progress.companies?.ridgeline;o.room.setStock(racksOf(GameState.progress),[...floorPallets(co).map(q=>({x:q.at.floor.x,z:q.at.floor.z,yaw:q.at.floor.yaw,count:q.count,order:q.order})),...stagingPallets(co).map(q=>({x:WAREHOUSE_STAGING[q.at.staging].x,z:WAREHOUSE_STAGING[q.at.staging].z,yaw:0,count:q.count,order:q.order}))])}}
 // Picking an order (4.16 C): planks out of a floor-level rack into your hands, onto the order's staging pallet (staged through applyCompany), and the staged order loaded onto the waiting truck.
 function takeFromRackNow(slot){const r=takeFromRack(GameState.progress,slot);if(r.error){toast(r.error);return}GameState.progress=r.state;stowTool();persist();syncWarehouse();toast(r.message)}
 function stageOnOrder(id){const c=GameState.progress.carry;if(c?.kind!=='planks')return;const r=applyCompany({type:'stage',id,count:c.count});if(r.error){toast(r.error);return}const left=c.count-r.used;GameState.progress={...GameState.progress,carry:left>0?{kind:'planks',count:left}:null};persist();syncWarehouse();toast(r.message)}
-function shipOrder(id){const k=ticketsOf(GameState.progress.companies?.ridgeline).list.find(t=>t.id===id),r=applyCompany({type:'ship',id});if(r.error){toast(r.error);return}if(k)dockGoing=k.planks;syncWarehouse();notifyPhone(r.message+' Paid '+money(PIECE_PAY.orders)+'.')}
+function shipOrder(id){const k=ticketsOf(GameState.progress.companies?.ridgeline).list.find(t=>t.id===id),r=applyCompany({type:'ship',id});if(r.error){toast(r.error);return}if(k)dockGoing=k.planks;syncWarehouse();notifyPhone('jobs',r.message+' Paid '+money(PIECE_PAY.orders)+'.')}
 // The forklift (4.16 D): parked in its bay in the warehouse; E at it (Yard hand or better, on shift) to drive: W S A D, R raises the forks and F lowers them. At a rack bay, a staging pallet or the delivery pile, E lifts or sets down a pallet
 // of up to 40 planks (the forks' load is saved on the company, forest.js forkLoadOf). The model is about 14,000 triangles and only loaded (and drawn) in the warehouse.
 const fork={on:false,state:forklift.fresh()};let forkView=null,forkGuide=null,forkLoading=false,forkHips=.95;const FORK_SIT=-.04; // forkHips: your hips' height when standing (measured as you get on); FORK_SIT: hip joint above the cushion
 function loadForklift(room){if(forkView||forkLoading)return;forkLoading=true;Promise.all([import('./forklift-view.js'),import('./fork-guide-view.js')]).then(([m,g])=>{forkView=m.buildForklift();room.scene.add(forkView.group);forkGuide=g.createForkGuide();room.scene.add(forkGuide.group);updateFork()})}
-function updatePalletTags(){const o=shop&&officeByKey(shop);if(!o||o.kind!=='warehouse'||!o.room.updateTags)return;const extra=[],fl=forkLoadOf(GameState.progress);if(fl>0&&forkView){const at=forklift.toWorld(fork.state,0,fp.CARRY_Z);extra.push({x:at.x,y:forkView.topY+.25,z:at.z,count:fl,product:'planks'})}o.room.updateTags(camera,{x:me.position.x,z:me.position.z},extra)} // the tags above the pallets (pallet-tags.js), the one on the forks too
+function updatePalletTags(){const o=shop&&officeByKey(shop);if(!o||o.kind!=='warehouse'||!o.room.updateTags)return;const extra=[],fl=forkLoadOf(GameState.progress);if(fl>0&&forkView){const at=forklift.toWorld(fork.state,0,fp.CARRY_Z);extra.push({x:at.x,y:forkView.topY+.25,z:at.z,count:fl,product:'planks',order:palletsOf(GameState.progress.companies?.ridgeline).find(q=>q.at.fork)?.order||0})}o.room.updateTags(camera,{x:me.position.x,z:me.position.z},extra)} // the tags above the pallets (pallet-tags.js), the one on the forks too
 function updateFork(){if(forkView)forkView.set(fork.state,forkLoadOf(GameState.progress))}
 const forkBlocks=(x,z)=>{if(fork.on||!forkView)return false;const s=fork.state,dx=x-s.x,dz=z-s.z,c=Math.cos(s.yaw),n=Math.sin(s.yaw);return Math.abs(dx*c-dz*n)<.85&&Math.abs(dx*n+dz*c)<1.9} // a parked forklift is solid to a walker
 function getOnFork(){const pr=GameState.progress;if(!onRidgeline()||careerOf(pr,'ridgeline').rank<4){toast('The forklift is for Ridgeline Yard hands (rank 4) and up, on shift.');return}if(pr.carry){toast('Put down what you are carrying first.');return}
@@ -250,17 +275,17 @@ let forkListKey=null,forkBoxes=[],forkCells=new Set(),forkLock=null; // forkLock
 function forkCtx(){
  const o=shop&&officeByKey(shop),co=GameState.progress.companies?.ridgeline,list=palletsOf(co);
  if(list!==forkListKey){forkListKey=list;forkBoxes=fp.boxesOf(list);forkCells=new Set(list.filter(q=>q.at.rack).map(q=>q.at.rack))}
- const slots=stagingOf(co);
- return {boxes:forkBoxes,carried:forkLoadOf(GameState.progress),cellOf:slot=>RACK_SLOTS.find(c=>c.id===slot),blockedOther:(x,z)=>o.room.blockedOther(x,z),solidAt:(x,z)=>o.room.solidAt(x,z),occupied:slot=>forkCells.has(slot),stagingTaken:i=>slots[i]?.status==='taken'}
+ const slots=stagingOf(co),held=list.find(q=>q.at.fork),carriedOrder=held?.order||0;
+ return {boxes:forkBoxes,carried:forkLoadOf(GameState.progress),carriedOrder,stagingTop:i=>{const q=list.find(x=>x.at.staging===i);return q&&!carriedOrder?fp.heightOf(q.count):0},stagingNote:i=>carriedOrder?'That is not this order\u2019s square.':slots[i]?'That order is already staged.':'No order is waiting on that square.',cellOf:slot=>RACK_SLOTS.find(c=>c.id===slot),blockedOther:(x,z)=>o.room.blockedOther(x,z),solidAt:(x,z)=>o.room.solidAt(x,z),occupied:slot=>forkCells.has(slot),stagingTaken:i=>{const k=slots[i];if(!k)return false;return carriedOrder?k.id===carriedOrder:k.status==='taken'}}
 }
 function forkCompany(company,message){const pr=GameState.progress;GameState.progress={...pr,companies:{...(pr.companies||{}),ridgeline:company}};persist();syncWarehouse();updateFork();if(message)toast(message)}
-function stageFromForks(id){const load=forkLoadOf(GameState.progress),r=applyCompany({type:'stage',id,count:load});if(r.error)return r;GameState.progress=forkUsed(GameState.progress,r.used);persist();syncWarehouse();updateFork();return r}
+function stageFromForks(id){const r=applyCompany({type:'stagePallet',id});if(r.error)return r;if(r.surplus>0){const back=applyCompany({type:'restock',planks:r.surplus});r.message+=' The other '+r.surplus+' planks went '+(back.error?'nowhere':back.toStock&&!back.placed?'to the lumberyard':'back to the racks')+'.'}persist();syncWarehouse();updateFork();return r}
 // after each drive step: lift a pallet the tines are in and raised, or set down the one the forks carry when it meets what is under it
 // the guide: what to do next (a line in the panel) and the markers in the room (fork-guide.js, fork-guide-view.js)
 let forkClock=0;
 function forkGuideTick(ctx,dt){
  if(!forkGuide)return;forkClock+=dt;if(!fork.on){forkGuide.update(null,null);return}
- const g=forkGoal({carried:ctx.carried,boxes:ctx.boxes,staging:stagingOf(GameState.progress.companies?.ridgeline),pos:fork.state});fork.goal=g.text;forkGuide.update(g.target,forkGhost(fork.state,ctx),forkClock)
+ const g=forkGoal({carried:ctx.carried,carriedOrder:ctx.carriedOrder,boxes:ctx.boxes,staging:stagingOf(GameState.progress.companies?.ridgeline),pos:fork.state});fork.goal=g.text;forkGuide.update(g.target,forkGhost(fork.state,ctx),forkClock)
 }
 function forkTick(ctx,raise){
  const s=fork.state,co=GameState.progress.companies?.ridgeline;fork.hint=fp.forkHint(s,ctx);
@@ -283,11 +308,12 @@ function forkOffers(add){const s=fork.state,here={x:me.position.x,z:me.position.
 const ridgelineTickets=()=>ticketsOf(GameState.progress.companies?.ridgeline).list;
 const deliveryBed=k=>driving.bedsWithin(DOCK_BAY.x,DOCK_BAY.z,16).find(b=>!addPlanks(b.cargo,b.model,k.planks).error)||null;
 function loadDelivery(id){const k=ridgelineTickets().find(t=>t.id===id),bed=k&&deliveryBed(k);if(!bed){toast('Park a truck with a bed outside the loading door first.');return}
- const r=applyCompany({type:'load',id,vehicle:bed.id});if(r.error){toast(r.error);return}driving.setCargo(bed.id,addPlanks(bed.cargo,bed.model,k.planks).cargo);syncWarehouse();persist();toast(r.message)}
+ const r=applyCompany({type:'load',id,vehicle:bed.id});if(r.error){toast(r.error);return}driving.setCargo(bed.id,addPlanks(bed.cargo,bed.model,k.planks,k.id).cargo);syncWarehouse();persist();toast(r.message+' It is marked on your task list: '+destinationName(k.dest)+'.');setFocus('ticket:'+k.id)} // the planks are tagged with the order (cargo.js): they cannot be sold or taken off anywhere but at the address
 function deliverOrder(id){const k=ridgelineTickets().find(t=>t.id===id),d=k&&dropSpot(k.dest),f=k&&driving.byId.get(k.vehicle);
  if(!f||!f.present||Math.hypot(f.state.x-d.x,f.state.z-d.z)>30){toast('Bring the truck with the order here first.');return}
- const off=removePlanks(driving.cargoOf(k.vehicle),k.planks);if(off.error){toast(off.error);return}
- const r=applyCompany({type:'deliver',id,dest:k.dest});if(r.error){toast(r.error);return}driving.setCargo(k.vehicle,off.cargo);persist();notifyPhone(r.message+' Paid '+money(PIECE_PAY.deliveries)+'.')}
+ const bed=driving.cargoOf(k.vehicle),tagged=removeOrderPlanks(bed,k.id),off=tagged.count>=k.planks?{cargo:tagged.cargo}:removePlanks(bed,k.planks); // a save from before the tag has planks without it
+ if(off.error){toast(off.error);return}
+ const r=applyCompany({type:'deliver',id,dest:k.dest});if(r.error){toast(r.error);return}driving.setCargo(k.vehicle,off.cargo);persist();notifyPhone('jobs',r.message+' Paid '+money(PIECE_PAY.deliveries)+'.')}
 function stackAtRack(slot){const r=stackPlanks(GameState.progress,slot);if(r.error){toast(r.error);return}GameState.progress=r.state;persist();syncWarehouse();toast(r.message)}
 function takeFromPile(){const r=takeLogFromPile(GameState.progress,me.position);if(r.error){toast(r.error);return}GameState.progress=r.state;stowTool();persist();syncMarks();toast(r.message)}
 function deliverByHand(){const c=GameState.progress.carry;if(c?.kind!=='planks')return;const r=deliverPlanks({...GameState.progress,carry:null},c.count);if(r.error){toast(r.error);return}GameState.progress=r.state;persist();syncMarks();toast(r.message)}
@@ -363,8 +389,17 @@ $('mainMenu').onclick=()=>{persist();multiplayer.disconnect();const go=()=>{if(t
 function updateHomeNotices(){const n=GameState.progress.homeNotices;if(n?.length){toast(n.join(' '));GameState.progress.homeNotices=[];persist()}} var saveLocked=false; // var, not let: persist() is hoisted and may run before this line. Set once an import or restore has written a new save: nothing may save the old game over it while the page reloads
  function persist(){if(saveLocked)return;refreshHotbar();refreshSkillHud();if(!inside&&!shop){const at=driving.active?driving.door():me.position;GameState.progress.position={x:at.x,z:at.z}} // driving: you are saved standing at the driver's door, and the vehicles where they were left
  GameState.progress.vehicles=driving.save();const ok=saveProfile({playerId:me.id,name:me.name,progress:GameState.progress});$('progressStatus').textContent=ok?'Saved on this browser':'Saving unavailable · session only';return ok}
-function notifyPhone(text){toast(text);phone?.notify();audio.ping()} // a phone notification: the usual toast, the button shakes and counts it, a soft two-note ping
-function toast(text){$('jobToast').textContent=text;$('jobToast').hidden=false;clearTimeout(toast.timer);toast.timer=setTimeout(()=>$('jobToast').hidden=true,4500)}
+// A phone notification (DESIGN 4.19): saved as a message for its app (messages.js), shown as a toast that waits its turn behind any toast still showing (at most three wait), the phone button shakes and every
+// app badge is redrawn, and a soft two-note ping plays. `app` is the phone app it belongs to: jobs, store, bank, homes, player or gigs.
+function notifyPhone(app,text){
+ const p=GameState.progress,r=addMessage(p,{app,text,at:absoluteNow(p)});GameState.progress=r.state;persist();
+ queueToast(text);phone?.notify(app);audio.ping();
+}
+function toast(text){showToast(text,4500)}
+const toastQueue=[];let toastShowing=false;
+function showToast(text,ms){$('jobToast').textContent=text;$('jobToast').hidden=false;toastShowing=true;clearTimeout(toast.timer);toast.timer=setTimeout(()=>{toastShowing=false;$('jobToast').hidden=true;const next=toastQueue.shift();if(next)showToast(next,3800)},ms)}
+// a notification toast: shown at once when nothing is showing, otherwise it waits (the three newest are kept); action feedback (toast) still shows at once
+function queueToast(text){if(!toastShowing){showToast(text,3800);return}toastQueue.push(text);while(toastQueue.length>3)toastQueue.shift()}
 function showDialog(kicker,title,text,tag,action,label){
  if(sleepElapsed!==null||consuming)return;
  phone?.close();inventoryUI?.close();storeUI?.close();
@@ -467,11 +502,13 @@ function candidates(){const all=[],add=(id,point,anchor,label,run,range=1.5,key)
    if(readyDel){const at={x:DOCK_DOOR.x-1.6,z:HALL.halfD-1},bed=deliveryBed(readyDel);add('wh-load-del',at,()=>worldPoint({x:at.x,y:1.6,z:at.z}),bed?`Load order #${readyDel.id} onto the ${bed.name} · ${readyDel.planks} planks`:`Order #${readyDel.id} is staged · park a truck with a bed outside the loading door`,()=>loadDelivery(readyDel.id),2.2)}
    if(ready){const at={x:DOCK_DOOR.x,z:HALL.halfD-1};add('wh-load',at,()=>worldPoint({x:at.x,y:1.6,z:at.z}),dockTruck.parked()?`Load order #${ready.id} onto the truck · ${ready.planks} planks`:`Order #${ready.id} is staged · the truck is on its way`,dockTruck.parked()?()=>shipOrder(ready.id):()=>toast('The customer\'s truck is still on its way to the dock.'),2.2)}}
   if(forkView)add('wh-fork',{x:fork.state.x,z:fork.state.z},()=>worldPoint({x:fork.state.x,y:1.9,z:fork.state.z}),'Drive the forklift',getOnFork,2.7);
+  {const w=coolerWait(pr,'warehouse');add('wh-cooler',WAREHOUSE_COOLER,()=>worldPoint({x:WAREHOUSE_COOLER.x,y:1.3,z:WAREHOUSE_COOLER.z}),w?'Water cooler · ready in '+w+' min':'Water cooler · free water',()=>drinkCooler('warehouse'),1.6)}
   add('wh-table',WAREHOUSE_TABLE,()=>entityPoint(officeByKey(shop).room.clerk.group),'Order table · '+(openTickets(pr.companies?.ridgeline).length||'no')+' open',orderTable,2.2);
   exitDoorOffer(add);return all}
  if(shop&&officeByKey(shop)){const o=officeByKey(shop),id=o.employer,c=careerOf(GameState.progress,id),owner=ownerOf(GameState.progress,id).name,onShift=GameState.progress.shift?.employer===id;
   add('office-owner',OFFICE_COUNTER,()=>entityPoint(o.room.clerk.group),'Talk to '+owner,()=>ownerMenu(o),2.2);
   if(c.hired)add('office-clock',OFFICE_CLOCK,()=>worldPoint({x:OFFICE_CLOCK.x,y:1.9,z:OFFICE_CLOCK.z}),onShift?'Time clock · clock out':'Time clock · clock in',()=>{const r=onShift?doClockOut():doClockIn(id);if(r.error)toast(r.error);else if(onShift)toast(r.message)},1.6);
+  {const w=coolerWait(GameState.progress,'office');add('office-cooler',OFFICE_COOLER,()=>worldPoint({x:OFFICE_COOLER.x,y:1.3,z:OFFICE_COOLER.z}),w?'Water cooler · ready in '+w+' min':'Water cooler · free water',()=>drinkCooler('office'),1.6)}
   add('office-store',OFFICE_STORE,()=>worldPoint({x:OFFICE_STORE.x,y:1.9,z:OFFICE_STORE.z}),'Company store',()=>companyStore(o),1.8);
   add('office-board',OFFICE_BOARD,()=>worldPoint({x:OFFICE_BOARD.x,y:2.2,z:OFFICE_BOARD.z}),'Notice board',()=>noticeBoard(o),1.7);exitDoorOffer(add);return all}
  if(shop){add('clerk',COUNTER,()=>entityPoint(shops[shop].clerk.group),shop==='market'?'Talk to Noah':'Talk to Elena',shop==='market'?marketMenu:managerMenu,1.6);exitDoorOffer(add);
@@ -661,6 +698,7 @@ function enterVehicle(id,seat='driver'){
  yaw=driving.yaw+Math.PI;pitch=driving.cameraPitch();zoom=zoomTarget=driving.cameraZoom();driveIdle=9;persist();
  toast(seat==='driver'?`Driving the ${driving.active.spec.name.replace(/^Eastbank /,'')} · W S accelerate and brake, A D steer, Space brakes, E gets out`:`Riding in the ${driving.active.spec.name.replace(/^Eastbank /,'')} · you are the passenger: nobody is driving · E gets out`);
 }
+function drinkCooler(key){const r=useCooler(GameState.progress,key);if(r.error){toast(r.error);return}GameState.progress=r.state;persist();toast(r.message);audio.drink(me.position,listenerAt())} // free water at work (water-cooler.js)
 function exitVehicle(){
  if(!driving.active)return;
  if(driving.speed>=1){toast('Stop first.');return}
@@ -722,7 +760,7 @@ window.addEventListener('keydown',e=>{
  if(cargoUI?.isOpen&&cargoUI.key(e.code)){e.preventDefault();return}
  if(sleepElapsed!==null){if(['Tab','Space'].includes(e.code))e.preventDefault();return}
  if(creatorOpen||e.target.matches('input,select,textarea,[contenteditable=true]'))return;
- if(e.code==='KeyY'&&active&&!inside&&!shop&&!e.ctrlKey&&!e.metaKey&&!e.altKey){e.preventDefault();if(!e.repeat)setFocus(nextFocus(GameState.progress,trackerItems(GameState.progress,me.position)));return}
+ if(e.code==='KeyY'&&active&&!inside&&(!shop||inWarehouse())&&!e.ctrlKey&&!e.metaKey&&!e.altKey){e.preventDefault();if(!e.repeat)setFocus(nextFocus(GameState.progress,trackerItems(GameState.progress,me.position,trackerRoom())));return}
  if((e.code==='KeyT'||e.code==='KeyJ')&&active&&!e.ctrlKey&&!e.metaKey&&!e.altKey){e.preventDefault();if(!e.repeat)toggleObjective();return}
  if(e.code==='KeyM'&&active&&!e.ctrlKey&&!e.metaKey&&!e.altKey){e.preventDefault();if(!e.repeat)minimap.toggle();return}
  if(consuming){if(e.code==='Escape'){pause(!modal);if(!modal)look.capture()}return}
@@ -838,10 +876,10 @@ const CLOSED_FOREST='Pine Ridge belongs to Ridgeline Timber. Clock in to work it
 function shiftOnSite(id){return onSiteAt(id,{x:me.position.x,z:me.position.z,room:currentRoom(),inCompanyVehicle:false})}
 function shiftEnded(r){const why=r.stub.reason==='end-of-day'?'The shift is over for the day.':r.stub.reason==='off-site'?'You left the site: clocked out.':'Clocked out.';toast(why+' Paid '+money(r.stub.total)+(r.repDelta?' · reputation '+(r.repDelta>0?'+':'')+r.repDelta:''))}
 let shiftClock=0;function tickShifts(dt){shiftClock+=dt;if(shiftClock<.5)return;shiftClock=0;for(const o of offices){const name=employerName(GameState.progress,o.employer);o.sign.setName(name);o.room.board.setName(name)}tickCompany();syncMarks();if(shop&&officeByKey(shop)?.kind==='warehouse')syncWarehouse();const p=GameState.progress;if(!p.shift)return;const r=tickShift(p,{onSite:shiftOnSite(p.shift.employer)});if(r.state!==p){GameState.progress=r.state;if(r.stub){persist();shiftEnded(r)}}phone?.showJobs()}
-let lastDue=null;function tickOrders(dt){orderClock+=dt;if(orderClock<.5)return;orderClock=0;{const h=GameState.progress.housing,due=h?totalDue(h):0;if(lastDue!==null&&due>lastDue)notifyPhone('Rent and bills are due: '+money(due)+'. Pay them on the phone (Bank).');lastDue=due} const had=driving.fleet.length,before=new Set(waitingHomes(GameState.progress)),next=deliverDue(GameState.progress);
- if(next!==GameState.progress){GameState.progress=next;driving.sync(next.vehicles||[]);persist();const fresh=waitingHomes(next).filter(h=>!before.has(h))[0];if(fresh)notifyPhone('Your order has arrived: collect it from the '+(fresh===STUDIO_ID?'parcel locker by the studio door.':'parcel box in front of the door.'))}
+let lastDue=null;function tickOrders(dt){orderClock+=dt;if(orderClock<.5)return;orderClock=0;{const h=GameState.progress.housing,due=h?totalDue(h):0;if(lastDue!==null&&due>lastDue)notifyPhone('bank','Rent and bills are due: '+money(due)+'. Pay them on the phone (Bank).');lastDue=due} const had=driving.fleet.length,before=new Set(waitingHomes(GameState.progress)),next=deliverDue(GameState.progress);
+ if(next!==GameState.progress){GameState.progress=next;driving.sync(next.vehicles||[]);persist();const fresh=waitingHomes(next).filter(h=>!before.has(h))[0];if(fresh)notifyPhone('store','Your order has arrived: collect it from the '+(fresh===STUDIO_ID?'parcel locker by the studio door.':'parcel box in front of the door.'))}
  // vehicles: owned ones come into the world (a delivery just made one), the lot's display vehicles show a colour that is in stock, and a bought vehicle takes its place on the lot
- {driving.sync(GameState.progress.vehicles||[]);if(driving.fleet.length>had){const v=driving.fleet[driving.fleet.length-1];notifyPhone('Your '+vehicleLabel(v.spec.model,v.colour)+' has been delivered: it is parked on your driveway.')}
+ {driving.sync(GameState.progress.vehicles||[]);if(driving.fleet.length>had){const v=driving.fleet[driving.fleet.length-1];notifyPhone('store','Your '+vehicleLabel(v.spec.model,v.colour)+' has been delivered: it is parked on your driveway.')}
   for(const f of driving.fleet)if(f.display){const standing=driving.fleet.some(o=>!o.display&&o.present&&Math.hypot(o.state.x-f.spec.home.x,o.state.z-f.spec.home.z)<8);driving.setDisplay(f.spec.id,standing?null:displayColour(GameState.progress,f.spec.model))}} parcels.update(GameState.progress)}
 function buyAtLot(id){const f=driving.byId.get(id);if(!f?.display||!f.colour)return;const r=buyVehicle(GameState.progress,f.spec.model,f.colour);if(r.error){toast(r.error);return}GameState.progress=r.state;driving.sync(r.state.vehicles);persist();toast(r.message)}
 function collectOrder(home){const r=takeDelivery(GameState.progress,home);if(r.error){toast(r.error);return}GameState.progress=r.state;persist();toast(r.message)}
@@ -1050,7 +1088,7 @@ storeUI=createStoreUI({document,getState:()=>GameState,
 });
 // Phone owns only its overlay; existing modal guards stop WASD and mouse look.
 cargoUI=createCargoUI({document,onOpen:()=>{clearWorldPanel();modal=true;keys.clear();look.release()},onClose:()=>{modal=false;keys.clear();look.resetMotion()}});
-phone=createPhone({document,getState:()=>GameState,isOnSite:id=>shiftOnSite(id),onClockIn:id=>doClockIn(id),onClockOut:()=>doClockOut(),onQuit:id=>{const r=quit(GameState.progress,id);if(r.error)return {error:r.error};GameState.progress=r.state;persist();return {message:'You quit '+employerName(GameState.progress,id)+'. Your rank is reset.'}},onCollect:id=>{const r=collectOwed(GameState.progress,id);if(r.error)return {error:r.error};GameState.progress=r.state;persist();return {message:'Collected '+r.handed.map(t=>itemById(t)?.name||t).join(', ')+'.'}},onOrder:(cart,home)=>{const r=placeOrder(GameState.progress,cart,home);if(r.error)return {error:r.error};GameState.progress=r.state;persist();return {message:r.message}},onOrderVehicle:(model,colour,home)=>{const r=orderVehicle(GameState.progress,model,colour,home);if(r.error)return {error:r.error};GameState.progress=r.state;persist();return {message:r.message}},onSetMain:id=>{const r=setMainHome(GameState.progress,id);if(r.error)return {error:r.error};GameState.progress=r.state;persist();return {message:r.message}},onHomeAction:(action,id)=>{const r=propertyTransaction(GameState.progress,action,id);if(r.error)return {error:r.error};GameState.progress=r.state;persist();return {message:r.message}},
+phone=createPhone({document,getState:()=>GameState,onRead:app=>{const next=markRead(GameState.progress,app);if(next!==GameState.progress){GameState.progress=next;persist()}},isOnSite:id=>shiftOnSite(id),onClockIn:id=>doClockIn(id),onClockOut:()=>doClockOut(),onQuit:id=>{const r=quit(GameState.progress,id);if(r.error)return {error:r.error};GameState.progress=r.state;persist();return {message:'You quit '+employerName(GameState.progress,id)+'. Your rank is reset.'}},onCollect:id=>{const r=collectOwed(GameState.progress,id);if(r.error)return {error:r.error};GameState.progress=r.state;persist();return {message:'Collected '+r.handed.map(t=>itemById(t)?.name||t).join(', ')+'.'}},onOrder:(cart,home)=>{const r=placeOrder(GameState.progress,cart,home);if(r.error)return {error:r.error};GameState.progress=r.state;persist();return {message:r.message}},onOrderVehicle:(model,colour,home)=>{const r=orderVehicle(GameState.progress,model,colour,home);if(r.error)return {error:r.error};GameState.progress=r.state;persist();return {message:r.message}},onSetMain:id=>{const r=setMainHome(GameState.progress,id);if(r.error)return {error:r.error};GameState.progress=r.state;persist();return {message:r.message}},onHomeAction:(action,id)=>{const r=propertyTransaction(GameState.progress,action,id);if(r.error)return {error:r.error};GameState.progress=r.state;persist();return {message:r.message}},
  canOpen:()=>active&&!modal&&!creatorOpen&&!actionBusy(),
  onOpen:()=>{clearWorldPanel();modal=true;keys.clear();look.release()},
  onClose:()=>{modal=false;keys.clear();look.resetMotion()},
@@ -1105,22 +1143,28 @@ function updateDoors(dt){
 // The task tracker (tracker.js, 0.35). The focused task takes over the card (title, progress, the arrow); the story objective and every other task are listed under it with a tick and a distance.
 // Y switches the focus; clicking a tick does too. The DOM is rebuilt only when the list changes and the distances are written four times a second.
 let storyAim=null,trackerKey='',trackerClock=1;const trackerDist=new Map();
+const inWarehouse=()=>!!shop&&officeByKey(shop)?.kind==='warehouse',trackerRoom=()=>inWarehouse()?{carryPlanks:GameState.progress.carry?.kind==='planks'}:null; // inside the warehouse the arrow points at places in the room (tracker.js warehouseTarget)
 function setFocus(id){GameState.progress={...GameState.progress,focus:id};persist();trackerKey=''}
 // Sections of the list, in this order; a row is {id,title,pos,done,group}. The row with the dot is the one on the card (its arrow points at it).
-const TRACKER_GROUPS=['Gigs','Jobs','Orders','Getting started'];
+const TRACKER_GROUPS=['Orders','Shift','Gigs','Getting started'];let prevJob=null,prevShift=false,trackerSeen=false;const prevSections=new Map(); // fixed order (DESIGN 4.19); prev* detect accepting a gig and clocking in
 function updateTracker(dt){
- const list=$('trackerList');if(!active||inside||shop){list.hidden=true;return}
- const p=GameState.progress,items=trackerItems(p,me.position),focus=focusedItem(p,items),card=$('objective');
- if(p.focus&&!focus){const gone=!items.some(i=>i.id===p.focus);setFocus(gone?null:(items.find(i=>!i.done)?.id||null))} // a finished (or vanished) focus moves on to the next open task
+ const list=$('trackerList');if(!active||inside||(shop&&!inWarehouse())){list.hidden=true;return}
+ const p=GameState.progress,items=trackerItems(p,me.position,trackerRoom()),focus=focusedItem(p,items),card=$('objective');
+ {const jobId=p.activeJob?.id||null,hasShift=!!p.shift,was=trackerSeen;let moved=false;trackerSeen=true;const seenJob=prevJob,seenShift=prevShift;prevJob=jobId;prevShift=hasShift;
+  if(was&&jobId&&jobId!==seenJob){if(p.focus){setFocus(null);moved=true}} // accepting a gig focuses it (the story is the gig)
+  else if(was&&hasShift&&!seenShift&&!jobId&&!p.focus){const first=items.find(i=>i.section==='Shift'&&!i.done);if(first){setFocus(first.id);moved=true}} // clocking in focuses the first unfinished shift task
+  if(moved){for(const i of items)prevSections.set(i.id,i.section);return}}
+ if(p.focus&&!focus){const gone=items.find(i=>i.id===p.focus);setFocus(focusAfter(items,gone?gone.section:prevSections.get(p.focus)))} // a finished (or vanished) focus moves to the next task in its section, then the next section, then the story
+ for(const i of items)prevSections.set(i.id,i.section);
  const story={id:'story',title:card.querySelector('h2').textContent,pos:storyAim,done:false,place:'',group:p.activeJob?'Gigs':'Getting started'};
  if(focus){card.querySelector('.eyebrow').textContent='FOCUS · '+focus.group.toUpperCase();card.querySelector('h2').textContent=focus.title;card.querySelector('p').textContent=focus.detail;$('gigChecklist').hidden=true;marker.visible=false;gigMarker.visible=false;
   const d=distanceTo(me.position,focus.pos);$('distance').textContent=d===null?(focus.place||'Nowhere to go yet'):d+' m · '+focus.place;$('direction').style.transform=focus.pos?`rotate(${Math.atan2(focus.pos.x-me.position.x,-(focus.pos.z-me.position.z))+yaw}rad)`:'none'}
  const rows=[story,...items],focusId=focus?focus.id:'story';list.hidden=items.length===0;
  const key=focusId+'#'+rows.map(r=>r.id+'|'+r.title+'|'+r.done+'|'+r.group).join(';');
  if(key!==trackerKey){trackerKey=key;list.replaceChildren();trackerDist.clear();
-  const groupOf=r=>r===story?story.group:r.group==='Orders'?'Orders':'Jobs';for(const name of TRACKER_GROUPS){const inGroup=rows.filter(r=>groupOf(r)===name);
+  const groupOf=r=>r===story?story.group:r.section;for(const name of TRACKER_GROUPS){const inGroup=rows.filter(r=>groupOf(r)===name);
    
-   if(!inGroup.length)continue;const h=document.createElement('h4');h.className='tracker-group';h.textContent=name==='Jobs'?'Jobs · '+(inGroup[0].group):name;list.append(h);
+   if(!inGroup.length)continue;const h=document.createElement('h4');h.className='tracker-group';h.textContent=name==='Shift'?'Shift · '+(inGroup[0].group):name;list.append(h);
    for(const r of inGroup){const row=document.createElement('button'),dot=document.createElement('span'),title=document.createElement('span'),dist=document.createElement('span');row.className='tracker-row'+(r.id===focusId?' focus':'')+(r.done?' done':'');row.disabled=r.done;
     row.setAttribute('aria-pressed',String(r.id===focusId));row.setAttribute('aria-label',(r.done?'Done: ':'Focus on: ')+r.title);row.onclick=()=>setFocus(r.id==='story'?null:r.id);
     dot.className='tracker-dot';dot.textContent=r.done?'☑':r.id===focusId?'◉':'○';title.className='tracker-title';title.textContent=r.title;dist.className='tracker-dist';row.append(dot,title,dist);list.append(row);trackerDist.set(r.id,dist)}}trackerClock=1}
@@ -1157,10 +1201,13 @@ function updateObjective(dt){
  $('direction').style.transform=aim?`rotate(${Math.atan2(aim.x-me.position.x,-(aim.z-me.position.z))+yaw}rad)`:'none';
 }
 // The needs bars (bottom right): food, thirst and energy as 0-100 bars that turn orange when low and red, with a pulsing icon, when critical.
+const needWarned=new Set(),NEED_WORDS={food:'hungry',thirst:'thirsty',energy:'tired'};
 function renderVitals(life){
+ const fx=needsEffects(life);document.body.classList.toggle('thirst-dry',fx.dry); // the screen edges dim at 0 thirst
+ for(const k of ['food','thirst','energy']){if(fx.warn.includes(k)){if(!needWarned.has(k)){needWarned.add(k);if(active)notifyPhone('player','You’re getting '+NEED_WORDS[k]+'.')}}else if(life[k]>30)needWarned.delete(k)}
  for(const [key,id] of [['food','vitalFood'],['thirst','vitalThirst'],['energy','vitalEnergy']]){
   const value=Math.max(0,Math.min(100,Math.round(life[key]))),row=$(id);
-  row.dataset.level=value<=15?'critical':value<=30?'low':'ok';
+  row.dataset.level=value<=10?'critical':value<=25?'low':'ok';
   if(row.dataset.value===String(value))continue;
   row.dataset.value=String(value);$(id+'Fill').style.width=value+'%';$(id+'Value').textContent=String(value);
  }
@@ -1188,6 +1235,31 @@ function updateGig(dt){
  $('objective').querySelector('h2').textContent=job.title;
  $('objective').querySelector('p').textContent=finished?'Return to the gold marker and press E to collect your pay.':job.stage==='travel'?job.description:job.mode==='timed'?'Stay still at the marked station. Moving or leaving resets this task’s timer.':job.mode==='courier'?'Run with Shift toward the delivery marker. Only distance actually run counts.':'Carry the box to the gold delivery marker. Movement uses twice the energy.';
  $('distance').textContent=target.room!==room?(target.room==='cafe'?'Enter Alder Coffee':'Go outside to continue'):Math.round(Math.hypot(me.position.x-target.x,me.position.z-target.z))+' m · '+(finished?'Return for payment':'Gig location');
+}
+// Passing out (DESIGN 4.18): black fade, then (at black) the vehicle or forklift stops, a carried log or planks are put down, and you are moved to your main home's bed
+// (or beside the starter apartment's door with no home); two game hours pass and you wake with energy 25. Online the clock cannot jump: a 60 s black screen with a countdown.
+let passT=null,passMoved=false;
+function startPassOut(){passT=0;passMoved=false;phone?.close();$('dialog').hidden=true;clearWorldPanel();modal=true;keys.clear();look.release();const fe=$('sleepFade');fe.hidden=false;fe.style.opacity='0';fe.textContent='You passed out from exhaustion'}
+function passOutMove(){
+ if(fork.on)getOffFork();
+ if(driving.active){driving.active.state.speed=0;exitVehicle()}
+ busy=null;putting=null;
+ {const cur=GameState.progress;if(cur.carry&&!inside&&!shop){const log=cur.carry.kind==='log',x=me.position.x,z=me.position.z,r=log?putDownLog(cur,{x,z,rot:me.rotation.y+Math.PI/2}):putDownPlanks(cur,{x,z,q:quarterOf(me.rotation.y)});if(!r.error){GameState.progress=r.state;if(log)world.setLogs(GameState.progress.logs)}}}
+ if(shop)leaveShop(0);
+ doorCooldown=2;const id=mainHome(GameState.progress),target=id===null?null:id===STUDIO_ID?studioHome:houseHome(id);
+ if(target){enterHome(target);const fl=home.BED_FLOOR||0;home.room.setFloor?.(fl);setMePosition(home.BED.x,fl*(home.room.FLOOR_HEIGHT||0)+.02,home.BED.z)}
+ else{if(inside)leaveHome();placeSafely(STUDIO.x,.165,STUDIO.z)}
+ const r=passOutThrough(GameState.progress,{online:multiplayer.online,drainMultiplier:GameState.progress.settings?.statDrainMultiplier});GameState.progress=expireCafe(r.state);
+ notifyPhone('player',target?'You passed out from exhaustion and woke up in your bed.'+(r.minutes?' Two hours passed.':''):'You passed out from exhaustion and woke up by the apartment door.'+(r.minutes?' Two hours passed.':''));
+ keys.clear();look.resetMotion();persist();
+}
+function updatePassOut(dt){
+ if(passT===null||document.hidden)return;passT+=dt;
+ const fadeIn=.6,hold=multiplayer.online?PASS_OUT_ONLINE_SECONDS:1.4,end=fadeIn+hold,fe=$('sleepFade');
+ if(passT>=fadeIn&&!passMoved){passMoved=true;passOutMove()}
+ fe.style.opacity=String(passT<fadeIn?passT/fadeIn:passT<end?1:Math.max(0,1-(passT-end)/.5));
+ if(multiplayer.online&&passT>=fadeIn&&passT<end)fe.textContent='You passed out from exhaustion · '+Math.ceil(end-passT)+' s';
+ if(passT>=end+.5){passT=null;fe.hidden=true;fe.textContent='';modal=false;keys.clear();look.resetMotion();persist()}
 }
 function startSleep(){
  if(!canAct('sleep')||!inside||shop||(home.kind==='studio'&&!GameState.progress.housing.rented)||(home.room.floor||0)!==(home.BED_FLOOR||0)||Math.hypot(me.position.x-home.BED.x,me.position.z-home.BED.z)>=1.4)return;
@@ -1277,6 +1349,8 @@ function updateMultiplayer(now,moving,dt){
 let prev=performance.now(),frames=0,elapsed=0,menuDrawn=false,stuckTime=0;
 // One slice of simulated time (see timestep.js). Everything that has to advance with real time runs here, once per slice.
 // Returns whether a movement key was pressed during the slice.
+// Carrying and the needs (DESIGN 4.18) together decide how fast you walk and whether Shift runs.
+function moveFx(){const fx=carryEffects(GameState.progress.carry),n=needsEffects(GameState.progress.life);return {...fx,speed:fx.speed*n.speed,sprint:fx.sprint&&n.canRun}}
 function stepWorld(step){
  let startX=me.position.x,startZ=me.position.z;
  let pressed=false;
@@ -1284,11 +1358,11 @@ function stepWorld(step){
   if(active&&!modal&&!document.hidden){driving.step(step,{throttle:Number(keys.has('KeyW')||keys.has('ArrowUp'))-Number(keys.has('KeyS')||keys.has('ArrowDown')),steer:Number(keys.has('KeyA')||keys.has('ArrowLeft'))-Number(keys.has('KeyD')||keys.has('ArrowRight')),brake:keys.has('Space')},pedestrians.people.map(p=>({x:p.group.position.x,z:p.group.position.z,r:.45})));
    const seat=driving.seat();me.position.x=seat.x;me.position.z=seat.z;me.rotation.y=driving.yaw;startX=seat.x;startZ=seat.z; // riding is not walking: no walked distance, no stuck check
    driveSave+=step;if(driveSave>=5){driveSave=0;persist()}}
- }else if(active&&!modal&&!actionBusy()&&!putting){let f=Number(keys.has('KeyW')||keys.has('ArrowUp'))-Number(keys.has('KeyS')||keys.has('ArrowDown')),s=Number(keys.has('KeyD')||keys.has('ArrowRight'))-Number(keys.has('KeyA')||keys.has('ArrowLeft'));let len=Math.hypot(f,s);if(len){f/=len;s/=len;const fx=carryEffects(GameState.progress.carry),speed=(fx.sprint&&(keys.has('ShiftLeft')||keys.has('ShiftRight'))?8.2:4.5)*fx.speed,dx=(-Math.sin(yaw)*f+Math.cos(yaw)*s)*speed*step,dz=(-Math.cos(yaw)*f-Math.sin(yaw)*s)*speed*step;if(!blocked(me.position.x+dx,me.position.z))me.position.x+=dx;if(!blocked(me.position.x,me.position.z+dz))me.position.z+=dz;const angle=Math.atan2(dx,dz);me.rotation.y+=Math.atan2(Math.sin(angle-me.rotation.y),Math.cos(angle-me.rotation.y))*(1-Math.exp(-step*24));phase+=step*speed*2.0;pressed=true}}
- const movedStep=Math.hypot(me.position.x-startX,me.position.z-startZ),moving=pressed&&movedStep>.000001,running=moving&&carryEffects(GameState.progress.carry).sprint&&(keys.has('ShiftLeft')||keys.has('ShiftRight'));
+ }else if(active&&!modal&&!actionBusy()&&!putting){let f=Number(keys.has('KeyW')||keys.has('ArrowUp'))-Number(keys.has('KeyS')||keys.has('ArrowDown')),s=Number(keys.has('KeyD')||keys.has('ArrowRight'))-Number(keys.has('KeyA')||keys.has('ArrowLeft'));let len=Math.hypot(f,s);if(len){f/=len;s/=len;const fx=moveFx(),speed=(fx.sprint&&(keys.has('ShiftLeft')||keys.has('ShiftRight'))?8.2:4.5)*fx.speed,dx=(-Math.sin(yaw)*f+Math.cos(yaw)*s)*speed*step,dz=(-Math.cos(yaw)*f-Math.sin(yaw)*s)*speed*step;if(!blocked(me.position.x+dx,me.position.z))me.position.x+=dx;if(!blocked(me.position.x,me.position.z+dz))me.position.z+=dz;const angle=Math.atan2(dx,dz);me.rotation.y+=Math.atan2(Math.sin(angle-me.rotation.y),Math.cos(angle-me.rotation.y))*(1-Math.exp(-step*24));phase+=step*speed*2.0;pressed=true}}
+ const movedStep=Math.hypot(me.position.x-startX,me.position.z-startZ),moving=pressed&&movedStep>.000001,running=moving&&moveFx().sprint&&(keys.has('ShiftLeft')||keys.has('ShiftRight'));
  if(active&&!modal&&!document.hidden){GameState.progress=expireCafe(advanceTime(GameState.progress,step*.5));const oldStage=GameState.progress.activeJob?.stage;
 const load=Math.max(GameState.progress.activeJob?.id==='heavy-delivery'&&oldStage==='task'?2:1,carryEffects(GameState.progress.carry).load);
-tickLife(step,moving,running,load);
+tickLife(step,moving,running,load);if(passT===null&&sleepElapsed===null&&needsEffects(GameState.progress.life).passOut)startPassOut();
 GameState.progress=tickContract(GameState.progress,{position:me.position,room:currentRoom(),dt:step,moving,paused:!!consuming,running,distance:movedStep});
 if(oldStage!==GameState.progress.activeJob?.stage)persist();if(!inside&&!shop)pedestrians.update(step,me.position);regrowClock+=step;if(regrowClock>=5){regrowClock=0;tickRegrowth()}if(inside||shop){saveElapsed+=step;if(saveElapsed>=4){saveElapsed=0;persist()}}}
  if(active&&!modal&&!document.hidden)updateCafeVisuals(step);updateConsumption(step);updateDoors(step);updateChop(step);updatePutting(step);fuelTick(step);
@@ -1309,9 +1383,9 @@ function frame(now){
  const movedDistance=Math.hypot(me.position.x-frameX,me.position.z-frameZ),moving=pressed&&movedDistance>.000001;
  // Safety net: holding a move key for a second without moving, while standing inside something solid, moves you to the nearest clear spot. The search only runs then.
  if(pressed&&!moving){stuckTime+=real;if(stuckTime>1){stuckTime=0;if(blocked(me.position.x,me.position.z))unstick()}}else stuckTime=0;
- const running=moving&&carryEffects(GameState.progress.carry).sprint&&(keys.has('ShiftLeft')||keys.has('ShiftRight'));
+ const running=moving&&moveFx().sprint&&(keys.has('ShiftLeft')||keys.has('ShiftRight'));
 const poseBlend=1-Math.exp(-view*18);
-avatar.setMotion(moving&&!fork.on?(running?8.2:4.5)*carryEffects(GameState.progress.carry).speed:0);
+avatar.setMotion(moving&&!fork.on?(running?8.2:4.5)*moveFx().speed:0);
 // Match foot height to the road, pavement, or grass rather than hovering.
 const px=me.position.x,pz=me.position.z;
  const deck=world.floorAt(px,pz);
@@ -1322,13 +1396,13 @@ look.tick(view);
 if(worldPanel?.actor&&!$('dialog').hidden){const actor=worldPanel.actor,pa=getMeWorldPosition(new THREE.Vector3()),pb=actor.getWorldPosition(new THREE.Vector3()),mid=pa.clone().add(pb).multiplyScalar(.5);const angle=Math.atan2(pa.x-pb.x,pa.z-pb.z);actor.rotation.y=angle;me.rotation.y=angle+Math.PI;worldPlayer.position.copy(mid);if(shop)shops[shop].camera(worldPlayer,angle+.45,.32,5.8,view);else updateCamera(worldPlayer,angle+.45,.32,5.8,view)}else if(shop){getMeWorldPosition(worldPlayer.position);shops[shop].camera(worldPlayer,yaw,pitch,zoom,view);}else if(inside)(home.camera||indoorCamera)(me,yaw,pitch,zoom,view);else updateCamera(me,yaw,pitch,zoom,view);
 const daylight=Math.max(.12,Math.sin((GameState.progress.routine.minutes-360)/1440*Math.PI*2));sun.intensity=.2+daylight*2.9;scene.background.setRGB(.08+daylight*.65,.12+daylight*.67,.2+daylight*.62);scene.fog.color.copy(scene.background);
 
-updateEquipped(modal?0:view);updateCarryPose(view);updateNozzlePose(view);updateForkPose();if(forkGuide)forkGuideTick(fork.on?forkCtx():null,view);avatar.update(modal?0:view);if(shop)shops[shop].clerk.update(modal?0:view);updatePalletTags();updateZones(view);updateSleep(real);updateWork(view);updateGig(view);updateObjective(view);updateWorldUI();updateTracker(real);updateHomeNotices();tickOrders(real);tickShifts(real);updateRing();updateMultiplayer(now,moving,view);syncPlayerMesh();fuelHose();{const dv=driving.active,on=!!dv&&(dv.fuelMgal>0||!dv.spec.fuel)&&!modal;{const tip=dv&&on?driving.exhaust(dv):null;if(tip)smoke.emit(dv.spec.id,view,tip,exhaustRate({running:true,throttle:driving.driving&&(keys.has('KeyW')||keys.has('ArrowUp'))?1:0,speed:dv.state.speed,top:dv.cls.top,tier:dv.cls.tier}));smoke.update(view,!inside)}audio.engine(engineVoice({speed:dv?dv.state.speed:0,top:dv?dv.cls.top:10,throttle:dv&&driving.driving&&(keys.has('KeyW')||keys.has('ArrowUp'))?1:0,tier:dv?dv.cls.tier:'low',running:on}))}audio.fuel({listener:listenerAt(),at:fuel.held?fuel.held.use:canAt,level:fuelFlow,fullness:fuelFull});fuelFlow=0;canAt=null;renderer.render(inside?home.room.scene:scene,camera)}requestAnimationFrame(frame);
+updateEquipped(modal?0:view);updateCarryPose(view);updateNozzlePose(view);updateForkPose();if(forkGuide)forkGuideTick(fork.on?forkCtx():null,view);avatar.update(modal?0:view);if(shop)shops[shop].clerk.update(modal?0:view);updatePalletTags();updateZones(view);updatePassOut(real);updateSleep(real);updateWork(view);updateGig(view);updateObjective(view);updateWorldUI();updateTracker(real);updateHomeNotices();tickOrders(real);tickShifts(real);updateRing();updateMultiplayer(now,moving,view);syncPlayerMesh();fuelHose();{const dv=driving.active,on=!!dv&&(dv.fuelMgal>0||!dv.spec.fuel)&&!modal;{const tip=dv&&on?driving.exhaust(dv):null;if(tip)smoke.emit(dv.spec.id,view,tip,exhaustRate({running:true,throttle:driving.driving&&(keys.has('KeyW')||keys.has('ArrowUp'))?1:0,speed:dv.state.speed,top:dv.cls.top,tier:dv.cls.tier}));smoke.update(view,!inside)}audio.engine(engineVoice({speed:dv?dv.state.speed:0,top:dv?dv.cls.top:10,throttle:dv&&driving.driving&&(keys.has('KeyW')||keys.has('ArrowUp'))?1:0,tier:dv?dv.cls.tier:'low',running:on}))}audio.fuel({listener:listenerAt(),at:fuel.held?fuel.held.use:canAt,level:fuelFlow,fullness:fuelFull});fuelFlow=0;canAt=null;renderer.render(inside?home.room.scene:scene,camera)}requestAnimationFrame(frame);
 
 // Development hook: open the game with ?debug to inspect state from the console (window.__city).
 if(typeof location!=='undefined'&&new URLSearchParams(location.search).has('debug'))window.__city={GameState,world,scene,camera,avatar,driving,pedestrians,audio,sawmillCtl,enterOffice:key=>{const o=officeByKey(key);if(o)enterOffice(o);return !!o},holdBend:a=>{bendNow=a;avatar.setLean(a*.87);avatar.setCrouch(a*.22)},
  teleport(x,z){if(inside||shop)return false;setMePosition(x,me.position.y,z);return true},
  view(newYaw,newPitch,newZoom){yaw=newYaw??yaw;pitch=newPitch??pitch;zoom=zoomTarget=newZoom??zoom},
- give(id){return commitInventory(addItem(GameState.progress,id))},equip:id=>toggleEquip(id,{silent:true}),hotbarUse,eHold(on){eHeld=on},place(x,z){setMePosition(x,me.position.y,z)},get shop(){return shop},get beacon(){return {visible:marker.visible,x:+marker.position.x.toFixed(2),y:+marker.position.y.toFixed(2),z:+marker.position.z.toFixed(2),diamondY:+diamond.position.y.toFixed(2)}},doors(){return {modal,active,busy:!!busy,fade:!!doorFade,cooldown:+doorCooldown.toFixed(2),fronts:shopDoors.map(f=>({kind:f.kind,amount:+f.door.amount.toFixed(2),open:shopOpen(f.kind,GameState.progress.routine),blocked:colliders.includes(f.blocker),dx:+(me.position.x-f.x).toFixed(2),z:+me.position.z.toFixed(2)}))}},get pos(){return {x:+me.position.x.toFixed(2),z:+me.position.z.toFixed(2),ry:+me.rotation.y.toFixed(2)}},get doorCooldown(){return +doorCooldown.toFixed(2)},get inside(){return inside},get hidden(){return $('objectiveDetails').hidden},get fork(){return fork},tagsShown(){const o=shop&&officeByKey(shop);return o?.room?.tags?.shown||[]},tickRegrowth,
+ give(id){return commitInventory(addItem(GameState.progress,id))},equip:id=>toggleEquip(id,{silent:true}),hotbarUse,eHold(on){eHeld=on},place(x,z){setMePosition(x,me.position.y,z)},get shop(){return shop},get beacon(){return {visible:marker.visible,x:+marker.position.x.toFixed(2),y:+marker.position.y.toFixed(2),z:+marker.position.z.toFixed(2),diamondY:+diamond.position.y.toFixed(2)}},doors(){return {modal,active,busy:!!busy,fade:!!doorFade,cooldown:+doorCooldown.toFixed(2),fronts:shopDoors.map(f=>({kind:f.kind,amount:+f.door.amount.toFixed(2),open:shopOpen(f.kind,GameState.progress.routine),blocked:colliders.includes(f.blocker),dx:+(me.position.x-f.x).toFixed(2),z:+me.position.z.toFixed(2)}))}},get pos(){return {x:+me.position.x.toFixed(2),z:+me.position.z.toFixed(2),ry:+me.rotation.y.toFixed(2)}},get doorCooldown(){return +doorCooldown.toFixed(2)},get inside(){return inside},get hidden(){return $('objectiveDetails').hidden},get fork(){return fork},notify:notifyPhone,toastState:()=>({showing:toastShowing,waiting:[...toastQueue],text:$('jobToast').textContent}),tagsShown(){const o=shop&&officeByKey(shop);return o?.room?.tags?.shown||[]},tickRegrowth,
  use(index){return beginConsumption(index)},chop:startChop,get acting(){return !!(chopping||consuming||armRecovery)},fps:()=>$("fps").textContent};
 
 // Update notice (update-check.js): asks the site for version.json a few seconds after loading and every 10 minutes; a newer version shows the banner, and Reload saves first (only once you are in the game, not on the menu).

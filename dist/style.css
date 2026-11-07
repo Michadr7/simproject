@@ -355,3 +355,23 @@ body:has(#welcome:not([hidden])) #phoneButton,body:has(#credits:not([hidden])) #
 .hotbar-slot .has-picture{width:1.35em;height:1.35em}
 .store-item-icon.has-picture{width:2.4em;height:2.4em}
 .has-icon::before{content:"";display:inline-block;width:1.5em;height:1.5em;margin-right:.35em;vertical-align:-.4em;background:var(--icon) center/contain no-repeat}
+/* order table cards: the lines of a card stay on separate lines */
+#dialog.in-world p{white-space:pre-line}
+
+/* the phone's Messages and the unread count on each app icon (DESIGN 4.19) */
+.phone-app{position:relative}
+.phone-badge{position:absolute;top:-6px;left:calc(50% + 14px);min-width:20px;height:20px;padding:0 5px;border-radius:10px;background:#e0442f;color:#fff;font-size:11px;font-weight:700;line-height:20px;text-align:center;box-shadow:0 0 0 2px #181612;z-index:2}
+.phone-badge[hidden]{display:none}
+#phoneMessages{display:flex;flex-direction:column;gap:8px;margin-top:12px}
+.phone-message{display:block;width:100%;text-align:left;border:1px solid #ffffff22;border-left:3px solid #ffffff44;border-radius:10px;background:#ffffff0c;color:#ebeae6;padding:9px 11px;font-size:12px;line-height:1.4}
+.phone-message[data-unread=true]{border-left-color:var(--honey,#f5c518);background:#f5c51816}
+.phone-message small{display:flex;justify-content:space-between;gap:8px;color:#a9a79f;font-size:10px;letter-spacing:.4px;text-transform:uppercase;margin-bottom:3px}
+.phone-message[data-unread=true] small b{color:var(--honey,#f5c518)}
+.phone-empty{color:#a9a79f;font-size:12px;margin:14px 2px}
+/* seven apps now (Messages is the first): three to a row so every icon fits without scrolling */
+.phone-app-grid{grid-template-columns:repeat(3,1fr);gap:14px 6px;margin-top:20px}
+.phone-app-grid .phone-app-icon{width:62px;height:70px}
+/* Needs (DESIGN 4.18): at 0 thirst the edges of the screen dim. */
+body::after{content:'';position:fixed;inset:0;pointer-events:none;z-index:5;opacity:0;transition:opacity 1.2s;box-shadow:inset 0 0 160px 60px #000c}
+body.thirst-dry::after{opacity:1}
+#sleepFade{display:grid;place-items:center;color:#e6e5e0;font:600 20px/1.4 Arial,sans-serif;letter-spacing:.5px;text-align:center}#sleepFade[hidden]{display:none}

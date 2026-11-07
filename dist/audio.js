@@ -113,7 +113,17 @@ export function createAudio({AudioContextClass,storage,random=Math.random}){
    last.onended=()=>{clicks--};
    return true;
   },
-  // The lever: a short click (a tick of noise and a falling blip). `at`: {x,z}. False if it was too far, muted or there are already three clicks playing.
+  // Drinking from the cooler: a short pour of filtered noise, then three gulps (sine blips that fall in pitch), about 1.3 s. False if muted, too far or too many sounds are playing.
+  drink(at,listener){
+   if(!ctx||settings.muted||clicks>=MAX_CLICKS)return false;
+   const a=attenuate(distance(listener,at));if(a<.02)return false;
+   const t=ctx.currentTime,src=ctx.createBufferSource();src.buffer=v.buffer;const band=filtered('bandpass',1800,1.4),env=gain(0);
+   env.gain.setValueAtTime(0,t);env.gain.linearRampToValueAtTime(.16*a,t+.05);env.gain.setValueAtTime(.16*a,t+.4);env.gain.setTargetAtTime(.0001,t+.45,.06);band.frequency.setValueAtTime(1500,t);band.frequency.linearRampToValueAtTime(2600,t+.5);
+   src.connect(band);band.connect(env);env.connect(master);clicks++;src.start(t,random()*1.5);src.stop(t+.7);
+   let last=src;[.55,.8,1.05].forEach((d,i)=>{const o=ctx.createOscillator(),g=gain(0),s=t+d;o.type='sine';o.frequency.setValueAtTime(260-i*20,s);o.frequency.setTargetAtTime(110,s,.05);g.gain.setValueAtTime(0,s);g.gain.linearRampToValueAtTime(.22*a,s+.02);g.gain.setTargetAtTime(.0001,s+.06,.05);o.connect(g);g.connect(master);o.start(s);o.stop(s+.3);last=o});
+   last.onended=()=>{clicks--};
+   return true;
+  },  // The lever: a short click (a tick of noise and a falling blip). `at`: {x,z}. False if it was too far, muted or there are already three clicks playing.
   click(at,listener){
    if(!ctx||settings.muted||clicks>=MAX_CLICKS)return false;
    const a=attenuate(distance(listener,at));if(a<.02)return false;

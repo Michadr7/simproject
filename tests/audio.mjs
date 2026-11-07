@@ -58,6 +58,8 @@ update(here,{level:0,sawing:false},{level:1});assert(gains()[3].gain.target>0&&g
  const before=ctx.nodes.length;assert.equal(audio.chime(pump,here),true,'the full chime plays near');assert(ctx.nodes.length>before);assert.equal(audio.chime(pump,far),false,'too far to hear');
  const oscs=ctx.nodes.filter(n=>n.kind==='osc').slice(-2);assert.deepEqual(oscs.map(o=>o.frequency.value),[880,1320],'two rising notes');
  oscs.at(-1).onended();assert.equal(audio.chime(pump,here,{ok:false}),true);const bad=ctx.nodes.filter(n=>n.kind==='osc').slice(-2);assert.deepEqual(bad.map(o=>o.frequency.value),[330,247],'two falling low notes when you cannot pay');bad.at(-1).onended()}
+// Drinking from the cooler: a pour and three falling gulps, near only, counted with the clicks.
+{const o0=ctx.nodes.filter(n=>n.kind==='osc').length;assert.equal(audio.drink(at,far),false,'too far to hear');assert.equal(audio.drink(at,here),true);const gulps=ctx.nodes.filter(n=>n.kind==='osc').slice(o0);assert.equal(gulps.length,3,'three gulps');gulps.at(-1).onended();}
 // The lever click: one-shot, near only, at most three at once, never while muted.
 const nodesBefore=ctx.nodes.length;assert.equal(audio.click(at,here),true);assert(ctx.nodes.length>nodesBefore);const srcs=ctx.nodes.filter(n=>n.kind==='src'&&n.onended);assert.equal(srcs.length,1);
 assert.equal(audio.click(at,far),false,'too far to hear');assert.equal(audio.click(at,here),true);assert.equal(audio.click(at,here),true);assert.equal(audio.click(at,here),false,'three at once is the limit');assert.equal(MAX_CLICKS,3);

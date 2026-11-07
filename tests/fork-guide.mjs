@@ -19,7 +19,7 @@ const order=(id,planks,staged=0,status='taken',kind='pickup')=>({id,kind,planks,
 // where to take it, and what to do next
 {const pallets=[rackPallet('B4-1',24,3),floorPallet(2,5,0,12,4)],boxes=boxesOf(pallets);
  let g=forkGoal({carried:0,boxes,staging:[order(7,12),null,null],pos:{x:-1,z:-8}});assert.match(g.text,/Order #7 needs 12 planks: lift the marked pallet \(rack B4-1, 24 planks\) and take it to square S1/,g.text);
- assert.deepEqual([g.target.kind,g.target.x,g.target.z],['pallet',bayX(4),FACE_ROWS.B.z],'the marker is over the nearest pallet');assert(Math.abs(g.target.y-(PALLET.h+6*.092))<1e-9,'at the top of the 24 planks');
+ assert.deepEqual([g.target.kind,g.target.x,g.target.z],['pallet',bayX(4),FACE_ROWS.B.z],'the marker is over the nearest pallet');assert.deepEqual([g.target.outline.x,g.target.outline.z,g.target.outline.y,g.target.outline.w,g.target.outline.d],[bayX(4),FACE_ROWS.B.z,0,PALLET.w,PALLET.d],'and the pallet itself gets a glow outline');assert(Math.abs(g.target.outline.h-(PALLET.h+6*.092))<1e-9);assert(Math.abs(g.target.y-(PALLET.h+6*.092))<1e-9,'at the top of the 24 planks');
  g=forkGoal({carried:0,boxes,staging:[order(7,12),null,null],pos:{x:2,z:6}});assert.match(g.text,/on the floor, 12 planks/,'the nearer one when the forklift is by the floor pallet');
  g=forkGoal({carried:40,boxes:[],staging:[null,order(9,24,10),null],pos:{x:0,z:0}});assert.match(g.text,/Order #9 needs 14 more planks: take this pallet to square S2/);assert.deepEqual([g.target.kind,g.target.x,g.target.z],['staging',WAREHOUSE_STAGING[1].x,WAREHOUSE_STAGING[1].z]);
  g=forkGoal({carried:40,boxes:[],staging:[null,null,null]});assert.match(g.text,/No order needs planks/);assert.equal(g.target,null);
@@ -31,8 +31,8 @@ const order=(id,planks,staged=0,status='taken',kind='pickup')=>({id,kind,planks,
 {const row=FACE_ROWS.B.z,x=bayX(4),carry=(cz,lift,o={})=>({x,z:cz-CARRY_Z,yaw:0,speed:0,lift,steer:0,roll:0,...o}),c=ctxFor([],40);
  let gh=forkGhost(carry(row,.09),c);assert.deepEqual([gh.ok,gh.x,gh.z,gh.y],[true,x,row,0],'on the cell it will rest in');assert(Math.abs(gh.h-(PALLET.h+10*.092))<1e-9);
  gh=forkGhost(carry(row,.09,{yaw:.5}),c);assert.equal(gh.ok,false,'crooked: amber');
- gh=forkGhost({x:0,z:2,yaw:.7,speed:0,lift:.5,steer:0,roll:0},ctxFor([],12));assert.equal(gh.ok,true);assert.equal(gh.yaw,.7,'on the floor, turned the way the forklift faces');
- const sq=WAREHOUSE_STAGING[1];gh=forkGhost({x:sq.x,z:sq.z-CARRY_Z,yaw:0,speed:0,lift:.4,steer:0,roll:0},ctxFor([],12,{stagingTaken:i=>i===1}));assert.deepEqual([gh.ok,gh.x,gh.y],[true,sq.x,.14],'on the order square');
+ gh=forkGhost({x:0,z:2,yaw:.7,speed:0,lift:.5,steer:0,roll:0},ctxFor([],12));assert.equal(gh.ok,true);assert.equal(gh.yaw,.7,'on the floor, turned the way the forklift faces');assert(gh.h<.1,'over the floor it is a flat footprint, not a box round the pallet you hold: '+gh.h);
+ const sq=WAREHOUSE_STAGING[1];gh=forkGhost({x:sq.x,z:sq.z-CARRY_Z,yaw:0,speed:0,lift:.4,steer:0,roll:0},ctxFor([],12,{stagingTaken:i=>i===1}));assert.deepEqual([gh.ok,gh.x,gh.y],[true,sq.x,0],'on the order square');assert(gh.h<.1,'a flat footprint too');
  gh=forkGhost({x:sq.x,z:sq.z-CARRY_Z,yaw:0,speed:0,lift:.4,steer:0,roll:0},ctxFor([],12));assert.equal(gh.ok,false,'a square with no order: amber');
  // forks empty: the pallet they are lined up with
  const pal=[floorPallet(0,0)],facing=(depth,lift,o={})=>({x:0,z:-PALLET.d/2+depth-F.TIP,yaw:0,speed:0,lift,steer:0,roll:0,...o});

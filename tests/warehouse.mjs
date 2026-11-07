@@ -52,6 +52,13 @@ assert(/Too high/.test(stackPlanks({...racked({}),carry:{kind:'planks',count:4}}
 assert.deepEqual(boardAt(0),{x:-.36,y:.044},'the first board');assert(boardAt(39).y>boardAt(0).y+.8,'forty boards stand about a metre high');
 // the tracker points at the warehouse for the stack task
 {const t=trackerItems({...racked({})},{x:0,z:0}).find(i=>i.id==='task:stack');assert.deepEqual(t.pos,{x:W.door.out.x,z:W.door.out.z});assert.equal(t.place,'Warehouse')}
+// inside the warehouse (B3) the arrow points at places in the room, in its own coordinates
+{const inRoom=(p,room,from={x:0,z:5})=>trackerItems(p,from,room).find(i=>i.id==='task:stack');
+ const empty=inRoom({...racked({})},{carryPlanks:false});assert.deepEqual([empty.pos,empty.place],[{x:WAREHOUSE_TABLE.x,z:WAREHOUSE_TABLE.z},'Order table'],'nothing in the racks: the order table');
+ const stocked=racked({'B4-1':12,'E2-1':30,'A1-2':40}),take=inRoom(stocked,{carryPlanks:false});assert.equal(take.place,'Rack E2-1','empty-handed: the nearest hand-level rack that holds planks (upper shelves are for the forklift)');
+ assert.deepEqual(take.pos,slotById('E2-1').stand);
+ const put=inRoom(racked({'E2-1':40,'B4-1':12}),{carryPlanks:true},{x:0,z:3.9});assert(put.place.startsWith('Rack ')&&put.place!=='Rack E2-1','a full rack is skipped: '+put.place);
+ const outdoors=trackerItems({...racked({}),shift:{...racked({}).shift,tasks:[{kind:'fell',piece:'trees',target:3,done:0}]}},{x:0,z:0},{carryPlanks:false})[0];assert.deepEqual([outdoors.pos,outdoors.place],[{x:0,z:11.4},'Front door'],'an outdoor task points at the front door')}
 
 // in the packaged game -------------------------------------------------------------------------------------------------------
 const g=await bootGame({position:{x:W.door.out.x,z:W.door.out.z}});

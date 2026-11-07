@@ -37,3 +37,11 @@ export function normalizeSupply(value){
  const ok=x=>Number.isSafeInteger(x)&&x>0&&x<=1e9;
  return ok(value.at)&&ok(value.planks)?{at:value.at,planks:Math.min(1000,value.planks)}:null;
 }
+
+// Planks that came back (an order failed or ran out of time: its staged planks, or the planks taken back off the truck) go to open rack space as pallets, the same way a delivery from the crew does;
+// if the racks are full what is left goes into the lumberyard's stock, so nothing is lost. Returns {company, placed (planks on pallets), toStock (planks sent to the lumberyard), cells}.
+export function returnPlanks(company,planks){
+ const co=company||{},n=Math.max(0,Math.floor(planks)),put=crewPutAway(co,n),left=put.left||0;
+ const next=left>0?{...put.company,stock:{logs:put.company.stock?.logs||0,planks:(put.company.stock?.planks||0)+left}}:put.company;
+ return {company:n?next:company,placed:put.placed,toStock:left,cells:put.cells};
+}

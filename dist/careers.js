@@ -6,7 +6,7 @@ import {MAP} from './map-definition.js';
 import {levelOf} from './skills.js';
 import {addItem,countItem,sellLogs,requirementError} from './inventory.js';
 import {itemById} from './items.js';
-import {normalizeTickets} from './tickets.js';
+import {normalizeTickets,migrateOrderPallets} from './tickets.js';
 import {normalizeSupply} from './supply.js';
 import {normalizePallets} from './pallets.js';
 
@@ -32,6 +32,7 @@ export function normalizeCompanies(value,map=MAP){
   {const n=x=>Number.isSafeInteger(x)&&x>0&&x<=1e7?x:0,logs=n(c.stock?.logs),planks=n(c.stock?.planks);if(logs||planks)entry.stock={logs,planks}} // company stock (forest.js): logs in the landing pile, planks at the lumberyard
   {const t=normalizeTickets(c.tickets);if(t)entry.tickets=t} // order tickets (tickets.js)
   {const pallets=normalizePallets(c.pallets,c);if(pallets.length)entry.pallets=pallets} // the warehouse's pallets (pallets.js); a save from before pallets carries racks {slot: n} and forkload n, migrated here
+  if(entry.tickets){const m=migrateOrderPallets(entry);if(m!==entry)entry.pallets=m.pallets} // a staged order from before order pallets gets its pallet on its square
   {const s=normalizeSupply(c.supply);if(s)entry.supply=s} // a crew delivery on its way to the warehouse (supply.js)
   if(Object.keys(entry).length)out[e.id]=entry}
  return out;

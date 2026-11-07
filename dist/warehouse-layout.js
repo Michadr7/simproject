@@ -24,7 +24,7 @@ export const RACK_IDS=Object.freeze(RACK_SLOTS.map(s=>s.id)),RACK_ID_PATTERN=/^[
 export const slotById=id=>RACK_SLOTS.find(s=>s.id===id)||null;
 export const reachableByHand=id=>{const s=slotById(id);return !!s&&s.level<=HAND_LEVEL};
 // where things stand inside the hall (front zone, z 6.8 to 12): the dock door at the front right, the order table at the front left, three staging pallets between (the inside delivery pile is gone: pallets come from the crew, 4.16 I)
-export const WAREHOUSE_TABLE=Object.freeze({x:-12,z:9.4}),DOCK_DOOR=Object.freeze({x:13.2,width:4});
-export const WAREHOUSE_STAGING=Object.freeze([5,7,9].map((x,i)=>Object.freeze({id:'S'+(i+1),x,z:8.2})));
+export const WAREHOUSE_TABLE=Object.freeze({x:-12,z:9.4}),DOCK_DOOR=Object.freeze({x:13.2,width:4}),WAREHOUSE_COOLER=Object.freeze({x:-8.5,z:11.3});
+export const WAREHOUSE_STAGING=Object.freeze([5,7,9].map((x,i)=>Object.freeze({id:'S'+(i+1),x,z:10.5}))); // against the front wall (feedback 2026-11-06: more room to drive and turn in front of them)
 // the interior spec the map uses (the same fields as a shop's interior: where you come in, the exit door, how close it opens, the trigger line)
 export const WAREHOUSE_INTERIOR=Object.freeze({frontWallZ:12,entry:{x:0,z:10.9},spawn:{x:0,z:10.1},exit:{x:0,z:11},counter:{x:0,z:-2},exitDoor:{kind:'double',z:11.96,width:2.2,height:2.7,near:{halfWidth:2.4,z:9.7},trigger:{halfWidth:.9,z:11.3}}});

@@ -43,7 +43,7 @@ import {RACK_SLOTS,DOCK_DOOR,HALL} from '../dist/warehouse-layout.js';
  const many=normalizePallets(Array.from({length:MAX_FLOOR+8},(_,i)=>({id:i+1,product:'planks',count:3,at:{floor:{x:i%30-15,z:0,yaw:0}}})));assert.equal(many.length,MAX_FLOOR);
  assert.equal(totalPlanks({pallets:f}),17,'planks on the floor count as held');assert.deepEqual(racksMap({pallets:f}),{},'but are not in a rack')}
 // the tag atlas: plate n of 1..40 sits in an 8 x 5 grid (read from the bottom); one instanced mesh for every pallet, only the nearest TAG_MAX drawn, within range
-{assert.deepEqual(tagCell(1),{col:0,row:4});assert.deepEqual(tagCell(8),{col:7,row:4});assert.deepEqual(tagCell(9),{col:0,row:3});assert.deepEqual(tagCell(40),{col:7,row:0});assert.deepEqual(tagCell(99),tagCell(40));assert.deepEqual(tagCell(0),tagCell(1));
+{assert.deepEqual(tagCell(1),{col:0,row:11});assert.deepEqual(tagCell(8),{col:7,row:11});assert.deepEqual(tagCell(9),{col:0,row:10});assert.deepEqual(tagCell(40),{col:7,row:7});assert.deepEqual(tagCell(1,true),{col:0,row:6},'the order plates are five rows lower');assert.deepEqual(tagCell(99),tagCell(40));assert.deepEqual(tagCell(0),tagCell(1));
  const fakeCanvas=()=>({width:0,height:0,getContext:()=>new Proxy({},{get:(t,k)=>k==='measureText'?()=>({width:10}):()=>{},set:()=>true})});
  const tags=createPalletTags({makeCanvasFn:fakeCanvas});assert.equal(tags.mesh.isInstancedMesh,true);assert.equal(tags.max,TAG_MAX);
  const cam={quaternion:{x:0,y:0,z:0,w:1,isQuaternion:true,_x:0,_y:0,_z:0,_w:1}};

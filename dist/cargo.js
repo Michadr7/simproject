@@ -2,7 +2,10 @@
 // A bed holds a MIXED load: a list of pieces in the order they went on (the last one on is the first one off): a log, or a stack of planks (1 to 4, what you carry).
 // Space: a bed has `space` units; a plank takes 1, a log 5 (so the flatbed's 120 is 120 planks, or 24 logs, or any mix). Boxes and pallets come with the warehouse work.
 // The load slows the vehicle (vehicle.js withLoad) and burns more fuel.
-//   vehicle cargo (saved on the owned vehicle, progress.vehicles[].cargo) = null | [{k:'log'} | {k:'planks', n:1..4}, ...]
+//   vehicle cargo (saved on the owned vehicle, progress.vehicles[].cargo) = null | [{k:'log'} | {k:'planks', n:1..4, o?:orderId}, ...]
+// Planks with an `o` are an order's planks (loaded at the warehouse for a delivery ticket, DESIGN 4.16 C): they belong to that order, not to you. They cannot be sold at the lumberyard, taken off by hand or
+// moved to a customer's truck (freeCount, takeAll, unloadOne and unloadKind skip them); they come off only when the order is delivered (removeOrderPlanks), and the game takes them back off the truck when
+// the order fails or runs out of time. (Playtest 2026-11-06: planks of a missed delivery stayed on the truck and could be sold.)
 // Bed rectangles are local to the vehicle (front +z, metres, y = the bed floor): the flatbed's from its model's cargo anchors and timber rails, the pickups' measured from their
 // converted meshes (the widest upward floor behind the cab). Pieces are laid on a grid of cells across and along the bed; each new piece goes on the lowest cell (front first),
 // so a mixed load stacks up evenly and never higher than MAX_HEIGHT above the floor.
@@ -25,12 +28,16 @@ export const capacity=(model,kind)=>CARGO_KINDS[kind]?Math.floor(spaceOf(model)/
 const pieceSpace=p=>p.k==='planks'?p.n:CARGO_KINDS.log.space;
 export const usedSpace=c=>(c||[]).reduce((s,p)=>s+pieceSpace(p),0);
 export const countOf=(c,kind)=>(c||[]).reduce((s,p)=>s+(p.k!==kind?0:kind==='planks'?p.n:1),0);
-export const cargoText=c=>{const logs=countOf(c,'log'),planks=countOf(c,'planks');if(!logs&&!planks)return 'empty';return [logs?`${logs} log${logs===1?'':'s'}`:'',planks?`${planks} plank${planks===1?'':'s'}`:''].filter(Boolean).join(', ')};
+// what is yours to take off, sell or move: planks that are not an order's
+export const freeCount=(c,kind)=>(c||[]).reduce((s,p)=>s+(p.k!==kind||p.o?0:kind==='planks'?p.n:1),0);
+export const orderCount=(c,id)=>(c||[]).reduce((s,p)=>s+(p.k==='planks'&&p.o===id?p.n:0),0);
+export const orderIdsOf=c=>[...new Set((c||[]).filter(p=>p.o).map(p=>p.o))];
+export const cargoText=c=>{const logs=countOf(c,'log'),planks=freeCount(c,'planks'),orders=orderIdsOf(c);if(!logs&&!planks&&!orders.length)return 'empty';return [logs?`${logs} log${logs===1?'':'s'}`:'',planks?`${planks} plank${planks===1?'':'s'}`:'',...orders.map(id=>`${orderCount(c,id)} planks for order #${id}`)].filter(Boolean).join(', ')};
 // How full the bed is, 0..1 (what the load does to the vehicle).
 export const loadOf=(model,c)=>Math.min(1,usedSpace(c)/Math.max(1,spaceOf(model)));
 export function normalizeCargo(value,model){
  if(!hasBed(model))return null;let list=[];
- if(Array.isArray(value))list=value.filter(p=>p&&(p.k==='log'||(p.k==='planks'&&Number.isInteger(p.n)&&p.n>=1&&p.n<=PLANKS_PER_STACK))).map(p=>p.k==='log'?{k:'log'}:{k:'planks',n:p.n});
+ if(Array.isArray(value))list=value.filter(p=>p&&(p.k==='log'||(p.k==='planks'&&Number.isInteger(p.n)&&p.n>=1&&p.n<=PLANKS_PER_STACK))).map(p=>p.k==='log'?{k:'log'}:{k:'planks',n:p.n,...(Number.isSafeInteger(p.o)&&p.o>0?{o:p.o}:{})});
  else if(value&&typeof value==='object'&&CARGO_KINDS[value.kind]&&Number.isFinite(value.count)){ // the first cargo build saved {kind, count}
   let n=Math.floor(value.count);if(value.kind==='log')list=Array.from({length:Math.max(0,n)},()=>({k:'log'}));else while(n>0){const take=Math.min(PLANKS_PER_STACK,n);list.push({k:'planks',n:take});n-=take}}
  const out=[];let used=0;for(const p of list){if(used+pieceSpace(p)>spaceOf(model))break;used+=pieceSpace(p);out.push(p)}
@@ -63,26 +70,31 @@ export function loadCarry(carry,cargo,model){
 export function unloadOne(carry,cargo,model){
  if(carry)return {error:'Your hands are full.'};
  if(!cargo?.length||!hasBed(model))return {error:'The bed is empty.'};
- const piece=cargo[cargo.length-1],left=cargo.slice(0,-1);
+ let i=cargo.length-1;while(i>=0&&cargo[i].o)i--; // the last piece that is yours: an order's planks stay on the bed
+ if(i<0)return {error:`Those planks belong to order #${cargo[cargo.length-1].o}: deliver them to the customer.`};
+ const piece=cargo[i],left=[...cargo.slice(0,i),...cargo.slice(i+1)];
  return {carry:piece.k==='planks'?{kind:'planks',count:piece.n}:{kind:'log'},cargo:left.length?left:null,message:`Took ${piece.k==='planks'?`${piece.n} plank${piece.n===1?'':'s'}`:'a log'} off · ${left.length?cargoText(left)+' left':'the bed is empty'}`};
 }
-// Take every piece of one kind off (the dock takes all the planks at once). Returns {cargo, count}.
-export function takeAll(cargo,kind){const left=(cargo||[]).filter(p=>p.k!==kind);return {cargo:left.length?left:null,count:countOf(cargo,kind)}}
+// Take every piece of one kind off (the dock takes all the planks at once). Only what is yours: an order's planks stay. Returns {cargo, count}.
+export function takeAll(cargo,kind){const left=(cargo||[]).filter(p=>p.k!==kind||p.o);return {cargo:left.length?left:null,count:freeCount(cargo,kind)}}
 // Take the last piece of one kind off (the Cargo panel: you pick what you need, the rest of the load closes up). Returns {carry, cargo} or {error}.
 export function unloadKind(carry,cargo,model,kind){
  if(carry)return {error:'Your hands are full.'};
- const i=(cargo||[]).map(p=>p.k).lastIndexOf(kind);if(i<0)return {error:`There are no ${CARGO_KINDS[kind]?.plural||kind} on the bed.`};
+ const i=(cargo||[]).map(p=>p.o?'order':p.k).lastIndexOf(kind);
+ if(i<0)return {error:(cargo||[]).some(p=>p.k===kind&&p.o)?`Those planks belong to order #${cargo.find(p=>p.k===kind&&p.o).o}: deliver them to the customer.`:`There are no ${CARGO_KINDS[kind]?.plural||kind} on the bed.`};
  const piece=cargo[i],left=[...cargo.slice(0,i),...cargo.slice(i+1)];
  return {carry:piece.k==='planks'?{kind:'planks',count:piece.n}:{kind:'log'},cargo:left.length?left:null,message:`Took ${piece.k==='planks'?`${piece.n} plank${piece.n===1?'':'s'}`:'a log'} off · ${left.length?cargoText(left)+' left':'the bed is empty'}`};
 }
 
 // Planks from the warehouse onto a bed (a delivery order, DESIGN 4.16): stacks of up to four. Returns {cargo} or {error}; nothing is changed.
-export function addPlanks(cargo,model,count){
+export function addPlanks(cargo,model,count,orderId=null){
  if(!hasBed(model))return {error:'This vehicle has no bed.'};
- const next=[...(cargo||[])];let n=Math.floor(count);while(n>0){const take=Math.min(PLANKS_PER_STACK,n);next.push({k:'planks',n:take});n-=take}
+ const next=[...(cargo||[])];let n=Math.floor(count);while(n>0){const take=Math.min(PLANKS_PER_STACK,n);next.push(orderId?{k:'planks',n:take,o:orderId}:{k:'planks',n:take});n-=take} // orderId: they are that order's planks (see the top of this file)
  if(usedSpace(next)>spaceOf(model)||!fits(model,next))return {error:'The order does not fit on that bed.'};
  return {cargo:next};
 }
+// Every plank of one order off the bed (it was delivered, or it failed and the planks go back). Returns {cargo, count}; count is 0 when none were there.
+export function removeOrderPlanks(cargo,id){const left=(cargo||[]).filter(p=>!(p.k==='planks'&&p.o===id));return {cargo:left.length?left:null,count:orderCount(cargo,id)}}
 // Take `count` planks off a bed (a delivery is unloaded), last stacks first. Returns {cargo} or {error} if the bed holds fewer; nothing is changed.
 export function removePlanks(cargo,count){
  if(countOf(cargo,'planks')<count)return {error:'The order is no longer on that truck.'};

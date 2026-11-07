@@ -64,7 +64,7 @@ assert.equal(Math.round(axisError(Math.PI,0)*1e6),0,'a pallet is entered from ei
  assert.equal(restingOn(s,ctxFor([],12,{solidAt:(x,z)=>z>2.5})).kind,'blocked','not into a wall');
  // staging squares: an order that is waiting takes the planks; an empty square does not take a pallet
  const sq=WAREHOUSE_STAGING[1],sqc=(o={})=>({x:sq.x,z:sq.z-CARRY_Z,yaw:Math.PI,...o});const place=(lift)=>({...sqc(),z:sq.z+CARRY_Z,yaw:Math.PI,speed:0,lift,steer:0,roll:0});
- r=restingOn(place(.3),ctxFor([],12,{stagingTaken:i=>i===1}));assert.deepEqual([r.kind,r.index,r.surface],['staging',1,.14]);assert.equal(settles(place(.14+CARRY_DROP),ctxFor([],12,{stagingTaken:i=>i===1})).index,1);
+ r=restingOn(place(.3),ctxFor([],12,{stagingTaken:i=>i===1}));assert.deepEqual([r.kind,r.index,r.surface],['staging',1,0]);assert.equal(settles(place(CARRY_DROP),ctxFor([],12,{stagingTaken:i=>i===1})).index,1);
  r=restingOn(place(.3),ctxFor([],12));assert.equal(r.kind,'blocked');assert.match(r.reason,/No order/);
  // a carried pallet cannot go through another pallet on the floor
  const other=ctxFor([floorPallet(0,6,0,40,9)],40);assert.equal(forksClear({x:0,z:6-CARRY_Z,yaw:0,speed:0,lift:.3},other),false);assert.equal(forksClear({x:0,z:6-CARRY_Z,yaw:0,speed:0,lift:.3+heightOf(40)+.2},other),true,'but over the top of it')}

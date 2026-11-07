@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import {tickSupply,shortfall,planksNeeded,planksHeld,supplyOrder,normalizeSupply,SUPPLY} from '../dist/supply.js';
+import {tickSupply,shortfall,planksNeeded,planksHeld,supplyOrder,normalizeSupply,returnPlanks,SUPPLY} from '../dist/supply.js';
 import {normalizeCompanies} from '../dist/careers.js';
 import {palletsOf,racksMap,totalPlanks} from '../dist/pallets.js';
 
@@ -41,6 +41,12 @@ assert.equal(tickSupply({...needy,supply:{at:at(600),planks:40}},{now:at(600)+14
 {const full={...needy,pallets:[...Array(120)].map((_,i)=>({id:i+1,product:'planks',count:40,at:{rack:['A','B','C','D','E'][Math.floor(i/24)]+(Math.floor((i%24)/3)+1)+'-'+((i%3)+1)}})),supply:{at:at(500),planks:40}};
  const f=tickSupply(full,{now:at(500)});assert.equal(f.delivered,0);assert.match(f.message,/racks are full/);assert.equal(f.company.supply,undefined,'the order is closed; a new one goes out if orders still need it')}
 
+// planks coming back (an order failed): they go to open rack space as pallets, floor level nearest the door first; what does not fit goes to the lumberyard, nothing is lost
+{const r=returnPlanks({stock:{logs:2,planks:5}},12);assert.equal(r.placed,12);assert.equal(r.toStock,0);assert.equal(totalPlanks(r.company),12);assert.equal(palletsOf(r.company).length,1);assert.deepEqual(r.cells.length,1);assert(/-1$/.test(r.cells[0]),'floor level first: '+r.cells[0]);assert.deepEqual(r.company.stock,{logs:2,planks:5},'the stock is untouched');
+ const more=returnPlanks(r.company,90);assert.equal(totalPlanks(more.company),102);assert.equal(palletsOf(more.company).length,4,'12, then 40 + 40 + 10');assert(!more.cells.includes(r.cells[0]),'a cell that holds a pallet is skipped');
+ const fullRacks={pallets:Array.from({length:120},(_,i)=>({id:i+1,product:'planks',count:40,at:{rack:['A','B','C','D','E'][Math.floor(i/24)]+(Math.floor((i%24)/3)+1)+'-'+((i%3)+1)}})),stock:{logs:0,planks:3}};
+ const full=returnPlanks(fullRacks,25);assert.equal(full.placed,0);assert.equal(full.toStock,25);assert.deepEqual(full.company.stock,{logs:0,planks:28},'the racks are full: the planks go to the lumberyard');
+ assert.equal(returnPlanks(r.company,0).company,r.company,'nothing to return: the same object');assert.equal(returnPlanks(undefined,0).company,undefined)}
 // saved on the company, cleaned on load
 assert.deepEqual(normalizeSupply({at:5000,planks:80}),{at:5000,planks:80});assert.equal(normalizeSupply({at:-1,planks:80}),null);assert.equal(normalizeSupply({at:5,planks:'x'}),null);assert.equal(normalizeSupply(null),null);assert.equal(normalizeSupply({at:5,planks:99999}).planks,1000);
 assert.deepEqual(normalizeCompanies({ridgeline:{supply:{at:5000,planks:80}}}).ridgeline.supply,{at:5000,planks:80});assert.equal(normalizeCompanies({ridgeline:{supply:{at:'soon'},stock:{planks:3}}}).ridgeline.supply,undefined);

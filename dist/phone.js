@@ -12,12 +12,16 @@ import {canOf} from './inventory.js';
 import {createPhoneStore} from './phone-store.js';
 import {createPhoneJobs} from './phone-jobs.js';
 import {vehicleCapacity,vehicleCount,vehicleLabel} from './orders.js';
+import {messagesOf,unreadByApp,unreadTotal,APP_NAMES,timeText} from './messages.js';
 
 // UI only: transactions and movement/cursor ownership stay in game.js.
-export function createPhone({document:doc,getState,canOpen,onOpen,onClose,onAccept,onRefresh,onHomeAction,onOrder,onOrderVehicle,onSetMain,isOnSite,onClockIn,onClockOut,onQuit,onCollect}){
+export function createPhone({document:doc,getState,canOpen,onOpen,onClose,onAccept,onRefresh,onHomeAction,onOrder,onOrderVehicle,onSetMain,isOnSite,onClockIn,onClockOut,onQuit,onCollect,onRead}){
   const $=id=>doc.getElementById(id);
-  let opened=false,screen='home',previousFocus=null,unread=0;
-  const badgeNow=()=>{const b=$('phoneButton');b.dataset.unread=unread?String(Math.min(unread,9)):'';b.classList.toggle('has-unread',unread>0)};
+  let opened=false,screen='home',previousFocus=null;
+  // unread counts come from the saved messages (messages.js): the phone button shows the total, each app icon its own, Messages the total again
+  const APP_IDS=['messages','gigs','bank','homes','player','store','jobs'];
+  const badgeNow=()=>{const p=getState().progress,by=unreadByApp(p),total=unreadTotal(p),b=$('phoneButton');b.dataset.unread=total?String(Math.min(total,9)):'';b.classList.toggle('has-unread',total>0);
+   for(const id of APP_IDS){const el=$('phoneBadge-'+id);if(!el)continue;const n=id==='messages'?total:(by[id]||0);el.hidden=!n;el.textContent=n>9?'9+':String(n)}};
   $('phoneOverlay').hidden=true;
   const store=createPhoneStore({document:doc,getState,onOrderVehicle:(model,colour,home)=>onOrderVehicle?.(model,colour,home)||{error:'Ordering is not available.'},onOrder:(cart,home)=>onOrder?.(cart,home)||{error:'Ordering is not available.'},onSetMain:id=>onSetMain?.(id)||{error:'Not available.'},say:text=>{$('phoneMessage').textContent=text}});
   const jobs=createPhoneJobs({document:doc,getState,isOnSite:id=>isOnSite?.(id)??false,onClockIn:id=>onClockIn?.(id)||{error:'Not available.'},onClockOut:()=>onClockOut?.()||{error:'Not available.'},onQuit:id=>onQuit?.(id)||{error:'Not available.'},onCollect:id=>onCollect?.(id)||{error:'Not available.'},say:text=>{$('phoneMessage').textContent=text}});
@@ -99,15 +103,27 @@ export function createPhone({document:doc,getState,canOpen,onOpen,onClose,onAcce
       button.textContent=current?'In progress':progress.activeJob?'Finish active gig':'Accept';
     }
   }
+  // The Messages screen: every message newest first (unread ones marked), each a button that opens its app. Built when the screen is shown, so a message that comes in while it is open is added.
+  function renderMessages(){
+    const box=$('phoneMessages'),list=messagesOf(getState().progress),rows=[];
+    if(!list.length){const none=doc.createElement('p');none.className='phone-empty';none.textContent='No messages yet. Orders, deliveries, bills and reminders will show up here.';rows.push(none)}
+    for(const msg of list){const row=doc.createElement('button');row.className='phone-message';row.dataset.unread=String(!msg.read);row.dataset.app=msg.app;
+      const head=doc.createElement('small'),app=doc.createElement('b'),at=doc.createElement('span');app.textContent=APP_NAMES[msg.app]||msg.app;at.textContent=timeText(msg.at);head.append(app,at);
+      const text=doc.createElement('span');text.textContent=msg.text;row.append(head,text);row.onclick=()=>showScreen(msg.app);rows.push(row)}
+    box.replaceChildren(...rows);
+  }
   function showScreen(next){
     screen=next;
-    for(const name of ['home','gigs','bank','homes','player','store','jobs'])$('phoneScreen-'+name).hidden=name!==screen;
+    for(const name of ['home','messages','gigs','bank','homes','player','store','jobs'])$('phoneScreen-'+name).hidden=name!==screen;
     $('phoneTitle').textContent=screen==='home'?'Your phone':({homes:'Housing'})[screen]||screen[0].toUpperCase()+screen.slice(1);
     if(screen!=='store')store.reset();if(screen!=='jobs')jobs.reset();$('phoneHome').disabled=screen==='home';$('phoneBack').disabled=screen==='home';$('phoneMessage').textContent='';refresh();
+    // opening an app reads its messages; Messages reads them all (the list was drawn first, so the unread ones still show as unread this once)
+    if(screen==='messages'){renderMessages();onRead?.(null)}else if(screen!=='home')onRead?.(screen);
+    badgeNow();
   }
   function open(){
     if(opened||!canOpen())return;
-    previousFocus=doc.activeElement;opened=true;unread=0;badgeNow();onOpen();
+    previousFocus=doc.activeElement;opened=true;badgeNow();onOpen();
     $('phoneOverlay').hidden=false;showScreen('home');$('phoneApp-gigs').focus();
   }
   function close(){
@@ -115,11 +131,11 @@ export function createPhone({document:doc,getState,canOpen,onOpen,onClose,onAcce
     opened=false;$('phoneOverlay').hidden=true;onClose();
     previousFocus?.focus?.();
   }
-  for(const name of ['gigs','bank','homes','player','store','jobs'])$('phoneApp-'+name).onclick=()=>showScreen(name);
+  for(const name of ['messages','gigs','bank','homes','player','store','jobs'])$('phoneApp-'+name).onclick=()=>showScreen(name);
   $('phoneHome').onclick=()=>showScreen('home');$('phoneBack').onclick=()=>{if(screen==='store'&&store.back())return;showScreen('home')};$('phoneClose').onclick=close;
   $('phoneButton').onclick=()=>opened?close():open();
-  // A notification: the button shakes (the class is taken off and put back so a second one shakes again) and shows how many are unread; opening the phone clears them.
+  // A notification (the message itself is already saved: game.js notifyPhone): the button shakes (the class is taken off and put back so a second one shakes again) and the badges are redrawn. With the phone open, a message for the screen you are on is read at once.
   const btn=$('phoneButton'),badge=badgeNow;let ringTimer=null;
-  function notify(){if(opened)return;unread++;badge();btn.classList.remove('ring');void btn.offsetWidth;btn.classList.add('ring');clearTimeout(ringTimer);ringTimer=setTimeout(()=>btn.classList.remove('ring'),900)}
-  return {open,notify,get unread(){return unread},close,toggle:()=>opened?close():open(),get isOpen(){return opened},showJobs(){if(opened&&screen==='jobs')jobs.render()}};
+  function notify(app){if(opened){if(screen==='messages'){renderMessages();onRead?.(null)}else if(app&&screen===app)onRead?.(app);badge();return}badge();btn.classList.remove('ring');void btn.offsetWidth;btn.classList.add('ring');clearTimeout(ringTimer);ringTimer=setTimeout(()=>btn.classList.remove('ring'),900)}
+  return {open,notify,get unread(){return unreadTotal(getState().progress)},refreshBadges:badgeNow,close,toggle:()=>opened?close():open(),get isOpen(){return opened},showJobs(){if(opened&&screen==='jobs')jobs.render()}};
 }

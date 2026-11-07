@@ -1,3 +1,4 @@
+import {normalizeCoolers} from './water-cooler.js';
 import {MAP} from './map-definition.js';
 import {freshInventory,normalizeInventory,hasItem} from './inventory.js';
 import {itemById} from './items.js';
@@ -9,6 +10,7 @@ import {normalizeLife,normalizeDrainMultiplier} from './life.js';
 import {freshHousing,normalizeHousing} from './housing.js';
 import {SCHEMA,normalizeProperties,normalizeNotices} from './ownership.js';
 import {freshOrders,normalizeOrders} from './orders.js';
+import {normalizeMessages} from './messages.js';
 import {normalizePlots,normalizeLogs,nextLogIdFor} from './grid.js';
 import {isWalkable} from './world.js';
 import {normalizeCarry,normalizeBelt,normalizePlankDrops} from './carry.js';
@@ -36,7 +38,7 @@ export function normalizeProgress(value){
  s.schema=SCHEMA;s.properties=normalizeProperties(a.properties);s.homeNotices=normalizeNotices(a.homeNotices);
  s.housing=normalizeHousing(a.housing);s.life=normalizeLife(a.life);s.routine=normalizeRoutine(a.routine);s.cafe=normalizeCafe(a.cafe);s.plots=normalizePlots(a.plots);s.skills=normalizeSkills(a.skills);s.stats=normalizeStats(a.stats);s.logs=normalizeLogs(a.logs);s.nextLogId=nextLogIdFor(a.nextLogId,s.logs);s.carry=normalizeCarry(a.carry);s.belt=normalizeBelt(a.belt);s.plankDrops=normalizePlankDrops(a.plankDrops);
  s.vehicles=normalizeVehicles(a.vehicles,MAP.vehicles,MAP.playable); // 0.33: where the drivable vehicles were left (a new optional field: no schema bump)
- s.focus=typeof a.focus==='string'&&/^[a-z0-9:_-]{1,40}$/i.test(a.focus)?a.focus:null;s.orders=normalizeOrders(a.orders); // 0.34: Store orders and the main home (an optional field: no schema bump)
+ s.focus=typeof a.focus==='string'&&/^[a-z0-9:_-]{1,40}$/i.test(a.focus)?a.focus:null;s.messages=normalizeMessages(a.messages);s.coolers=normalizeCoolers(a.coolers);s.orders=normalizeOrders(a.orders); // messages: the phone's notifications (DESIGN 4.19); 0.34: Store orders and the main home (an optional field: no schema bump)
  s.careers=normalizeCareers(a.careers);s.companies=normalizeCompanies(a.companies);s.shift=normalizeShift(a.shift,s.careers);s.payStubs=normalizePayStubs(a.payStubs); // 0.35: careers (DESIGN 4.15), optional fields: no schema bump
  // A save from the first dealership build kept owned vehicles as ids in orders.owned: they become owned vehicles v1, v2 ... where they were left.
  if(Array.isArray(a.orders?.owned)&&!s.vehicles.length){const old=Array.isArray(a.vehicles)?a.vehicles:[],moved=[];for(const id of a.orders.owned){const slot=MAP.vehicles.find(v=>v.id===id);if(!slot)continue;const was=old.find(v=>v?.uid===id);moved.push({uid:'v'+(s.orders.nextVehicle+moved.length),model:slot.model,x:Number.isFinite(was?.x)?was.x:slot.home.x,z:Number.isFinite(was?.z)?was.z:slot.home.z,yaw:Number.isFinite(was?.yaw)?was.yaw:slot.home.yaw,fuelMgal:was?.fuelMgal})}

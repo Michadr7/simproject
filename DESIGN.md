@@ -572,6 +572,59 @@ This replaces plank counts in the warehouse with pallet objects, and it replaces
 4. **The forklift through the roller door and the player put-away task (Sonnet).**
 5. **The optional player supply run (Sonnet).**
 6. **In co-op, another player drives it:** with the co-op server (4.17 L).
+
+#### J. The dock through the roller door (design by Opus 5.5, 2026-11-06, from play-test round 6; replaces steps 3 to 5 of I)
+**The rule:** everything that moves goods goes through the roller door on the forklift. E is only for doors and for planks carried by hand. The E prompt at the dock door that loaded a truck goes away.
+
+**1. Staged orders are real pallets.**
+- An order's staging square holds a pallet `{at:{staging:i}, order:id}`.
+  - By hand: E adds a stack of four to it (the pallet appears with the first stack).
+  - By forklift: set a pallet on the square and the order takes what it still needs. Any surplus is split off at once and goes back to open rack space (`returnPlanks`), so nothing disappears.
+- A complete order pallet can be lifted like any other pallet. An incomplete one can be lifted too, but it will not load.
+- Order pallets have their own tag: the same plate with a green edge and the order number (`#12 · 12`). The atlas gets a second set of plates and stays 512 px wide.
+- On failure the order pallet's planks go back to the racks (as built in batch A).
+
+**2. The roller door opens for the forklift.**
+- The panel on the inside front wall (`DOCK_DOOR`, 4 m) and a matching panel over the model's door outside (world x 168.4 to 171.2 on the north wall) slide up when the forklift is within 3 m. They close 4 s after it has gone.
+- Walkers use the person door. The roller door never opens for them.
+- **Crossing.** The interior is a separate scene and is not to scale with the building: the hall is 36 m wide and the building 17 m. So crossing is a short fade (0.4 s), like the person door, not a continuous drive.
+  - Inside to outside: the doorway line at local z 11.4 moves you to the apron at (169.8, 30.2), facing north.
+  - Outside to inside: the reverse.
+  - Speed, fork height and the load carry over. The forklift's state gains `where: 'inside' | 'outside'`.
+- **Outdoors**, the forklift uses `worldBlocked` plus a yard boundary (`MAP.forkliftYard`, the paved apron north of the warehouse, about x 152 to 175, z 20 to 31.5). At the edge it stops with "The forklift stays in the yard".
+  - It is drawn in the outdoor scene. The same view object is moved between scenes.
+  - **Performance:** +14,000 triangles, drawn only within 60 m.
+
+**3. The loading zone.**
+- A green painted area in front of the roller door, centred at (169.8, 29.6), 2.4 x 1.5 m: one pallet at a time.
+- The customer's pickup truck no longer stops at the old dock bay. It parks with its tail to the zone at a new bay north of it (about (169.8, 24), facing north). The route data changes in `customers.js`.
+- **Set an order pallet on the zone and it loads by itself.**
+  - It slides onto the truck's bed (0.6 s), the bed shows the planks, the ticket ships, and whoever set it down is paid.
+  - If the truck has not arrived yet, the pallet waits on the zone and loads when the truck parks.
+  - A pallet of the wrong order, or one that is not complete, is refused by the panel note ("That pallet is not order #12's") and stays on the forks.
+- **A delivery order** works the same way with your own truck. Park a truck with a bed in the bay and set the order pallet on the zone: the planks go onto your bed, tagged with the order (batch A), and you drive them to the address.
+- The ghost and the beacon (4.16 I) mark the zone when you carry a pallet that is ready to load.
+
+**4. Outdoor inbound staging and the supply truck.**
+- Six painted pallet spots in a row on the apron: z 28, x 156.5 to 164, 1.5 m apart. That is 3.5 m from the wall, and the forklift works them from the north side, facing south. See the mock-up in context.md.
+- **The NPC supply truck** (the customer-truck code with a Ridgeline flatbed) parks on an inbound bay north of the row, along it. Its pallets slide off one every 3 s onto free spots.
+  - The planks come from the lumberyard's stock first, then from the mill off the map (4.16 I).
+  - If the row is full, no truck comes.
+- **Put-away (decided):**
+  - A Yard hand on shift gets the task "Put away N pallets": lift a pallet from a spot, drive in through the roller door, set it in a rack. It pays the `putaway` piece, a placeholder $2.00 per pallet.
+  - The crew does it when no Yard hand is on shift, or when a pallet has waited 30 game minutes: one pallet every 5 game minutes, into the free cell nearest the door, floor level first.
+  - This replaces the crew putting supplies straight into the racks (step 1's stand-in).
+- **The trucks' lanes:** the customer truck comes in from the west along z 23.5 to 25.5, which keeps clear of the row (whose north edge is z 27.4). The forklift crosses the lane between the row and the door; trucks stop for it (`blocksWalker` already covers people; the forklift joins it).
+
+**5. Build order (Sonnet; each step ends with `npm test` and a stop):**
+- **D1 - DONE 2026-11-07** (`pallets.js` `stageByHand`/`setOnSquare`/`dropOrderPallet`, `tickets.js` `stagePallet`/`releaseOrderPallet`/`migrateOrderPallets`, test `order-pallets.mjs`): an order's square holds a real pallet `{at:{staging:i}, order:id}`, drawn with the floor pallets (the old plinth is gone; the squares are painted only). By hand the pallet appears with the first stack. A plain pallet lowered on the square gives the order what it needs; the surplus is split off at once and goes back to the racks (`restock`). The order pallet (complete or not) can be lifted, carried and set on the floor (never in a rack, never counted as stock, hand-taking refuses it); an order cannot ship or load unless its pallet is on its square, and loading consumes it. A failed order releases its pallet wherever it is (the forks too). The ticket keeps `square` (stamped when taken) so an older order finishing does not move the others; `ticket.staged` mirrors the pallet. Old saves: a staged order gets its pallet on load. Tag: green plate (own atlas rows) with `#12` drawn above by glyph quads; atlas 512 x 384. Not seen in a browser (tag size, the pallet on the square). Differences from the plan: none; the E at the dock door still loads (D3 removes it).
+- **D2:** the roller door (both sides), crossing, and the forklift outdoors in the yard.
+- **D3:** the loading zone, the new truck bay, auto-loading (customer truck and own truck), and removing the E load at the dock door.
+- **D4:** the inbound row, the NPC supply truck, the put-away task and the crew fallback.
+- **D5:** the optional player supply run (4.16 I step 5).
+
+**Open:** the put-away pay; whether two loading spots are needed once orders are larger.
+
 ### 4.17 Co-op server update (design by Opus 5.5, 2026-11-06; decided with the user where marked; numbers are placeholders for Haiku to tune)
 Goal: two to four players (eight at most) share one world. What one player sees, the others see. Single player stays as it is: fully offline, local save.
 
@@ -661,6 +714,81 @@ Goal: two to four players (eight at most) share one world. What one player sees,
 8. **Random tickets (Sonnet builds, Haiku tunes).**
 
 Open questions: the sell-back percentage; how long a dropped player's tickets are held (15 min is a guess); whether a world owner can kick players in the first build.
+
+### 4.18 Needs: what happens when food, thirst or energy runs out (design by Opus 5.5, 2026-11-06, play-test round 6)
+**Today:** nothing, apart from extra energy drain while food or thirst is at zero, and a UI flag (`life.js`). The bars drain per real second:
+- thirst empties in about 60 real minutes (30 game hours);
+- food in about 93 real minutes;
+- energy in about 67 minutes of walking or 24 of running.
+
+**Principles:**
+- Warn early.
+- Make the effect something you can see and feel, never a hidden number.
+- Always recoverable, and never death or a game over.
+- Never more than one serious thing at a time.
+
+| Level | Food | Thirst | Energy |
+|---|---|---|---|
+| **25 and under** | The bar pulses amber; one phone message ("You're getting hungry") | Same ("You're getting thirsty") | Same ("You're getting tired") |
+| **10 and under** | Energy drains 1.5x | No running (Shift does nothing) | Walk 25% slower, no running |
+| **0** | Energy cannot rise above 50 (sleep and drinks stop at 50) | Same, plus the edges of the screen dim | **You pass out** (below) |
+
+**Passing out (energy 0):**
+- The screen fades to black, a toast says "You passed out from exhaustion", and you wake **at home** (decided 2026-11-06) two game hours later with energy 25: in the bed of your main home (a rented or owned house, or your studio), or, with no home, beside the starter apartment's door on Oak Street. You are lying down for a second, then standing.
+- If you are in a vehicle or on the forklift, it stops first and is left where it stopped (a forklift's load is set down where it is); you are moved to your bed. Anything you were carrying in your hands is put down on the spot.
+- Effects on what you are doing:
+  - a shift counts you as off site for those two hours (the existing hour-off-site rule may clock you out);
+  - gigs and orders keep their deadlines;
+  - nothing is taken from you.
+- **Multiplayer:** the shared clock cannot jump, so you are out for 60 real seconds instead (the screen stays dark with a countdown), and other players see you lying down.
+
+**Free water at work:** a water cooler in the Ridgeline office and the warehouse (E: thirst +30, once per game hour). A shift should not depend on buying drinks.
+
+**Build (Sonnet; Haiku tunes the numbers):**
+- `needsEffects(life)` in `life.js`, pure: `{speed, canRun, energyCap, energyDrain, warn:[...], passOut}`.
+- `game.js` applies it to the walk speed and running, caps energy in `tickLife`, sends the warnings once (through Messages, 4.19), and runs the pass-out sequence.
+- Tests: the pure rules, plus a game test that walks with 0 energy and wakes two hours later.
+
+**Open:** whether waking at home should cost anything (a rescue fee): decided no for now.
+
+### 4.19 Tasks, gigs, jobs and notifications (design by Opus 5.5, 2026-11-06, play-test round 6)
+**What each thing is:**
+- **Getting started:** the starter guidance.
+- **Gig:** a one-off paid job you accept, such as the market delivery or the café shift.
+- **Shift:** your employment with a company while you are clocked in. It comes with **shift tasks**, the day's assigned tasks such as "Fell 5 marked pines".
+- **Order:** a customer ticket you accepted at a company's order table.
+- **Notification:** anything that only tells you something.
+
+**The rule (decided):** something is a **task** only if you accepted it, or it is your shift's assigned task, it has somewhere to go or something to do, and it can be finished or fail. Everything else is a **notification**. Notifications include:
+- a parcel delivered home (decided: never a task);
+- a vehicle delivered;
+- rent and bills due;
+- a new order on the board;
+- the crew's delivery;
+- an order that failed (its task just leaves the list).
+
+**The task card (the bottom-left panel):**
+- **The focused task is always shown with its arrow, distance and place on the bottom row of the card, whatever else is on screen** (decided). With no task it shows Getting started.
+- Under it, the other tasks in fixed groups, in this order: **Orders**, **Shift · Ridgeline Timber**, **Gigs**, **Getting started**. Parcels and vehicles on the way are gone from the list.
+- **Focus rules:**
+  - Accepting a gig or an order focuses it.
+  - Clocking in focuses the first unfinished shift task, if nothing else is focused.
+  - When the focused task finishes, the focus moves to the next task in the same group, then the next group, then Getting started.
+  - Y still cycles.
+- **Arrows inside buildings:** the warehouse tasks point at real places in the room: the pallet to lift (4.16 I goal), the order's square, the roller door, the loading zone. Today they point at the person door only.
+
+**Messages and badges (decided):**
+- **A Messages app**, the first icon on the phone, keeps every notification: `{id, app, text, at (game time), read}`, saved as `progress.messages`, newest first, at most 50.
+- Every notification names the app it belongs to: Jobs (orders, the crew, shifts), Store (parcels, vehicles), Bank (bills), Housing (rent, keys), Player (needs, 4.18).
+- **Each app icon shows its own unread count.** The phone button shows the total.
+- Opening an app reads its messages. Opening Messages reads all of them. Tapping a message opens its app.
+- `notifyPhone(text)` becomes `notifyPhone(app, text)`. Every call site is listed in the build step; there are nine today.
+- **Toasts queue** instead of overwriting each other: at most three waiting, three seconds each. In testing, a second notification hid the first.
+
+**Build (Sonnet), in this order:**
+- **B1:** Messages, badges, the toast queue.
+- **B2:** the task card: groups, focus rules, the always-visible arrow row, parcels out of the list.
+- **B3:** places inside the warehouse for the arrow. This goes with D1 to D3 of 4.16 J.
 
 ## 5. Economy progression (existing numbers; placeholders marked)
 | Stage | Player can do | Money in | Money out | Core loop |

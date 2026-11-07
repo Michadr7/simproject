@@ -6,8 +6,9 @@ import * as T from './vendor/three.module.js';
 import {createCharacter} from './character.js';
 import {outfit} from './appearance.js';
 import {createSlidingDoor,createDoubleDoor} from './doors.js';
+import {addWaterCooler,COOLER_SIZE} from './water-cooler-view.js';
 
-export const OFFICE_CLOCK={x:5.6,z:-.6},OFFICE_BOARD={x:-5.6,z:-.6},OFFICE_COUNTER={x:0,z:-2},OFFICE_STORE={x:4.2,z:-3.3}; // OFFICE_STORE: the company store's shelf, at the back right
+export const OFFICE_CLOCK={x:5.6,z:-.6},OFFICE_BOARD={x:-5.6,z:-.6},OFFICE_COUNTER={x:0,z:-2},OFFICE_STORE={x:4.2,z:-3.3},OFFICE_COOLER={x:5.45,z:1.6}; // OFFICE_STORE: the company store's shelf, at the back right
 const makeCanvas=()=>document.createElement('canvas');
 // A name board drawn on a canvas, so a renamed company redraws one texture (DESIGN 4.15: names are data, never literals).
 export function createNameBoard({width=3.4,height=.7,text,fg='#f5c518',bg='#17301f',makeCanvasFn=makeCanvas}){
@@ -45,6 +46,8 @@ export function createOffice({name,ownerName='Walt Hargrove',spec}){
  box(.1,1.2,2.2,OFFICE_BOARD.x-.2,1.7,OFFICE_BOARD.z,'#7d5f3d');box(.06,1,2,OFFICE_BOARD.x-.14,1.7,OFFICE_BOARD.z,'#a9794c');
  for(const [dz,dy,c] of [[-.6,1.95,'#f1ebd9'],[.1,1.9,'#e9d27a'],[.7,1.6,'#f1ebd9'],[-.2,1.5,'#9fc4a2']])box(.03,.3,.24,OFFICE_BOARD.x-.1,dy,OFFICE_BOARD.z+dz,c);
  for(let i=0;i<4;i++)box(.5,2,.6,-5.7,1,-3.7+i*.65-1.1+1.1,'#5f7a72',true);
+ // the water cooler on the right wall (the project owner's model, water-cooler-view.js; a hidden box is its collider)
+ box(COOLER_SIZE.d,COOLER_SIZE.h,COOLER_SIZE.w,OFFICE_COOLER.x,COOLER_SIZE.h/2,OFFICE_COOLER.z,'#e8ebe9',true).visible=false;addWaterCooler(scene,{x:OFFICE_COOLER.x,z:OFFICE_COOLER.z,yaw:-Math.PI/2});
  // a bench and a hard hat by the door, a rug, a plant
  box(.5,.5,2.2,3.6,.25,3.8,'#7a5f3e',true);box(.3,.2,.34,3.6,.6,3.4,'#d8b429');box(3,.02,1.8,0,.01,2.2,'#5f7466');box(.55,.7,.55,-4.8,.35,3.9,'#8c6a4c');box(.45,.55,.45,-4.8,.95,3.9,'#4f7d4c');
  // the company name on the back wall

@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import {freshProgress,normalizeProgress} from '../dist/jobs.js';
-import {trackerItems,focusedItem,nextFocus,distanceTo,taskPlace,normalizeFocus} from '../dist/tracker.js';
+import {trackerItems,focusedItem,nextFocus,focusAfter,distanceTo,taskPlace,normalizeFocus} from '../dist/tracker.js';
 import {markedBlocks,blockCentre,LANDING} from '../dist/forest.js';
 import {BAY} from '../dist/customers.js';
 
@@ -22,9 +22,13 @@ assert.deepEqual(items[0].pos,near,'felling points at the nearest marked block')
 assert.deepEqual(taskPlace('landing',p,here),{x:LANDING.x,z:LANDING.z});assert(taskPlace('mill',p,here)&&taskPlace('haul',p,here),'the sawmill and the lumberyard have points');
 assert.equal(distanceTo(here,{x:3,z:4}),5);assert.equal(distanceTo(here,null),null);
 
-// orders: one on the way (no place), listed
+// orders on the way and parcels are notifications, not items
 const q={...p,orders:{...p.orders,queue:[{id:7,home:'studio',items:[],vehicle:null,arrivesAt:3*1440}]}};
-assert.equal(trackerItems(q,here).filter(i=>i.id==='order:7').length,1,'an order on the way is listed');
+assert.equal(trackerItems(q,here).filter(i=>i.id==='order:7').length,0,'an order on the way is not listed');
+assert(trackerItems(q,here).every(i=>i.section==='Shift'),'only the shift tasks remain');
+// focusAfter: next open task in the section, then the next section, then the story
+const mixed=[{id:'ticket:1',section:'Orders',done:false},{id:'ticket:2',section:'Orders',done:true},{id:'task:a',section:'Shift',done:false},{id:'task:b',section:'Shift',done:false}];
+assert.equal(focusAfter(mixed,'Orders'),'ticket:1');assert.equal(focusAfter(mixed.slice(1),'Orders'),'task:a','no open order left: the Shift section');assert.equal(focusAfter(mixed,'Shift'),'task:a');assert.equal(focusAfter([mixed[1]],'Orders'),null,'nothing open: the story');assert.equal(focusAfter([],undefined),null);
 
 // focus: a saved id that exists and is open; a finished or missing one falls back to the story
 assert.equal(focusedItem({...p,focus:'task:load'},items).id,'task:load');

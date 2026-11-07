@@ -5,7 +5,7 @@
 //   progress.shift.truck = {order (planks), loaded, stage: 'coming' | 'waiting' | 'gone', due (absolute game minutes)}
 import {recordPiece} from './shift.js';
 import {stockOf,addStock,EMPLOYER} from './forest.js';
-import {takeAll,countOf} from './cargo.js';
+import {takeAll,freeCount} from './cargo.js';
 
 export const ARRIVE_AFTER=20; // game minutes after clock-in
 // where the truck parks: in the timber yard, nose to the north, its bed's back toward the driveway
@@ -39,7 +39,7 @@ export function loadFromStock(progress){
 }
 // Planks straight off your own truck's bed (as many as the order needs). Returns {state, cargo (what stays on your bed), count}.
 export function loadFromBed(progress,cargo){
- const n=need(progress);if(n.error)return n;const have=countOf(cargo,'planks');if(!have)return {error:'Your truck has no planks on it.'};
+ const n=need(progress);if(n.error)return n;const have=freeCount(cargo,'planks');if(!have)return {error:'Your truck has no planks of your own on it.'};
  let take=Math.min(have,n.left),left=cargo;const all=takeAll(cargo,'planks');left=all.cargo;
  const back=have-take;if(back>0){left=[...(left||[])];let b=back;while(b>0){const k=Math.min(4,b);left.push({k:'planks',n:k});b-=k}} // what the order did not need goes back on your bed
  const r=recordPiece(setTruck(progress,{loaded:truckOf(progress).loaded+take}),'delivered',take);

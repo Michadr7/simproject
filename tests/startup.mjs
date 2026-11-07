@@ -129,7 +129,7 @@ for(const saved of [false,true]){
  if(saved){Object.assign(phoneState.me.position,{x:0,y:.02,z:3.9});for(let i=0;i<10;i++)phoneFrame();key('KeyE');for(let i=0;i<40;i++)phoneFrame();Object.assign(phoneState.me.position,{x:0,y:.02,z:4.4});for(let i=0;i<300;i++)phoneFrame()} // the cafe's double doors are opened by hand
  // The HUD is bars, not a box: needs show as bars that warn when low, and putting the axe away lowers the carrying arm again.
  if(saved){
-  phoneState.progress.life.food=9;phoneState.progress.life.thirst=28;phoneState.progress.life.energy=80;for(let i=0;i<10;i++)phoneFrame();
+  phoneState.progress.life.food=9;phoneState.progress.life.thirst=24;phoneState.progress.life.energy=80;for(let i=0;i<10;i++)phoneFrame();
   assert.equal(ids.get('vitalFoodFill').style.width,'9%');assert.equal(ids.get('vitalFood').dataset.level,'critical');assert.equal(ids.get('vitalThirst').dataset.level,'low');assert.equal(ids.get('vitalEnergy').dataset.level,'ok');assert.equal(ids.get('vitalEnergyValue').textContent,'80');
   phoneState.progress.life.food=100;phoneState.progress.life.thirst=100;phoneState.progress.life.energy=100;for(let i=0;i<10;i++)phoneFrame();
   const forearm=globalThis.__renderScene.getObjectByName('player').getObjectByName('LowerArmR'),rest=forearm.quaternion.clone();

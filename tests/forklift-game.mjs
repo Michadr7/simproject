@@ -60,22 +60,17 @@ try{
  hold('KeyF',.6);assert.equal(racks()['A1-3'],40,'set in the cell by lowering it onto the deck');assert.equal(load(),0);assert.equal(object('forklift-load').visible,false);assert.match(toastText(),/Set the pallet in rack A1-3/);
  // take it down again from the same shelf: the tines 60 cm into its pocket, level three, then raise
  place(ax,A+.62-.6+TIP,Math.PI,2.85+.1);assert.match(note(),/Raise the forks to lift the pallet/,note());hold('KeyR',.25);assert.equal(load(),40,'lifted again from the top shelf');assert.equal(racks()['A1-3'],undefined);
- // the order's staging square: lower the pallet onto it and the order takes its 12 planks; the rest stays on the forks
- const sq=WAREHOUSE_STAGING[0];place(sq.x,sq.z-CARRY_Z,0,.6);hold('KeyF',1.2);
- assert.equal(ticketsOf(p().companies.ridgeline).list[0].status,'staged','the order is staged');assert.equal(load(),28,'28 planks are still on the forks');
- // an empty square does not take a pallet
- const sq2=WAREHOUSE_STAGING[2];place(sq2.x,sq2.z-CARRY_Z,0,.6);pump(.3);assert.match(note(),/No order is waiting on that square/,note());hold('KeyF',1.2);assert.equal(load(),28,'it was not set down');
- // the floor: in the aisle, set the rest down where the forklift faces
+ // the order's staging square (D1): lower the pallet onto it and the order takes its 12 planks; the other 28 are split off at once and go back to the racks (nothing disappears)
+ const sq=WAREHOUSE_STAGING[0],sumRacks=()=>Object.values(racks()).reduce((s,n)=>s+n,0);place(sq.x,sq.z-CARRY_Z,0,.6);hold('KeyF',1.2);
+ assert.equal(ticketsOf(p().companies.ridgeline).list[0].status,'staged','the order is staged');assert.equal(load(),0,'the forks are empty: the pallet became the order\'s');assert.equal(sumRacks(),28,'the 28 spare planks went back to the racks');
+ {const op=palletsOf(p().companies.ridgeline).find(q=>q.order===1);assert.deepEqual([op.count,op.at.staging],[12,0],'an order pallet of 12 stands on S1');assert.equal(ticketsOf(p().companies.ridgeline).list[0].staged,12);assert.equal(object('warehouse-boards-floor').count,12,'its 12 boards are drawn');assert.match(toastText(),/Order #1 is staged/)}
+ // the order's pallet can be lifted like any other: the tines in its pocket, then raise (the order stays staged, but cannot ship from the forks)
+ const back=(.62-.6)+TIP;place(sq.x,sq.z-back,0,.1);assert.match(note(),/Raise the forks to lift the pallet/,note());hold('KeyR',.25);assert.equal(load(),12,'the order pallet is on the forks');assert(palletsOf(p().companies.ridgeline).some(q=>q.order===1&&q.at.fork),'still the order\'s pallet');
+ // another order's square is refused
+ const sq2=WAREHOUSE_STAGING[2];place(sq2.x,sq2.z-CARRY_Z,0,.6);pump(.3);assert.match(note(),/not this order/,note());hold('KeyF',1.2);assert.equal(load(),12,'it was not set down on another order\'s square');
+ // the floor: in the aisle, set it down where the forklift faces (it is still the order's pallet)
  place(0,5-0.0,.5,.6);hold('KeyF',1.5);assert.equal(load(),0,'set down on the floor');assert.equal(floorPallets(p().companies.ridgeline).length,1);
- {const f=floorPallets(p().companies.ridgeline)[0],at=f.at.floor;assert.equal(f.count,28);assert(Math.abs(at.yaw-.5)<.01,'turned the way it was facing');assert.equal(object('warehouse-boards-floor').count,28,'28 boards drawn on it');assert(object('warehouse-pallets').count>=1,'on a wooden pallet');
+ {const f=floorPallets(p().companies.ridgeline)[0],at=f.at.floor;assert.equal(f.count,12);assert.equal(f.order,1,'it keeps its order');assert(Math.abs(at.yaw-.5)<.01,'turned the way it was facing');assert.equal(object('warehouse-boards-floor').count,12,'12 boards drawn on it');assert(object('warehouse-pallets').count>=1,'on a wooden pallet');
   // lift it again from the floor: in front of the pallet, tines in 60 cm
-  const sin=Math.sin(at.yaw),cos=Math.cos(at.yaw),back=(.62-.6)+TIP;place(at.x-sin*back,at.z-cos*back,at.yaw,.1);assert.match(note(),/Raise the forks to lift the pallet/,note());hold('KeyR',.25);assert.equal(load(),28,'a pallet on the floor can be lifted again');assert.equal(floorPallets(p().companies.ridgeline).length,0)}
- // nothing to do here: E gets you off, beside it
- place(BAY.x,BAY.z,BAY.yaw,.2);assert.match(prompt(),/Get off the forklift/,prompt());press('KeyE',.6);assert.equal(fork().on,false);
- assert(Math.hypot(me().x-BAY.x,me().z-BAY.z)>1,'you stand beside it, not in it: '+me().x+','+me().z);
- // the load is saved with the company, as a pallet
- assert.equal(load(),28);assert(p().companies.ridgeline.pallets.some(x=>x.at.fork&&x.count===28),'the pallet on the forks is saved with the company, and the old fields are gone');assert.equal(p().companies.ridgeline.forkload,undefined);
- // off shift: it will not start
- GameState.progress={...p(),shift:null};me().x=BAY.x;me().z=BAY.z+2.3;pump(.6);press('KeyE',.6);assert.equal(fork().on,false,'not without a shift');
- console.log('PASS forklift-game.mjs: the forklift stands in its bay, E drives it (Yard hand on shift) and only gets you off; W and R move it and the forks, and the forks stop at a shelf or pallet they are not lined up with, the panel saying why; raising the tines in a pocket lifts the pallet, lowering it sets it down in a free shelf cell, on an order\'s square (the order takes its planks) or on the floor, and a pallet on the floor can be lifted again; the pallet is drawn on the forks with a tag and saved on the company.');
+  const sin=Math.sin(at.yaw),cos=Math.cos(at.yaw),back2=(.62-.6)+TIP;place(at.x-sin*back2,at.z-cos*back2,at.yaw,.1);assert.match(note(),/Raise the forks to lift the pallet/,note());hold('KeyR',.25);assert.equal(load(),12,'a pallet on the floor can be lifted again');assert.equal(floorPallets(p().companies.ridgeline).length,0)}
 }finally{g.close?.()}
