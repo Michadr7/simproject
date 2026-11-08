@@ -11,6 +11,7 @@ import {createNameBoard} from './office.js';
 import {createPalletTags} from './pallet-tags.js';
 import {PALLET,PALLET_CAP,MAX_FLOOR} from './pallets.js';
 import {palletGeometry,BOARD,COLS,TONES,boardAt} from './pallet-geometry.js';
+import {inDoorway} from './dock.js';
 import {HALL,RACK_SLOTS,UNITS,BAYS,LEVELS,BAY_PITCH,LEVEL_Y,FRAME_HEIGHT,WAREHOUSE_TABLE,WAREHOUSE_STAGING,DOCK_DOOR,WAREHOUSE_COOLER} from './warehouse-layout.js';
 
 export {RACK_SLOTS,WAREHOUSE_TABLE,WAREHOUSE_STAGING};
@@ -21,7 +22,8 @@ export {boardAt}; // plank i of a stack (pallet-geometry.js), kept here for the 
 export function createWarehouse({name,spec}){
  const scene=new T.Group();scene.name='warehouse-interior';const occluders=[],blocks=[];
  const mats=new Map(),mat=c=>{if(!mats.has(c))mats.set(c,new T.MeshStandardMaterial({color:c,roughness:.85}));return mats.get(c)};
- function box(w,h,d,x,y,z,c,solid=false,wall=false){const m=new T.Mesh(new T.BoxGeometry(w,h,d),wall?new T.MeshStandardMaterial({color:c,roughness:.85}):mat(c));m.position.set(x,y,z);scene.add(m);if(wall)occluders.push(m);if(solid)blocks.push({x,z,hx:w/2,hz:d/2});return m}
+ let dockPanel=null,dockPass=false;const inDoor=(x,z)=>dockPass&&inDoorway(x,z); // the front wall is open to the forklift where the roller door is up
+  function box(w,h,d,x,y,z,c,solid=false,wall=false){const m=new T.Mesh(new T.BoxGeometry(w,h,d),wall?new T.MeshStandardMaterial({color:c,roughness:.85}):mat(c));m.position.set(x,y,z);scene.add(m);if(wall)occluders.push(m);if(solid)blocks.push({x,z,hx:w/2,hz:d/2});return m}
  // many boxes of one colour as one InstancedMesh (the shelving's posts, beams and decks): [{x,y,z,w,h,d}]
  const unit=new T.BoxGeometry(1,1,1),m4=new T.Matrix4(),q0=new T.Quaternion(),p0=new T.Vector3(),s0=new T.Vector3();
  function instanced(list,colour,nm){const mesh=new T.InstancedMesh(unit,mat(colour),Math.max(1,list.length));mesh.name=nm;mesh.castShadow=mesh.receiveShadow=true;mesh.frustumCulled=false;
@@ -34,9 +36,11 @@ export function createWarehouse({name,spec}){
  box(W*2,H,.16,0,H/2,-D,'#c3c8b8',true,true);for(const x of [-W,W])box(.16,H,D*2,x,H/2,0,'#b4baa8',true,true);
  box(W*2,.35,.2,0,.175,-D+.05,'#4f4a3f');for(const x of [-W+.05,W-.05])box(.2,.35,D*2,x,.175,0,'#4f4a3f');
  const gap=spec?.exitDoor?.width||2.2,fz=D;
- box(W-gap/2,H,.16,-(gap/2+(W-gap/2)/2),H/2,fz,'#b4baa8',true,true);box(W-gap/2,H,.16,gap/2+(W-gap/2)/2,H/2,fz,'#b4baa8',true,true);box(gap,H-2.7,.16,0,2.7+(H-2.7)/2,fz,'#b4baa8',true,true);
+ box(W-gap/2,H,.16,-(gap/2+(W-gap/2)/2),H/2,fz,'#b4baa8',true,true);{const dx0=DOCK_DOOR.x-DOCK_DOOR.width/2,dx1=DOCK_DOOR.x+DOCK_DOOR.width/2,lh=3.75; // the right part of the front wall has the dock's doorway cut in it (4 m wide, 3.75 m high): the wall either side is solid, the lintel above is not (the forklift passes under it when the door is up)
+  box(dx0-gap/2,H,.16,(gap/2+dx0)/2,H/2,fz,'#b4baa8',true,true);box(W-dx1,H,.16,(dx1+W)/2,H/2,fz,'#b4baa8',true,true);box(dx1-dx0,H-lh,.16,DOCK_DOOR.x,lh+(H-lh)/2,fz,'#b4baa8',false,true)}box(gap,H-2.7,.16,0,2.7+(H-2.7)/2,fz,'#b4baa8',true,true);
  // the dock's roller door on the front wall (shut): a corrugated panel in a steel frame, with a dock light; the delivery pile stands in front of it
- {const x=DOCK_DOOR.x,w=DOCK_DOOR.width;box(w,3.6,.1,x,1.8,fz-.1,'#8a948f');for(let i=0;i<14;i++)box(w-.1,.05,.04,x,.2+i*.25,fz-.16,'#7a847f');box(w+.2,.16,.16,x,3.68,fz-.12,'#4d5654');for(const s of [-1,1])box(.16,3.8,.16,x+s*(w/2+.1),1.9,fz-.12,'#4d5654');const l=box(.2,.14,.2,x,4.1,fz-.2,'#f3e7b0');l.material=new T.MeshStandardMaterial({color:'#f3e7b0',emissive:new T.Color('#f1d98a'),emissiveIntensity:.9})}
+ {const x=DOCK_DOOR.x,w=DOCK_DOOR.width;dockPanel=new T.Group();dockPanel.name='dock-door-panel';dockPanel.position.set(x,3.6,fz-.1);scene.add(dockPanel);const part=m=>{scene.remove(m);m.position.set(m.position.x-x,m.position.y-3.6,m.position.z-(fz-.1));dockPanel.add(m);return m}; // the panel hangs from the top and rolls up (scale) when the forklift comes (dock.js)
+  part(box(w,3.6,.1,x,1.8,fz-.1,'#8a948f'));for(let i=0;i<14;i++)part(box(w-.1,.05,.04,x,.2+i*.25,fz-.16,'#7a847f'));box(w+.2,.16,.16,x,3.68,fz-.12,'#4d5654');for(const s of [-1,1])box(.16,3.8,.16,x+s*(w/2+.1),1.9,fz-.12,'#4d5654');const l=box(.2,.14,.2,x,4.1,fz-.2,'#f3e7b0');l.material=new T.MeshStandardMaterial({color:'#f3e7b0',emissive:new T.Color('#f1d98a'),emissiveIntensity:.9})}
  // the shelving: per unit, uprights at every bay boundary at the front and back of the cell rows (and down the spine of a double unit), a slatted deck and a beam at each level above the floor, a top
  // beam. Each unit is its own set of instanced meshes and joins the occluders, so a unit between the camera and you fades like a wall (its planks fade with it: they are per unit too).
  const unitMeshes=new Map();
@@ -88,13 +92,20 @@ export function createWarehouse({name,spec}){
   tagSpots=[...stacks.map(({s,pad,count})=>({x:s.x,y:top(pad+.14,count)+.2,z:s.z,count,product:'planks'})),
    ...loose.map(f=>({x:f.x,y:top(.14,Math.min(PALLET_CAP,f.count))+.2,z:f.z,count:Math.min(PALLET_CAP,f.count),product:'planks',...(f.order?{order:f.order}:{})}))];
  }
- set({},[]); return {tags,updateTags:(camera,near,extra=[])=>tags.update([...tagSpots,...extra],camera,near),scene,occluders,glass:[],clerk,exitDoor,board,lamp,blocked(x,z){return Math.abs(x)>W-.45||Math.abs(z)>D-.45||blocks.some(b=>Math.abs(x-b.x)<b.hx+.32&&Math.abs(z-b.z)<b.hz+.32)||floorBlocks.some(b=>Math.abs(x-b.x)<b.hx+.32&&Math.abs(z-b.z)<b.hz+.32)},
+ set({},[]); return {tags,updateTags:(camera,near,extra=[])=>tags.update([...tagSpots,...extra],camera,near),scene,occluders,glass:[],clerk,exitDoor,board,lamp,blocked(x,z){return Math.abs(x)>W-.45||(Math.abs(z)>D-.45&&!inDoor(x,z))||blocks.some(b=>Math.abs(x-b.x)<b.hx+.32&&Math.abs(z-b.z)<b.hz+.32)||floorBlocks.some(b=>Math.abs(x-b.x)<b.hx+.32&&Math.abs(z-b.z)<b.hz+.32)},
   // for the forks (fork-pallets.js): what is solid to them other than shelving, the order squares and pallets (they have their own rules), and what is solid to a pallet set down on the floor (no margin)
-  blockedOther(x,z){return Math.abs(x)>W-.45||Math.abs(z)>D-.45||blocks.some(b=>!b.kind&&Math.abs(x-b.x)<b.hx+.32&&Math.abs(z-b.z)<b.hz+.32)},solidAt(x,z){return Math.abs(x)>W-.1||Math.abs(z)>D-.1||blocks.some(b=>!b.kind&&Math.abs(x-b.x)<b.hx&&Math.abs(z-b.z)<b.hz)||floorBlocks.some(b=>Math.abs(x-b.x)<b.hx&&Math.abs(z-b.z)<b.hz)},setStock:set,boards:()=>[...unitMeshes.values()].reduce((n,u)=>n+u.mesh.count,floorBoards.count)};
+  blockedOther(x,z){return Math.abs(x)>W-.45||(Math.abs(z)>D-.45&&!inDoor(x,z))||blocks.some(b=>!b.kind&&Math.abs(x-b.x)<b.hx+.32&&Math.abs(z-b.z)<b.hz+.32)},solidAt(x,z){return Math.abs(x)>W-.1||(Math.abs(z)>D-.1&&!inDoor(x,z))||blocks.some(b=>!b.kind&&Math.abs(x-b.x)<b.hx&&Math.abs(z-b.z)<b.hz)||floorBlocks.some(b=>Math.abs(x-b.x)<b.hx&&Math.abs(z-b.z)<b.hz)},setStock:set,setDock(t,pass){dockPass=!!pass;if(dockPanel){dockPanel.scale.y=Math.max(.04,1-t*.96);dockPanel.visible=t<.995}},boards:()=>[...unitMeshes.values()].reduce((n,u)=>n+u.mesh.count,floorBoards.count)};
 }
 
 // The person door on the warehouse's outside wall (the building model has only the loading door): a steel frame and a door slab with a small window, a canopy and a lamp. Local frame:
 // the origin is on the wall face, +z points out into the yard; the game turns it by the door's yaw. Static: the doors you walk through are the fade to the interior.
+// The roller door's panel on the outside of the building, over the model's loading door (world x 159.95 to 163.65, 2.15 m high): ribbed grey steel hanging from its top edge, which rolls up (scale.y) when the forklift comes.
+// Local frame: the origin is the top middle of the panel; the game places it a hair in front of the wall face and turns nothing (the wall faces north, -z).
+export function createDockPanel(){
+ const g=new T.Group();g.name='dock-door-outside';const H=2.15,W=3.7,m=(w,h,d,y,c)=>{const o=new T.Mesh(new T.BoxGeometry(w,h,d),new T.MeshStandardMaterial({color:c,roughness:.7}));o.position.set(0,y,-d/2);o.castShadow=true;g.add(o);return o};
+ m(W,H,.08,-H/2,'#8a948f');for(let i=0;i<8;i++)m(W-.1,.05,.1,-.2-i*.24,'#76807b');m(W+.2,.14,.16,-.04,'#4d5654');
+ return g;
+}
 export function createWarehouseDoorway(){
  const g=new T.Group();g.name='warehouse-doorway';const part=(w,h,d,x,y,z,c,emit)=>{const m=new T.Mesh(new T.BoxGeometry(w,h,d),new T.MeshStandardMaterial({color:c,roughness:.7,...(emit?{emissive:new T.Color(emit),emissiveIntensity:.9}:{})}));m.position.set(x,y,z);m.castShadow=true;g.add(m);return m};
  part(.14,2.3,.2,-.62,1.15,.1,'#3d4442');part(.14,2.3,.2,.62,1.15,.1,'#3d4442');part(1.4,.14,.2,0,2.3,.1,'#3d4442');

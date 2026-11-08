@@ -97,25 +97,26 @@ function finishStage(co,k,square,used){
 }
 const squareOf=(company,k)=>stagingOf(company).findIndex(s=>s&&s.id===k.id);
 // A loaded order consumes its pallet: it must be on its square (an order with no pallet, from a save or a test before pallets, loads as before).
-function consume(company,k){
+function consume(company,k,zone=false){
  const p=orderPallet(company,k.id);if(!p)return {company};
+ if(zone&&p.at.fork)return {company:dropOrderPallet(company,k.id).company}; // set down on the loading zone (D3): the pallet on the forks is the one that loads
  if(!Number.isInteger(p.at.staging))return {error:`Order #${k.id}'s pallet is not on its square.`};
  return {company:dropOrderPallet(company,k.id).company};
 }
 // A staged pickup order loaded onto the customer's truck: done. The order pay and the reputation go to whoever loads it.
-export function shipTicket(company,{id,playerId,now}){
+export function shipTicket(company,{id,playerId,now,zone}){
  const k=find(company,id);if(!k||k.kind!=='pickup')return {error:'No such pickup order.'};
  if(k.status!=='staged')return {error:'Stage every plank of the order first.'};
  if(now>=k.dueAt)return {error:'That order is past its time.'};
- const c=consume(company,k);if(c.error)return {error:c.error};
+ const c=consume(company,k,zone);if(c.error)return {error:c.error};
  return {company:replace(c.company,{...k,status:'done',doneAt:now}),effects:[{playerId,piece:PIECE.pickup,rep:DONE_REP}],message:`Order #${k.id} shipped to ${k.customer}.`};
 }
 // A staged delivery order loaded onto a vehicle at the loading door, then unloaded at its destination: done.
-export function loadTicket(company,{id,vehicle,now}){
+export function loadTicket(company,{id,vehicle,now,zone}){
  const k=find(company,id);if(!k||k.kind!=='delivery')return {error:'No such delivery.'};
  if(k.status!=='staged')return {error:'Stage every plank of the order first.'};
  if(now>=k.dueAt)return {error:'That order is past its time.'};
- const c=consume(company,k);if(c.error)return {error:c.error};
+ const c=consume(company,k,zone);if(c.error)return {error:c.error};
  return {company:replace(c.company,{...k,status:'loaded',vehicle:String(vehicle).slice(0,24)}),effects:[],message:`Order #${k.id} is on the truck: take it to ${k.dest||'the customer'}.`};
 }
 // A failed or expired order's pallet goes (wherever it is, the forks included); returns {company, planks} for the caller to send back to the racks.

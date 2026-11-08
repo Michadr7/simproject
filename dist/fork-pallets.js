@@ -9,6 +9,7 @@
 import {toWorld,tipOf,TIP,FORK_POINTS,LIFT_MIN,LIFT_MAX} from './forklift.js';
 import {RACK_SLOTS,LEVEL_Y,UNITS,BAYS,BAY_PITCH,WAREHOUSE_STAGING} from './warehouse-layout.js';
 import {PALLET} from './pallets.js';
+import {inZone} from './dock.js';
 
 // More forgiving than the real thing (user feedback 2026-11-06: the first version was too hard to hit): the tine tops may be 2 to 18 cm above the base, the middle 18 cm off and 11 degrees crooked, and the assists below pull the forks into line.
 export const POCKET=Object.freeze({lo:.02,hi:.18,liftAt:.14,lateral:.18,yaw:.2,engage:.35}); // tine top above the pallet's base; liftAt: where a pallet comes off the ground; yaw: 11 degrees
@@ -114,6 +115,11 @@ export function restingOn(s,ctx){
   const p=WAREHOUSE_STAGING[i];if(Math.abs(c.x-p.x)>STAGING_BOX.hx||Math.abs(c.z-p.z)>STAGING_BOX.hz)continue;
   return ctx.stagingTaken(i)?{kind:'staging',index:i,surface:ctx.stagingTop?.(i)||STAGING_BOX.top}:{kind:'blocked',reason:ctx.stagingNote?.(i)||'No order is waiting on that square.',surface:ctx.stagingTop?.(i)||STAGING_BOX.top};
  }
+ // outdoors (the apron, D2): nowhere to set a pallet down yet; the loading zone comes in D3
+ if(ctx.outdoors){ // the apron: the loading zone takes an order's pallet (the game says when it cannot yet), nowhere else
+  if(inZone(c.x,c.z)){const why=ctx.zoneNote?.();return why?{kind:'blocked',reason:why,surface:0}:{kind:'zone',surface:0}}
+  return {kind:'blocked',reason:'Set it down on the green loading zone, or take it back inside.',surface:0};
+ }
  // inside a shelving unit but not square to a free cell: it cannot be set down
  if(unitAt(c.x,c.z,.05))return {kind:'blocked',reason:'Line up with the bay.',surface:0};
  // the floor, if no wall or furniture is under it
@@ -131,7 +137,7 @@ export function settles(s,ctx){const r=restingOn(s,ctx);return r.kind!=='blocked
 
 // A line for the vehicle panel: why the forks are stopped, or what to do next. '' when there is nothing to say.
 export function forkHint(s,ctx){
- if(ctx.carried>0){const r=restingOn(s,ctx);if(r.kind==='blocked')return r.reason;if(r.kind==='rack')return `Lower the pallet into rack ${r.slot}.`;if(r.kind==='staging')return ctx.carriedOrder?'Lower the order’s pallet onto its square.':'Lower the pallet onto the order’s square.';return 'Lower the forks (F) to set the pallet down here.';}
+ if(ctx.carried>0){const r=restingOn(s,ctx);if(r.kind==='blocked')return r.reason;if(r.kind==='rack')return `Lower the pallet into rack ${r.slot}.`;if(r.kind==='zone')return 'Lower the pallet onto the loading zone to load the truck.';if(r.kind==='staging')return ctx.carriedOrder?'Lower the order’s pallet onto its square.':'Lower the pallet onto the order’s square.';return 'Lower the forks (F) to set the pallet down here.';}
  for(const b of ctx.boxes){
   if(Math.hypot(b.x-s.x,b.z-s.z)>3.8)continue;
   const p=probe(s,b);

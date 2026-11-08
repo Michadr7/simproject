@@ -6,7 +6,7 @@ import {PALLET_CAP} from './pallets.js';
 
 export const TAG_MAX=24,TAG_RANGE=10,TAG_SIZE={w:.8,h:.4};
 const COLS=8,PLAIN_ROWS=5,ROWS=12,CELL={w:64,h:32}; // 512 wide: rows 0..4 the 40 stock plates, rows 5..9 the 40 order plates (green edge), rows 10 and 11 the 11 glyphs of an order's number
-export const GLYPHS='#0123456789',ORDER_COLOUR='#4fd16a',GLYPH_SCALE={x:.5,y:.25,advance:.15}
+export const GLYPHS='#0123456789',ORDER_COLOUR='#4fd16a',GLYPH_SCALE={x:1.1,y:.55,advance:.3}
 const makeCanvas=()=>document.createElement('canvas');
 
 // plate `n` (1..PALLET_CAP) of the planks atlas: a dark plate with a honey edge, a stack of planks seen from the end on the left (three boards, each with its end grain and a light top edge)
@@ -24,7 +24,7 @@ function drawAtlas(canvas){
   g.font='bold 22px Arial, Helvetica, sans-serif';g.textAlign='center';g.textBaseline='middle';g.lineWidth=3;g.strokeStyle='#15130e';g.strokeText(String(n),x+47,y+17);g.fillStyle='#fff7da';g.fillText(String(n),x+47,y+17);
  }
  // the glyphs of an order's number: big white characters with a green outline, one per cell (the plate's number sits above the stock count)
- g.font='bold 30px Arial, Helvetica, sans-serif';g.textAlign='center';g.textBaseline='middle';g.lineWidth=5;g.lineJoin='round';
+ g.font='bold 22px Arial, Helvetica, sans-serif';g.textAlign='center';g.textBaseline='middle';g.lineWidth=4;g.lineJoin='round';
  [...GLYPHS].forEach((ch,i)=>{const x=(i%COLS)*CELL.w+CELL.w/2,y=(Math.floor(i/COLS)+PLAIN_ROWS*2)*CELL.h+CELL.h/2+1;g.strokeStyle='#15350f';g.strokeText(ch,x,y);g.fillStyle='#e8ffe0';g.fillText(ch,x,y)});
  return true;
 }
@@ -49,7 +49,7 @@ export function createPalletTags({max=TAG_MAX,range=TAG_RANGE,makeCanvasFn=makeC
   for(let i=0;i<n;i++){const {p}=within[i],c=tagCell(p.count,!!p.order);pos.set(p.x,p.y,p.z);m4.compose(pos,camera.quaternion,one);mesh.setMatrixAt(i,m4);cells[i*2]=c.col;cells[i*2+1]=c.row
    if(p.order){ // '#12' above the plate: one glyph quad per character, centred, facing the camera
     const text='#'+String(p.order).slice(0,4),w=(text.length-1)*GLYPH_SCALE.advance;
-    for(let k=0;k<text.length&&used<max*6;k++){const g=glyphCell(text[k]);if(!g)continue;const o=-w/2+k*GLYPH_SCALE.advance;pos.set(p.x+right.x*o,p.y+.3,p.z+right.z*o);m4.compose(pos,camera.quaternion,gs);mesh.setMatrixAt(used,m4);cells[used*2]=g.col;cells[used*2+1]=g.row;used++}
+    for(let k=0;k<text.length&&used<max*6;k++){const g=glyphCell(text[k]);if(!g)continue;const o=-w/2+k*GLYPH_SCALE.advance;pos.set(p.x+right.x*o,p.y+.4,p.z+right.z*o);m4.compose(pos,camera.quaternion,gs);mesh.setMatrixAt(used,m4);cells[used*2]=g.col;cells[used*2+1]=g.row;used++}
    }
   }
   mesh.count=used;mesh.instanceMatrix.needsUpdate=true;attr.needsUpdate=true;shown=within.slice(0,n).map(({p})=>p);return n;

@@ -21,9 +21,10 @@ import {tickTickets,takeTicket,stagePlanks,stagePallet,releaseOrderPallet,shipTi
 import {createOffice,createNameBoard,OFFICE_CLOCK,OFFICE_BOARD,OFFICE_COUNTER,OFFICE_STORE,OFFICE_COOLER} from './office.js';
 import {useCooler,coolerWait} from './water-cooler.js';
 import {dockRoute,DOCK_BAY} from './customers.js';
-import {createWarehouse,createWarehouseDoorway,RACK_SLOTS,WAREHOUSE_TABLE,WAREHOUSE_STAGING} from './warehouse.js';
+import {createWarehouse,createWarehouseDoorway,createDockPanel,RACK_SLOTS,WAREHOUSE_TABLE,WAREHOUSE_STAGING} from './warehouse.js';
 import {WAREHOUSE_COOLER} from './warehouse-layout.js';
 import {HAND_LEVEL,DOCK_DOOR,HALL} from './warehouse-layout.js';
+import {OUT,ZONE,toOutside,toInside,crossesOut,crossesIn,freshDoor,stepDoor,passable,nearDoor,inYard,inDoorwayOut} from './dock.js';
 import {clockIn,clockOut,tickShift,onSiteAt,taskText,recordPiece,PIECE_PAY} from './shift.js';
 import {deliverDue,takeDelivery,placeOrder,setMainHome,waitingHomes,waiting,dropSpot,homesHeld,mainHome,STUDIO_ID,buyVehicle,orderVehicle,displayColour,vehicleLabel,VEHICLE_PRICE,vehicleLock} from './orders.js';
 import {createParcels} from './parcels.js';
@@ -258,11 +259,11 @@ function stageOnOrder(id){const c=GameState.progress.carry;if(c?.kind!=='planks'
 function shipOrder(id){const k=ticketsOf(GameState.progress.companies?.ridgeline).list.find(t=>t.id===id),r=applyCompany({type:'ship',id});if(r.error){toast(r.error);return}if(k)dockGoing=k.planks;syncWarehouse();notifyPhone('jobs',r.message+' Paid '+money(PIECE_PAY.orders)+'.')}
 // The forklift (4.16 D): parked in its bay in the warehouse; E at it (Yard hand or better, on shift) to drive: W S A D, R raises the forks and F lowers them. At a rack bay, a staging pallet or the delivery pile, E lifts or sets down a pallet
 // of up to 40 planks (the forks' load is saved on the company, forest.js forkLoadOf). The model is about 14,000 triangles and only loaded (and drawn) in the warehouse.
-const fork={on:false,state:forklift.fresh()};let forkView=null,forkGuide=null,forkLoading=false,forkHips=.95;const FORK_SIT=-.04; // forkHips: your hips' height when standing (measured as you get on); FORK_SIT: hip joint above the cushion
+const fork={on:false,where:'inside',state:forklift.fresh()};let forkView=null,forkGuide=null,forkLoading=false,forkHips=.95;const FORK_SIT=-.04; // fork.where: 'inside' (the hall, room metres) or 'outside' (the apron, world metres: through the roller door, DESIGN 4.16 J step 2).  // forkHips: your hips' height when standing (measured as you get on); FORK_SIT: hip joint above the cushion
 function loadForklift(room){if(forkView||forkLoading)return;forkLoading=true;Promise.all([import('./forklift-view.js'),import('./fork-guide-view.js')]).then(([m,g])=>{forkView=m.buildForklift();room.scene.add(forkView.group);forkGuide=g.createForkGuide();room.scene.add(forkGuide.group);updateFork()})}
 function updatePalletTags(){const o=shop&&officeByKey(shop);if(!o||o.kind!=='warehouse'||!o.room.updateTags)return;const extra=[],fl=forkLoadOf(GameState.progress);if(fl>0&&forkView){const at=forklift.toWorld(fork.state,0,fp.CARRY_Z);extra.push({x:at.x,y:forkView.topY+.25,z:at.z,count:fl,product:'planks',order:palletsOf(GameState.progress.companies?.ridgeline).find(q=>q.at.fork)?.order||0})}o.room.updateTags(camera,{x:me.position.x,z:me.position.z},extra)} // the tags above the pallets (pallet-tags.js), the one on the forks too
 function updateFork(){if(forkView)forkView.set(fork.state,forkLoadOf(GameState.progress))}
-const forkBlocks=(x,z)=>{if(fork.on||!forkView)return false;const s=fork.state,dx=x-s.x,dz=z-s.z,c=Math.cos(s.yaw),n=Math.sin(s.yaw);return Math.abs(dx*c-dz*n)<.85&&Math.abs(dx*n+dz*c)<1.9} // a parked forklift is solid to a walker
+const forkBlocks=(x,z)=>{if(fork.on||!forkView||(fork.where==='outside')!==!shop)return false;const s=fork.state,dx=x-s.x,dz=z-s.z,c=Math.cos(s.yaw),n=Math.sin(s.yaw);return Math.abs(dx*c-dz*n)<.85&&Math.abs(dx*n+dz*c)<1.9} // a parked forklift is solid to a walker
 function getOnFork(){const pr=GameState.progress;if(!onRidgeline()||careerOf(pr,'ridgeline').rank<4){toast('The forklift is for Ridgeline Yard hands (rank 4) and up, on shift.');return}if(pr.carry){toast('Put down what you are carrying first.');return}
  stowTool();{player.updateMatrixWorld(true);const h=avatar.bone?.('Hips');if(h){const v=new THREE.Vector3(),o=new THREE.Vector3();h.getWorldPosition(v);player.getWorldPosition(o);if(v.y-o.y>.6&&v.y-o.y<1.3)forkHips=v.y-o.y}}fork.on=true;fork.state={...fork.state,speed:0};keys.clear();toast('On the forklift: the controls are in the vehicle panel')}
 // Seated at the wheel: the thighs forward (character.js seated pose) and both hands on the steering wheel (forklift-local (±0.14, 1.5, -0.21), turned into the character's own frame)
@@ -276,7 +277,7 @@ function forkCtx(){
  const o=shop&&officeByKey(shop),co=GameState.progress.companies?.ridgeline,list=palletsOf(co);
  if(list!==forkListKey){forkListKey=list;forkBoxes=fp.boxesOf(list);forkCells=new Set(list.filter(q=>q.at.rack).map(q=>q.at.rack))}
  const slots=stagingOf(co),held=list.find(q=>q.at.fork),carriedOrder=held?.order||0;
- return {boxes:forkBoxes,carried:forkLoadOf(GameState.progress),carriedOrder,stagingTop:i=>{const q=list.find(x=>x.at.staging===i);return q&&!carriedOrder?fp.heightOf(q.count):0},stagingNote:i=>carriedOrder?'That is not this order\u2019s square.':slots[i]?'That order is already staged.':'No order is waiting on that square.',cellOf:slot=>RACK_SLOTS.find(c=>c.id===slot),blockedOther:(x,z)=>o.room.blockedOther(x,z),solidAt:(x,z)=>o.room.solidAt(x,z),occupied:slot=>forkCells.has(slot),stagingTaken:i=>{const k=slots[i];if(!k)return false;return carriedOrder?k.id===carriedOrder:k.status==='taken'}}
+ return {outdoors:!o,zoneNote,boxes:o?forkBoxes:[],carried:forkLoadOf(GameState.progress),carriedOrder,stagingTop:i=>{const q=list.find(x=>x.at.staging===i);return q&&!carriedOrder?fp.heightOf(q.count):0},stagingNote:i=>carriedOrder?'That is not this order\u2019s square.':slots[i]?'That order is already staged.':'No order is waiting on that square.',cellOf:slot=>RACK_SLOTS.find(c=>c.id===slot),blockedOther:(x,z)=>o?o.room.blockedOther(x,z):forkBlockedFn(x,z),solidAt:(x,z)=>o?o.room.solidAt(x,z):forkBlockedFn(x,z),occupied:slot=>!o||forkCells.has(slot),stagingTaken:i=>{const k=slots[i];if(!k)return false;return carriedOrder?k.id===carriedOrder:k.status==='taken'}}
 }
 function forkCompany(company,message){const pr=GameState.progress;GameState.progress={...pr,companies:{...(pr.companies||{}),ridgeline:company}};persist();syncWarehouse();updateFork();if(message)toast(message)}
 function stageFromForks(id){const r=applyCompany({type:'stagePallet',id});if(r.error)return r;if(r.surplus>0){const back=applyCompany({type:'restock',planks:r.surplus});r.message+=' The other '+r.surplus+' planks went '+(back.error?'nowhere':back.toStock&&!back.placed?'to the lumberyard':'back to the racks')+'.'}persist();syncWarehouse();updateFork();return r}
@@ -284,17 +285,18 @@ function stageFromForks(id){const r=applyCompany({type:'stagePallet',id});if(r.e
 // the guide: what to do next (a line in the panel) and the markers in the room (fork-guide.js, fork-guide-view.js)
 let forkClock=0;
 function forkGuideTick(ctx,dt){
- if(!forkGuide)return;forkClock+=dt;if(!fork.on){forkGuide.update(null,null);return}
+ if(!forkGuide)return;forkClock+=dt;if(fork.on&&fork.where==='outside'&&ctx){fork.goal=ctx.carriedOrder?(zoneNote()||'Lower the order pallet onto the green loading zone to load the truck.'):ctx.carried>0?'Take the pallet back inside: only an order pallet loads here.':'';forkGuide.update(null,null);return}if(!fork.on){forkGuide.update(null,null);return}
  const g=forkGoal({carried:ctx.carried,carriedOrder:ctx.carriedOrder,boxes:ctx.boxes,staging:stagingOf(GameState.progress.companies?.ridgeline),pos:fork.state});fork.goal=g.text;forkGuide.update(g.target,forkGhost(fork.state,ctx),forkClock)
 }
 function forkTick(ctx,raise){
- const s=fork.state,co=GameState.progress.companies?.ridgeline;fork.hint=fp.forkHint(s,ctx);
+ const s=fork.state,co=GameState.progress.companies?.ridgeline;fork.hint=fp.forkHint(s,ctx);if(fork.where==='outside'){const a=forklift.toWorld(s,0,forklift.TIP+.6);if(!inYard(a.x,a.z)&&!(passable(dockDoor)&&inDoorwayOut(a.x,a.z)))fork.hint='The forklift stays in the yard.'}
  if(ctx.carried>0){
   const r=fp.settles(s,ctx);if(!r){forkLock=null;return}
   const key=r.kind+':'+(r.slot||r.index||'');if(raise>=0||forkLock===key)return;forkLock=key;
   if(!onRidgeline()){toast('Clock in to work the forklift for Ridgeline Timber.');return}
   if(r.kind==='rack'){const n=forkLoadOf(GameState.progress),res=setPallet(co,{rack:r.slot});if(res.placed)forkCompany(res.company,'Set the pallet in rack '+r.slot+' · '+n+' planks.');else toast(res.error)}
   else if(r.kind==='floor'){const n=forkLoadOf(GameState.progress),res=setPallet(co,{floor:{x:r.x,z:r.z,yaw:r.yaw}});if(res.placed)forkCompany(res.company,'Set the pallet down · '+n+' planks.');else toast(res.error)}
+  else if(r.kind==='zone')loadAtZone();
   else if(r.kind==='staging'){const k=stagingOf(co)[r.index],res=k&&stageFromForks(k.id);if(res)toast(res.error||res.message)}
   return;
  }
@@ -303,12 +305,47 @@ function forkTick(ctx,raise){
  if(b){if(!onRidgeline()){toast('Clock in to work the forklift for Ridgeline Timber.');return}const res=liftPallet(co,b.id);if(res.lifted)forkCompany(res.company,'Lifted a pallet · '+res.lifted+' planks.')}
 }
 // E on the forklift only gets you off (and only when it is nearly stopped)
+// The roller door and the way through it (dock.js): the panels roll up when the driven forklift is near, it crosses between the hall and the apron with a short fade (same forklift, half a turn about the door), and outside it stays on the apron.
+const zonePaint=new THREE.Mesh(new THREE.PlaneGeometry(ZONE.hx*2,ZONE.hz*2),new THREE.MeshBasicMaterial({color:'#3fae5a',transparent:true,opacity:.6,depthWrite:false,polygonOffset:true,polygonOffsetFactor:-16,polygonOffsetUnits:-32}));zonePaint.renderOrder=2;zonePaint.name='loading-zone';zonePaint.rotation.x=-Math.PI/2;zonePaint.position.set(ZONE.x,.03,ZONE.z);scene.add(zonePaint); // the loading zone, painted on the apron
+const dockOut=createDockPanel();dockOut.position.set(OUT.x,2.15,OUT.wall-.04);scene.add(dockOut);let dockDoor=freshDoor(),dockShown=-1,forkCrossing=false;
+const forkBlockedFn=(x,z)=>fork.where==='outside'?(passable(dockDoor)&&inDoorwayOut(x,z)?false:(!inYard(x,z)||blocked(x,z))):blocked(x,z); // outdoors the apron only
+function updateDock(dt){
+ const o=offices.find(x=>x.kind==='warehouse'),near=fork.on&&nearDoor(fork.where,fork.state),next=stepDoor(dockDoor,{near,dt});
+ if(next===dockDoor&&dockShown===(fork.on?1:0))return;dockDoor=next;dockShown=fork.on?1:0;
+ dockOut.scale.y=Math.max(.04,1-dockDoor.t*.96);dockOut.visible=dockDoor.t<.995;if(o)o.room.setDock(dockDoor.t,fork.on&&fork.where==='inside');
+}
+function forkCrossCheck(){
+ if(forkCrossing||doorFade)return;const open=passable(dockDoor),s=fork.state;
+ if(fork.where==='inside'&&crossesOut(s,open)||fork.where==='outside'&&crossesIn(s,open)){const dir=fork.where==='inside'?'out':'in';forkCrossing=true;doorFade={t:0,phase:'out',action:()=>{forkCross(dir);forkCrossing=false}}}
+}
+function forkCross(dir){
+ const o=offices.find(x=>x.kind==='warehouse');if(!o||!fork.on)return;
+ if(dir==='out'){fork.state=toOutside(fork.state);fork.where='outside';for(const mesh of o.room.occluders){mesh.material.opacity=1;mesh.material.depthWrite=true}o.room.scene.visible=false;shop=null;scene.add(player);if(forkView)scene.add(forkView.group);
+  const seat=forklift.seatOf(fork.state);setMePosition(seat.x,.02,seat.z);me.rotation.y=fork.state.yaw;yaw=0;pitch=.4;camera.position.set(seat.x,3,seat.z+7)}
+ else{fork.state=toInside(fork.state);fork.where='inside';enterOffice(o);if(forkView)o.room.scene.add(forkView.group);
+  const seat=forklift.seatOf(fork.state);setMePosition(seat.x,.02,seat.z);me.rotation.y=fork.state.yaw;yaw=0}
+ updateFork();
+}
 function forkOffers(add){const s=fork.state,here={x:me.position.x,z:me.position.z},at=()=>worldPoint({x:me.position.x,y:2,z:me.position.z});add('fork-off',here,at,Math.abs(s.speed)<.6?'Get off the forklift':'Stop to get off',()=>{if(Math.abs(fork.state.speed)<.6)getOffFork()},9)}
 // Delivery orders (4.16 C): a staged delivery is loaded through the loading door onto a truck with a bed parked within 16 m of the dock (yours or the company's), driven to the house, and unloaded at its drop spot.
 const ridgelineTickets=()=>ticketsOf(GameState.progress.companies?.ridgeline).list;
-const deliveryBed=k=>driving.bedsWithin(DOCK_BAY.x,DOCK_BAY.z,16).find(b=>!addPlanks(b.cargo,b.model,k.planks).error)||null;
-function loadDelivery(id){const k=ridgelineTickets().find(t=>t.id===id),bed=k&&deliveryBed(k);if(!bed){toast('Park a truck with a bed outside the loading door first.');return}
- const r=applyCompany({type:'load',id,vehicle:bed.id});if(r.error){toast(r.error);return}driving.setCargo(bed.id,addPlanks(bed.cargo,bed.model,k.planks,k.id).cargo);syncWarehouse();persist();toast(r.message+' It is marked on your task list: '+destinationName(k.dest)+'.');setFocus('ticket:'+k.id)} // the planks are tagged with the order (cargo.js): they cannot be sold or taken off anywhere but at the address
+const deliveryBed=k=>driving.bedsWithin(ZONE.x,ZONE.z,9).find(b=>!addPlanks(b.cargo,b.model,k.planks).error)||null;
+// The loading zone (D3): an order's complete pallet lowered onto the green zone in front of the roller door loads itself onto the waiting truck (a pickup: the customer's flatbed; a delivery: any stopped truck with a bed beside the zone).
+// Why it cannot yet is the forklift panel's note (fork-pallets.js restingOn). The pallet is consumed from the forks (tickets.js zone).
+function zoneNote(){
+ const co=GameState.progress.companies?.ridgeline,held=palletsOf(co).find(q=>q.at.fork);if(!held?.order)return 'Only an order\u2019s pallet goes on the loading zone.';
+ const k=ridgelineTickets().find(t=>t.id===held.order);if(!k||k.status!=='staged')return `Order #${held.order} is not complete (${k?k.staged:0} of ${k?k.planks:'?'} planks).`;
+ if(k.kind==='pickup')return dockTruck.parked()?'':'The customer\u2019s truck has not arrived yet.';
+ return deliveryBed(k)?'':'Park a truck with a bed beside the loading zone first.';
+}
+function loadAtZone(){
+ const co=GameState.progress.companies?.ridgeline,held=palletsOf(co).find(q=>q.at.fork&&q.order),k=held&&ridgelineTickets().find(t=>t.id===held.order);if(!k)return;
+ if(k.kind==='pickup'){const r=applyCompany({type:'ship',id:k.id,zone:true});if(r.error){toast(r.error);return}dockGoing=k.planks;notifyPhone('jobs',r.message+' Paid '+money(PIECE_PAY.orders)+'.')}
+ else loadDelivery(k.id);
+ syncWarehouse();updateFork();persist();
+}
+function loadDelivery(id){const k=ridgelineTickets().find(t=>t.id===id),bed=k&&deliveryBed(k);if(!bed){toast('Park a truck with a bed beside the loading zone first.');return}
+ const r=applyCompany({type:'load',id,vehicle:bed.id,zone:true});if(r.error){toast(r.error);return}driving.setCargo(bed.id,addPlanks(bed.cargo,bed.model,k.planks,k.id).cargo);syncWarehouse();persist();toast(r.message+' It is marked on your task list: '+destinationName(k.dest)+'.');setFocus('ticket:'+k.id)} // the planks are tagged with the order (cargo.js): they cannot be sold or taken off anywhere but at the address
 function deliverOrder(id){const k=ridgelineTickets().find(t=>t.id===id),d=k&&dropSpot(k.dest),f=k&&driving.byId.get(k.vehicle);
  if(!f||!f.present||Math.hypot(f.state.x-d.x,f.state.z-d.z)>30){toast('Bring the truck with the order here first.');return}
  const bed=driving.cargoOf(k.vehicle),tagged=removeOrderPlanks(bed,k.id),off=tagged.count>=k.planks?{cargo:tagged.cargo}:removePlanks(bed,k.planks); // a save from before the tag has planks without it
@@ -376,7 +413,7 @@ function unstick(){const r=placeSafely(me.position.x,me.position.y,me.position.z
 if(GameState.progress.position){const p=GameState.progress.position;if(!blocked(p.x,p.z)){me.position.x=p.x;me.position.z=p.z;camera.position.set(p.x,4,p.z+7)}else{const spot=findNearestClearSpot(blocked,p.x,p.z,{openArea:OPEN_AREA}); // a blocked saved position (the 0.31 parked car) no longer sends you back to the spawn
  if(spot){me.position.x=spot.x;me.position.z=spot.z;camera.position.set(spot.x,4,spot.z+7)}}}
 function worldBlocked(x,z){if(!isWalkable(x,z)||world.blocked(x,z))return true;return colliders.some(b=>Math.abs(x-b.x)<b.hx+.33&&Math.abs(z-b.z)<b.hz+.33)||plankBoxes.some(b=>Math.abs(x-b.x)<b.hx+.33&&Math.abs(z-b.z)<b.hz+.33)}
-function blocked(x,z){if(shop)return shops[shop].blocked(x,z)||forkBlocks(x,z);if(inside)return home.room.blocked(x,z);return worldBlocked(x,z)||driving.blocksWalker(x,z)||customerTruck.blocksWalker(x,z)||dockTruck.blocksWalker(x,z)} // a drivable vehicle is solid to a walker (its hull, inflated by the player radius)
+function blocked(x,z){if(shop)return shops[shop].blocked(x,z)||forkBlocks(x,z);if(inside)return home.room.blocked(x,z);return worldBlocked(x,z)||driving.blocksWalker(x,z)||customerTruck.blocksWalker(x,z)||dockTruck.blocksWalker(x,z)||forkBlocks(x,z)} // a drivable vehicle is solid to a walker (its hull, inflated by the player radius)
 function clearWorldPanel(){if(worldPanel?.actor){const pa=getMeWorldPosition(new THREE.Vector3()),pb=worldPanel.actor.getWorldPosition(new THREE.Vector3());yaw=Math.atan2(pa.x-pb.x,pa.z-pb.z)+.45;pitch=.32;zoom=zoomTarget=5.8;}worldPanel=null;look.resetMotion()}
 function pause(show){if(sleepElapsed!==null)return;if(show){phone?.close();inventoryUI?.close();storeUI?.close();}if(show){$('dialog').hidden=true;clearWorldPanel();}$('controls').hidden=!show;modal=show;keys.clear();if(show)look.release()}
 function startGame(){if(currentAppearance.name){saveMenu.backupOnPlay();$('welcome').hidden=true;active=true}else openCreator()}$('start').onclick=startGame;$('help').onclick=()=>pause(true);
@@ -494,13 +531,13 @@ function showCafe(){const c=GameState.progress.cafe,o=ORDERS[c.customer];if(c.st
 function exitDoorOffer(add){const d=shops[shop]?.exitDoor;if(!d?.manual)return;const spec=(MAP.shops[shop]||officeByKey(shop)).interior.exitDoor;add('exit-door',{x:0,z:spec.z-1.1},()=>worldPoint({x:0,y:1.7,z:spec.z-.4}),d.isOpen?'Close the doors':'Open the doors',()=>{d.toggle();audio.click(listenerAt(),listenerAt())},1.9)}
 function candidates(){const all=[],add=(id,point,anchor,label,run,range=1.5,key)=>all.push({id,point,anchor,label,run,range,key}); // key: the key shown on the prompt (E when missing; '' shows none)
  if(driving.active){add('exit-vehicle',{x:me.position.x,z:me.position.z},()=>new THREE.Vector3(me.position.x,me.position.y+2.4,me.position.z),driving.speed<1?'Get out':'Stop to get out',exitVehicle,9);return all} // driving: E gets you out (and nothing else is on offer)
+ if(!shop&&fork.where==='outside'){if(fork.on){forkOffers(add);return all}if(forkView)add('wh-fork-out',{x:fork.state.x,z:fork.state.z},()=>worldPoint({x:fork.state.x,y:1.9,z:fork.state.z}),'Drive the forklift',getOnFork,2.7)} // the forklift left outside is driven from there
  if(shop&&officeByKey(shop)?.kind==='warehouse'){if(fork.on){forkOffers(add);return all}const pr=GameState.progress,racks=racksOf(pr),on=onRidgeline();
   if(pr.carry?.kind==='planks')for(const s of RACK_SLOTS)if(s.level<=HAND_LEVEL&&Math.hypot(s.stand.x-me.position.x,s.stand.z-me.position.z)<2.6)add('wh-rack-'+s.id,s.stand,()=>worldPoint({x:s.x,y:1.2,z:s.z}),`Stack the planks in rack ${s.id} · ${racks[s.id]||0} / ${RACK_CAP}`,()=>stackAtRack(s.id),1.3); // by hand only the floor level; the upper shelves are for the forklift
   {const co=pr.companies?.ridgeline,slots=stagingOf(co),need=slots.map(k=>k&&k.status==='taken'?k.planks-k.staged:0),ready=slots.find(k=>k&&k.kind==='pickup'&&k.status==='staged'),readyDel=slots.find(k=>k&&k.kind==='delivery'&&k.status==='staged');
    if(on&&!pr.carry)for(const s of RACK_SLOTS)if(s.level<=HAND_LEVEL&&(racks[s.id]||0)>0&&Math.hypot(s.stand.x-me.position.x,s.stand.z-me.position.z)<2.6)add('wh-take-'+s.id,s.stand,()=>worldPoint({x:s.x,y:1.2,z:s.z}),`Take a stack from rack ${s.id} · ${racks[s.id]}${need.some(n=>n>0)?' · for your order':''}`,()=>takeFromRackNow(s.id),1.3);
    if(pr.carry?.kind==='planks')slots.forEach((k,i)=>{if(k&&need[i]>0){const p=WAREHOUSE_STAGING[i];add('wh-stage-'+k.id,p,()=>worldPoint({x:p.x,y:.9,z:p.z}),`Stage the planks on order #${k.id} · ${k.staged} / ${k.planks}`,()=>stageOnOrder(k.id),1.9)}});
-   if(readyDel){const at={x:DOCK_DOOR.x-1.6,z:HALL.halfD-1},bed=deliveryBed(readyDel);add('wh-load-del',at,()=>worldPoint({x:at.x,y:1.6,z:at.z}),bed?`Load order #${readyDel.id} onto the ${bed.name} · ${readyDel.planks} planks`:`Order #${readyDel.id} is staged · park a truck with a bed outside the loading door`,()=>loadDelivery(readyDel.id),2.2)}
-   if(ready){const at={x:DOCK_DOOR.x,z:HALL.halfD-1};add('wh-load',at,()=>worldPoint({x:at.x,y:1.6,z:at.z}),dockTruck.parked()?`Load order #${ready.id} onto the truck · ${ready.planks} planks`:`Order #${ready.id} is staged · the truck is on its way`,dockTruck.parked()?()=>shipOrder(ready.id):()=>toast('The customer\'s truck is still on its way to the dock.'),2.2)}}
+   }
   if(forkView)add('wh-fork',{x:fork.state.x,z:fork.state.z},()=>worldPoint({x:fork.state.x,y:1.9,z:fork.state.z}),'Drive the forklift',getOnFork,2.7);
   {const w=coolerWait(pr,'warehouse');add('wh-cooler',WAREHOUSE_COOLER,()=>worldPoint({x:WAREHOUSE_COOLER.x,y:1.3,z:WAREHOUSE_COOLER.z}),w?'Water cooler · ready in '+w+' min':'Water cooler · free water',()=>drinkCooler('warehouse'),1.6)}
   add('wh-table',WAREHOUSE_TABLE,()=>entityPoint(officeByKey(shop).room.clerk.group),'Order table · '+(openTickets(pr.companies?.ridgeline).length||'no')+' open',orderTable,2.2);
@@ -1054,7 +1091,7 @@ function updateZones(dt){
  world.update(dt,camera,fadeTarget);sawmillCtl?.update(dt);syncSawmill();if(sawmillCtl?.ready)audio.update({listener:{x:me.position.x,z:me.position.z},blade:{at:sawmillCtl.bladePoint,level:sawmillCtl.speed,sawing:sawmillCtl.sawing},belt:{at:sawmillCtl.beltPoint,level:sawmillCtl.beltLevel}});
  if(outdoors){sun.position.set(me.position.x-24,30,me.position.z+22);sun.target.position.set(me.position.x,0,me.position.z);sun.target.updateMatrixWorld()}
  const markers=[];
- if(outdoors){const job=GameState.progress.activeJob;if(job&&gigMarker.visible)markers.push({x:gigMarker.position.x,z:gigMarker.position.z,color:'#f2ca79'});if(marker.visible)markers.push({x:marker.position.x,z:marker.position.z,color:'#d4e7b3'})}
+ if(outdoors){const job=GameState.progress.activeJob;if(job&&gigMarker.visible)markers.push({x:gigMarker.position.x,z:gigMarker.position.z,color:'#f2ca79'});if(marker.visible)markers.push({x:marker.position.x,z:marker.position.z,color:'#d4e7b3'});for(const v of driving.fleet)if(v.present&&!v.display&&!v.dev&&v!==driving.active)markers.push({x:v.state.x,z:v.state.z,color:'#6fb7ff'})} // your own vehicles show on the minimap in blue
  const p=outdoors?me.position:shop?SHOPS[shop]:STUDIO;
  minimap.update(dt,{player:{x:p.x,z:p.z},heading:outdoors?me.rotation.y:0,yaw,markers});
 }
@@ -1354,7 +1391,7 @@ function moveFx(){const fx=carryEffects(GameState.progress.carry),n=needsEffects
 function stepWorld(step){
  let startX=me.position.x,startZ=me.position.z;
  let pressed=false;
- if(fork.on){if(active&&!modal&&!document.hidden){const k=c=>keys.has(c),ctx=forkCtx();fork.state=forklift.step(fork.state,{throttle:Number(k('KeyW')||k('ArrowUp'))-Number(k('KeyS')||k('ArrowDown')),steer:Number(k('KeyA')||k('ArrowLeft'))-Number(k('KeyD')||k('ArrowRight')),raise:Number(k('KeyR'))-Number(k('KeyF')),boost:k('ShiftLeft')||k('ShiftRight')},step,blocked,{forksClear:s=>fp.forksClear(s,ctx),liftRange:s=>fp.liftRange(s,ctx)});{const c2=forkCtx(),held=k('KeyR')||k('KeyF'),a=fp.assist(fork.state,c2,step,{forksHeld:held});if(a!==fork.state&&forklift.clear(a,blocked,{forksClear:s=>fp.forksClear(s,c2)}))fork.state=a;forkTick(c2,Number(k('KeyR'))-Number(k('KeyF')))}const seat=forklift.seatOf(fork.state);me.position.x=seat.x;me.position.z=seat.z;me.rotation.y=fork.state.yaw;startX=seat.x;startZ=seat.z}}else if(driving.active){ // driving: the keys steer the vehicle and you ride at its seat (nothing paused is simulated: a paused game leaves the vehicle where it is)
+ if(fork.on){if(active&&!modal&&!document.hidden){const k=c=>keys.has(c),ctx=forkCtx();fork.state=forklift.step(fork.state,{throttle:Number(k('KeyW')||k('ArrowUp'))-Number(k('KeyS')||k('ArrowDown')),steer:Number(k('KeyA')||k('ArrowLeft'))-Number(k('KeyD')||k('ArrowRight')),raise:Number(k('KeyR'))-Number(k('KeyF')),boost:k('ShiftLeft')||k('ShiftRight')},step,forkBlockedFn,{forksClear:s=>fp.forksClear(s,ctx),liftRange:s=>fp.liftRange(s,ctx)});{const c2=forkCtx(),held=k('KeyR')||k('KeyF'),a=fp.assist(fork.state,c2,step,{forksHeld:held});if(a!==fork.state&&forklift.clear(a,forkBlockedFn,{forksClear:s=>fp.forksClear(s,c2)}))fork.state=a;forkTick(c2,Number(k('KeyR'))-Number(k('KeyF')));forkCrossCheck()}const seat=forklift.seatOf(fork.state);me.position.x=seat.x;me.position.z=seat.z;me.rotation.y=fork.state.yaw;startX=seat.x;startZ=seat.z}}else if(driving.active){ // driving: the keys steer the vehicle and you ride at its seat (nothing paused is simulated: a paused game leaves the vehicle where it is)
   if(active&&!modal&&!document.hidden){driving.step(step,{throttle:Number(keys.has('KeyW')||keys.has('ArrowUp'))-Number(keys.has('KeyS')||keys.has('ArrowDown')),steer:Number(keys.has('KeyA')||keys.has('ArrowLeft'))-Number(keys.has('KeyD')||keys.has('ArrowRight')),brake:keys.has('Space')},pedestrians.people.map(p=>({x:p.group.position.x,z:p.group.position.z,r:.45})));
    const seat=driving.seat();me.position.x=seat.x;me.position.z=seat.z;me.rotation.y=driving.yaw;startX=seat.x;startZ=seat.z; // riding is not walking: no walked distance, no stuck check
    driveSave+=step;if(driveSave>=5){driveSave=0;persist()}}
@@ -1396,10 +1433,10 @@ look.tick(view);
 if(worldPanel?.actor&&!$('dialog').hidden){const actor=worldPanel.actor,pa=getMeWorldPosition(new THREE.Vector3()),pb=actor.getWorldPosition(new THREE.Vector3()),mid=pa.clone().add(pb).multiplyScalar(.5);const angle=Math.atan2(pa.x-pb.x,pa.z-pb.z);actor.rotation.y=angle;me.rotation.y=angle+Math.PI;worldPlayer.position.copy(mid);if(shop)shops[shop].camera(worldPlayer,angle+.45,.32,5.8,view);else updateCamera(worldPlayer,angle+.45,.32,5.8,view)}else if(shop){getMeWorldPosition(worldPlayer.position);shops[shop].camera(worldPlayer,yaw,pitch,zoom,view);}else if(inside)(home.camera||indoorCamera)(me,yaw,pitch,zoom,view);else updateCamera(me,yaw,pitch,zoom,view);
 const daylight=Math.max(.12,Math.sin((GameState.progress.routine.minutes-360)/1440*Math.PI*2));sun.intensity=.2+daylight*2.9;scene.background.setRGB(.08+daylight*.65,.12+daylight*.67,.2+daylight*.62);scene.fog.color.copy(scene.background);
 
-updateEquipped(modal?0:view);updateCarryPose(view);updateNozzlePose(view);updateForkPose();if(forkGuide)forkGuideTick(fork.on?forkCtx():null,view);avatar.update(modal?0:view);if(shop)shops[shop].clerk.update(modal?0:view);updatePalletTags();updateZones(view);updatePassOut(real);updateSleep(real);updateWork(view);updateGig(view);updateObjective(view);updateWorldUI();updateTracker(real);updateHomeNotices();tickOrders(real);tickShifts(real);updateRing();updateMultiplayer(now,moving,view);syncPlayerMesh();fuelHose();{const dv=driving.active,on=!!dv&&(dv.fuelMgal>0||!dv.spec.fuel)&&!modal;{const tip=dv&&on?driving.exhaust(dv):null;if(tip)smoke.emit(dv.spec.id,view,tip,exhaustRate({running:true,throttle:driving.driving&&(keys.has('KeyW')||keys.has('ArrowUp'))?1:0,speed:dv.state.speed,top:dv.cls.top,tier:dv.cls.tier}));smoke.update(view,!inside)}audio.engine(engineVoice({speed:dv?dv.state.speed:0,top:dv?dv.cls.top:10,throttle:dv&&driving.driving&&(keys.has('KeyW')||keys.has('ArrowUp'))?1:0,tier:dv?dv.cls.tier:'low',running:on}))}audio.fuel({listener:listenerAt(),at:fuel.held?fuel.held.use:canAt,level:fuelFlow,fullness:fuelFull});fuelFlow=0;canAt=null;renderer.render(inside?home.room.scene:scene,camera)}requestAnimationFrame(frame);
+updateEquipped(modal?0:view);updateCarryPose(view);updateNozzlePose(view);updateForkPose();updateDock(modal?0:view);if(forkGuide)forkGuideTick(fork.on?forkCtx():null,view);avatar.update(modal?0:view);if(shop)shops[shop].clerk.update(modal?0:view);updatePalletTags();updateZones(view);updatePassOut(real);updateSleep(real);updateWork(view);updateGig(view);updateObjective(view);updateWorldUI();updateTracker(real);updateHomeNotices();tickOrders(real);tickShifts(real);updateRing();updateMultiplayer(now,moving,view);syncPlayerMesh();fuelHose();{const dv=driving.active,on=!!dv&&(dv.fuelMgal>0||!dv.spec.fuel)&&!modal;{const tip=dv&&on?driving.exhaust(dv):null;if(tip)smoke.emit(dv.spec.id,view,tip,exhaustRate({running:true,throttle:driving.driving&&(keys.has('KeyW')||keys.has('ArrowUp'))?1:0,speed:dv.state.speed,top:dv.cls.top,tier:dv.cls.tier}));smoke.update(view,!inside)}audio.engine(engineVoice({speed:dv?dv.state.speed:0,top:dv?dv.cls.top:10,throttle:dv&&driving.driving&&(keys.has('KeyW')||keys.has('ArrowUp'))?1:0,tier:dv?dv.cls.tier:'low',running:on}))}audio.fuel({listener:listenerAt(),at:fuel.held?fuel.held.use:canAt,level:fuelFlow,fullness:fuelFull});fuelFlow=0;canAt=null;renderer.render(inside?home.room.scene:scene,camera)}requestAnimationFrame(frame);
 
 // Development hook: open the game with ?debug to inspect state from the console (window.__city).
-if(typeof location!=='undefined'&&new URLSearchParams(location.search).has('debug'))window.__city={GameState,world,scene,camera,avatar,driving,pedestrians,audio,sawmillCtl,enterOffice:key=>{const o=officeByKey(key);if(o)enterOffice(o);return !!o},holdBend:a=>{bendNow=a;avatar.setLean(a*.87);avatar.setCrouch(a*.22)},
+if(typeof location!=='undefined'&&new URLSearchParams(location.search).has('debug'))window.__city={blockedAt:(x,z)=>blocked(x,z),GameState,world,scene,camera,avatar,driving,pedestrians,audio,sawmillCtl,enterOffice:key=>{const o=officeByKey(key);if(o)enterOffice(o);return !!o},holdBend:a=>{bendNow=a;avatar.setLean(a*.87);avatar.setCrouch(a*.22)},
  teleport(x,z){if(inside||shop)return false;setMePosition(x,me.position.y,z);return true},
  view(newYaw,newPitch,newZoom){yaw=newYaw??yaw;pitch=newPitch??pitch;zoom=zoomTarget=newZoom??zoom},
  give(id){return commitInventory(addItem(GameState.progress,id))},equip:id=>toggleEquip(id,{silent:true}),hotbarUse,eHold(on){eHeld=on},place(x,z){setMePosition(x,me.position.y,z)},get shop(){return shop},get beacon(){return {visible:marker.visible,x:+marker.position.x.toFixed(2),y:+marker.position.y.toFixed(2),z:+marker.position.z.toFixed(2),diamondY:+diamond.position.y.toFixed(2)}},doors(){return {modal,active,busy:!!busy,fade:!!doorFade,cooldown:+doorCooldown.toFixed(2),fronts:shopDoors.map(f=>({kind:f.kind,amount:+f.door.amount.toFixed(2),open:shopOpen(f.kind,GameState.progress.routine),blocked:colliders.includes(f.blocker),dx:+(me.position.x-f.x).toFixed(2),z:+me.position.z.toFixed(2)}))}},get pos(){return {x:+me.position.x.toFixed(2),z:+me.position.z.toFixed(2),ry:+me.rotation.y.toFixed(2)}},get doorCooldown(){return +doorCooldown.toFixed(2)},get inside(){return inside},get hidden(){return $('objectiveDetails').hidden},get fork(){return fork},notify:notifyPhone,toastState:()=>({showing:toastShowing,waiting:[...toastQueue],text:$('jobToast').textContent}),tagsShown(){const o=shop&&officeByKey(shop);return o?.room?.tags?.shown||[]},tickRegrowth,
