@@ -23,9 +23,11 @@ export function loadAudioSettings(storage){
 export function saveAudioSettings(storage,settings){try{storage.setItem(AUDIO_KEY,JSON.stringify({volume:+settings.volume.toFixed(2),muted:!!settings.muted}));return true}catch{return false}}
 
 // AudioContextClass: window.AudioContext (or a fake in tests); storage: {getItem,setItem}.
-export function createAudio({AudioContextClass,storage,random=Math.random}){
+export function createAudio({AudioContextClass,storage,random=Math.random,sampleUrl=null}){
  const settings=loadAudioSettings(storage);
- let ctx=null,master=null,v=null,clicks=0;
+ let ctx=null,master=null,v=null,clicks=0,drinkSample=null;
+ // Recorded drink (assets/sounds/water_drink.wav). Fetched once the context exists; until it arrives, or if it fails, drink() uses the synthesized one.
+ function loadDrinkSample(){if(!sampleUrl||typeof fetch!=='function'||!ctx)return;fetch(sampleUrl).then(r=>r.ok?r.arrayBuffer():null).then(b=>b?ctx.decodeAudioData(b):null).then(buf=>{if(buf)drinkSample=buf}).catch(()=>{})}
  const loudness=()=>settings.muted?0:settings.volume*settings.volume; // volume feels linear when squared
  const ease=(param,value,k=.06)=>param.setTargetAtTime(value,ctx.currentTime,k);
  const distance=(a,b)=>Math.hypot(a.x-b.x,a.z-b.z);
@@ -60,7 +62,7 @@ export function createAudio({AudioContextClass,storage,random=Math.random}){
   unlock(){
    if(ctx){if(ctx.state==='suspended')ctx.resume?.();return true}
    if(!AudioContextClass)return false;
-   try{ctx=new AudioContextClass();build();ctx.resume?.();return true}catch{ctx=null;master=null;v=null;return false}
+   try{ctx=new AudioContextClass();build();ctx.resume?.();loadDrinkSample();return true}catch{ctx=null;master=null;v=null;return false}
   },
   setActive(on){if(!ctx)return;if(on)ctx.resume?.();else ctx.suspend?.()}, // a hidden tab is silent
   setVolume(volume){settings.volume=Math.max(0,Math.min(1,Number.isFinite(volume)?volume:settings.volume));saveAudioSettings(storage,settings);if(master)ease(master.gain,loudness(),.03)},
@@ -117,6 +119,7 @@ export function createAudio({AudioContextClass,storage,random=Math.random}){
   drink(at,listener){
    if(!ctx||settings.muted||clicks>=MAX_CLICKS)return false;
    const a=attenuate(distance(listener,at));if(a<.02)return false;
+   if(drinkSample){const t=ctx.currentTime,s=ctx.createBufferSource(),g=gain(0);s.buffer=drinkSample;g.gain.setValueAtTime(0,t);g.gain.linearRampToValueAtTime(.6*a,t+.03);s.connect(g);g.connect(master);clicks++;s.onended=()=>{clicks--};s.start(t);return true}
    const t=ctx.currentTime,src=ctx.createBufferSource();src.buffer=v.buffer;const band=filtered('bandpass',1800,1.4),env=gain(0);
    env.gain.setValueAtTime(0,t);env.gain.linearRampToValueAtTime(.16*a,t+.05);env.gain.setValueAtTime(.16*a,t+.4);env.gain.setTargetAtTime(.0001,t+.45,.06);band.frequency.setValueAtTime(1500,t);band.frequency.linearRampToValueAtTime(2600,t+.5);
    src.connect(band);band.connect(env);env.connect(master);clicks++;src.start(t,random()*1.5);src.stop(t+.7);

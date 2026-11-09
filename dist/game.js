@@ -135,7 +135,7 @@ const world=createWorld(scene,{label});
 const sawmillCtl=createSawmillController(scene.getObjectByName('prop-sawmill-v4'),MAP.landmarks.find(l=>l.id==='sawmill'),{belt:()=>GameState.progress.belt}); // the sawmill's switch, blade, cut and belt (sawmill.js)
 let sawmillState=freshSawmill();
 // Sound (audio.js): generated with Web Audio, started by the first click or key press (browsers need one), silent beyond 40 m; volume and mute are saved and set in the main menu's Settings.
-const audio=createAudio({AudioContextClass:globalThis.AudioContext||globalThis.webkitAudioContext,storage:{getItem:k=>localStorage.getItem(k),setItem:(k,v)=>localStorage.setItem(k,v)}});
+const audio=createAudio({AudioContextClass:globalThis.AudioContext||globalThis.webkitAudioContext,sampleUrl:globalThis.document?.baseURI?new URL('assets/sounds/water_drink.wav',document.baseURI).href:null,storage:{getItem:k=>localStorage.getItem(k),setItem:(k,v)=>localStorage.setItem(k,v)}});
 for(const type of ['pointerdown','keydown'])window.addEventListener(type,()=>audio.unlock(),{capture:true});
 document.addEventListener('visibilitychange',()=>audio.setActive(!document.hidden));
 const vehicles=createVehicles(scene,colliders,world.fade); // the parked cars are converted models; they need the world's sightline fade
