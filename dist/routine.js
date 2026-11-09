@@ -2,7 +2,7 @@ import {hoursOf} from './map-definition.js';
 import {advanceHousingDays} from './housing.js';
 import {advanceProperties} from './ownership.js';
 export const freshRoutine=()=>({minutes:540,earned:0,shiftStep:0,shiftDay:0});
-export function normalizeRoutine(v={}){const r=freshRoutine();for(const k of Object.keys(r))if(Number.isFinite(v?.[k])&&v[k]>=0)r[k]=v[k];r.minutes=Math.min(1439,r.minutes);r.shiftStep=Math.min(3,Math.floor(r.shiftStep));return r}
+export function normalizeRoutine(v={}){const r=freshRoutine();for(const k of Object.keys(r))if(Number.isFinite(v?.[k])&&v[k]>=0)r[k]=v[k];r.minutes=Math.min(1439.999,r.minutes);r.shiftStep=Math.min(3,Math.floor(r.shiftStep));return r}
 // 12-hour clock with AM / PM: 540 -> "9:00 AM", 1380 -> "11:00 PM".
 export function formatClock(minutes){const total=Math.floor(minutes)%1440,hour=Math.floor(total/60);return `${hour%12||12}:${String(total%60).padStart(2,'0')} ${hour<12?'AM':'PM'}`}
 export const clockText=r=>formatClock(r.minutes);

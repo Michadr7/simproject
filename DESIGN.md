@@ -625,6 +625,55 @@ This replaces plank counts in the warehouse with pallet objects, and it replaces
 
 **Open:** the put-away pay; whether two loading spots are needed once orders are larger.
 
+#### K. Two docks, the parking fix and order hints (design by Opus 5.5, 2026-11-09, from the user's notes after 0.35.2; nothing built; positions are proposals the build checks against the hulls and props)
+**What is wrong today (read from the code):**
+- There is **one** loading zone (`dock.js` ZONE, 161.8, 28.6) and **one** bay (`customers.js` DOCK_BAY, 161.8, 23). A pickup needs the customer's flatbed in that bay; a delivery needs *your* truck "within 9 m of the zone" (`deliveryBed`), which is the same bay. With a pickup and a delivery staged together, the customer's truck drives into the bay through your parked truck (it passes through everything), or your truck cannot get there while the customer's waits. Nothing on the ground says where your truck goes.
+- **The crooked truck:** `customer-truck.js` moves the truck's middle exactly along the path but eases the yaw toward the path heading (`dt*3`). The last leg into the bay is 4 m at 8 m/s (0.5 s) after a near right-angle turn, so it parks about 20 degrees off (e^-1.5 of the turn is left), and `arrived` never snaps it to `bay.yaw`. The route also swings its middle to z 27 (tail at 31.4, into the wall) before driving forward 4 m. A save that loads with the truck waiting places it straight, which is why it is only crooked when you watch it arrive.
+
+**1. Two docks, one per kind of order (decided by this design; ask the user if they want one shared dock instead).**
+- **Pickup dock (green), unchanged place:** zone at (161.8, 28.6) straight out of the roller door; the customer's flatbed parks in the bay north of it. Only pickup pallets load here.
+- **Delivery dock (blue, new):** a second painted zone, 2.4 x 1.5 m, at about (170.5, 27.4), and a painted truck bay north of it at about (170.5, 22.6), 3.0 x 9.0 m, facing north, with back-in chevrons and the words YOUR TRUCK. Only delivery pallets load here. Blue because your own vehicles are already blue on the minimap.
+- The forklift leaves the roller door and turns east to the blue zone. To check in the build: the pickup sign (`zone-sign-pickup`, 165.6, 28) and the person door's step (166.9, 30.2) are on that path; move the sign west of the door (about 157, 28) if the forklift hull or a walker clips it.
+- **A truck "is in the delivery bay"** when it is stopped, has a bed, and its middle is inside the painted box with its heading within 25 degrees of north or south (backing in is drawn, nose in is accepted: the pallet slides onto the bed either way). This replaces the 9 m radius. `zoneNote` names what is wrong: "Park a truck with a bed in the blue bay", "Your truck is not straight in the bay", "Stop the truck".
+- **The customer's bay is reserved.** If any player vehicle stands in it when the truck is due, the truck waits on the road at a holding point (about 176, 7.8) and the phone and the task card say "The customer's truck is waiting: move your vehicle out of the green bay." It comes in when the bay is clear.
+- **Wrong zone:** an order pallet lowered on the other kind's zone is refused and stays on the forks: "Order #14 is a delivery: the blue zone, for your truck."
+- **Order tags follow the dock colour:** pickup order plates stay green, delivery plates turn blue (a second plate row in `pallet-tags.js`; the atlas stays 512 x 384 if the row fits, else 512 x 448).
+
+**2. What happens with several orders at once (the rules, so the hints can say them).**
+- Each taken order keeps its own staging square (S1 to S3, as now). Up to three orders can be staged in any mix.
+- **A pickup and a delivery staged together:** independent. The customer's truck comes for the pickup; you load the delivery at the blue dock whenever your truck is there. Either can go first.
+- **Two pickups staged:** one customer truck at a time, oldest order first. The second truck sets off from the map edge when the first has left. Lowering the newer order's pallet on the green zone while the older one's truck waits is refused: "This truck is for order #12."
+- **Two deliveries staged:** both may go on the same truck, one pallet after the other, while the bed has room (`addPlanks` already refuses an overfull bed: "Your truck's bed is full: 40 / 40"). Each stays tagged with its own order.
+
+**3. The customer's truck parks straight, backing to the door.**
+- The route gains an optional reverse leg into the bay (`backIn`, the same shape as `backOut`): drive forward along the inbound lane past the bay, then reverse into it. Proposal: forward to about (152, 9) heading west, then reverse through (157, 10.5), (160.5, 14), (161.8, 18) to the bay (161.8, 23), so the last 5 m or more are a straight reverse on the bay's axis, at the reverse speed (3 m/s: over 1.6 s straight, the yaw error left is under 1 percent).
+- On arrival the pose snaps to the bay (`state = {x:bay.x, z:bay.z, yaw:bay.yaw}`), so it is exact even if the path is changed later.
+- It leaves forward, north then east (the current `outPath`).
+- Test: drive the truck in with the real route and assert yaw = bay.yaw and the tail's middle within 0.2 m of the zone's north edge; and that its hull never crosses the delivery bay, the bollards or the warehouse wall on the way in or out (sample every 0.5 m).
+
+**4. Order hints (the user: "a hint system that can be turned off").**
+- **Setting:** Settings > "Order hints", on by default, saved with the other settings (`citylife.settings.v1`, per browser, not in the save). It applies to warehouse orders (pickups and deliveries). The same switch can cover other jobs later.
+- **What a hint is:** a short numbered checklist under the focused order on the task card (4.19), with the current step highlighted and the steps already done ticked, worked out every update from the save and the world (pure: `orderSteps(ticket, world)` in a new `order-hints.js`, returning `[{text, done, now, target}]`). Hints off: the card shows only the order line and the arrow row, as today.
+- **Pickup steps:**
+  1. Take the order at the order table (done once taken).
+  2. Fill the pallet on square S2: 12 / 40 planks. By hand from the floor racks, or set a pallet from the racks on the square with the forklift.
+  3. Get on the forklift and lift order #12's pallet (green tag).
+  4. Drive out through the roller door.
+  5. Lower it on the green zone behind the customer's truck. While the truck is not there: "The customer's truck is on its way" (or "waiting: move your vehicle out of the green bay").
+- **Delivery steps:**
+  1. Take the order. 2. Fill the pallet on its square. 3. Park a truck with a bed in the blue bay, backing in (done while a truck is in the bay; it can be done before step 2). 4. Lift order #14's pallet (blue tag). 5. Drive out through the roller door. 6. Lower it on the blue zone. 7. Drive to 3 Cedar Loop, Cedar Heights. 8. E at the drop spot.
+- **In the world, hints on:** the target of the current step glows (the square, the order pallet: the existing `fork-glow`; the roller door; the right zone and bay: the paint pulses). While you drive a truck with a bed and a delivery waits for one, a flat ghost of the truck's footprint lies in the blue bay: blue, turning green when your truck is in place and stopped. The arrow row points at the current step's target (the B3 targets, extended outdoors: roller door, zone, bay).
+- **Hints off:** no checklist, no glow, no ghost. The arrow row, the forklift panel's refusal notes and the toasts stay: they are feedback, not hints.
+- **Cost:** two painted zones and one bay are ground-layer quads in the existing paving layer (no new draw calls if added to the zone's mesh; at most +2). The ghost is one flat mesh, drawn only while a delivery waits for a truck and you drive one. The checklist is DOM, written only when its text changes (like the vehicle panel). No per-frame cost worth measuring.
+
+**5. Build order (Sonnet 5.5; each step ends with `npm test` passing and a stop):**
+- **K1:** the parking fix (route with `backIn`, snap on arrival, the hull test). Small and independent.
+- **K2:** the blue delivery dock: zone, bay paint, the in-bay rule replacing the 9 m radius, wrong-zone refusal, blue delivery tags, the reserved green bay and the waiting truck, two pickups in turn. Tests: `orders-game`, `delivery-game`, `order-pallets` extended; a new case with a pickup and a delivery staged together.
+- **K3:** order hints: `order-hints.js` (pure, `tests/order-hints.mjs`: every step for both kinds, in every state), the Settings switch, the checklist on the card, the glows and the bay ghost. Seen in the browser lab with hints on and off.
+- **Then D4** (the inbound row and the supply truck). **Its row must move:** J.4 put it at z 28, x 156.5 to 164, which overlaps the green zone (built in D3 at x 160.6 to 163). Suggestion: make the decorative loaded pallets west of the door (x 153 to 157, `loadedRow` in `map-definition.js`) the real inbound spots.
+
+**Open (ask the user):** one shared dock with a queue instead of two docks; whether nose-in parking in the blue bay should be refused; whether hints should also cover the forest tasks and gigs now or later.
+
 ### 4.17 Co-op server update (design by Opus 5.5, 2026-11-06; decided with the user where marked; numbers are placeholders for Haiku to tune)
 Goal: two to four players (eight at most) share one world. What one player sees, the others see. Single player stays as it is: fully offline, local save.
 
