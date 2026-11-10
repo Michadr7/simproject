@@ -4,6 +4,7 @@
   "private": true,
   "type": "module",
   "scripts": {
+    "launcher": "node scripts/build-launcher.mjs",
     "dev": "node scripts/dev-server.mjs",
     "server": "node server.js",
     "server:lan": "node server.js --lan",

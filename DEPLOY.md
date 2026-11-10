@@ -51,3 +51,11 @@ The first time on a PC: `npx wrangler login` (browser sign-in, one time). `wrang
 - Only this site and `localhost` pages may open a relay socket (Origin check).
 - Costs on the free plan: incoming WebSocket messages count as one request per 20; the game sends up to 20 positions a second while moving, so about 3,600 requests per hour of walking per player, against 100,000 a day. An idle lobby hibernates (no time billed). An empty lobby is forgotten after 10 minutes.
 - Bump `PROTOCOL` in `dist/relay-protocol.js` whenever the messages change shape: older open tabs are then refused with `update`.
+
+## Desktop launcher (exe download, from 0.35.3)
+- `launcher/` is an Electron shell (own `package.json`, own `node_modules`, both outside the game). `main.js` serves the bundled game from `http://127.0.0.1:47231` (next free port up to 47240 if taken) and opens it in a window. A fixed port keeps the web address, and so the saves in `localStorage`, the same every run. F11 toggles full screen. A log is written to `%TEMP%\citylife-launcher.log`.
+- **Every release, after the usual steps** (bump, `npm run release`, `npm test`, commit, push, `npx wrangler deploy`): `npm run launcher` stages `dist/index.html` plus the CURRENT release (about 13 MB, not the old ones) into `launcher/game/` and writes `launcher/out/CityLife-<version>.exe` (about 108 MB, portable, unsigned: Windows SmartScreen may warn). Attach that file to a GitHub Release tagged with the version.
+- The bundled copy is offline and fixed to its version: players download a new exe for each update. The in-game update banner compares with the bundled `version.json`, so it never fires in the exe.
+- Works in the exe: single player, multiplayer (the hosted relay accepts `127.0.0.1` origins). Does not work: cloud saves and Google sign-in (they call the site's own `/api`; they fall back to "offline"). Local saves are separate from the website's (different web address): use Export/Import to move one.
+- **Testing here:** the agent's shell has `ELECTRON_RUN_AS_NODE=1` (VS Code), which makes any Electron exe exit silently. Run `Remove-Item Env:ELECTRON_RUN_AS_NODE` before launching it from a terminal.
+- Not done: an icon (default Electron icon), code signing, a GitHub Release workflow, a check that the packaged portable exe (as opposed to `launcher/out/win-unpacked`) renders the game on a real GPU.

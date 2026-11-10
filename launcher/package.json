@@ -1,0 +1,30 @@
+{
+  "name": "city-life-launcher",
+  "version": "0.35.3",
+  "description": "City Life desktop launcher (bundled offline game)",
+  "main": "main.js",
+  "private": true,
+  "author": "Michadr",
+  "build": {
+    "appId": "com.michadr.citylife",
+    "productName": "City Life",
+    "directories": {
+      "output": "out"
+    },
+    "files": [
+      "main.js",
+      "game/**"
+    ],
+    "win": {
+      "target": "portable",
+      "signExecutable": false
+    },
+    "portable": {
+      "artifactName": "CityLife-${version}.exe"
+    }
+  },
+  "devDependencies": {
+    "electron": "^45.2.3",
+    "electron-builder": "^26.18.0"
+  }
+}

@@ -3,3 +3,8 @@ node_modules/
 .wrangler/
 # wrangler dev's local variables (secrets go here too, never in git)
 .dev.vars
+
+# desktop launcher: installed tools, staged copy of the game, built exe
+launcher/node_modules/
+launcher/game/
+launcher/out/
