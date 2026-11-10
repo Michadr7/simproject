@@ -212,13 +212,13 @@ const properties=[
  {id:'studio',type:'apartment',name:'Studio 2B',access:'tenant',owner:{type:'landlord',name:'the landlord'}},
  // Cedar Heights: R1, R3, R5 and R7 are vacant (for sale); the others belong to residents.
  {id:'house-r1',type:'house',size:'small',landmark:'house-r1',plot:'R1',name:'1 Cedar Loop',access:'owner',owner:null,listing:{rentCents:16000,depositCents:32000,priceCents:1250000}},
- {id:'house-r2',type:'house',size:'small',landmark:'house-r2',plot:'R2',name:'2 Cedar Loop',access:'owner',owner:{type:'npc',name:'Marta Ellison'}},
+ {id:'house-r2',type:'house',size:'small',landmark:'house-r2',plot:'R2',name:'2 Cedar Loop',access:'owner',owner:{type:'npc',name:'Marta Ellison',body:'female'}},
  {id:'house-r3',type:'house',size:'small',landmark:'house-r3',plot:'R3',name:'3 Cedar Loop',access:'owner',owner:null,listing:{rentCents:14000,depositCents:28000,priceCents:1100000}},
- {id:'house-r4',type:'house',size:'small',landmark:'house-r4',plot:'R4',name:'4 Cedar Loop',access:'owner',owner:{type:'npc',name:'Tom Reyes'}},
+ {id:'house-r4',type:'house',size:'small',landmark:'house-r4',plot:'R4',name:'4 Cedar Loop',access:'owner',owner:{type:'npc',name:'Tom Reyes',body:'male'}},
  {id:'house-r5',type:'house',size:'small',landmark:'house-r5',plot:'R5',name:'5 Cedar Loop',access:'owner',owner:null,listing:{rentCents:19000,depositCents:38000,priceCents:1500000}},
- {id:'house-r6',type:'house',size:'small',landmark:'house-r6',plot:'R6',name:'6 Cedar Loop',access:'owner',owner:{type:'npc',name:'Priya Nair'}},
+ {id:'house-r6',type:'house',size:'small',landmark:'house-r6',plot:'R6',name:'6 Cedar Loop',access:'owner',owner:{type:'npc',name:'Priya Nair',body:'female'}},
  {id:'house-r7',type:'house',size:'small',landmark:'house-r7',plot:'R7',name:'7 Cedar Loop',access:'owner',owner:null,listing:{rentCents:17500,depositCents:35000,priceCents:1350000}},
- {id:'house-r8',type:'house',size:'small',landmark:'house-r8',plot:'R8',name:'8 Cedar Loop',access:'owner',owner:{type:'npc',name:'Grace Whitfield'}},
+ {id:'house-r8',type:'house',size:'small',landmark:'house-r8',plot:'R8',name:'8 Cedar Loop',access:'owner',owner:{type:'npc',name:'Grace Whitfield',body:'female'}},
  // Alder Center: shop and office interiors arrive with later updates.
  {id:'alder-store',type:'shop',landmark:'alder-store',plot:'C1',name:'Alder Store',enterable:false,reason:'Shop interiors arrive with the store jobs update (cashier shifts).'},
  {id:'alder-offices',type:'commercial',landmark:'alder-offices',plot:'C2',name:'Alder Offices',enterable:false,reason:'Office interiors arrive with a later update.'},
@@ -231,7 +231,7 @@ const properties=[
  {id:'alder-books',type:'shop',landmark:'alder-books',plot:'C9',name:'Alder Books',enterable:false,reason:'Shop interiors arrive with the store jobs update.'},
  {id:'alder-cinema',type:'commercial',landmark:'alder-cinema',plot:'C10',name:'Alder Cinema',enterable:false,reason:'Its interior arrives with a later update.'},
  // The farm and the timber yard.
- {id:'farm-house',type:'farm',landmark:'farm-house',name:'Willow Farmhouse',access:'owner',owner:{type:'npc',name:'Hal Brennan'}},
+ {id:'farm-house',type:'farm',landmark:'farm-house',name:'Willow Farmhouse',access:'owner',owner:{type:'npc',name:'Hal Brennan',body:'male',outfit:'Farmer'}},
  {id:'farm-barn',type:'farm',landmark:'farm-barn',name:'The Barn',enterable:false,reason:'Barn interiors (storage, animal pens) arrive with the farming update.'},
  {id:'farm-small-barn',type:'farm',landmark:'farm-small-barn',name:'The Small Barn',enterable:false,reason:'Barn interiors arrive with the farming update.'},
  {id:'farm-open-barn',type:'farm',landmark:'farm-open-barn',name:'The Open Barn',enterable:false,reason:'An open shelter for machinery; you can already walk in.'},
@@ -292,8 +292,45 @@ const offices=[
 // removed) inward; its first point must lie outside the playable rectangle (validateMap), so making the map bigger means moving the exit too. Lanes: Freight South is centred on
 // z 68, 12 m wide; westbound traffic keeps to z 65, eastbound to z 71 (drive on the right).
 const exits=[{id:'east',road:'freight-out',in:[[322,65],[296,65],[200,65],[120,65],[95,65]],out:[[95,71],[200,71],[296,71],[322,71]]}];
-const employers=[
- {id:'ridgeline',name:'Ridgeline Timber Co.',skill:'lumberjack',office:'ridgeline-office',owner:{kind:'npc',id:'walt-hargrove',name:'Walt Hargrove',title:'Owner'},
+// ── The people of the town (0.35.4, DESIGN 4.20) ─────────────────────────────
+// Who lives where and who works where is data: population.js turns it into people, and schedule.js into each person's day. Nothing here is a person placed by hand in the world.
+// Homes are (1) every property owned by an NPC (`owner:{type:'npc',name,body?,outfit?}`: the owner heads the household) and (2) the dwellings below: one street door, several households.
+//   units      how many flats NPCs live in (the player's studio is not one of them)
+//   door       where its residents step onto the street
+//   cars       how many of its households own a car
+//   residents  people already known in town, one per flat in this order (the other flats are generated)
+// A new house with an NPC owner, or a new dwelling, fills itself by the same rules.
+const dwellings=[
+ {id:'oak-apartments',name:'Oak Street Apartments',door:{x:1,z:-6.3},units:9,cars:3,residents:[
+  {name:'Alex',body:'male',outfit:'Casual_2'},{name:'Sophie',body:'female',outfit:'Casual'},{name:'Robert',body:'male',outfit:'Suit'},{name:'Julia',body:'female',outfit:'Formal'},
+  {name:'Carlos',body:'male',outfit:'Worker'},{name:'Megan',body:'female',outfit:'Suit'},{name:'Elena',body:'female',outfit:'Formal'},{name:'Noah',body:'male',outfit:'Casual_2'}]}
+];
+// Staffed posts: who a workplace needs and when. `at` names where the work is, exactly one of {shop}, {office}, {property}, {zone}, {plot}; `hours` are [from, to) in minutes since midnight
+// (inside one day: no post crosses midnight); `count` people (default 1); `person` names who holds it (a resident of that name gets it; otherwise they drive in from out of town);
+// `outfit` is what the post's people wear. A post nobody in town can take is filled by a commuter who comes and goes by a map exit.
+const posts=[
+ {id:'market-day',at:{shop:'market'},role:'Clerk',hours:[420,870],person:{name:'Noah'}},
+ {id:'market-evening',at:{shop:'market'},role:'Clerk',hours:[870,1320]},
+ {id:'cafe-manager',at:{shop:'cafe'},role:'Manager',hours:[480,1080],person:{name:'Elena'}},
+ {id:'cafe-barista',at:{shop:'cafe'},role:'Barista',hours:[480,1080]},
+ {id:'ridgeline-owner',employer:'ridgeline',at:{office:'ridgeline-office'},role:'Owner',hours:[360,1080],person:{name:'Walt Hargrove',body:'male',outfit:'Suit'}},
+ {id:'ridgeline-fellers',employer:'ridgeline',at:{zone:'forest'},role:'Feller',hours:[360,1080],count:2,outfit:'Worker'},
+ {id:'ridgeline-sawyer',employer:'ridgeline',at:{property:'sawmill'},role:'Sawyer',hours:[360,1080],outfit:'Worker'},
+ {id:'ridgeline-yard',employer:'ridgeline',at:{office:'ridgeline-warehouse'},role:'Yard hand',hours:[360,1080],outfit:'Worker'},
+ {id:'farm',at:{property:'farm-house'},role:'Farmer',hours:[390,1050],person:{name:'Hal Brennan'}},
+ {id:'alder-store',at:{property:'alder-store'},role:'Shopkeeper',hours:[480,1140]},
+ {id:'alder-bakery',at:{property:'alder-bakery'},role:'Baker',hours:[330,840]},
+ {id:'alder-barber',at:{property:'alder-barber'},role:'Barber',hours:[540,1050]},
+ {id:'alder-pharmacy',at:{property:'alder-pharmacy'},role:'Pharmacist',hours:[480,1080]},
+ {id:'alder-bank',at:{property:'alder-bank'},role:'Bank teller',hours:[540,1020],outfit:'Suit'},
+ {id:'alder-books',at:{property:'alder-books'},role:'Bookseller',hours:[600,1080]},
+ {id:'alder-cinema',at:{property:'alder-cinema'},role:'Usher',hours:[840,1380]},
+ {id:'police',at:{property:'police-station'},role:'Police officer',hours:[420,1140],count:2},
+ {id:'riden-deals',at:{property:'riden-deals'},role:'Salesperson',hours:[540,1080],outfit:'Suit'},
+ {id:'gas-kiosk',at:{property:'eastbank-gas-kiosk'},role:'Attendant',hours:[360,1320]},
+ {id:'eastbank-supply',at:{property:'eastbank-supply'},role:'Counter clerk',hours:[420,1020],outfit:'Worker'}
+];
+const employers=[ {id:'ridgeline',name:'Ridgeline Timber Co.',skill:'lumberjack',office:'ridgeline-office',owner:{kind:'npc',id:'walt-hargrove',name:'Walt Hargrove',title:'Owner'},
   hours:{from:360,to:1080,lastIn:1050},
   store:[{item:'chainsaw',rank:6},{item:'logging-chainsaw',rank:6}], // the company store at the office: sold to this rank and above (an item may also need a skill level: items.js `requires`)
   sites:[{zone:'forest'},{plot:'I5'},{plot:'I1'},{room:'ridgeline-office'},{room:'ridgeline-warehouse'}],
@@ -315,7 +352,7 @@ export const MAP=deepFreeze({
  // Where you can walk: everywhere inside this rectangle except water (and trees, fences and buildings, which are solid objects). The zones name and shape the districts; they no longer fence them in.
  playable:{x0:-250,x1:290,z0:-380,z1:100},
  openCountry:{id:'open',name:'Open Country',label:'OPEN COUNTRY',subtitle:'Meadows between districts',color:'#6e8a5c'}, // how far the ground is drawn (scenery fades into fog beyond the walkable zones)
- zones,roads,water,fields,buildings,shops,reserved,properties,paving,bayRows,yards,vehicles,relief,employers,offices,exits,
+ zones,roads,water,fields,buildings,shops,reserved,properties,paving,bayRows,yards,vehicles,relief,employers,offices,exits,dwellings,posts,
  // The marked parking lot behind the south row of shops: bays 2.7 m wide and 5 m deep along its north edge, an aisle to Alder Street, the lot's own asphalt.
  lots:[{id:'alder-lot',x0:-14,x1:45,z0:-63,z1:-52,bays:{x0:-13.5,z0:-63,count:20,width:2.7,depth:5}}],
  // Parking lanes on the cross street (6 m bays, nose in the direction of traffic: eastbound on the south side, westbound on the north), and the lane edge lines.
@@ -664,5 +701,26 @@ export function validateMap(map=MAP){
   for(const s of e.store||[])if(!Number.isInteger(s.rank)||s.rank<1||s.rank>(e.ranks||[]).length||typeof s.item!=='string')bad(`employer ${e.id} sells ${s.item} to a rank that does not exist`);
   (e.ranks||[]).forEach((r,i)=>{const p=e.ranks[i-1];if(!r.id||!r.name||!Number.isSafeInteger(r.wage)||r.wage<=0||!Array.isArray(r.grants)||!Array.isArray(r.tasks))bad(`employer ${e.id} rank ${r.id} is incomplete`);
    if(p&&!(r.needs.level>=p.needs.level&&r.needs.shifts>=p.needs.shifts&&r.needs.rep>=p.needs.rep&&r.wage>=p.wage))bad(`employer ${e.id} rank ${r.id} needs or pays less than the rank below`)})}
+ // the people of the town (0.35.4, DESIGN 4.20): dwellings with a door on open ground inside the map and room for their named residents; posts that name one known place and hours inside one day
+ {const bodies=['male','female'],inMap=(x,z)=>x>=map.playable.x0&&x<=map.playable.x1&&z>=map.playable.z0&&z<=map.playable.z1,ids=new Set();
+  for(const p of map.properties||[])if(p.owner?.type==='npc'&&p.owner.body!==undefined&&!bodies.includes(p.owner.body))bad(`property ${p.id}'s owner has an unknown body ${p.owner.body}`);
+  for(const d of map.dwellings||[]){if(typeof d.id!=='string'||!d.id||ids.has(d.id)||(map.properties||[]).some(p=>p.id===d.id))bad(`dwelling ${d.id} has a missing or duplicate id`);ids.add(d.id);
+   if(!d.name||!Number.isInteger(d.units)||d.units<1||!Number.isInteger(d.cars)||d.cars<0||d.cars>d.units)bad(`dwelling ${d.id} needs a name, units and cars (at most one per unit)`);
+   if(![d.door?.x,d.door?.z].every(Number.isFinite)||!inMap(d.door.x,d.door.z))bad(`dwelling ${d.id} has no door inside the playable map`);
+   else if(map.buildings.some(b=>{const f=footprint(b);return d.door.x>f.x0&&d.door.x<f.x1&&d.door.z>f.z0&&d.door.z<f.z1}))bad(`dwelling ${d.id}'s door is inside a building`);
+   if((d.residents||[]).length>d.units)bad(`dwelling ${d.id} names more residents than it has units`);
+   for(const r of d.residents||[])if(!r.name||!bodies.includes(r.body))bad(`dwelling ${d.id} has a resident without a name or body`)}
+  const postIds=new Set(),names=new Set();
+  for(const p of map.posts||[]){if(typeof p.id!=='string'||!p.id||postIds.has(p.id))bad(`post ${p.id} has a missing or duplicate id`);postIds.add(p.id);
+   const at=p.at||{},keys=Object.keys(at);
+   const known=keys.length===1&&((at.shop&&map.shops[at.shop])||(at.office&&(map.offices||[]).some(o=>o.id===at.office))||(at.property&&(map.properties||[]).some(b=>b.id===at.property&&(b.landmark||b.plot)))||(at.zone&&map.zones.some(z=>z.id===at.zone))||(at.plot&&(map.reserved||[]).some(r=>r.id===at.plot)));
+   if(!known)bad(`post ${p.id} must be at one known shop, office, property, zone or plot`);
+   if(!p.role)bad(`post ${p.id} has no role`);
+   const [from,to]=p.hours||[];if(!Number.isInteger(from)||!Number.isInteger(to)||!(from>=240&&from+60<=to&&to<=1380))bad(`post ${p.id} needs hours inside one day (4 AM to 11 PM, at least an hour)`);
+   if(p.count!==undefined&&(!Number.isInteger(p.count)||p.count<1||(p.person&&p.count!==1)))bad(`post ${p.id} has a bad count (a named post is one person)`);
+   if(p.employer!==undefined&&!(map.employers||[]).some(e=>e.id===p.employer))bad(`post ${p.id} names an unknown employer ${p.employer}`);
+   if(p.person){if(!p.person.name)bad(`post ${p.id} names nobody`);else if(names.has(p.person.name))bad(`${p.person.name} holds two posts`);names.add(p.person.name);
+    if(p.person.body!==undefined&&!bodies.includes(p.person.body))bad(`post ${p.id}'s person has an unknown body`)}}
+  if((map.posts||[]).length&&!(map.exits||[]).length)bad('posts need a map exit for commuters')}
  return problems;
 }
