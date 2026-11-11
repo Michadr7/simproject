@@ -6,6 +6,9 @@ export const ROWS=[
  {key:'assets',num:'04',label:'Assets'},
  {key:'tokens',num:'05',label:'Tokens'},
  {key:'runs',num:'06',label:'Runs'}];
+// The scene of each page: the hue (0 to 360) of the flowing background and of the sliding highlight in the menu. Hovering a row previews its scene. hub.css has one html[data-scene=...] rule per key.
+export const SCENES={chat:262,waiting:26,plans:172,assets:135,tokens:215,runs:14};
+export const sceneOf=(route,hover)=>Object.hasOwn(SCENES,hover||'')?hover:Object.hasOwn(SCENES,route||'')?route:'waiting';
 export const ROUTES=ROWS.filter(r=>!r.off).map(r=>r.key);
 export const routeOf=hash=>{const k=String(hash||'').replace(/^#\/?/,'').split(/[?&/]/)[0].toLowerCase();return ROUTES.includes(k)?k:'waiting'};
 export const planIdOf=hash=>{const m=/^#\/?plans\/([a-z0-9][a-z0-9-]{0,79})(?:[?&].*)?$/.exec(String(hash||''));return m?m[1]:null}; // #plans/<id> opens that plan

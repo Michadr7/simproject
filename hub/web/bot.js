@@ -36,6 +36,7 @@ export function mountBot({doc=document,win=window,query=null,store=null}={}){
   face.setAttribute('aria-label',faceLabel(last,state));face.title=state==='mini'?lineOf(last):'Fold away'}
  function draw(a){
   last=a;const m=a?moodOf(a):'stopped';box.dataset.mood=m;
+  root.dataset.mood=m;if(a&&(a.source==='chat'||a.source==='run'))root.dataset.doing=a.source;else delete root.dataset.doing; // the background follows what the hub is doing (hub.css, "the scene")
   mood.textContent=a?MOOD_LABEL[m]:'Offline';text.textContent=lineOf(a);count.textContent=countOf(a);
   const items=a&&Array.isArray(a.items)?a.items:[],s=JSON.stringify([items,linkOf(a)]);
   if(s!==sig){sig=s;rows.textContent='';

@@ -7,6 +7,7 @@ import path from 'node:path';
 import {fileURLToPath} from 'node:url';
 import {BOT_STATES,MOOD_LABEL,moodOf,botStateOf,afterFace,afterLine,pollMs,lineOf,countOf,linkOf,faceLabel} from '../hub/web/bot.js';
 import {MOODS} from '../hub/activity.js';
+import {SCENES,ROUTES,sceneOf} from '../hub/web/shell.js';
 import {activityOf,resolveRoute} from '../hub/server.js';
 
 const root=path.join(path.dirname(fileURLToPath(import.meta.url)),'..');
@@ -36,4 +37,9 @@ assert.ok(hOf('line')>=lineH+bottom+2,'the strip is as tall as the speech line')
 assert.match(css,/prefers-reduced-motion:reduce\)\{\.bot/);
 // the activity answer says when runs and the chat are off
 assert.equal(activityOf(null,null).enabled,false);assert.equal(activityOf(null,null).mood,'idle');
+// the scene: every page has a hue, the stylesheet has a rule for each, hovering a row previews it, and what the hub is doing changes the background
+assert.deepEqual(Object.keys(SCENES).sort(),[...ROUTES].sort(),'a scene for every page');for(const [k,hue] of Object.entries(SCENES)){assert.ok(css.includes(`html[data-scene=${k}]{--hue:${hue}}`),'css scene '+k);assert.ok(css.includes(`.wave[data-scene=${k}]{--wh:${hue}}`),'css wave '+k)}
+assert.equal(sceneOf('plans',null),'plans');assert.equal(sceneOf('plans','runs'),'runs','the hovered row wins');assert.equal(sceneOf('nope',null),'waiting');assert.equal(sceneOf('plans','constructor'),'plans');
+assert.ok(css.includes("@property --hue{syntax:'<number>'")&&/html\[data-mood=working\]\{--glow:/.test(css)&&/html\[data-mood=question\]:not\(\[data-hover\]\)\{--hue:/.test(css)&&/html\[data-mood=stopped\]:not\(\[data-hover\]\)\{--hue:/.test(css));
+assert.ok(js.includes('root.dataset.mood=m')&&app.includes("pill.className='nav-pill'")&&css.includes('.nav-pill{')&&/prefers-reduced-motion:reduce\)\{\.scene i\{animation:none/.test(css));
 console.log('hub-bot: fold states, clicks, poll pace, speech line, count, link, room made on the page, text-only DOM with one read, and the runs-off notice passed.');

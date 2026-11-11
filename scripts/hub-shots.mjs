@@ -46,7 +46,8 @@ function shoot(name,hash,{w=1280,h=860,wait=4500}={}){
   const p=spawn(EDGE,['--headless=new','--disable-gpu','--hide-scrollbars','--no-first-run',`--user-data-dir=${edgeProfile}`,`--window-size=${w},${h}`,`--virtual-time-budget=${wait}`,`--screenshot=${file}`,`${base}/${hash}`],{stdio:'ignore',windowsHide:true});
   const t=setTimeout(()=>{p.kill();fail(new Error('Edge timed out on '+name))},40000);
   p.on('exit',()=>{clearTimeout(t);fs.existsSync(file)?ok(file):fail(new Error('no screenshot for '+name))})})}
-const shots=[];const snap=async(...a)=>{shots.push(await shoot(...a))};
+const ONLY=process.env.HUB_SHOTS_ONLY?new RegExp(process.env.HUB_SHOTS_ONLY):null; // HUB_SHOTS_ONLY=<regex> photographs only the matching names (the states are still played)
+const shots=[];const snap=async(name,...a)=>{if(ONLY&&!ONLY.test(name))return;shots.push(await shoot(name,...a))};
 
 try{
  // 1. a Sonnet run, working
@@ -113,5 +114,11 @@ try{
  await call('/api/chat/stop',{});
  await snap('18-bot-open-after-stop','?menu=closed&bot=open#plans');
  await snap('19-bot-narrow','?menu=closed&bot=open#runs',{w:500,h:900});
+ // 13. the scene: the background and the sliding highlight take the hue of the page, of the row you hover, and of what the hub is doing
+ await snap('22-scene-stopped-run','?menu=open#waiting');
+ for(const r of runs.list().runs)if(r.status!=='closed')runs.close(r.id);
+ await snap('23-scene-chat-idle','?menu=open#chat');
+ await snap('24-scene-plans-hover-runs','?menu=open&hover=runs#plans');
+ await snap('25-scene-waiting-menu-closed','?menu=closed#waiting');
  console.log(shots.join('\n'));
 }finally{await chat.shutdown();await runs.shutdown();await srv.close();fs.rmSync(edgeProfile,{recursive:true,force:true})}

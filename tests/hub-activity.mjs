@@ -35,7 +35,7 @@ for(const s of ['capped','paused','interrupted','guard-stopped','failed','stoppe
 assert.equal(buildActivity({runs:[run('done')]}).mood,'idle');assert.match(buildActivity({runs:[run('done')]}).line,/finished/);
 assert.equal(buildActivity({runs:[run('closed')]}).line,'Nothing is running.');
 assert.equal(buildActivity({chat:{working:false,model:'sonnet'},chatFeed:{events:[{kind:'end',end:'result',tokens:10}]}}).mood,'idle');
-a=buildActivity({chat:{working:false,model:'sonnet'},chatFeed:{events:[{kind:'end',end:'capped',tokens:10}]}});assert.equal(a.mood,'stopped');assert.match(a.line,/no answer/);
+a=buildActivity({chat:{working:false,model:'sonnet'},chatFeed:{events:[{kind:'end',end:'capped',tokens:10}]}});assert.equal(a.mood,'idle','an unanswered message waits on nothing');assert.match(a.line,/no answer/);
 assert.equal(buildActivity({runs:[run('running')],runFeed:Array.from({length:30},(_,i)=>tool('Read','f'+i))}).items.length,MAX_ITEMS);
 assert.equal(feedRunOf([run('done',{id:'d'}),run('capped',{id:'c'})]),'c');assert.equal(feedRunOf([]),null);
 assert.equal(feedRow({kind:'end',end:'result',tokens:6350}).text,'answered');assert.equal(feedRow({kind:'end',end:'capped'}).cls,'bad');assert.equal(feedRow({kind:'end',end:'stopped'}).text,'stopped by you');
@@ -64,7 +64,7 @@ env.HUB_FAKE_SCENARIO='masterhang';chat.send({text:'think'});await sleep(250);
 const runs=createRuns({root,claude:{path:process.execPath,prefix:[FAKE]},extraEnv:env,saveEveryMs:0,busy:()=>chat.working()});
 a=activityOf(runs,chat);assert.equal(a.mood,'working');assert.equal(a.source,'chat');assert.match(a.line,/^The master \(Sonnet 5\.5\) is thinking\.$/);
 await chat.stop();assert.equal(chat.feed(0).events.at(-1).end,'stopped');
-a=activityOf(runs,chat);assert.equal(a.mood,'stopped');assert.ok(!JSON.stringify(a).includes(SECRET));
+a=activityOf(runs,chat);assert.equal(a.mood,'idle');assert.match(a.line,/no answer/);assert.ok(!JSON.stringify(a).includes(SECRET));
 assert.equal(activityOf(null,null).mood,'idle','runs off: idle');
 env.HUB_FAKE_SCENARIO='master';
 

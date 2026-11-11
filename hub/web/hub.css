@@ -190,3 +190,65 @@ html[data-bot=open] .bot-chev{transform:rotate(135deg);margin-top:-3px}
 @keyframes bot-in{from{opacity:0;transform:translateX(-10px)}}
 @media(max-width:699px){.bot-n{display:none}.bot-rows .br{grid-template-columns:58px 60px 1fr auto}}
 @media(prefers-reduced-motion:reduce){.bot *,.bot-face,.bot-bubble{animation:none!important}}
+
+/* ---- The scene and the sliding highlight (from the menu reference video): the background flows in the hue of what we are doing, the menu grows out of the rail, and one pill glides to the row under the pointer. ---- */
+@property --hue{syntax:'<number>';inherits:true;initial-value:215}
+@property --glow{syntax:'<number>';inherits:true;initial-value:.48}
+html{--hue:215;--glow:.48;transition:--hue 1.1s ease,--glow 1.1s ease}
+html[data-scene=chat]{--hue:262}html[data-scene=waiting]{--hue:26}html[data-scene=plans]{--hue:172}html[data-scene=assets]{--hue:135}html[data-scene=tokens]{--hue:215}html[data-scene=runs]{--hue:14}
+/* what the hub is doing wins over the page, unless you are pointing at a menu row */
+html[data-mood=working]{--glow:.8}
+html[data-mood=working][data-doing=chat]:not([data-hover]){--hue:262}html[data-mood=working][data-doing=run]:not([data-hover]){--hue:14}
+html[data-mood=question]:not([data-hover]){--hue:30;--glow:.68}
+html[data-mood=stopped]:not([data-hover]){--hue:356;--glow:.62}
+body{background:radial-gradient(34% 26% at 100% 0,rgba(var(--acc-glow),.2),transparent 70%),var(--bg)}
+.scene{position:fixed;inset:0;z-index:0;overflow:hidden;pointer-events:none}
+.scene i{position:absolute;inset:-30%;will-change:transform;animation:scene-a 26s ease-in-out infinite alternate;
+ background:radial-gradient(34% 36% at 84% 82%,hsl(calc(var(--hue) + 14) 96% 56% / var(--glow)),transparent 72%),radial-gradient(26% 26% at 94% 92%,hsl(calc(var(--hue) + 30) 96% 74% / calc(var(--glow) * .9)),transparent 72%),radial-gradient(40% 44% at 52% 70%,hsl(var(--hue) 76% 32% / calc(var(--glow) * .85)),transparent 74%)}
+.scene i+i{animation:scene-b 34s ease-in-out infinite alternate;background:radial-gradient(34% 40% at 24% 84%,hsl(calc(var(--hue) - 16) 72% 28% / calc(var(--glow) * .8)),transparent 72%),radial-gradient(30% 30% at 70% 44%,hsl(calc(var(--hue) + 6) 80% 44% / calc(var(--glow) * .32)),transparent 74%)}
+html[data-mood=working] .scene i{animation-duration:10s}html[data-mood=working] .scene i+i{animation-duration:13s}
+@keyframes scene-a{from{transform:translate3d(-3%,2%,0) rotate(-4deg)}to{transform:translate3d(4%,-4%,0) rotate(6deg) scale(1.12)}}
+@keyframes scene-b{from{transform:translate3d(3%,-2%,0) rotate(5deg) scale(1.08)}to{transform:translate3d(-4%,3%,0) rotate(-5deg)}}
+/* cards stay readable over the scene */
+.it,.plan-row,.cmsg,.feed,.g{background-color:rgba(15,17,21,.74)}
+.cmsg.c-user{background:linear-gradient(rgba(var(--acc-glow),.14),rgba(var(--acc-glow),.14)),rgba(15,17,21,.8)}
+.box,.reader{background:rgba(20,22,26,.9)}
+/* the menu grows out of the rail */
+.panel{left:var(--rail);top:22px;border-radius:0 20px 20px 0;border-left:0;background:rgba(22,24,30,.56);-webkit-backdrop-filter:blur(20px) saturate(1.35);backdrop-filter:blur(20px) saturate(1.35);padding:20px 14px}
+.panel::before,.panel::after{content:"";position:absolute;left:0;width:18px;height:18px;pointer-events:none}
+.panel::before{top:-18px;background:radial-gradient(circle at 100% 0,transparent 17.5px,rgba(22,24,30,.56) 18px)}
+.panel::after{bottom:-18px;background:radial-gradient(circle at 100% 100%,transparent 17.5px,rgba(22,24,30,.56) 18px)}
+.main{left:calc(var(--rail) + var(--panelw) + 40px)}
+.nav{position:relative;gap:2px}
+.nav li{position:relative;z-index:1}
+.nav a,.nav li>span{padding:10px 12px;font-size:15.5px;border-radius:999px;transition:transform .28s cubic-bezier(.3,1.2,.4,1),color .2s}
+.nav a:hover,.nav a[aria-current=page]{background:none}
+.nav li.hot a{transform:translateX(5px);color:#fff}.nav li.hot b{color:rgba(255,255,255,.85)}.nav li.hot .count{color:#fff}
+.nav-pill{position:absolute;left:-14px;right:-30px;top:0;height:0;z-index:0;border-radius:0 999px 999px 0;pointer-events:none;opacity:0;
+ background:linear-gradient(90deg,hsl(var(--hue) 64% 30%),hsl(calc(var(--hue) + 6) 80% 50%) 46%,hsl(calc(var(--hue) + 10) 74% 42% / .92));
+ box-shadow:0 8px 26px hsl(var(--hue) 85% 45% / .45),inset 0 1px 0 rgba(255,255,255,.28),inset 0 -1px 0 rgba(0,0,0,.25);
+ transition:transform .34s cubic-bezier(.3,1.25,.4,1),height .2s,opacity .25s}
+html[data-menu=closed] .nav-pill{opacity:0!important}
+/* hover feedback on the things you can press */
+.btn{transition:border-color .18s,background-color .18s,box-shadow .18s,transform .12s}
+.btn:not(:disabled):hover{background:rgba(var(--acc-glow),.2);box-shadow:0 0 0 3px rgba(var(--acc-glow),.14),0 6px 18px rgba(var(--acc-glow),.18)}
+.btn.pri:not(:disabled):hover{background:rgba(var(--acc-glow),.36)}.btn:not(:disabled):active{transform:translateY(1px)}
+.btn.danger:not(:disabled):hover{background:rgba(242,118,109,.28);border-color:var(--crit);box-shadow:0 0 0 3px rgba(242,118,109,.14)}
+.it,.plan-row{transition:border-color .2s,transform .25s cubic-bezier(.3,1.2,.4,1),box-shadow .2s}
+.it:hover,a.plan-row:hover{border-color:hsl(var(--hue) 70% 60% / .55);transform:translateX(3px);box-shadow:-3px 0 0 hsl(var(--hue) 80% 58% / .7)}
+.menutab{transition:color .2s,letter-spacing .25s}.menutab:hover{letter-spacing:.34em}
+.bot-face:hover{transform:translateY(-2px) scale(1.06)}.bot-line:hover{background:rgba(255,255,255,.04)}
+@media(max-width:699px){.main,html[data-menu=closed] .main,html[data-menu=open] .main{left:calc(var(--rail) + 14px)}.nav-pill{right:-14px}}
+@media(prefers-reduced-motion:reduce){.scene i{animation:none!important}}
+/* the colour wave from the row you pick, the items rising in when the menu opens, and the tab swelling under the pointer (after the spine-menu reference) */
+.wave{position:fixed;inset:0;z-index:0;pointer-events:none;opacity:0;--wx:50%;--wy:50%;--wh:215;clip-path:circle(0 at var(--wx) var(--wy));
+ background:radial-gradient(circle at var(--wx) var(--wy),hsl(var(--wh) 95% 62% / .5),hsl(calc(var(--wh) + 18) 90% 50% / .28) 45%,hsl(var(--wh) 80% 40% / .16))}
+.wave[data-scene=chat]{--wh:262}.wave[data-scene=waiting]{--wh:26}.wave[data-scene=plans]{--wh:172}.wave[data-scene=assets]{--wh:135}.wave[data-scene=tokens]{--wh:215}.wave[data-scene=runs]{--wh:14}
+.wave.go{animation:wave-go 1.15s cubic-bezier(.2,.7,.2,1) forwards}
+@keyframes wave-go{0%{opacity:1;clip-path:circle(0 at var(--wx) var(--wy))}70%{opacity:.9}100%{opacity:0;clip-path:circle(160vmax at var(--wx) var(--wy))}}
+html.opening .nav li,html.opening .panel .label{animation:rise .5s cubic-bezier(.2,.8,.2,1) backwards}
+html.opening .nav li:nth-child(2){animation-delay:.04s}html.opening .nav li:nth-child(3){animation-delay:.08s}html.opening .nav li:nth-child(4){animation-delay:.12s}html.opening .nav li:nth-child(5){animation-delay:.16s}html.opening .nav li:nth-child(6){animation-delay:.2s}html.opening .nav li:nth-child(7){animation-delay:.24s}
+@keyframes rise{from{opacity:0;transform:translateY(10px);filter:blur(6px)}}
+.menutab{border-radius:0 14px 14px 0;transition:color .2s,letter-spacing .25s,width .25s cubic-bezier(.3,1.3,.4,1),background-color .25s}
+.menutab:hover{width:calc(var(--rail) + 8px);background:rgba(255,255,255,.07)}
+@media(prefers-reduced-motion:reduce){.wave.go,html.opening .nav li,html.opening .panel .label{animation:none!important}}

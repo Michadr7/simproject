@@ -34,7 +34,8 @@ export function buildActivity({chat=null,chatFeed=null,runs=[],runFeed=[]}={}){
  const done=runs.find(r=>r.status==='done');
  if(done)return {...base,source:'run',runId:done.id,model:done.model,tokens:done.tokens||0,line:'A run finished. Its result is waiting for you.',items:items(runFeed)};
  if(ce.length){const end=ce.findLast(e=>e.kind==='end'),ok=end&&(end.end==='result'||end.end==='question');
-  return {...base,mood:ok?'idle':'stopped',source:'chat',model:chat?chat.model:null,tokens:end&&Number.isFinite(end.tokens)?end.tokens:0,line:ok?'Nothing is running. The master answered your last message.':'Your last message to the master got no answer.',items:items(ce)}}
+  // idle either way: an unanswered message waits on nothing (the chat page says why), so it must not hold the bot and the background red
+  return {...base,source:'chat',model:chat?chat.model:null,tokens:end&&Number.isFinite(end.tokens)?end.tokens:0,line:ok?'Nothing is running. The master answered your last message.':'Your last message to the master got no answer.',items:items(ce)}}
  return base}
 
 // For the server: picks the run whose feed matters (the same order as above) so only one feed file is read.
