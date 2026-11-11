@@ -15,11 +15,12 @@ import {acquireLock,releaseLock} from './run-store.mjs';
 import {writeAtomic} from './plans-store.mjs';
 import {processName} from './runs.js';
 import {withStatus} from './status.js';
+import {parseActionLine,MAX_CHAT_ACTIONS} from './web/run-actions.js';
 
 export const CHAT_MODELS=['haiku','sonnet','opus','fable'];
 export const CHAT_CAP=200000; // tokens per message (a first message pays for the brief and the index it reads)
 export const MAX_MESSAGE=8000,MAX_KEPT=200,MAX_REPLY=60000,CONFIRM_MS=120000,MAX_FEED=500;
-export const MASTER_RULES=`You are the master planning agent of the Mikkadr Hub, talking with the project owner about the City Life repo. You are READ-ONLY: you have Read, Grep and Glob and nothing else; you cannot edit, run commands, or start a run, and you must not claim you did. Every message begins with a HUB STATUS block (project state, tokens, the active and recent runs, ready and waiting plans) followed by USER MESSAGE: that block is ground truth and is rebuilt each time, so use it first and do not re-read the brief unless the question needs detail. Be precise and brief: say where we are, what the next step is, and what you need from the owner; if you do not know, say so. Read PROJECT-BRIEF.md only when needed, Grep PROJECT-INDEX.md for what you need, and never read context.md whole. Talk the task through briefly. When you and the owner agree on a plan, end your reply with a line containing only PLAN: and then the plan in Markdown, starting with a "# Title" heading, and finishing with this block (the hub reads only these four keys):\n## Run\nmodel: haiku | sonnet | opus   (Haiku for tiny edits and number tweaks, Sonnet for building against tests, Opus for design, save formats, multiplayer and security)\nwhy: one line\nsize: S | M | L   (Haiku S only; Opus S or M; lean to M or L when unsure)\nneeds: npm test, release, check\nThe owner must approve the plan on the Plans page and press Start; you cannot. Do not use PLAN: for anything that is not a finished plan.`;
+export const MASTER_RULES=`You are the master planning agent of the Mikkadr Hub, talking with the project owner about the City Life repo. You are READ-ONLY: you have Read, Grep and Glob and nothing else; you cannot edit, run commands, or start a run, and you must not claim you did. Every message begins with a HUB STATUS block (project state, tokens, the active and recent runs, ready and waiting plans) followed by USER MESSAGE: that block is ground truth and is rebuilt each time, so use it first and do not re-read the brief unless the question needs detail. Be precise and brief: say where we are, what the next step is, and what you need from the owner; if you do not know, say so. Read PROJECT-BRIEF.md only when needed, Grep PROJECT-INDEX.md for what you need, and never read context.md whole. Talk the task through briefly. When you and the owner agree on a plan, end your reply with a line containing only PLAN: and then the plan in Markdown, starting with a "# Title" heading, and finishing with this block (the hub reads only these four keys):\n## Run\nmodel: haiku | sonnet | opus   (Haiku for tiny edits and number tweaks, Sonnet for building against tests, Opus for design, save formats, multiplayer and security)\nwhy: one line\nsize: S | M | L   (Haiku S only; Opus S or M; lean to M or L when unsure)\nneeds: npm test, release, check\nThe owner must approve the plan and press Start; you cannot. Do not use PLAN: for anything that is not a finished plan. PROPOSING A CLICK: when the next step is something the owner can do with one click, add a line of its own (above any PLAN: section), copied exactly from the "Possible actions" line of the status block: ACTION: approve <plan id> <revision> | ACTION: start <plan id> <revision> | ACTION: resume <run id> | ACTION: close <run id>. At most 4, only ids from the status block, and say in one sentence why. The hub shows each as a button; nothing happens until the owner clicks, so never say it is done. A plan you file with PLAN: gets its Approve button from the hub: do not add one.`;
 
 // extractPlan: the plan filed out of a reply, or null. The section starts at a line that is only "PLAN:" (any case, optional bold) and runs to the end of the reply.
 export function extractPlan(reply){
@@ -30,6 +31,12 @@ export function extractPlan(reply){
  if(!text)return null;
  const title=titleOf(text,'Plan from the master');
  return {title,text:text.slice(0,MAX_PLAN),slug:slugify(title)}}
+
+// extractActions (R7c): the actions the master proposes, from "ACTION: ..." lines above any PLAN: section. At most MAX_CHAT_ACTIONS, no repeats. They are only proposals: the page draws buttons and your click does the rest.
+export function extractActions(reply){
+ const lines=String(reply||'').replace(/\r\n/g,'\n').split('\n'),end=lines.findIndex(l=>/^\s*\**PLAN:\**\s*$/i.test(l)),out=[],seen=new Set();
+ for(const l of end<0?lines:lines.slice(0,end)){const a=parseActionLine(l);if(!a)continue;const k=JSON.stringify(a);if(seen.has(k))continue;seen.add(k);out.push(a);if(out.length>=MAX_CHAT_ACTIONS)break}
+ return out}
 
 const err=(error,code=409,extra={})=>({error,code,...extra});
 const blank=(now)=>({id:randomUUID().slice(0,8),sessionId:randomUUID(),started:false,model:'sonnet',working:false,pid:null,exeName:null,pending:null,tokens:0,messages:[],createdAt:now,updatedAt:now});
@@ -52,10 +59,14 @@ export function createChat({root,claude=null,now=Date.now,extraEnv={},runTurnFn=
  const view=()=>{load();expire();return {enabled:!!claude?.path,id:st.id,model:st.model,working:st.working,tokens:st.tokens,pending:st.pending?{model:st.pending.model,until:st.pending.until}:null,cap:CHAT_CAP,messages:st.messages.map(m=>({...m}))}};
 
  function fileReply(text,msg){
+  const acts=extractActions(text);if(acts.length)msg.actions=acts;
   const p=extractPlan(text);if(!p)return;
   const r=sendPlan(plansDir,{source:`master/${st.id}/${p.slug}`,title:p.title,from:'master',text:p.text,now:now()});
   if(r.error){msg.planError=String(r.error).slice(0,200);return}
-  msg.plan={id:r.plan.id,title:r.plan.title,revision:r.plan.revisions.length,action:r.action}}
+  msg.plan={id:r.plan.id,title:r.plan.title,revision:r.plan.revisions.length,action:r.action};
+  // a plan the master just filed gets its Approve button from the hub (the master cannot know the id yet)
+  const own={op:'approve',plan:r.plan.id,revision:r.plan.revisions.length};
+  if(!(msg.actions||[]).some(a=>a.op==='approve'&&a.plan===own.plan))msg.actions=[own,...(msg.actions||[])].slice(0,MAX_CHAT_ACTIONS)}
 
  function finish(turn,out){
   active=null;st.working=false;st.pid=null;st.exeName=null;releaseLock(root,'chat');

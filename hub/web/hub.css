@@ -129,6 +129,8 @@ a.btn{text-decoration:none;display:inline-block}
 .cmsg .mtext{margin:4px 0 0;max-height:none}
 .chead{display:flex;gap:10px;align-items:baseline;justify-content:space-between}
 .chip-plan{display:inline-block;margin-top:6px;border:1px solid var(--acc);background:rgba(var(--acc-glow),.18);color:var(--ink);border-radius:99px;padding:3px 12px;font-size:13px;text-decoration:none}
+.cacts{display:grid;gap:7px;margin-top:10px;padding-top:10px;border-top:1px dashed var(--line)}.cacts .label{margin:0}
+.cact{display:flex;gap:10px;align-items:center;flex-wrap:wrap}.cact .btn{white-space:normal;text-align:left}
 .chat-composer{max-width:900px;margin-top:10px}
 .chat-composer textarea{width:100%;background:var(--panel2);color:var(--ink);border:1px solid var(--line);border-radius:10px;padding:9px 11px;font:14px var(--sans);resize:vertical;margin-bottom:8px}
 .small.warn{color:var(--watch)}

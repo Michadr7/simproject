@@ -6,6 +6,7 @@ import path from 'node:path';
 import {listPlans} from './plans-store.mjs';
 import {statusOf,latestRevision} from './plans.js';
 import {loadReadings,evaluate} from './watcher.js';
+import {actionsFor} from './web/run-actions.js';
 
 export const MAX_STATUS=4500,MAX_STATE=1400;
 const cut=(s,n)=>{s=String(s??'').replace(/\s+/g,' ').trim();return s.length>n?s.slice(0,n-1)+'…':s};
@@ -19,6 +20,17 @@ export function stateSection(briefText){
  const body=[];for(let i=at+1;i<lines.length&&!/^##\s/.test(lines[i]);i++)body.push(lines[i]);
  return cut(body.join(' '),MAX_STATE)}
 
+// R7c: the clicks that are possible right now, as ready-made ACTION lines with their ids (the master can only propose what is listed here). At most MAX_ACTIONS.
+export const MAX_ACTIONS=8;
+export function possibleActions({plans=[],runs=[],ready=[]}={}){
+ const out=[];
+ for(const p of plans)if(statusOf(p).status==='waiting')out.push(`ACTION: approve ${p.id} ${latestRevision(p).n} (plan "${cut(p.title,50)}")`);
+ for(const r of ready)if(r.canStart&&r.planId)out.push(`ACTION: start ${r.planId} ${r.revision} (run "${cut(r.title,50)}" on ${r.model})`);
+ for(const r of runs){const ops=actionsFor(r).map(a=>a.op);
+  if(ops.includes('resume'))out.push(`ACTION: resume ${r.id} ("${cut(r.planTitle,50)}", ${r.status})`);
+  if(ops.includes('close'))out.push(`ACTION: close ${r.id} ("${cut(r.planTitle,50)}", ${r.status})`)}
+ return out.slice(0,MAX_ACTIONS)}
+
 // plans: normalised plan objects; runs: the run views (hub/runs.js); ready: its ready() list; gauges: {weekly,fiveHour} pcts or null; chat: {model,tokens}; state: the brief's State text.
 export function buildStatus({plans=[],runs=[],ready=[],gauges=null,chat=null,state='',now=Date.now()}={}){
  const L=[`HUB STATUS at ${hm(now)} (ground truth: trust it over your memory; it is rebuilt for every message)`];
@@ -27,6 +39,8 @@ export function buildStatus({plans=[],runs=[],ready=[],gauges=null,chat=null,sta
  const live=runs.find(r=>['running','waiting-answer','confirming'].includes(r.status));
  if(live)L.push(`ACTIVE RUN: ${cut(live.planTitle,70)} · ${live.status} · ${live.model} · ${live.tokens.toLocaleString('en-US')} of ${live.capTokens.toLocaleString('en-US')} tokens · ${live.files.length} file(s) touched${live.question?' · waiting for the user to answer: '+cut(live.question.text,200):''}.`);
  else L.push('No run is active.');
+ const acts=possibleActions({plans,runs,ready});
+ if(acts.length)L.push('Possible actions (you may propose one by copying its ACTION line exactly; the user clicks): '+acts.join(' | '));
  const recent=runs.filter(r=>r!==live).slice(0,4);
  if(recent.length)L.push('Recent runs: '+recent.map(r=>`${cut(r.planTitle,50)} [${r.status}${r.flagged.length?`, ${r.flagged.length} flagged file(s) to look at`:''}${r.status==='done'&&r.resultText?`, result: ${cut(r.resultText,160)}`:''}${r.reason&&r.status!=='done'?`, ${cut(r.reason,100)}`:''}] ${ago(r.updatedAt,now)}`).join(' | '));
  if(ready.length)L.push('Ready to run (approved, startable by the user pressing Start): '+ready.map(p=>`${cut(p.title,60)} (${p.model} ${p.size}${p.canStart?'':', blocked: '+cut(p.reasons.join(' '),80)})`).join('; '));

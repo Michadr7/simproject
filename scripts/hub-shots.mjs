@@ -100,6 +100,11 @@ try{
  await call('/api/chat/model',{model:'opus'});
  await snap('14-chat-opus-second-yes','?menu=open#chat',{h:1000});
  await call('/api/chat/model',{model:'sonnet'});
+ // R7c: the master proposes clicks (Start a ready plan, Resume and Close the stopped Opus run); the filed plan above already has the hub's own Approve button
+ const rdy=runs.list().ready.find(p=>p.title==='Incident log');
+ await say('What should I do next?','master',`Two things are waiting for you.\n\nThe incident log plan is approved and ready, so you can start it. The Netcode review run was stopped at 1,825 tokens: resume it if you still want the review, or close it.\nACTION: start ${rdy.planId} ${rdy.revision}\nACTION: resume ${id}\nACTION: close ${id}`);
+ await snap('20-chat-proposed-actions','?menu=open#chat',{h:1100});
+ await snap('21-chat-proposed-actions-narrow','?menu=closed&bot=mini#chat',{w:500,h:1000});
  await say('Now check the plan against the warehouse code.','masterhang');await sleep(300);
  await snap('15-chat-working','?menu=open#chat',{h:1000});
  // 12. the corner bot (R7b): the live list while the master works, folded away, after a stop, and in a narrow window

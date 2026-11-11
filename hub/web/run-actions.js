@@ -22,6 +22,7 @@ export function actionsFor(run){
 // The request one button sends: {url, body}, or null for an op the hub does not know. `a` carries what the op needs (id; plan, revision, model; extra; question, text).
 export function callFor(op,a={}){
  if(op==='start')return {url:'/api/runs/start',body:{plan:a.plan,revision:a.revision,model:a.model}};
+ if(op==='approve')return a.plan?{url:`/api/plans/${a.plan}/answer`,body:{verdict:'approved',note:'Approved from the chat.',revision:a.revision}}:null; // the Plans page's own route: 423 while a run works, 409 on a stale revision
  if(op==='chat-send')return {url:'/api/chat/send',body:{text:a.text}};
  if(op==='chat-model')return {url:'/api/chat/model',body:{model:a.model,confirm:a.confirm===true}};
  if(op==='chat-new'||op==='chat-stop')return {url:'/api/chat/'+op.slice(5),body:{}};
@@ -30,6 +31,47 @@ export function callFor(op,a={}){
  if(op==='continue')return {url:base+'continue',body:{extra:a.extra}};
  if(op==='answer')return {url:base+'answer',body:{question:a.question,text:a.text}};
  if(['stop','confirm','resume','close'].includes(op))return {url:base+op,body:{}};
+ return null}
+
+// ── R7c: actions the master proposes in a chat reply. The master only writes the line; the hub draws a button, and a click goes through the same routes and gates as the buttons on Plans and Runs.
+// A line alone in the reply: "ACTION: approve <plan id> <revision>", "ACTION: start <plan id> <revision>", "ACTION: resume <run id>", "ACTION: close <run id>". Anything else is ignored.
+export const CHAT_OPS=['approve','start','resume','close'],MAX_CHAT_ACTIONS=4;
+const ACTION_LINE=/^\s*\**ACTION:\**\s*(approve|start|resume|close)\s+(\S+)(?:\s+(\d{1,6}))?\s*\**\s*$/i,PLAN_ID=/^[a-z0-9][a-z0-9-]{0,79}$/,RUN_ID_RE=/^run-[0-9]{8}-[0-9]{6}-[0-9a-f]{4}$/;
+export function parseActionLine(line){
+ const m=ACTION_LINE.exec(String(line||''));if(!m)return null;
+ const op=m[1].toLowerCase(),id=m[2].replace(/[`*]/g,''),n=m[3]?Number(m[3]):null;
+ if(op==='approve'||op==='start')return PLAN_ID.test(id)&&!RUN_ID_RE.test(id)&&Number.isInteger(n)&&n>=1?{op,plan:id,revision:n}:null;
+ return RUN_ID_RE.test(id)&&n===null?{op,run:id}:null}
+// The reply as shown: the ACTION lines are drawn as buttons, so they are left out of the text.
+export const withoutActions=text=>String(text||'').split('\n').filter(l=>!ACTION_LINE.test(l)).join('\n').replace(/\n{3,}/g,'\n\n').trim();
+// What one proposed action is right now: {label, enabled, why, primary}. plans: /api/plans summaries; runs and ready: /api/runs. A stale proposal (answered plan, closed run) is shown switched off, with the reason.
+export function chatActionState(a,{plans=[],runs=[],ready=[]}={}){
+ const off=(label,why)=>({label,enabled:false,why,primary:false});
+ if(!a||!CHAT_OPS.includes(a.op))return off('Unknown action','The hub does not know this action.');
+ if(a.op==='approve'){
+  const p=plans.find(x=>x.id===a.plan);if(!p)return off('Approve','That plan is not on the Plans page.');
+  const label=`Approve: ${p.title} (revision ${a.revision})`;
+  if(p.revision!==a.revision)return off(label,`A newer revision (${p.revision}) exists. Read it on the Plans page.`);
+  if(p.status!=='waiting')return off(label,`Already ${p.status}.`);
+  return {label,enabled:true,why:'',primary:true}}
+ if(a.op==='start'){
+  const r=ready.find(x=>x.planId===a.plan&&x.revision===a.revision);
+  if(!r){const run=runs.find(x=>x.planId===a.plan&&x.revision===a.revision),p=plans.find(x=>x.id===a.plan);
+   return off(`Start: ${p?p.title:'plan'}`,run?`Already started (${STATUS_LABEL[run.status]||run.status}).`:!p?'That plan is not on the Plans page.':p.status!=='approved'||p.revision!==a.revision?'Approve this revision first.':'The plan has no usable "## Run" block.')}
+  const label=`Start on ${modelName(r.model)}: ${r.title}`;
+  if(!r.canStart)return off(label,r.reasons.join(' '));
+  return {label,enabled:true,why:`${r.size} · up to ${fmt(r.capTokens)} tokens${r.secondYes?' · needs your second yes on the Runs page':''}`,primary:true}}
+ const run=runs.find(x=>x.id===a.run),word=a.op==='resume'?'Resume':'Close';
+ if(!run)return off(word,'That run is not on the Runs page.');
+ const label=`${word}: ${run.planTitle}`;
+ if(!actionsFor(run).some(x=>x.op===a.op))return off(label,`Not possible now: ${STATUS_LABEL[run.status]||run.status}.`);
+ return {label,enabled:true,why:STATUS_LABEL[run.status]||'',primary:a.op==='resume'}}
+// The call a click on a proposed action sends: {op, args} for runCall, or null. Start uses the model in the plan's own Run block (from the ready list), never one the master names.
+export function chatActionCall(a,{ready=[]}={}){
+ if(!a)return null;
+ if(a.op==='approve')return {op:'approve',args:{plan:a.plan,revision:a.revision}};
+ if(a.op==='start'){const r=ready.find(x=>x.planId===a.plan&&x.revision===a.revision);return r?{op:'start',args:{plan:a.plan,revision:a.revision,model:r.model}}:null}
+ if(a.op==='resume'||a.op==='close')return {op:a.op,args:{id:a.run}};
  return null}
 
 // The cap bar: ok under 80 percent, warn from 80 (the run card turns orange), full from 100.
