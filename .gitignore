@@ -8,3 +8,6 @@ node_modules/
 launcher/node_modules/
 launcher/game/
 launcher/out/
+
+# the hub's local data (usage readings, the watcher page)
+.hub/

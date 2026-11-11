@@ -9,6 +9,8 @@
     "server": "node server.js",
     "server:lan": "node server.js --lan",
     "release": "node scripts/package-release.mjs",
+    "index": "node scripts/build-index.mjs",
+    "watcher": "node hub/watcher-cli.mjs",
     "pictures": "node scripts/render-vehicle-pictures.mjs",
     "icons": "node scripts/render-item-icons.mjs",
     "test": "node scripts/run-tests.mjs"
