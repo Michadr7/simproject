@@ -13,6 +13,7 @@ import {previewKey,previewSpec,trackChanges,isRecent,usesText} from './assets.js
 import {checklistFor} from './checklist.js';
 import {renderAssetsPage,attentionItems} from './assets-page.js';
 import {renderPreviews,previewDir,studioVersion,readManifest} from './assets-render.mjs';
+import {acquireLock,releaseLock} from './run-store.mjs';
 
 const ROOT=path.resolve(path.dirname(fileURLToPath(import.meta.url)),'..'),PAGE=path.join(ROOT,'.hub','assets.html');
 const args=process.argv.slice(2),flag=n=>args.includes(n);
@@ -40,7 +41,9 @@ export async function buildPage(root=ROOT){
 }
 
 if(process.argv[1]&&path.resolve(process.argv[1])===fileURLToPath(import.meta.url)){
- if(!flag('--no-pictures')){const s=await renderPreviews(ROOT,{force:flag('--force'),log:()=>{}});console.log(`Pictures: ${s.drawn} drawn, ${s.placeholders} placeholders, ${s.failed} failed, ${s.kept} unchanged.`);for(const f of s.failures)console.log('  '+f)}
+ // drawing pictures starts Edge, a heavy process: it never overlaps an agent run (they share .hub/run.lock)
+ if(!flag('--no-pictures')){const lock=acquireLock(ROOT,'assets');if(!lock.ok){console.error(`Not drawing pictures: ${lock.holder} holds the run lock (an agent run is working). Try again when it is done, or use --no-pictures.`);process.exit(1)}
+  try{const s=await renderPreviews(ROOT,{force:flag('--force'),log:()=>{}});console.log(`Pictures: ${s.drawn} drawn, ${s.placeholders} placeholders, ${s.failed} failed, ${s.kept} unchanged.`);for(const f of s.failures)console.log('  '+f)}finally{releaseLock(ROOT,'assets')}}
  const {data,pictures,html,tracked}=await buildPage();
  const s=data.summary;
  console.log(`Assets: ${s.total} (${Object.entries(s.byStage).map(([k,v])=>`${v} ${k}`).join(', ')}) in ${data.groups.length} packs; ${pictures.size} pictures built in; page ${Math.round(html.length/1024)} KB.`);

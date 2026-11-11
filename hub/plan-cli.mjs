@@ -7,6 +7,7 @@ import path from 'node:path';
 import {fileURLToPath} from 'node:url';
 import {sendPlan,listPlans,findPlan} from './plans-store.mjs';
 import {statusOf,latestRevision} from './plans.js';
+import {describeRun} from './runplan.js';
 
 const ROOT=path.resolve(path.dirname(fileURLToPath(import.meta.url)),'..'),DIR=path.join(ROOT,'plans');
 const args=process.argv.slice(2),flag=n=>args.includes(n),value=n=>{const i=args.indexOf(n);return i>=0?args[i+1]:null};
@@ -24,6 +25,7 @@ if(flag('--list')){
  const s=statusOf(p);
  console.log(`${s.id}: ${s.status}, revision ${s.revision}${s.verdict?`, answered ${s.verdict}`:', not answered yet'}${s.note?`, note: ${s.note}`:''}`);
  console.log(s.buildable?'Build allowed: this revision is approved.':'Do not build from this yet.');
+ console.log(describeRun(latestRevision(p).text));
  if(!s.buildable)process.exitCode=1;
 }else{
  const file=args.find(a=>!a.startsWith('--')&&a!==value('--title')&&a!==value('--from'));

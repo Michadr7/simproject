@@ -19,7 +19,7 @@ const hx=n=>String(n).repeat(16).slice(0,16);
 const P=(id,status,sentAt,rev=1)=>({id,title:'Plan '+id,from:'opus session',status,revision:rev,sentAt});
 
 // nothing waiting
-assert.deepEqual(buildWaiting({gauges:gauge(),now:NOW}),{items:[],counts:{waiting:0,plans:0,assets:0,tokens:0}});
+assert.deepEqual(buildWaiting({gauges:gauge(),now:NOW}),{items:[],counts:{waiting:0,plans:0,runs:0,assets:0,tokens:0}});
 assert.deepEqual(buildWaiting({now:NOW}).items,[],'no sources at all is an empty list, not an error');
 
 // plans: only waiting ones, one item each with the newest revision, oldest first
@@ -61,7 +61,7 @@ w=buildWaiting({
 assert.deepEqual(w.items.map(i=>i.group),['tokens-critical','plan','plan','tokens-high','asset','asset','asset','note','note','note']);
 assert.deepEqual(w.items.filter(i=>i.group==='plan').map(i=>i.id),['plan:old','plan:new'],'oldest plan first');
 assert.deepEqual(w.items.filter(i=>i.group==='note').map(i=>i.at),[NOW-200*60000,NOW-200*60000,NOW-2*H].sort((a,b)=>a-b),'notes oldest first');
-assert.deepEqual(w.counts,{waiting:10,plans:2,assets:3,tokens:4});
+assert.deepEqual(w.counts,{waiting:10,plans:2,runs:0,assets:3,tokens:4});
 assert.ok(w.items.every(i=>i.severity&&Number.isInteger(i.rank)&&Array.isArray(i.actions)&&i.actions.length));
 assert.equal(signature(w),signature(JSON.parse(JSON.stringify(w))),'the page redraws only when the list changed');assert.notEqual(signature(w),signature({items:[]}));
 

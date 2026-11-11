@@ -86,3 +86,105 @@ a.plan-row:hover{border-color:rgba(var(--acc-glow),.6)}
 .s-plan{background:var(--watch)}.s-att{background:#7fb0ff}.s-tok{background:var(--high)}.s-crit{background:var(--crit)}.s-info{background:var(--faint)}
 a.btn{text-decoration:none;display:inline-block}
 @media(max-width:699px){.it{grid-template-columns:4px 1fr}.it .acts{grid-column:2;padding-bottom:2px}}
+
+/* ---- P5 R4: Runs page and run items in Waiting for you ---- */
+.s-run{background:var(--acc)}
+.rcard{display:grid;gap:10px;max-width:1100px}
+.rhead{display:flex;gap:12px;align-items:center;justify-content:space-between}
+.rgrid{display:grid;grid-template-columns:minmax(0,1fr) 300px;gap:14px;align-items:start}
+.feedwrap{min-width:0}
+.feed{border:1px solid var(--line);background:rgba(255,255,255,.03);border-radius:12px;padding:10px 12px;margin-top:6px;height:330px;overflow:auto;font:12.5px/1.75 var(--mono);color:#cfcdc6}
+.feed .fr{display:grid;grid-template-columns:62px 78px 1fr auto;gap:8px}
+.feed .t{color:var(--faint)}.feed .k{color:var(--acc-ink)}.feed .n{color:var(--dim)}
+.feed .fr.q .k{color:var(--watch)}.feed .fr.bad .k{color:var(--crit)}
+.side{display:grid;gap:10px;min-width:0}
+.box{border:1px solid var(--line);background:var(--panel);border-radius:12px;padding:12px 14px;min-width:0}
+.kv{display:grid;grid-template-columns:auto 1fr;gap:3px 12px;font-size:13px}.kv span:nth-child(odd){color:var(--dim)}.kv a{color:var(--acc-ink);overflow-wrap:anywhere}
+.capbar{height:9px;border-radius:5px;background:rgba(255,255,255,.1);position:relative;margin:8px 0 4px;overflow:hidden}
+.capbar i{position:absolute;inset:0 auto 0 0;width:0;border-radius:5px;background:var(--acc);transition:width .4s}
+.capbar[data-state=warn] i{background:var(--high)}.capbar[data-state=full] i{background:var(--crit)}
+.btns{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
+.cont{display:inline-flex;gap:6px}
+.sel{background:var(--panel2);color:var(--ink);border:1px solid var(--line);border-radius:8px;padding:5px 8px;font:13px var(--sans)}
+.btn.danger{color:#ffd9d6;background:rgba(242,118,109,.16)}
+.pill.rs-running{color:var(--acc-ink)}.pill.rs-done{color:var(--ok)}.pill.rs-closed,.pill.rs-stopped{color:var(--dim)}
+.pill.rs-confirming,.pill.rs-waiting-answer,.pill.rs-capped,.pill.rs-paused,.pill.rs-interrupted{color:var(--watch)}
+.pill.rs-failed,.pill.rs-guard-stopped{color:var(--crit)}
+.mtext{white-space:pre-wrap;overflow-wrap:anywhere;font:13.5px/1.55 var(--sans);margin:6px 0 10px;max-height:320px;overflow:auto}
+.answerbox textarea{width:100%;background:var(--panel2);color:var(--ink);border:1px solid var(--line);border-radius:10px;padding:9px 11px;font:14px var(--sans);resize:vertical;margin-bottom:8px}
+.box.flag{border-color:rgba(224,176,96,.5)}.files{margin:4px 0 0;padding-left:20px}
+.chips{display:flex;gap:6px;flex-wrap:wrap;margin-top:6px}.chips code{font:12.5px var(--mono);background:var(--panel2);border:1px solid var(--line);border-radius:5px;padding:1px 7px}
+.plan-meta.warn{color:var(--watch)}
+.d.err{color:var(--crit);margin-top:4px}
+.it .cont{align-items:center}
+@media(max-width:899px){.rgrid{grid-template-columns:1fr}.feed{height:240px}}
+/* ---- P5 R5: the Chat page ---- */
+.chat-top{display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin-bottom:8px}
+.chat-tokens{margin-left:auto}
+.chat-list{display:grid;gap:10px;align-content:start;max-width:900px;max-height:calc(100vh - 380px);min-height:160px;overflow:auto;padding-right:4px}
+.cmsg{border:1px solid var(--line);background:rgba(255,255,255,.035);border-radius:12px;padding:10px 14px}
+.cmsg.c-user{background:rgba(var(--acc-glow),.12);border-color:rgba(var(--acc-glow),.35)}
+.cmsg.c-note{background:none;border-style:dashed;color:var(--dim)}
+.cmsg.bad{border-color:rgba(242,118,109,.6)}
+.cmsg .mtext{margin:4px 0 0;max-height:none}
+.chead{display:flex;gap:10px;align-items:baseline;justify-content:space-between}
+.chip-plan{display:inline-block;margin-top:6px;border:1px solid var(--acc);background:rgba(var(--acc-glow),.18);color:var(--ink);border-radius:99px;padding:3px 12px;font-size:13px;text-decoration:none}
+.chat-composer{max-width:900px;margin-top:10px}
+.chat-composer textarea{width:100%;background:var(--panel2);color:var(--ink);border:1px solid var(--line);border-radius:10px;padding:9px 11px;font:14px var(--sans);resize:vertical;margin-bottom:8px}
+.small.warn{color:var(--watch)}
+
+/* ---- P5 R7b: the corner bot. The face sits at the foot of the rail; the speech line and the live list grow out of the rail in a strip the page makes room for (--bot-h), so nothing is ever covered. ---- */
+html{--bot-h:0px}html[data-bot=line]{--bot-h:54px}html[data-bot=open]{--bot-h:258px}
+.main{bottom:calc(18px + var(--bot-h));transition:left .2s,bottom .2s}
+.panel{bottom:calc(16px + var(--bot-h));transition:transform .2s,opacity .2s,bottom .2s}
+.chat-list{max-height:calc(100vh - 380px - var(--bot-h))}
+.bot{--bot:var(--acc);--bot-ink:var(--acc-ink);--bot-glow:var(--acc-glow)}
+.bot[data-mood=question]{--bot:var(--watch);--bot-ink:#f0cd8f;--bot-glow:224,176,96}
+.bot[data-mood=stopped]{--bot:var(--crit);--bot-ink:#f8a39c;--bot-glow:242,118,109}
+.bot-face{position:fixed;left:6px;bottom:13px;width:32px;height:32px;z-index:5;padding:0;border:1px solid rgba(255,255,255,.22);border-radius:11px 11px 11px 5px;cursor:pointer;
+ background:linear-gradient(155deg,rgba(var(--bot-glow),1),rgba(var(--bot-glow),.55));box-shadow:0 0 0 0 rgba(var(--bot-glow),.5),inset 0 1px 0 rgba(255,255,255,.35);display:flex;gap:6px;align-items:center;justify-content:center;transition:background .4s,filter .3s,transform .15s}
+.bot-face:hover{transform:translateY(-1px)}
+.bot-face .eye{width:4px;height:9px;border-radius:2px;background:#0b0c0e;transform-origin:50% 60%;animation:bot-blink 5.2s infinite}
+.bot[data-mood=idle] .bot-face{filter:saturate(.55) brightness(.85)}
+.bot[data-mood=working] .bot-face{animation:bot-pulse 1.6s ease-out infinite}
+.bot[data-mood=working] .bot-face .eye{animation:bot-scan 1.6s ease-in-out infinite}
+.bot[data-mood=question] .bot-face{animation:bot-nod 1.8s ease-in-out infinite}
+.bot[data-mood=question] .bot-face .eye{height:10px;transform:translateY(-2px);animation:none}
+.bot[data-mood=stopped] .bot-face .eye{height:2px;animation:none}
+.bot-face::after{content:"";position:absolute;right:-5px;top:-6px;min-width:15px;height:15px;border-radius:8px;font:700 10px/15px var(--mono);color:#0b0c0e;background:var(--bot);border:1px solid var(--bg);opacity:0;transform:scale(.4);transition:opacity .2s,transform .2s}
+.bot[data-mood=question] .bot-face::after{content:"?";opacity:1;transform:none}
+.bot[data-mood=stopped] .bot-face::after{content:"!";opacity:1;transform:none}
+.bot-bubble{position:fixed;left:var(--rail);bottom:8px;z-index:4;width:min(640px,calc(100vw - var(--rail) - 12px));display:flex;flex-direction:column;border-radius:0 16px 16px 0;border:1px solid rgba(255,255,255,.1);border-left:0;
+ background:rgba(28,31,37,.72);-webkit-backdrop-filter:blur(10px);backdrop-filter:blur(10px);box-shadow:0 14px 36px rgba(0,0,0,.4);animation:bot-in .22s ease-out}
+.bot-bubble[hidden],.bot-list[hidden]{display:none}
+/* the concave corners where the bubble leaves the rail */
+.bot-bubble::before,.bot-bubble::after{content:"";position:absolute;left:0;width:14px;height:14px;pointer-events:none}
+.bot-bubble::before{top:-14px;background:radial-gradient(circle at 100% 0,transparent 13.5px,rgba(28,31,37,.72) 14px)}
+.bot-bubble::after{bottom:-9px;height:9px;width:9px;background:radial-gradient(circle at 100% 100%,transparent 8.5px,rgba(28,31,37,.72) 9px)}
+.bot-line{display:flex;gap:10px;align-items:center;width:100%;height:40px;padding:0 12px 0 14px;background:none;border:0;color:var(--ink);cursor:pointer;text-align:left;font:14px var(--sans);border-radius:0 16px 16px 0}
+.bot-mood{font:600 10.5px var(--mono);letter-spacing:.14em;text-transform:uppercase;color:var(--bot-ink);white-space:nowrap;display:flex;gap:7px;align-items:center}
+.bot-mood::before{content:"";width:7px;height:7px;border-radius:50%;background:var(--bot);box-shadow:0 0 8px rgba(var(--bot-glow),.9)}
+.bot[data-mood=idle] .bot-mood{color:var(--dim)}.bot[data-mood=idle] .bot-mood::before{background:var(--faint);box-shadow:none}
+.bot[data-mood=working] .bot-mood::before{animation:bot-dot 1.2s ease-in-out infinite}
+.bot-text{flex:1;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.bot-n{font:11.5px var(--mono);color:var(--dim);white-space:nowrap}
+.bot-chev{width:7px;height:7px;margin:3px 3px 0 4px;border:solid var(--dim);border-width:1.5px 1.5px 0 0;transform:rotate(-45deg);transition:transform .2s}
+html[data-bot=open] .bot-chev{transform:rotate(135deg);margin-top:-3px}
+.bot-line:hover .bot-chev{border-color:var(--ink)}
+.bot-list{height:204px;padding:12px 14px 0;display:flex;flex-direction:column;border-bottom:1px solid rgba(255,255,255,.08)}
+.bot-list .label{margin:0 0 6px}
+.bot-rows{flex:1;min-height:0;overflow:auto;font:12.5px/1.75 var(--mono);color:#cfcdc6}
+.bot-rows .br{display:grid;grid-template-columns:62px 70px 1fr auto;gap:8px}
+.bot-rows .x{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.bot-rows .t{color:var(--faint)}.bot-rows .k{color:var(--acc-ink)}.bot-rows .n,.bot-none{color:var(--dim)}
+.bot-rows .br.q .k{color:var(--watch)}.bot-rows .br.bad .k{color:var(--crit)}
+.bot-rows .br:last-child .x{color:var(--ink)}
+.bot-foot{height:30px;padding-top:6px;font-size:12.5px}.bot-foot a{color:var(--acc-ink);text-decoration:none}.bot-foot a:hover{text-decoration:underline}
+@keyframes bot-blink{0%,46%,50%,100%{transform:scaleY(1)}48%{transform:scaleY(.12)}}
+@keyframes bot-scan{0%,100%{transform:translateX(-2px)}50%{transform:translateX(2px)}}
+@keyframes bot-pulse{0%{box-shadow:0 0 0 0 rgba(var(--bot-glow),.55),inset 0 1px 0 rgba(255,255,255,.35)}100%{box-shadow:0 0 0 11px rgba(var(--bot-glow),0),inset 0 1px 0 rgba(255,255,255,.35)}}
+@keyframes bot-nod{0%,100%{transform:none}50%{transform:translateY(-3px)}}
+@keyframes bot-dot{0%,100%{opacity:1}50%{opacity:.35}}
+@keyframes bot-in{from{opacity:0;transform:translateX(-10px)}}
+@media(max-width:699px){.bot-n{display:none}.bot-rows .br{grid-template-columns:58px 60px 1fr auto}}
+@media(prefers-reduced-motion:reduce){.bot *,.bot-face,.bot-bubble{animation:none!important}}

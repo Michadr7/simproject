@@ -51,8 +51,9 @@ const listFiles=(dir,test)=>fs.existsSync(dir)?fs.readdirSync(dir,{withFileTypes
 // "../dist/x.js" imports in a test -> the module names it covers
 export const coversOf=text=>[...new Set([...text.matchAll(/from\s+['"]\.\.\/dist\/([A-Za-z0-9_.-]+\.js)['"]/g)].map(m=>m[1]))];
 // "## / ###" headings with their line numbers, so an agent can open a long document by range.
-export function headings(file,{levels=[2,3],max=80,width=88}={}){
- if(!fs.existsSync(file))return [];const out=[];read(file).split(/\r?\n/).forEach((line,i)=>{const m=/^(#{2,4})\s+(.+?)\s*$/.exec(line);if(m&&levels.includes(m[1].length))out.push({line:i+1,level:m[1].length,title:clip(m[2].replace(/[`*]/g,''),width)})});
+// dropNotes: leave out long parenthetical status notes (dates, test counts, who built it): the heading's own words are the search key, and the notes are cut off mid-sentence at this width anyway.
+export function headings(file,{levels=[2,3],max=80,width=88,dropNotes=false}={}){
+ if(!fs.existsSync(file))return [];const out=[];read(file).split(/\r?\n/).forEach((line,i)=>{const m=/^(#{2,4})\s+(.+?)\s*$/.exec(line);if(m&&levels.includes(m[1].length)){const raw=m[2].replace(/[`*]/g,'');out.push({line:i+1,level:m[1].length,title:clip(dropNotes?raw.replace(/\s*\([^)]{26,}\)/g,''):raw,width)})}});
  return out.slice(-max)}
 
 // The repo's HEAD, if git can be found (it is not on PATH here; GitHub Desktop's copy is). Missing git just leaves the commit out.
@@ -76,14 +77,16 @@ export function buildIndex({root=ROOT,head=undefined}={}){
   const shown=ex.slice(0,5).join(', ')+(ex.length>5?` (+${ex.length-5})`:'');
   const testText=name==='game.js'?`the ${booted} tests that boot the packaged game (tests/support/boot-game.mjs)`:cov.length?cov.slice(0,2).join(', ')+(cov.length>2?` (+${cov.length-2})`:''):'none';
   code.push(`- ${name} · ${lines} lines${size>60*1024?' · read by range':''} · ${purpose||'(no header comment)'}${shown?` · exports: ${shown}`:''} · tests: ${testText}`)}
- const testLines=tests.map(t=>{const c=leadingComment(read(path.join(root,'tests',t)),78);return `- ${t.replace(/\.mjs$/,'')}${c?' · '+c:''}`});
+ // In the hub/ and test lines the words "Mikkadr Hub" repeat on most lines under a section already about the hub: leave them out and clip shorter by the same amount, so the same description shows.
+ const hubDescribed=(text,max)=>{const full=leadingComment(text,1e6),s=full.replace(/\bMikkadr Hub,? ?/g,'');return clip(s,max-(full.length-s.length))};
+ const testLines=tests.map(t=>{const c=hubDescribed(read(path.join(root,'tests',t)),78);return `- ${t.replace(/\.mjs$/,'')}${c?' · '+c:''}`});
  const scriptLines=scripts.map(s=>{const c=leadingComment(read(path.join(root,'scripts',s)),90);return `- ${s}${c?' · '+c:''}`});
  const workerLines=workers.map(s=>{const c=leadingComment(read(path.join(root,'worker',s)),90);return `- worker/${s}${c?' · '+c:''}`});
  const hubFiles=listFiles(path.join(root,'hub'),n=>/\.(mjs|js)$/.test(n)); // Mikkadr Hub (Node only): the token watcher, the usage probe, the page
- const hubLines=hubFiles.map(s=>{const c=leadingComment(read(path.join(root,'hub',s)),90);return `- hub/${s}${c?' · '+c:''}`});
+ const hubLines=hubFiles.map(s=>{const c=hubDescribed(read(path.join(root,'hub',s)),90);return `- hub/${s}${c?' · '+c:''}`});
  const otherDist=listFiles(dist,n=>!n.endsWith('.js')).join(', ');
  const docLines=[];for(const doc of ['context.md','DESIGN.md','README.md','DEPLOY.md','ASSETS.md']){const f=path.join(root,doc);if(!fs.existsSync(f))continue;
-  const hs=headings(f,doc==='README.md'?{levels:[2],max:6}:{levels:[2,3],max:70});docLines.push(`### ${doc} (${lineCount(read(f))} lines${doc==='context.md'||doc==='DESIGN.md'?', open by line range':''})`);for(const h of hs)docLines.push(`- L${h.line} ${h.title}`)}
+  const hs=headings(f,doc==='README.md'?{levels:[2],max:6}:{levels:[2,3],max:70,dropNotes:true});docLines.push(`### ${doc} (${lineCount(read(f))} lines${doc==='context.md'||doc==='DESIGN.md'?', open by line range':''})`);for(const h of hs)docLines.push(`- L${h.line} ${h.title}`)}
  const sha=head===undefined?gitHead(root):head,version=pkg.version;
  const modulesText=[...code,...generated,...testLines,...scriptLines,...workerLines,...hubLines,...docLines].join('\n'); // about the whole index, for the size it quotes about itself
  const index=[

@@ -3,13 +3,14 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import path from 'node:path';
 import {fileURLToPath} from 'node:url';
-import {ROWS,ROUTES,routeOf,accentOf,barOf,titleOf,pageOf} from '../hub/web/shell.js';
+import {ROWS,ROUTES,routeOf,runIdOf,accentOf,barOf,titleOf,pageOf} from '../hub/web/shell.js';
 import {resolveRoute} from '../hub/server.js';
 
 const root=path.resolve(path.dirname(fileURLToPath(import.meta.url)),'..');
-assert.deepEqual(ROWS.map(r=>r.num+' '+r.label),['01 Waiting for you','02 Plans','03 Assets','04 Tokens','05 Sessions']);
-assert.equal(ROWS[4].off,'P5');assert.deepEqual(ROUTES,['waiting','plans','assets','tokens'],'Sessions has no route until P5');
-for(const [h,r] of [['#waiting','waiting'],['#plans','plans'],['#assets','assets'],['#tokens','tokens'],['#/plans','plans'],['#Plans?id=x','plans'],['#plans/2026-11-10-x','plans'],['','waiting'],[undefined,'waiting'],['#sessions','waiting'],['#nope','waiting'],['#__proto__','waiting']])assert.equal(routeOf(h),r,`route of ${JSON.stringify(h)}`);
+assert.deepEqual(ROWS.map(r=>r.num+' '+r.label),['01 Chat','02 Waiting for you','03 Plans','04 Assets','05 Tokens','06 Runs']);
+assert.equal(ROWS[5].off,undefined);assert.deepEqual(ROUTES,['chat','waiting','plans','assets','tokens','runs'],'Chat is row 01, Runs row 06, each with its own route');
+assert.equal(runIdOf('#runs/run-20261111-140211-ab12'),'run-20261111-140211-ab12');assert.equal(runIdOf('#runs/../x'),null);assert.equal(runIdOf('#runs'),null);assert.equal(runIdOf('#plans/run-20261111-140211-ab12'),null);
+for(const [h,r] of [['#waiting','waiting'],['#plans','plans'],['#assets','assets'],['#tokens','tokens'],['#/plans','plans'],['#Plans?id=x','plans'],['#plans/2026-11-10-x','plans'],['','waiting'],[undefined,'waiting'],['#sessions','waiting'],['#chat','chat'],['#runs','runs'],['#runs/run-20261111-140211-ab12','runs'],['#nope','waiting'],['#__proto__','waiting']])assert.equal(routeOf(h),r,`route of ${JSON.stringify(h)}`);
 // the accent follows the weekly gauge: blue under 60, orange from 60, red from 90
 for(const [p,a] of [[0,'blue'],[7,'blue'],[59.9,'blue'],[60,'orange'],[89.9,'orange'],[90,'red'],[100,'red'],[null,'blue'],[undefined,'blue'],[NaN,'blue']])assert.equal(accentOf(p),a,`accent at ${p}`);
 // each gauge bar uses its own thresholds (weekly 60/90, 5-hour 50/90)

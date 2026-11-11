@@ -1,12 +1,15 @@
 // Mikkadr Hub P4, S3: the shell. Draws the rail, the Menu panel and the gauges, follows the hash route, and sets the accent from the weekly gauge.
 // Waiting for you (home.js) and Plans (plans.js) draw inside the shell; Assets and Tokens open the pages that already exist. Polls GET /api/gauges and /api/waiting every 20 s and when the tab comes back; the writes live in plans.js and home.js.
-import {ROWS,routeOf,planIdOf,accentOf,barOf,titleOf,pageOf} from './shell.js';
+import {ROWS,routeOf,planIdOf,runIdOf,accentOf,barOf,titleOf,pageOf} from './shell.js';
 import {mountPlans} from './plans.js';
+import {mountRuns} from './runs.js';
+import {mountChat} from './chat.js';
 import {mountHome} from './home.js';
+import {mountBot} from './bot.js';
 
 const $=id=>document.getElementById(id);
 const root=document.documentElement;
-const counts={waiting:0,plans:0,assets:0,tokens:0};
+const counts={waiting:0,plans:0,runs:0,assets:0,tokens:0};
 let route=routeOf(location.hash),menuOpen,unmount=null,home=null,lastWaiting=null;
 
 const store={get(k){try{return localStorage.getItem(k)}catch{return null}},set(k,v){try{localStorage.setItem(k,v)}catch{}}};
@@ -32,6 +35,8 @@ function drawRoute(){
  if(unmount){unmount();unmount=null}
  if(page){if(frame.getAttribute('src')!==page)frame.setAttribute('src',page)}
  else if(route==='plans'){view.textContent='';unmount=mountPlans(view,{id:planIdOf(location.hash),onChange:refresh})}
+ else if(route==='chat'){view.textContent='';unmount=mountChat(view,{onChange:refresh})}
+ else if(route==='runs'){view.textContent='';unmount=mountRuns(view,{id:runIdOf(location.hash),onChange:refresh})}
  else{view.textContent='';home=mountHome(view,{onChange:refresh});unmount=()=>{home=null};if(lastWaiting)home.update(lastWaiting);else{const p=document.createElement('p');p.className='soon';p.textContent='Loading…';view.append(p)}}
  drawNav();document.title=titleOf(route,counts.waiting);
  if(innerWidth<700)setMenu(false);
@@ -61,4 +66,6 @@ addEventListener('keydown',e=>{if(e.key==='Escape'&&menuOpen&&innerWidth<700)set
 addEventListener('hashchange',drawRoute);
 addEventListener('focus',refresh);
 document.addEventListener('visibilitychange',()=>{if(!document.hidden)refresh()});
+const bot=mountBot({query:new URLSearchParams(location.search).get('bot'),store}); // R7b: the corner bot, on every page
+addEventListener('hashchange',()=>bot.refresh());
 setMenu(menuOpen);drawRoute();refresh();setInterval(()=>{if(!document.hidden)refresh()},20000);
