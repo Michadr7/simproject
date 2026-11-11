@@ -1,0 +1,19 @@
+<!doctype html>
+<html lang="en" data-accent="blue" data-menu="open"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"><title>Mikkadr Hub</title>
+<!-- Mikkadr Hub P4 S3: the shell. Rail with the rotated Menu tab, the frosted Menu panel, both gauges, hash routes. Scripts: shell.js (pure rules) and app.js. -->
+<link rel="stylesheet" href="/web/hub.css"></head>
+<body>
+<div class="rail"><button id="menutab" class="menutab" type="button" aria-controls="panel" aria-expanded="true">MENU</button></div>
+<nav id="panel" class="panel" aria-label="Hub"><div class="label">Navigate</div><ul id="nav" class="nav"></ul></nav>
+<main class="main">
+ <div class="gauges" aria-label="Token use">
+  <div id="g-weekly" class="g" data-name="Weekly" data-bar="none"><div class="row"><span>WEEKLY</span><span class="val">…</span></div><div class="bar"><i></i></div></div>
+  <div id="g-five" class="g" data-name="5-hour" data-bar="none"><div class="row"><span>5-HOUR</span><span class="val">…</span></div><div class="bar"><i></i></div></div>
+ </div>
+ <div id="g-age" class="age"></div>
+ <h1 id="title" class="title">Waiting for you</h1>
+ <section id="view" class="view"></section>
+ <iframe id="frame" class="frame" title="Hub page" hidden></iframe>
+</main>
+<script type="module" src="/web/app.js"></script>
+</body></html>

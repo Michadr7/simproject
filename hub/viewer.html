@@ -1,0 +1,211 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Mikkadr Hub · 3D viewer</title>
+<!-- Mikkadr Hub P3c: the 3D viewer. Served by hub/server.js (`npm run hub`); it cannot work from a file because it loads modules and model files.
+     It builds each asset with the game's own builders (hub/builders.js), turns it with hub/orbit.js, and reads the list of assets from /previews/catalog.json. -->
+<style>
+:root{--bg:#0b0c0e;--ink:#f1efe9;--dim:rgba(241,239,233,.55);--line:rgba(255,255,255,.14);--panel:rgba(255,255,255,.045);--ok:#5fbf85;--watch:#e0b060;--blue:#6aa7ff;--acc:59,130,246}
+*{box-sizing:border-box}html,body{height:100%}body{margin:0;background:var(--bg);color:var(--ink);font:14px/1.5 "Segoe UI",system-ui,sans-serif;display:grid;grid-template-columns:320px 1fr;overflow:hidden}
+aside{border-right:1px solid var(--line);display:flex;flex-direction:column;min-height:0;background:rgba(255,255,255,.02)}
+.head{padding:14px 14px 10px}.mono{font:500 11px/1 ui-monospace,Consolas,monospace;letter-spacing:.16em;color:var(--dim)}h1{font-size:20px;margin:6px 0 8px;letter-spacing:-.01em}
+input[type=search]{width:100%;background:var(--panel);color:var(--ink);border:1px solid var(--line);border-radius:8px;padding:8px 10px;font:inherit}input[type=search]:focus{outline:2px solid var(--blue)}
+.filters{display:flex;gap:6px;flex-wrap:wrap;margin-top:8px}.fb{font:600 10.5px ui-monospace,Consolas,monospace;letter-spacing:.08em;text-transform:uppercase;border:1px solid var(--line);background:var(--panel);color:var(--dim);border-radius:99px;padding:3px 9px;cursor:pointer}.fb[aria-pressed=true]{color:var(--ink);background:rgba(var(--acc),.3);border-color:rgb(var(--acc))}
+#list{overflow:auto;flex:1;min-height:0;padding:0 8px 16px}
+details{margin:4px 0}summary{cursor:pointer;list-style:none;padding:6px 8px;border-radius:8px;display:flex;gap:8px;align-items:center}summary::-webkit-details-marker{display:none}summary::before{content:"▸";color:var(--dim);width:10px}details[open]>summary::before{content:"▾"}summary:hover{background:rgba(255,255,255,.05)}summary .n{margin-left:auto;color:var(--dim);font:12px ui-monospace,Consolas,monospace}
+.row{display:flex;gap:8px;align-items:center;width:100%;text-align:left;background:none;border:1px solid transparent;border-radius:8px;color:inherit;font:inherit;padding:3px 6px;cursor:pointer}.row:hover{background:rgba(255,255,255,.05)}.row[aria-current=true]{border-color:rgb(var(--acc));background:rgba(var(--acc),.18)}
+.row img{width:40px;height:40px;object-fit:contain;border-radius:6px;background:rgba(255,255,255,.04);flex:none}.row .t{min-width:0;flex:1}.row .nm,.row .sm{display:block}.row .nm{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.row .sm{font-size:11.5px;color:var(--dim)}
+.dot{width:8px;height:8px;border-radius:50%;flex:none;background:var(--dim)}.dot.in-game{background:var(--ok)}.dot.converted{background:var(--blue)}.dot.received{background:var(--watch)}
+main{position:relative;min-width:0;min-height:0}#stage{position:absolute;inset:0;background:radial-gradient(120% 90% at 100% 100%,rgba(var(--acc),.2),transparent 62%),#12151a}canvas{display:block;width:100%;height:100%;cursor:grab}canvas:active{cursor:grabbing}
+.card{position:absolute;border:1px solid var(--line);background:rgba(11,12,14,.78);backdrop-filter:blur(6px);border-radius:12px;padding:12px 14px}
+#info{left:14px;top:14px;max-width:min(380px,calc(100% - 28px))}#info h2{margin:0 0 4px;font-size:18px}#info dl{margin:8px 0 0;display:grid;grid-template-columns:auto 1fr;gap:2px 12px;font-size:13px}#info dt{color:var(--dim)}#info dd{margin:0;overflow-wrap:anywhere}
+.chip{font:600 10.5px ui-monospace,Consolas,monospace;letter-spacing:.09em;text-transform:uppercase;border:1px solid currentColor;border-radius:99px;padding:2px 9px;color:var(--dim)}.chip.in-game{color:var(--ok)}.chip.converted{color:var(--blue)}.chip.received{color:var(--watch)}
+#tools{right:14px;top:14px;display:flex;gap:8px;flex-wrap:wrap;max-width:calc(100% - 28px);justify-content:flex-end;padding:8px}
+.tb{font:inherit;font-size:13px;background:var(--panel);color:var(--ink);border:1px solid var(--line);border-radius:8px;padding:6px 12px;cursor:pointer}.tb[aria-pressed=true]{background:rgba(var(--acc),.3);border-color:rgb(var(--acc))}.tb:focus-visible{outline:2px solid var(--blue)}.tb:disabled{opacity:.4;cursor:default}
+#hint{left:14px;bottom:12px;font-size:12.5px;color:var(--dim);padding:6px 10px}#msg{inset:0;margin:auto;width:fit-content;height:fit-content;max-width:min(460px,90%);text-align:center;display:none}#msg img{max-width:100%;border-radius:8px}
+#legend{right:14px;bottom:12px;font-size:12.5px;color:var(--dim);padding:6px 10px;display:flex;gap:8px;align-items:center}#legend i{width:10px;height:18px;background:rgba(106,167,255,.75);display:inline-block;border-radius:3px}
+.lab{position:absolute;transform:translate(-50%,-100%);pointer-events:none;display:none;background:rgba(11,12,14,.78);border:1px solid var(--line);border-radius:99px;padding:2px 10px;font-size:12.5px;white-space:nowrap}
+#info .cols{display:grid;grid-template-columns:1fr 1fr;gap:14px}#info .col h2{font-size:16px}.tag{font:700 11px ui-monospace,Consolas,monospace;letter-spacing:.12em;color:var(--dim);margin-bottom:2px}.tag.a{color:var(--blue)}.tag.b{color:var(--watch)}.small{font-size:12px}
+#info .cmp{margin:10px 0 0;padding:8px 0 0 18px;border-top:1px solid var(--line);font-size:13px}.comparing #info{max-width:min(620px,calc(100% - 28px))}.row[data-slot=a]{border-color:var(--blue)}.row[data-slot=b]{border-color:var(--watch);background:rgba(224,176,96,.14)}
+@media(max-width:760px){body{grid-template-columns:1fr;grid-template-rows:40vh 1fr}aside{border-right:0;border-bottom:1px solid var(--line)}#info{max-width:calc(100% - 28px)}#hint{display:none}}
+</style></head><body>
+<aside><div class="head"><div class="mono">MIKKADR HUB</div><h1>3D viewer</h1><input id="q" type="search" placeholder="Search assets" aria-label="Search assets" autocomplete="off">
+<div class="filters" id="fl"></div></div><div id="list" role="list"></div></aside>
+<main><div id="stage"></div>
+<div class="card" id="info"><h2>Loading…</h2></div>
+<div class="card" id="tools"><button class="tb" id="wire" aria-pressed="false">Wireframe</button><button class="tb" id="player" aria-pressed="true">Player 1.95 m</button><button class="tb" id="grid" aria-pressed="true">Grid</button><button class="tb" id="reset">Reset view</button><button class="tb" id="compare" aria-pressed="false" title="Put a second asset beside this one, at the same scale">Compare</button><button class="tb" id="swap" style="display:none" disabled>Swap A and B</button></div>
+<div class="card" id="msg"></div>
+<div class="lab" id="labA"></div><div class="lab" id="labB"></div>
+<div class="card" id="hint">Drag to turn · wheel to zoom · right-drag or Shift-drag to move · double-click to reset</div>
+<div class="card" id="legend"><i></i> the player, 1.95 m</div></main>
+<script type="module">
+import {THREE,buildObject,readyPicture,measure,setWireframe} from '/builders.js';
+import {OrbitControl} from '/orbit.js';
+import {compareFacts,factsOf,sideBySide} from '/compare.js';
+const $=id=>document.getElementById(id),esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const PLAYER=1.95,STAGES=['in-game','converted','received','wanted'],GAP=2.2;
+// slots[0] is the asset on show (A); slots[1] is the one compared with it (B), only while compare mode is on. A slot is {asset, wrapper|null, m|null, note|null}.
+let catalog=[],slots=[null,null],compare=false,grid=null,figure=null,wire=false,showPlayer=true,showGrid=true,token=0,stageFilter=null;
+
+// ---- scene (rendered on demand: software WebGL is slow, so nothing redraws unless something changed)
+const stage=$('stage'),renderer=new THREE.WebGLRenderer({antialias:true,alpha:true});renderer.setPixelRatio(Math.min(devicePixelRatio||1,2));stage.append(renderer.domElement);
+const scene=new THREE.Scene(),camera=new THREE.PerspectiveCamera(35,1,.01,5000);
+scene.add(new THREE.HemisphereLight(0xfff3dc,0x5d5a50,1.6));const sun=new THREE.DirectionalLight(0xffffff,2.4);sun.position.set(-5,9,7);scene.add(sun);
+let dirty=true;const render=()=>{dirty=true};
+// Name tags float above each model in compare mode: the top middle of the wrapper, projected to the screen after every draw.
+const tags=[$('labA'),$('labB')],tmp=new THREE.Vector3();
+function placeTags(){
+ const w=stage.clientWidth,h=stage.clientHeight;
+ slots.forEach((s,i)=>{const t=tags[i];if(!compare||!s||!s.wrapper||!s.m){t.style.display='none';return}
+  tmp.set(s.wrapper.position.x,s.m.size.h+.25,s.wrapper.position.z).project(camera);
+  const visible=tmp.z<1;t.style.display=visible?'block':'none';t.style.left=((tmp.x+1)/2*w)+'px';t.style.top=((1-tmp.y)/2*h)+'px'});
+}
+(function loop(){requestAnimationFrame(loop);if(!dirty)return;dirty=false;renderer.render(scene,camera);placeTags()})();
+const controls=new OrbitControl(camera,renderer.domElement,{onChange:render});
+const resize=()=>{const w=stage.clientWidth,h=stage.clientHeight;renderer.setSize(w,h,false);camera.aspect=w/Math.max(h,1);camera.updateProjectionMatrix();render()};
+new ResizeObserver(resize).observe(stage);resize();
+
+// The blue figure is a 1.95 m stand-in for the player: a box 0.5 m wide and 0.3 m deep with a head, so scale reads at a glance.
+function makeFigure(){
+ const g=new THREE.Group(),mat=new THREE.MeshStandardMaterial({color:0x6aa7ff,transparent:true,opacity:.7,roughness:.8});
+ const body=new THREE.Mesh(new THREE.BoxGeometry(.5,PLAYER-.3,.3),mat);body.position.y=(PLAYER-.3)/2;const head=new THREE.Mesh(new THREE.SphereGeometry(.13,16,12),mat);head.position.y=PLAYER-.15;g.add(body,head);return g;
+}
+function makeGrid(extent){
+ const half=Math.max(2,Math.ceil(extent/2)),n=half*2,g=new THREE.GridHelper(n,n,0x6a7280,0x363c46);g.material.transparent=true;g.material.opacity=.7;return g;
+}
+// Takes a slot's model out of the scene (and out of wireframe, in case its materials are shared) and empties the slot.
+function dropSlot(i){const s=slots[i];if(s&&s.wrapper){setWireframe(s.wrapper,false);scene.remove(s.wrapper)}slots[i]=null}
+function updateHint(){$('hint').textContent=compare&&!slots[1]?'Compare: click an asset in the list to put it beside the first one':HINT}
+function clearScene(){
+ for(const s of slots)if(s&&s.wrapper){setWireframe(s.wrapper,false);scene.remove(s.wrapper)}
+ for(const o of [grid,figure])if(o)scene.remove(o);grid=figure=null;
+}
+
+// ---- the panel
+function rowsOf(a,m){
+ const f=m||{},tri=f.triangles??a.triangles,sz=f.size||a.size;
+ return [['Pack',a.pack],['Triangles',tri!=null?Number(tri).toLocaleString('en-US'):'unknown'],['Size',sz?`${sz.w} × ${sz.d} × ${sz.h} m (w × d × h)`:'unknown'],['Source',a.source],['Licence',[a.licence,a.credit&&a.credit!==a.licence?a.credit:''].filter(Boolean).join(' · ')],['Planned use',a.plannedUse],['Used in',a.used],['Import',a.import],['Notes',a.notes],['Evidence',a.evidence]].filter(r=>r[1]);
+}
+function infoSingle(a,m){
+ $('info').innerHTML=`<h2>${esc(a.name)}</h2><span class="chip ${esc(a.stage)}">${esc(a.stage)}</span><dl>${rowsOf(a,m).map(r=>`<dt>${esc(r[0])}</dt><dd>${esc(r[1])}</dd>`).join('')}</dl>`;
+}
+function infoCompare(){
+ const [A,B]=slots;
+ const col=(s,tag)=>s?`<div class="col"><div class="tag ${tag}">${tag.toUpperCase()}</div><h2>${esc(s.asset.name)}</h2><span class="chip ${esc(s.asset.stage)}">${esc(s.asset.stage)}</span>${s.note?`<div class="dim small">${esc(s.note)}</div>`:''}<dl>${rowsOf(s.asset,s.m).filter(r=>['Pack','Triangles','Size'].includes(r[0])).map(r=>`<dt>${esc(r[0])}</dt><dd>${esc(r[1])}</dd>`).join('')}</dl></div>`:`<div class="col dim"><div class="tag ${tag}">${tag.toUpperCase()}</div><div style="margin-top:8px">Click an asset in the list to compare.</div></div>`;
+ let lines='';
+ if(A&&B)lines=`<ul class="cmp">${compareFacts(factsOf(A.asset,A.m),factsOf(B.asset,B.m)).lines.map(l=>`<li>${esc(l)}</li>`).join('')}</ul>`;
+ $('info').innerHTML=`<div class="cols">${col(A,'a')}${col(B,'b')}</div>${lines}`;
+}
+function refreshInfo(){compare?infoCompare():slots[0]&&infoSingle(slots[0].asset,slots[0].m)}
+function message(html){const m=$('msg');m.innerHTML=html;m.style.display=html?'block':'none'}
+
+// ---- showing assets
+// Builds one asset: {asset, wrapper, m, note}. A wanted asset, a placeholder or a ready-made picture has no wrapper and says why in `note`.
+async function build(asset,my){
+ const spec=asset.spec,slot={asset,wrapper:null,m:null,note:null};
+ if(spec.mode==='placeholder'){slot.note='No 3D model yet: '+(spec.why||'');return slot}
+ if(spec.mode==='dataurl'){slot.note='A picture, not a model';slot.picture=await readyPicture(spec);return slot}
+ let object;try{object=await buildObject(spec)}catch(e){slot.note='Could not build it: '+String(e.message||e).slice(0,160);return slot}
+ if(my!==token||!object)return null;
+ // stand the model on the ground, centred on its bounding box, inside a wrapper so the game's own object keeps its transform
+ const m=measure(object),box=m.box,centre=box.getCenter(new THREE.Vector3());
+ const wrapper=new THREE.Group();object.position.set(-centre.x,-box.min.y,-centre.z);wrapper.add(object);
+ slot.wrapper=wrapper;slot.m={triangles:m.triangles,size:m.size};return slot;
+}
+function layout(){
+ clearScene();slots.forEach((s,i)=>{tags[i].textContent=s?s.asset.name:''});
+ const live=slots.filter(s=>s&&s.wrapper);
+ $('wire').disabled=!live.length;
+ if(!live.length){render();return}
+ let w,d,h,target,yaw,pitch;
+ if(compare&&slots[0]&&slots[0].wrapper&&slots[1]&&slots[1].wrapper){
+  const [A,B]=slots,pos=sideBySide(A.m.size.w,B.m.size.w,GAP);
+  A.wrapper.position.set(pos.a,0,0);B.wrapper.position.set(pos.b,0,0);scene.add(A.wrapper,B.wrapper);
+  w=pos.total;d=Math.max(A.m.size.d,B.m.size.d);h=Math.max(A.m.size.h,B.m.size.h,PLAYER);
+  figure=makeFigure();figure.position.set(pos.gapCentre,0,0);yaw=.3;pitch=.22;
+ }else{
+  const s=live[0];s.wrapper.position.set(0,0,0);scene.add(s.wrapper);
+  w=s.m.size.w;d=s.m.size.d;h=s.m.size.h;figure=makeFigure();figure.position.set(-(w/2+.8),0,0);yaw=.67;pitch=.33;
+ }
+ scene.add(figure);figure.visible=showPlayer;
+ grid=makeGrid(Math.max(w,d)*3+PLAYER);scene.add(grid);grid.visible=showGrid;
+ const radius=Math.max(Math.hypot(w,d,h)/2,.05),dist=radius/Math.sin(THREE.MathUtils.degToRad(camera.fov/2))*1.15;
+ const lift=compare&&live.length>1?.85:.5; // in compare mode the wider info card covers the top of the view, so the models sit lower
+ controls.setHome({target:{x:0,y:h*lift,z:0},yaw,pitch,distance:dist},{min:radius*.15,max:dist*12});camera.near=dist/300;camera.far=dist*40;camera.updateProjectionMatrix();
+ if(wire)for(const s of live)setWireframe(s.wrapper,true);
+ render();
+}
+// #A shows one asset; #A~B (or #A~ while compare mode waits for B) shows two side by side. Ids are percent-encoded and no id contains '~'.
+function setHash(){const id=s=>s?encodeURIComponent(s.asset.id):'';location.hash=compare?id(slots[0])+'~'+id(slots[1]):id(slots[0])}
+function markRows(){
+ for(const b of document.querySelectorAll('.row')){
+  const isA=slots[0]&&b.dataset.id===slots[0].asset.id,isB=compare&&slots[1]&&b.dataset.id===slots[1].asset.id;
+  b.setAttribute('aria-current',isA?'true':'false');b.dataset.slot=isB?'b':isA&&compare?'a':'';
+ }
+}
+// Puts `asset` in slot i (0 = the one on show, 1 = the one to compare) and redraws.
+async function setSlot(i,asset){
+ const my=++token;
+ message('<span style="color:var(--dim)">Building…</span>');
+ const slot=await build(asset,my);if(my!==token||!slot)return;
+ dropSlot(i);slots[i]=slot;message('');
+ if(!compare)dropSlot(1);
+ if(!compare&&slot.note){const imgs=slot.picture?`<img src="${slot.picture}" alt="${esc(asset.name)}" style="margin-top:10px">`:`<img src="/previews/${asset.key}.png" alt="" width="160" style="margin-top:10px">`;message(`<b>${esc(slot.note)}</b><br>${imgs}`)}
+ layout();refreshInfo();markRows();setHash();
+ $('swap').disabled=!(compare&&slots[0]&&slots[1]);updateHint();
+}
+function setCompare(on){
+ compare=on;$('compare').setAttribute('aria-pressed',String(on));$('swap').style.display=on?'':'none';document.body.classList.toggle('comparing',on);
+ if(!on){dropSlot(1);message('')}
+ layout();refreshInfo();markRows();setHash();$('swap').disabled=!(compare&&slots[0]&&slots[1]);
+ updateHint();render();
+}
+
+// ---- the list: packs fold, search and stage filters narrow it
+function row(a){
+ const b=document.createElement('button');b.className='row';b.dataset.id=a.id;b.setAttribute('role','listitem');b.setAttribute('aria-current','false');
+ b.innerHTML=`<img src="/previews/${a.key}.png" alt="" loading="lazy" width="40" height="40"><span class="t"><span class="nm">${esc(a.name)}</span><span class="sm">${esc(a.stage)}${a.triangles!=null?' · '+Number(a.triangles).toLocaleString('en-US')+' tris':''}${a.changedAt?' · '+(a.changeKind==='new'?'new':'changed'):''}</span></span><span class="dot ${esc(a.stage)}"></span>`;
+ b.onclick=()=>{if(compare&&slots[0]&&slots[0].asset.id!==a.id)setSlot(1,a);else{if(compare&&slots[0]&&slots[0].asset.id===a.id)return;setSlot(0,a)}};return b;
+}
+function buildList(){
+ const q=$('q').value.trim().toLowerCase(),list=$('list');list.textContent='';
+ const packs=new Map();
+ for(const a of catalog){
+  if(stageFilter&&a.stage!==stageFilter)continue;
+  if(q&&!`${a.name} ${a.id} ${a.pack} ${a.source||''}`.toLowerCase().includes(q))continue;
+  if(!packs.has(a.pack))packs.set(a.pack,[]);packs.get(a.pack).push(a);
+ }
+ for(const [pack,items] of packs){
+  const d=document.createElement('details');if(q||items.length<=3||items.some(i=>slots.some(s=>s&&s.asset.id===i.id)))d.open=true;
+  d.innerHTML=`<summary>${esc(pack)}<span class="n">${items.length}</span></summary>`;for(const a of items)d.append(row(a));list.append(d);
+ }
+ if(!packs.size)list.innerHTML='<div class="mono" style="padding:16px">NOTHING MATCHES</div>';
+ markRows();
+}
+$('fl').innerHTML=STAGES.map(s=>`<button class="fb" data-s="${s}" aria-pressed="false">${s}</button>`).join('');
+$('fl').onclick=e=>{const s=e.target.dataset&&e.target.dataset.s;if(!s)return;stageFilter=stageFilter===s?null:s;for(const b of $('fl').children)b.setAttribute('aria-pressed',String(b.dataset.s===stageFilter));buildList()};
+$('q').oninput=buildList;
+
+// ---- tools
+const HINT=$('hint').textContent;
+const toggle=(id,get,set)=>{$(id).onclick=()=>{const v=!get();set(v);$(id).setAttribute('aria-pressed',String(v));render()}};
+toggle('wire',()=>wire,v=>{wire=v;for(const s of slots)if(s&&s.wrapper)setWireframe(s.wrapper,v)});
+toggle('player',()=>showPlayer,v=>{showPlayer=v;if(figure)figure.visible=v});
+toggle('grid',()=>showGrid,v=>{showGrid=v;if(grid)grid.visible=v});
+$('reset').onclick=()=>controls.reset();
+$('compare').onclick=()=>setCompare(!compare);
+$('swap').onclick=()=>{if(!(slots[0]&&slots[1]))return;slots=[slots[1],slots[0]];layout();refreshInfo();markRows();setHash();tags[0].textContent=slots[0].asset.name;tags[1].textContent=slots[1].asset.name;render()};
+const fromHash=()=>location.hash.slice(1).split('~').map(id=>catalog.find(x=>x.id===decodeURIComponent(id))||null);
+const wantsCompare=()=>location.hash.includes('~');
+addEventListener('hashchange',()=>{const [a,b]=fromHash(),want=wantsCompare();if(!a)return;
+ const sameA=slots[0]&&slots[0].asset===a,sameB=(!b&&!slots[1])||(b&&slots[1]&&slots[1].asset===b);if(sameA&&sameB&&want===compare)return;
+ (async()=>{if(want!==compare)setCompare(want);if(!sameA)await setSlot(0,a);if(b&&!(slots[1]&&slots[1].asset===b))await setSlot(1,b)})()});
+
+// ---- start
+try{
+ catalog=await (await fetch('/previews/catalog.json')).json();
+ buildList();
+ const [a,b]=fromHash(),first=a||catalog.find(x=>x.id==='prop:house-a')||catalog.find(x=>x.spec&&x.spec.mode!=='placeholder')||catalog[0];
+ if(first)await setSlot(0,first);
+ if(first&&wantsCompare()){setCompare(true);if(b)await setSlot(1,b)}
+}catch(e){console.error(e);$('info').innerHTML=`<h2>No catalog yet</h2><div style="color:var(--dim)">Run <code>npm run assets</code> to draw the pictures and write the catalog, then open it from <code>npm run hub</code>.</div>`}
+window.viewerReady=true;
+</script></body></html>

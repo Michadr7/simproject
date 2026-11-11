@@ -13,7 +13,11 @@
     "watcher": "node hub/watcher-cli.mjs",
     "pictures": "node scripts/render-vehicle-pictures.mjs",
     "icons": "node scripts/render-item-icons.mjs",
-    "test": "node scripts/run-tests.mjs"
+    "test": "node scripts/run-tests.mjs",
+    "asset-pictures": "node hub/assets-render.mjs",
+    "assets": "node hub/assets-cli.mjs",
+    "plan": "node hub/plan-cli.mjs",
+    "hub": "node hub/hub-cli.mjs"
   },
   "dependencies": {
     "ws": "^8.18.0"

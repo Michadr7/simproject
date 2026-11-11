@@ -1,0 +1,39 @@
+<!doctype html>
+<meta charset="utf-8">
+<title>Asset studio</title>
+<!-- Dev tool, not part of the game (Mikkadr Hub P3c): hub/assets-render.mjs opens this page in headless Edge, served by hub/server.js, and calls renderAsset(spec) once per asset.
+     It draws one 256 px still frame with the game's own builders (createProp, createHeldItem, buildForklift, the nature geometry) or the vendored GLTFLoader, and returns a PNG data URL plus the measured triangles and size. -->
+<body style="margin:0;background:#00000000">
+<script type="module">
+import {THREE,buildObject,readyPicture,texturesReady,measure} from '/builders.js';
+const S=256;
+const renderer=new THREE.WebGLRenderer({antialias:true,alpha:true,preserveDrawingBuffer:true});
+renderer.setPixelRatio(1);renderer.setSize(S,S);renderer.setClearColor(0x000000,0);document.body.append(renderer.domElement);
+const scene=new THREE.Scene(),camera=new THREE.PerspectiveCamera(26,1,.01,2000);
+scene.add(new THREE.HemisphereLight(0xfff3dc,0x5d5a50,1.5));const sun=new THREE.DirectionalLight(0xffffff,2.4);sun.position.set(-5,9,7);scene.add(sun);
+const sleep=ms=>new Promise(r=>setTimeout(r,ms));
+async function frame(root,note={}){
+ scene.add(root);await texturesReady(root);
+ const m=measure(root),box=m.box,size=box.getSize(new THREE.Vector3()),centre=box.getCenter(new THREE.Vector3());
+ const radius=Math.max(size.length()/2,1e-3),dir=new THREE.Vector3(.62,.34,.78).normalize(),dist=radius/Math.sin(THREE.MathUtils.degToRad(camera.fov/2))*1.02;
+ camera.near=dist/200;camera.far=dist*10;camera.position.copy(centre).addScaledVector(dir,dist);camera.lookAt(centre);camera.updateProjectionMatrix();
+ await new Promise(r=>requestAnimationFrame(()=>requestAnimationFrame(r)));
+ renderer.render(scene,camera);const png=renderer.domElement.toDataURL('image/png');scene.remove(root);
+ return {png,triangles:m.triangles,size:m.size,...note};
+}
+function placeholder(label,kind,stage,why){
+ const c=document.createElement('canvas');c.width=c.height=S;const g=c.getContext('2d');
+ g.fillStyle='#2b2f36';g.fillRect(0,0,S,S);g.strokeStyle='#4a505a';g.lineWidth=2;g.setLineDash([8,6]);g.strokeRect(14,14,S-28,S-28);
+ g.fillStyle='#8a919c';g.textAlign='center';g.font='bold 20px sans-serif';g.fillText((stage||'').toUpperCase(),S/2,S/2-8);g.font='15px sans-serif';g.fillText(kind||'',S/2,S/2+16);
+ if(why){g.font='12px sans-serif';g.fillText(why,S/2,S/2+40)}
+ return {png:c.toDataURL('image/png'),triangles:null,size:null,placeholder:true};
+}
+window.renderAsset=async spec=>{
+ try{
+  if(spec.mode==='dataurl')return {png:await readyPicture(spec),triangles:null,size:null,existing:true};
+  const object=await buildObject(spec);
+  if(!object)return placeholder(spec.label,spec.kindLabel,spec.stage,spec.why);
+  return await frame(object);
+ }catch(e){const r=placeholder(spec.label,spec.kindLabel,spec.stage,'could not draw');r.error=String(e&&e.message||e).slice(0,200);return r}
+};window.studioReady=true;
+</script>
