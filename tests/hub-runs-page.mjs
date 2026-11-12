@@ -12,7 +12,14 @@ import {createRuns} from '../hub/runs.js';
 import {readRun,saveRun} from '../hub/run-store.mjs';
 import {createHubServer,waitingOf} from '../hub/server.js';
 import {buildWaiting} from '../hub/waiting.js';
-import {actionsFor,callFor,feedRow,capClass,secondsLeft,EXTRAS,STATUS_LABEL,modelName} from '../hub/web/run-actions.js';
+import {actionsFor,callFor,feedRow,capClass,secondsLeft,EXTRAS,STATUS_LABEL,modelName,startModels,draftStore} from '../hub/web/run-actions.js';
+import {MASTER_RULES} from '../hub/chat.js';
+// the Start card's model picker: the plan's model or Fable, never a third one; the request carries the pick; the master knows where the picker is
+assert.deepEqual(startModels('sonnet'),['sonnet','fable']);assert.deepEqual(startModels('opus'),['opus','fable']);assert.deepEqual(startModels('fable'),['fable']);
+assert.equal(callFor('start',{plan:'p',revision:2,model:'fable'}).body.model,'fable');
+assert.ok(MASTER_RULES.includes('model picker')&&MASTER_RULES.includes('never write fable in a Run block'));
+// a kept draft: without browser storage (as here, in Node) it reads empty and never throws
+{const d=draftStore('hub.test');assert.equal(d.get(),'');d.set('words');d.set('')}
 
 const HERE=path.dirname(fileURLToPath(import.meta.url)),FAKE=path.join(HERE,'fixtures','fake-claude.mjs'),WEB=path.join(HERE,'..','hub','web');
 const sleep=ms=>new Promise(r=>setTimeout(r,ms));
@@ -40,9 +47,9 @@ assert.equal(callFor('rm',{id}),null);assert.equal(callFor('stop',{}),null,'no i
 
 // ── feed rows: names and counts only
 const at=new Date(2026,10,11,14,3,41).getTime();
-assert.deepEqual(feedRow({at,kind:'tool',tool:'Edit',target:'minimap.js'}),{t:'14:03:41',k:'tool',text:'Edit · minimap.js',n:'',cls:''});
-assert.equal(feedRow({at,kind:'tokens',total:412300}).n,'412,300');assert.equal(feedRow({at,kind:'turn',n:2,resumed:true}).k,'answer');
-assert.equal(feedRow({at,kind:'question'}).cls,'q');assert.equal(feedRow({at,kind:'cap-stop',capPct:101}).cls,'bad');assert.equal(feedRow({at,kind:'gauges',weekly:12.4,fiveHour:61}).text,'fresh reading 12% weekly / 61% 5-hour');
+assert.deepEqual(feedRow({at,kind:'tool',tool:'Edit',target:'minimap.js'}),{t:'14:03:41',k:'tool',text:'Editing minimap.js',n:'',cls:''});
+assert.equal(feedRow({at,kind:'tokens',total:412300}).text,'Tokens used so far: 412,300');assert.equal(feedRow({at,kind:'turn',n:2,resumed:true}).k,'answer');
+assert.equal(feedRow({at,kind:'question'}).cls,'q');assert.equal(feedRow({at,kind:'cap-stop',capPct:101}).cls,'bad');assert.equal(feedRow({at,kind:'gauges',weekly:12.4,fiveHour:61}).text,'Usage check: 12% of this week, 61% of these 5 hours');
 assert.deepEqual(feedRow({at,kind:'weird',secret:'SECRET'}),{t:'14:03:41',k:'weird',text:'',n:'',cls:''},'an unknown event shows only its kind');
 assert.equal(capClass(20),'ok');assert.equal(capClass(79.9),'ok');assert.equal(capClass(80),'warn');assert.equal(capClass(100),'full');assert.equal(capClass(null),'ok');
 assert.equal(secondsLeft(R('confirming',{confirmUntil:10500}),10000),1);assert.equal(secondsLeft(R('confirming',{confirmUntil:5000}),10000),0);assert.equal(secondsLeft(R('running',{confirmUntil:99999}),10000),0);

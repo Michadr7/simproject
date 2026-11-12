@@ -1,3 +1,5 @@
+// P4 S1: plans as pure data
+
 // Mikkadr Hub P4, S1: plans as pure data. A plan is {id, title, from, source, status waiting|approved|denied, revisions [{n, at, hash, text}], answers [{revision, at, verdict, note}]}.
 // Everything here is a pure function (plan in, new plan or error out); hub/plans-store.mjs does the files.
 import {createHash} from 'node:crypto';

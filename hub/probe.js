@@ -1,3 +1,5 @@
+// P3: the usage probe
+
 // Mikkadr Hub, P3: the usage probe. One tiny headless Claude Code call on Haiku (about 7,600 tokens, under a cent) whose only purpose is the rate_limit_event it prints.
 // It is a model call, so it refuses to run unless the caller passes approved:true, which only an explicit user action may do (typing `npm run watcher -- --probe`,
 // or a yes in the chat). Nothing else in the hub may call it.

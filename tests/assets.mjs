@@ -88,5 +88,5 @@ assert.equal(stale.length,0,'a received entry points at files that exist');
 const uncredited=r.assets.filter(a=>a.origin==='module'&&a.hasCredit===false);
 if(uncredited.length)console.log(`WARNING (credits, not urgent until the public release): ${uncredited.length} shipped assets have no credits.js line: ${uncredited.map(a=>a.id).join(', ')}`);
 // stages: every register-only asset is wanted or received, every module asset is in-game or converted
-for(const a of r.assets)if(a.origin==='register')assert(['wanted','received','retired'].includes(a.stage),`${a.id}: a register entry is wanted, received or retired`);else assert(['in-game','converted'].includes(a.stage),`${a.id}: a shipped asset is in-game or converted`);
+for(const a of r.assets)if(a.origin==='register')assert(['wanted','received','staged','retired'].includes(a.stage),`${a.id}: a register entry is wanted, received, staged or retired`);else assert(['in-game','converted'].includes(a.stage),`${a.id}: a shipped asset is in-game or converted`);
 console.log(`Register rules: no unbacked claims, ${originals.length} originals checked (${stray.length} unregistered, warning only), ${uncredited.length} uncredited (warning only).`);

@@ -1,3 +1,5 @@
+// P4 S1: the plan command
+
 // Mikkadr Hub P4, S1: the plan command. No model call, no network; it only reads and writes files in plans/.
 //   npm run plan -- <file.md> [--title "..."] [--from name]   send a plan (the same file from the same sender = the next revision)
 //   npm run plan -- --status <id or file.md>                   print verdict, note and revision

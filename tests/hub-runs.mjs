@@ -34,8 +34,9 @@ const sonnetS=makePlan('sonnet','S');
 
 // ── guards
 assert.ok(!/findClaude\s*\(/.test(fs.readFileSync(fileURLToPath(import.meta.url),'utf8').split('\n').filter(l=>!l.trim().startsWith('//')).join('\n').replace(/findClaude\s*\(\s*\)\s*\)/g,'')),'this test never looks up the real claude.exe');
-// the hub never commits or pushes: no run file names git, commit or push (the house-rules line that TELLS the run not to is the one allowed mention)
-for(const f of ['runner.js','runs.js','run-store.mjs','runplan.js','server.js','chat.js']){
+// a run never uses git: no run file names git, commit or push (the house-rules line that TELLS the run not to is the one allowed mention).
+// Hub v2 V3: the hub itself now commits and pushes, but only on the owner's press, through hub/commit-ctl.mjs and hub/git.mjs (server.js and chat.js name them; tests/hub-commit.mjs pins how).
+for(const f of ['runner.js','runs.js','run-store.mjs','runplan.js']){
  const code=fs.readFileSync(path.join(HUB,f),'utf8').split('\n').filter(l=>!l.trim().startsWith('//')&&!l.includes('HOUSE_RULES')).join('\n').replace(/\/\/.*$/gm,'').replace(/\.push\(/g,'.add(');
  assert.ok(!/\bgit(\.exe)?\b|\bcommit(s|ted)?\b|\bpush\b/i.test(code),`${f} does not name git, commit or push`)}
 assert.ok(!/child_process/.test(fs.readFileSync(path.join(HUB,'server.js'),'utf8').replace(/\/\/.*$/gm,'')),'server.js has no process code');

@@ -1,3 +1,5 @@
+// P3c: viewer builders
+
 // Mikkadr Hub, P3c: how to turn an asset's drawing spec (previewSpec in hub/assets.js) into a three.js object, shared by the picture studio (hub/studio.html) and the 3D viewer
 // (hub/viewer.html). Served by hub/server.js as /builders.js; it imports the game's own builders from /dist, so what you see is what the game builds.
 import * as THREE from '/dist/vendor/three.module.js';

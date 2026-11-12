@@ -1,3 +1,5 @@
+// P3c: viewer compare mode
+
 // Mikkadr Hub, P3c: what the viewer's compare mode says about two assets. Pure (no three.js, no DOM), served as /compare.js and pinned by tests/assets-viewer.mjs.
 // A "fact set" is {name, stage, pack, triangles, size:{w,d,h}|null}; the viewer builds one per asset from the catalog, overridden by the measurement of the model it actually built.
 export const PLAYER_HEIGHT=1.95;

@@ -1,3 +1,5 @@
+// P5 R2: the run engine
+
 // Mikkadr Hub P5, R2: the run engine. One call of runTurn = one headless Claude Code process = one turn (a first prompt, or an answer sent with --resume).
 // Pure parts: buildArgs (every flag in one place), createReducer (stream lines in; names and counts out), createCapTracker. The only process code is runTurn and killTree.
 // It makes no model call by itself: the caller passes the claude path (tests pass the fake CLI). Nothing here reads a route, a plan file or a page.
@@ -20,7 +22,10 @@ export const SESSION_ID=/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-
 export const USD_PER_MTOK={haiku:3,sonnet:12,opus:40,fable:40};
 export const budgetUsd=(model,cap)=>Math.max(0.05,Math.round(cap/1e6*USD_PER_MTOK[model]*1.2*100)/100);
 export const HOUSE_RULES='You are a build run started by the Mikkadr Hub from an approved plan. Do only what the plan says. Run npm test after each change. Never commit, push or use git. If you need an answer from the user, write one line starting with QUESTION: followed by the question, then end your turn. Stop when the plan is done and say what you changed.';
-export const bashPatterns=needs=>needs.map(k=>{if(!NEEDS[k])throw new Error(`unknown need ${k}`);return k==='check'?'Bash(node --check:*)':`Bash(${NEEDS[k]})`});
+// The shell tool is named Bash on some installs and PowerShell on this Windows one (a run on 2026-11-11 had 5 tools and no shell when only Bash was asked for). Both are offered with the same exact-command patterns; the CLI ignores a name it does not have.
+export const SHELL_TOOLS=['Bash','PowerShell'];
+export const shellPatterns=needs=>needs.flatMap(k=>{if(!NEEDS[k])throw new Error(`unknown need ${k}`);return SHELL_TOOLS.map(t=>k==='check'?`${t}(node --check:*)`:`${t}(${NEEDS[k]})`)});
+export const bashPatterns=shellPatterns;
 
 // buildArgs: the whole command line for one turn. The prompt is NOT here: it goes in on stdin (a plan can be longer than a command line may be).
 // readOnly is the master chat's mode (R5): Read, Grep, Glob and nothing else.
@@ -28,12 +33,13 @@ export function buildArgs({model,sessionId,resume=false,capTokens,needs=[],readO
  if(!MODEL_IDS[model])throw new Error(`unknown model ${model}`);
  if(!SESSION_ID.test(String(sessionId)))throw new Error('the session id must be a UUID');
  if(!Number.isInteger(capTokens)||capTokens<1)throw new Error('the cap must be a whole number of tokens');
- const bash=readOnly?[]:bashPatterns(needs),tools=readOnly?READ_TOOLS:[...RUN_TOOLS,...(bash.length?['Bash']:[])],allowed=[...tools.filter(t=>t!=='Bash'),...bash];
+ const shell=readOnly?[]:shellPatterns(needs),tools=readOnly?READ_TOOLS:[...RUN_TOOLS,...(shell.length?SHELL_TOOLS:[])],allowed=[...tools.filter(t=>!SHELL_TOOLS.includes(t)),...shell];
+ const shellRule=shell.length?` Your shell tool (${SHELL_TOOLS.join(' or ')}, whichever you have) accepts ONLY these exact commands: ${needs.map(k=>k==='check'?'node --check <file>':NEEDS[k]).join(' | ')}. Any other command, including npm run plan, is refused on purpose: the hub already checked the plan's approval. A refused command does not mean the allowed ones fail: try them.`:'';
  return ['-p','--output-format','stream-json','--verbose','--model',MODEL_IDS[model],
   ...(resume?['--resume',sessionId]:['--session-id',sessionId]),
   `--tools=${tools.join(',')}`,`--allowedTools=${allowed.join(',')}`,`--disallowedTools=${[...DENIED_TOOLS,...DENIED_PATHS].join(',')}`,
   '--permission-mode','dontAsk','--strict-mcp-config','--setting-sources','project',
-  '--max-budget-usd',String(budgetUsd(model,capTokens)),'--append-system-prompt',rules]}
+  '--max-budget-usd',String(budgetUsd(model,capTokens)),'--append-system-prompt',rules+shellRule]}
 export const toolsOf=args=>{const a=args.find(x=>x.startsWith('--tools='));return a?a.slice(8).split(',').filter(Boolean):[]};
 
 export const firstPrompt=({id,title,revision,text})=>`Build from approved plan ${id} ("${String(title).slice(0,120)}"), revision ${revision}. The plan follows.\n\n${String(text).replace(/\r\n/g,'\n')}`;
@@ -62,7 +68,7 @@ export function createReducer({tools=[],cwd=null,maxText=MAX_TEXT}={}){
   if(n==='Read')return {kind:'tool',tool:n,target:safeName(i.file_path)};
   if(n==='Edit'||n==='Write'){const f=safeName(i.file_path);if(f)files.add(f);const rp=relPath(i.file_path,cwd);if(rp&&paths.size<300)paths.add(rp);return {kind:'tool',tool:n,target:f}}
   if(n==='Grep'||n==='Glob')return {kind:'tool',tool:n,target:'1 pattern'};
-  if(n==='Bash'){const c=String(i.command||'').trim(),hit=Object.values(NEEDS).find(s=>c===s||c.startsWith(s+' '));return {kind:'tool',tool:'Shell',target:hit||'command'}}
+  if(n==='Bash'||n==='PowerShell'){const c=String(i.command||'').trim(),hit=Object.values(NEEDS).find(s=>c===s||c.startsWith(s+' '));return {kind:'tool',tool:'Shell',target:hit||'command'}}
   return {kind:'tool',tool:n,target:''}}
  return {
   // take: one stdout line. Returns the feed events it produced, and the usage to count (if any).

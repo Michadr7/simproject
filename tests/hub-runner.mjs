@@ -19,17 +19,20 @@ assert.throws(()=>runTurn({claude:null,args:[],cap:1}),/claude path/);
 // ── buildArgs: every flag pinned
 const a=buildArgs({model:'sonnet',sessionId:SID,capTokens:1500000,needs:['test','release','check']});
 assert.deepEqual(a,['-p','--output-format','stream-json','--verbose','--model','claude-sonnet-5-5','--session-id',SID,
- '--tools=Read,Grep,Glob,Edit,Write,Bash',
- '--allowedTools=Read,Grep,Glob,Edit,Write,Bash(npm test),Bash(npm run release -- --force),Bash(node --check:*)',
+ '--tools=Read,Grep,Glob,Edit,Write,Bash,PowerShell',
+ '--allowedTools=Read,Grep,Glob,Edit,Write,Bash(npm test),PowerShell(npm test),Bash(npm run release -- --force),PowerShell(npm run release -- --force),Bash(node --check:*),PowerShell(node --check:*)',
  '--disallowedTools=WebFetch,WebSearch,Task,Agent,Skill,AskUserQuestion,NotebookEdit,Edit(.hub/**),Write(.hub/**),Edit(plans/**),Write(plans/**)',
  '--permission-mode','dontAsk','--strict-mcp-config','--setting-sources','project',
- '--max-budget-usd','21.6','--append-system-prompt',HOUSE_RULES]);
+ '--max-budget-usd','21.6','--append-system-prompt',a[a.length-1]]);
+assert.ok(a[a.length-1].startsWith(HOUSE_RULES)&&/ONLY these exact commands: npm test \| npm run release -- --force \| node --check <file>/.test(a[a.length-1])&&/npm run plan/.test(a[a.length-1]),'the shell rule names the allowed commands');
+assert.equal(buildArgs({model:'haiku',sessionId:SID,capTokens:150000}).at(-1),HOUSE_RULES,'no needs: no shell rule');
 assert.ok(!a.includes('--no-session-persistence')&&!a.some(x=>x.startsWith('--max-turns'))&&!a.includes('--dangerously-skip-permissions')&&!a.includes('--add-dir')&&!a.includes('--mcp-config'),'forbidden or missing flags');
 const r=buildArgs({model:'haiku',sessionId:SID,resume:true,capTokens:150000,needs:[]});
 assert.ok(r.join(' ').includes(`--resume ${SID}`)&&!r.includes('--session-id'),'a later turn resumes');
 assert.ok(r.includes('--tools=Read,Grep,Glob,Edit,Write')&&!r.some(x=>x.includes('Bash')&&!x.startsWith('--disallowed')),'no needs, no shell');
 assert.equal(buildArgs({model:'opus',sessionId:SID,capTokens:1,readOnly:true,needs:['test']}).find(x=>x.startsWith('--tools=')),'--tools=Read,Grep,Glob','the master chat is read-only, whatever needs say');
-assert.deepEqual(toolsOf(a),['Read','Grep','Glob','Edit','Write','Bash']);
+assert.deepEqual(toolsOf(a),['Read','Grep','Glob','Edit','Write','Bash','PowerShell']);
+assert.ok(buildArgs({model:'sonnet',sessionId:SID,capTokens:1,needs:['index']}).some(x=>x.startsWith('--allowedTools=')&&x.includes('PowerShell(npm run index)')),'index is an allowed need');
 assert.throws(()=>buildArgs({model:'gpt',sessionId:SID,capTokens:1}),/unknown model/);
 assert.throws(()=>buildArgs({model:'sonnet',sessionId:'../x',capTokens:1}),/UUID/);
 assert.throws(()=>buildArgs({model:'sonnet',sessionId:SID,capTokens:1,needs:['git']}),/unknown need/);

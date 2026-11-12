@@ -1,10 +1,12 @@
+// P4 S1: the plans folder
+
 // Mikkadr Hub P4, S1: the plans folder. plans/<id>.json, written to a temp file and then renamed so a crash never leaves half a plan.
 import fs from 'node:fs';
 import path from 'node:path';
 import {ID_PATTERN,MAX_TEXT,HASH_PATTERN,hashText,isPlanFileName,unsentOf,normalizePlan,findBySource,submitPlan,planId} from './plans.js';
 
 const NOT_PLANS=new Set(['ignored.json']);
-export function writeAtomic(file,text){const tmp=`${file}.${process.pid}.tmp`;fs.writeFileSync(tmp,text);fs.renameSync(tmp,file)}
+export function writeAtomic(file,text){const tmp=`${file}.${process.pid}.tmp`;try{fs.writeFileSync(tmp,text);fs.renameSync(tmp,file)}catch(e){try{fs.unlinkSync(tmp)}catch{}throw e}} // a failed write leaves no .tmp file behind
 export function listPlans(dir){
  if(!fs.existsSync(dir))return [];
  const out=[];

@@ -1,3 +1,5 @@
+// P4: the hub server
+
 // Mikkadr Hub P4: the one local server behind the hub (it absorbed hub/assets-server.js). Binds to 127.0.0.1 only, refuses any Host that is not 127.0.0.1 or localhost on its own port,
 // refuses a foreign Origin, and serves nothing outside an allowlist. Reads are GET and HEAD; the writes are the plan POSTs below and, only when the hub is started with --runs, the run POSTs. This file has no process code: runs are started by the controller it is given (hub/runs.js).
 //   /                                          hub/web/index.html (the shell)              /web/<name>.html|js|css   hub/web/
@@ -5,10 +7,15 @@
 //   /studio.html /viewer.html /builders.js /orbit.js /compare.js                          the asset studio and 3D viewer (hub/)
 //   /dist/<name>.js|json|png|jpg  /dist/vendor/<name>.js                                  the game's modules and pictures (not dist/releases, not dist/saves)
 //   /assets-src/<path>.glb|gltf|bin|png|jpg|jpeg   /register   /previews/<key>.png|manifest.json|catalog.json
-//   GET  /api/gauges  /api/waiting  /api/plans  /api/plans/<id>[?rev=n]  /api/plans/found   JSON (counts, names and plan text; never raw model fields)
+//   GET  /api/gauges  /api/waiting  /api/work  /api/plans  /api/plans/<id>[?rev=n]  /api/plans/found   JSON (counts, names and plan text; never raw model fields)
 //   POST /api/plans/<id>/answer {verdict,note,revision}   /api/plans/found/add {hash}   /api/plans/found/hide {hash}   /api/waiting/hide {hash}
 //   P5 (only when the hub is started with --runs): GET /api/hub-token  /api/runs  /api/runs/<id>  /api/runs/<id>/feed?after=n  /api/chat/feed?after=n  /api/activity (R7b: mood, one line, a short list)
 //   POST /api/runs/start {plan,revision,model}  /api/runs/<id>/stop|confirm|resume|close  /answer {question,text}  /continue {extra}: each also needs the X-Hub-Token header
+// Hub v2 V2 (only with --runs, each POST with the X-Hub-Token header): GET /api/jobs (the job table, what runs, each last result)   POST /api/jobs/start {job}   /api/jobs/stop {id}   /api/hub/restart {}
+//   POST /api/plans/<id>/quick {revision}  (one press approves and starts a Haiku S plan the master filed)   GET /api/hub-id (always: {hub, pid, startedAt}, so a newer hub can recognise this one)
+// Hub v2 V3 (only with --runs): GET /api/commit/proposal  /api/commit/summary  /api/push/status   POST /api/commit {files,message,hash}  /api/commit/undo {}  /api/push {head}  (token on each POST; commit and push are separate presses, the hub commits and pushes only on the owner's press)
+// Hub v2 V4 (also without --runs; the token is GET /api/hub-token's recordsToken): GET /api/assets/summary   POST /api/assets/add {name,kind,source,licence,stage,note}  /api/assets/stage {id,stage}  /api/assets/file {id,file} (V4b: attach a file from assets-src/)  /api/records/undo {id}  (409 when the row changed since)
+//   A job is named by its key only, checked against the table in hub/jobs.js; no script, argument or path is ever read from a request. The processes live in hub/job-runner.mjs.
 // Every POST needs Content-Type application/json, an Origin equal to the hub's own (a missing one is refused), and a body of at most 64 KB. Ids and hashes are checked against patterns; the page never sends a path.
 // `resolveRoute` is pure (path and host in, a file, an api name or a refusal out) so tests can pin it; `createHubServer` wraps it.
 import http from 'node:http';
@@ -20,6 +27,9 @@ import {renderMarkdown} from './markdown.js';
 import {loadReadings,evaluate} from './watcher.js';
 import {buildWaiting} from './waiting.js';
 import {buildActivity,feedRunOf} from './activity.js';
+import {buildWork,projectLine} from './work.js';
+import {parseRunBlock,quickFix} from './runplan.js';
+import {JOB_ID} from './jobs.js';
 
 export const MAX_BODY=64*1024,MAX_RUN_ANSWER=8000;
 const TYPES={'.html':'text/html; charset=utf-8','.js':'text/javascript; charset=utf-8','.css':'text/css; charset=utf-8','.json':'application/json; charset=utf-8','.png':'image/png','.jpg':'image/jpeg','.jpeg':'image/jpeg','.glb':'model/gltf-binary','.gltf':'model/gltf+json','.bin':'application/octet-stream'};
@@ -33,6 +43,14 @@ const SRC=/\.(glb|gltf|bin|png|jpg|jpeg)$/i;
 const PREVIEW=/^\/previews\/([a-f0-9]{16,40}\.png|manifest\.json|catalog\.json)$/;
 const PLAN_API=/^\/api\/plans\/([a-z0-9][a-z0-9-]{0,79})$/;
 const ANSWER_API=/^\/api\/plans\/([a-z0-9][a-z0-9-]{0,79})\/answer$/;
+const QUICK_API=/^\/api\/plans\/([a-z0-9][a-z0-9-]{0,79})\/quick$/;
+const TOOL_WRITES={'/api/jobs/start':'job-start','/api/jobs/stop':'job-stop','/api/hub/restart':'hub-restart'};
+// Hub v2 V3: commit and push, each its own press. [api name, is a write]. The reads need no token (like the other lists); every write needs the hub token.
+const COMMIT_ROUTES={'/api/commit/proposal':['commit-proposal',false],'/api/commit/summary':['commit-summary',false],'/api/push/status':['push-status',false],'/api/commit':['commit-do',true],'/api/commit/undo':['commit-undo',true],'/api/push':['push-do',true]};
+// Hub v2 V4: the Assets area. They work without --runs, with their own token (records.token, given by GET /api/hub-token as recordsToken).
+const RECORD_ROUTES={'/api/assets/summary':['assets-summary',false],'/api/assets/add':['assets-add',true],'/api/assets/stage':['assets-stage',true],'/api/assets/file':['assets-file',true],'/api/records/undo':['records-undo',true]};
+const MAX_PICKED=5000;
+export const HUB_NAME='mikkadr-hub';
 // P5 run routes. The server only validates and hands over to the run controller (hub/runs.js); it has no process code of its own.
 const RUN_API=/^\/api\/runs\/(run-[0-9]{8}-[0-9]{6}-[0-9a-f]{4})(?:\/(feed|stop|confirm|answer|resume|continue|close))?$/;
 const RUN_WRITES=['stop','confirm','answer','resume','continue','close'];
@@ -47,6 +65,7 @@ export function resolveRoute(root,pathname,host,port){
  if(pathname==='/api/gauges')return {api:'gauges'};
  if(pathname==='/api/plans')return {api:'plans'};
  if(pathname==='/api/waiting')return {api:'waiting'};
+ if(pathname==='/api/work')return {api:'work'};
  if(pathname==='/api/waiting/hide')return {api:'waiting-hide',write:true};
  if(pathname==='/api/plans/found')return {api:'found'};
  if(pathname==='/api/plans/found/add')return {api:'found-add',write:true};
@@ -57,6 +76,12 @@ export function resolveRoute(root,pathname,host,port){
  if(pathname==='/api/chat')return {api:'chat'};
  if(pathname==='/api/chat/feed')return {api:'chatfeed'};
  if(pathname==='/api/activity')return {api:'activity'};
+ if(pathname==='/api/jobs')return {api:'jobs'};
+ if(pathname==='/api/hub-id')return {api:'hub-id'};
+ if(Object.hasOwn(RECORD_ROUTES,pathname))return {api:RECORD_ROUTES[pathname][0],write:RECORD_ROUTES[pathname][1]};
+ if(Object.hasOwn(COMMIT_ROUTES,pathname))return {api:COMMIT_ROUTES[pathname][0],write:COMMIT_ROUTES[pathname][1]};
+ if(Object.hasOwn(TOOL_WRITES,pathname))return {api:TOOL_WRITES[pathname],write:true};
+ const qm=QUICK_API.exec(pathname);if(qm)return {api:'quick',id:qm[1],write:true};
  if(CHAT_WRITES.includes(pathname))return {api:'chat-'+pathname.slice(10),write:true};
  const rm=RUN_API.exec(pathname);if(rm){const act=rm[2]||'get';return {api:'run-'+act,id:rm[1],write:RUN_WRITES.includes(act)}}
  const am=ANSWER_API.exec(pathname);if(am)return {api:'answer',id:am[1],write:true};
@@ -84,7 +109,7 @@ export function planOf(root,id,rev){
  if(!ID_PATTERN.test(id))return null;
  const p=readPlan(path.join(root,'plans'),id);if(!p)return null;
  const shown=p.revisions.find(r=>r.n===rev)||latestRevision(p);
- return {...planSummary(p),shown:shown.n,revisions:p.revisions.map(r=>({n:r.n,at:r.at,hash:r.hash})),answers:p.answers,html:renderMarkdown(shown.text)}}
+ return {...planSummary(p),shown:shown.n,revisions:p.revisions.map(r=>({n:r.n,at:r.at,hash:r.hash})),answers:p.answers,html:renderMarkdown(shown.text),quick:quickFix(p)}}
 export const foundOf=root=>({files:foundPlans(root,path.join(root,'plans')).map(f=>({hash:f.hash,path:f.path,title:titleOf(f.text,f.path.split('/').pop()),bytes:Buffer.byteLength(f.text),modifiedAt:f.modifiedAt}))});
 
 // Waiting for you: the four sources read from files, then the pure list. Asset items come from .hub/attention.json (written by npm run assets); hidden ones are kept by content hash in .hub/hidden-assets.json.
@@ -95,6 +120,12 @@ export const attentionOf=root=>{const a=readJson(path.join(root,'.hub','attentio
 export function waitingOf(root,now=Date.now(),runs=null){
  const dir=path.join(root,'plans'),l=runs?runs.list():null; // run items only when runs are switched on
  return buildWaiting({plans:listPlans(dir).map(planSummary),found:foundPlans(root,dir),attention:attentionOf(root),hidden:readHidden(root),gauges:gaugesOf(root,now),runs:l?l.runs:[],ready:l?l.ready:[],now})}
+// Hub v2 V1: the Work tree (hub/work.js). The plan summaries get four small facts from the plan text (the project line, the Run block's model and size, why it cannot start, the deny note); the text itself never leaves.
+export function workOf(root,now=Date.now(),runs=null){
+ const dir=path.join(root,'plans'),l=runs?runs.list():null;
+ const plans=listPlans(dir).map(p=>{const last=latestRevision(p),pr=parseRunBlock(last.text),ans=[...p.answers].reverse().find(a=>a.revision===last.n);
+  return {...planSummary(p),project:projectLine(last.text),run:pr.run&&pr.run.model&&pr.run.size?{model:pr.run.model,size:pr.run.size}:null,runProblem:pr.ok?null:pr.errors[0]||'The plan asks for Fable. A plan may not choose Fable.',note:ans&&ans.verdict==='denied'?ans.note:''}});
+ return {...buildWork({plans,runs:l?l.runs:[],ready:l?l.ready:[],waiting:waitingOf(root,now,runs).items,found:foundOf(root).files,enabled:!!(l&&l.enabled)}),locked:!!(l&&l.locked)}}
 export function hideAsset(root,hash){
  const a=attentionOf(root);if(!a||!a.items.some(i=>i.hash===hash))return false;
  const list=readHidden(root);if(!list.includes(hash)){list.push(hash);fs.mkdirSync(path.join(root,'.hub'),{recursive:true});writeAtomic(hiddenFile(root),JSON.stringify(list.slice(-1000)))}
@@ -110,7 +141,10 @@ export function activityOf(runs=null,chat=null){
 const readBody=req=>new Promise(ok=>{let size=0,chunks=[],big=false;req.on('data',c=>{size+=c.length;if(size>MAX_BODY)big=true;else chunks.push(c)});req.on('end',()=>ok(big?null:Buffer.concat(chunks).toString('utf8')));req.on('error',()=>ok(null))});
 
 // runs: the run controller from hub/runs.js, or null (the default) when runs are not switched on: every run POST then answers 503 and the lists are empty.
-export function createHubServer({root,port=0,runs=null,chat=null}={}){
+// jobs: the job runner (hub/job-runner.mjs) or null. restart: () => {error} or {go}, given by the program that can end this process (hub/hub-cli.mjs), or null.
+// commits: the commit and push controller (hub/commit-ctl.mjs) or null. This file has no process code: git is started only by hub/git.mjs.
+// records: the asset record store (hub/records-store.mjs) or null.
+export function createHubServer({root,port=0,runs=null,chat=null,jobs=null,commits=null,records=null,restart=null,startedAt=Date.now()}={}){
  const plansDir=path.join(root,'plans');
  const server=http.createServer(async(req,res)=>{
   const headers=type=>({'Content-Type':type,'X-Content-Type-Options':'nosniff','Cache-Control':'no-store','Cross-Origin-Resource-Policy':'same-origin'});
@@ -134,17 +168,70 @@ export function createHubServer({root,port=0,runs=null,chat=null}={}){
     const text=await readBody(req);if(text===null)return json(413,{error:'body too large'});
     let b;try{b=JSON.parse(text)}catch{return json(400,{error:'body is not JSON'})}
     if(!b||typeof b!=='object'||Array.isArray(b))return json(400,{error:'body must be an object'});
+    if(r.api==='assets-add'||r.api==='assets-stage'||r.api==='assets-file'||r.api==='records-undo'){
+     // Hub v2 V4: records. Their own token; the store validates every field (unknown fields are refused) and refuses an undo when the row changed after the record.
+     if(!records)return json(503,{error:'records are not switched on'});
+     if(!records.checkToken(req.headers['x-hub-token']))return json(403,{error:'hub token required'});
+     let out;
+     if(r.api==='assets-add')out=records.add(b,'you');
+     else if(r.api==='assets-stage')out=records.stage(b,'you');
+     else if(r.api==='assets-file')out=await records.attach(b,'you');
+     else{if(Object.keys(b).some(k=>k!=='id'))return json(400,{error:'Unknown field'});out=records.undo(b.id,'you')}
+     if(out.error)return json(out.code||409,{error:out.error});
+     return json(200,out)}
     if(r.api.startsWith('chat-')){
      // the master chat: same token rule as runs (the chat only exists when runs are on)
      if(!chat||!runs)return json(503,{error:'the chat is not switched on (start the hub with --runs)'});
      if(!runs.checkToken(req.headers['x-hub-token']))return json(403,{error:'hub token required'});
      let res;
-     if(r.api==='chat-send'){if(typeof b.text!=='string')return json(400,{error:'text must be a string'});res=chat.send({text:b.text,busy:runs.locked()})}
+     if(r.api==='chat-send'){if(typeof b.text!=='string')return json(400,{error:'text must be a string'});res=chat.send({text:b.text,busy:runs.locked()||!!(jobs&&jobs.active())})}
      else if(r.api==='chat-model'){if(typeof b.model!=='string'||!RUN_MODELS.includes(b.model))return json(400,{error:'model must be haiku, sonnet, opus or fable'});res=chat.setModel({model:b.model,confirm:b.confirm===true})}
      else if(r.api==='chat-stop')res=await chat.stop();
      else res=chat.newChat();
      if(res.error)return json(res.code||409,{error:res.error,reasons:res.reasons});
      return json(200,{chat:res.chat,needsConfirm:!!res.needsConfirm})}
+    if(r.api==='job-start'||r.api==='job-stop'||r.api==='hub-restart'||r.api==='quick'){
+     // Hub v2 V2: the tools and the one-press start. The same token rule as runs; the only thing read from the body is a job key, a job id or a revision number, each checked.
+     if(!runs)return json(503,{error:'tools are not switched on (start the hub with --runs)'});
+     if(!runs.checkToken(req.headers['x-hub-token']))return json(403,{error:'hub token required'});
+     if(r.api==='quick'){
+      if(!Number.isInteger(b.revision)||b.revision<1||b.revision>100000)return json(400,{error:'revision must be a whole number'});
+      if(runs.locked())return json(423,{error:'Plans are locked while a run works. Stop the run or wait for it.'});
+      const out=runs.quick({planId:r.id,revision:b.revision});
+      if(out.error)return json(out.code||409,{error:out.error,reasons:out.reasons});
+      return json(200,{run:out.run,needsConfirm:!!out.needsConfirm})}
+     if(r.api==='hub-restart'){
+      if(!restart)return json(503,{error:'This hub cannot restart itself. Stop it and start it again with: npm run hub -- --runs'});
+      const out=restart();
+      if(!out||out.error)return json(409,{error:out&&out.error||'The hub cannot restart now.'});
+      res.on('finish',()=>{try{out.go()}catch{}});
+      return json(200,{restarting:true})}
+     if(!jobs)return json(503,{error:'tools are not switched on (start the hub with --runs)'});
+     let out;
+     if(r.api==='job-start'){
+      if(typeof b.job!=='string'||!jobs.has(b.job))return json(400,{error:'job must be one of the jobs the hub knows'});
+      out=jobs.start(b.job)}
+     else{
+      if(typeof b.id!=='string'||!JOB_ID.test(b.id))return json(400,{error:'id must be a job id'});
+      out=await jobs.stop(b.id)}
+     if(out.error)return json(out.code||409,{error:out.error});
+     return json(200,{job:out.job})}
+    if(r.api==='commit-do'||r.api==='commit-undo'||r.api==='push-do'){
+     // Hub v2 V3: the owner's press. The token rule is the same as runs; the controller refuses while anything works, and checks every path against its own proposal.
+     if(!commits||!runs)return json(503,{error:'commit is not switched on (start the hub with --runs)'});
+     if(!runs.checkToken(req.headers['x-hub-token']))return json(403,{error:'hub token required'});
+     let out;
+     if(r.api==='commit-do'){
+      if(!Array.isArray(b.files)||b.files.length>MAX_PICKED||b.files.some(f=>typeof f!=='string'||f.length>400))return json(400,{error:'files must be a list of file names'});
+      if(typeof b.message!=='string')return json(400,{error:'message must be text'});
+      if(typeof b.hash!=='string'||!/^[0-9a-f]{24}$/.test(b.hash))return json(400,{error:'hash must come from the proposal'});
+      out=await commits.commit({files:b.files,message:b.message,hash:b.hash})}
+     else if(r.api==='commit-undo')out=await commits.undo();
+     else{
+      if(typeof b.head!=='string'||!/^[0-9a-f]{4,40}$/.test(b.head))return json(400,{error:'head must be a commit id'});
+      out=await commits.push({head:b.head})}
+     if(out.error)return json(out.code||409,{error:out.error,proposal:out.proposal,push:out.push,kind:out.kind});
+     return json(200,out)}
     if(r.api.startsWith('run-')){
      // run routes: the per-start token first (a page on another site never has it), then plain validation, then the controller decides
      if(!runs)return json(503,{error:'runs are not switched on (start the hub with --runs)'});
@@ -188,15 +275,23 @@ export function createHubServer({root,port=0,runs=null,chat=null}={}){
     if(r.api==='gauges')return json(200,gaugesOf(root));
     if(r.api==='plans')return json(200,plansOf(root));
     if(r.api==='waiting')return json(200,waitingOf(root,Date.now(),runs));
+    if(r.api==='work')return json(200,workOf(root,Date.now(),runs));
     if(r.api==='found')return json(200,foundOf(root));
-    if(r.api==='hub-token')return json(200,{token:runs?runs.token:null,runs:!!runs,chat:!!chat});
+    if(r.api==='hub-token')return json(200,{token:runs?runs.token:null,runs:!!runs,chat:!!chat,records:!!records,recordsToken:records?records.token:null});
+    if(r.api==='assets-summary'){if(!records)return json(200,{enabled:false});const s=await records.summary();return s.error?json(s.code||500,{error:s.error}):json(200,{enabled:true,...s})}
     if(r.api==='chat')return json(200,chat?chat.view():{enabled:false,messages:[],working:false,model:'sonnet',tokens:0,pending:null});
     if(r.api==='chatfeed')return json(200,chat?chat.feed(Number.parseInt(url.searchParams.get('after'),10)||0):{turn:0,working:false,events:[],last:0});
     if(r.api==='activity')return json(200,activityOf(runs,chat));
+    if(r.api==='jobs')return json(200,jobs&&runs?jobs.list():{enabled:false,busy:false,running:null,jobs:[]});
+    if(r.api==='hub-id')return json(200,{hub:HUB_NAME,pid:process.pid,startedAt,canRestart:!!(restart&&runs)});
+    if(r.api==='commit-proposal')return json(200,commits&&runs?commits.proposal():{enabled:false});
+    if(r.api==='commit-summary')return json(200,commits&&runs?commits.summary():{enabled:false,files:0,unpushed:0});
+    if(r.api==='push-status')return json(200,commits&&runs?commits.pushStatus():{enabled:false,canPush:false,count:0,commits:[]});
     if(r.api==='runs')return json(200,runs?runs.list():{enabled:false,locked:false,holding:null,runs:[],ready:[]});
     if(r.api==='run-get'){const v=runs&&runs.get(r.id);return v?json(200,{run:v}):json(404,{error:'no such run'})}
     if(r.api==='run-feed'){const f=runs&&runs.feed(r.id,Number.parseInt(url.searchParams.get('after'),10)||0);return f?json(200,f):json(404,{error:'no such run'})}
-    const p=planOf(root,r.id,Number.parseInt(url.searchParams.get('rev'),10));return p?json(200,p):json(404,{error:'no such plan'})}
+    const p=planOf(root,r.id,Number.parseInt(url.searchParams.get('rev'),10));if(p&&!(runs&&runs.enabled()))p.quick=null; // the one-press start is only offered when a run can start
+    return p?json(200,p):json(404,{error:'no such plan'})}
   }catch{return json(500,{error:'could not complete that'})}
   fs.stat(r.file,(err,st)=>{
    if(err||!st.isFile())return send(404,'not found');

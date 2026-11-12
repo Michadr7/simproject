@@ -1,0 +1,563 @@
+<title>Mikkadr Hub v2 Design</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<style>
+/* Layout: one working mock of the hub screen on top (tree | narrow content | free bot space), then the written design as plain sections. One dark look on purpose: it is the hub's own palette. */
+:root{--bg:#0b0c0e;--panel:#14161a;--panel2:#1b1e23;--ink:#f1efe9;--dim:#a3a39d;--faint:#6e6f6c;--line:#2a2d33;
+ --ok:#5fbf85;--watch:#e0b060;--high:#e8905f;--crit:#f2766d;--acc:#3b82f6;--acc-ink:#9cc2ff;
+ --sans:"Segoe UI",system-ui,-apple-system,sans-serif;--mono:ui-monospace,"Cascadia Mono",Consolas,monospace;color-scheme:dark}
+*{box-sizing:border-box}
+body{background:var(--bg);color:var(--ink);font:15px/1.55 var(--sans)}
+.wrap{max-width:1120px;margin:0 auto;padding-block:28px 60px;padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px))}
+h1{font-size:30px;line-height:1.15;margin:0 0 8px;text-wrap:balance}
+h2{font-size:21px;margin:44px 0 6px;text-wrap:balance}
+h3{font-size:16px;margin:0 0 8px}
+p{margin:6px 0;max-width:70ch}.dim{color:var(--dim)}
+.eyebrow{font:600 11px var(--mono);letter-spacing:.2em;text-transform:uppercase;color:var(--acc-ink)}
+.state{display:flex;flex-wrap:wrap;gap:8px;margin:14px 0 0}
+.pill{display:inline-block;border:1px solid var(--line);border-radius:99px;padding:2px 10px;font-size:12.5px;color:var(--dim);white-space:nowrap}
+.pill.ok{color:var(--ok);border-color:rgba(95,191,133,.5)}.pill.you{color:var(--watch);border-color:rgba(224,176,96,.55)}.pill.bad{color:var(--crit);border-color:rgba(242,118,109,.5)}.pill.acc{color:var(--acc-ink);border-color:rgba(59,130,246,.55)}
+button{font:inherit;color:inherit}
+:focus-visible{outline:2px solid var(--acc-ink);outline-offset:2px}
+.btn{background:var(--panel2);border:1px solid var(--line);border-radius:8px;padding:5px 12px;cursor:pointer;font-size:13.5px}
+.btn:hover{border-color:var(--faint)}.btn.go{background:var(--acc);border-color:var(--acc);color:#fff;font-weight:600}.btn.sm{padding:1px 8px;font-size:12px}
+.btn[aria-pressed=true]{border-color:var(--acc);color:var(--acc-ink)}
+/* the hub frame */
+.hub{margin-top:18px;border:1px solid var(--line);border-radius:14px;overflow:hidden;background:radial-gradient(70% 60% at 100% 100%,rgba(59,130,246,.2),transparent 65%),var(--bg);display:grid;grid-template-columns:236px minmax(0,1fr);grid-template-rows:auto 690px}
+.top{grid-column:1/-1;display:flex;flex-wrap:wrap;gap:6px 18px;align-items:center;padding:8px 14px;border-bottom:1px solid var(--line);font-size:13px;color:var(--dim)}
+.top b{color:var(--ink);font-weight:600}.top .sp{flex:1}
+.g{display:inline-flex;align-items:center;gap:6px}.g i{display:block;width:70px;height:5px;border-radius:9px;background:var(--line);overflow:hidden}.g i::after{content:"";display:block;height:100%;width:var(--v);background:var(--acc)}
+.tree{border-right:1px solid var(--line);padding:10px 8px;overflow:auto;display:flex;flex-direction:column;background:rgba(255,255,255,.015)}
+.tree ul{list-style:none;margin:0;padding:0}.tree ul ul{margin-left:13px;padding-left:6px;border-left:1px solid var(--line)}
+.tree button{display:flex;gap:7px;align-items:baseline;width:100%;text-align:left;background:none;border:0;color:var(--dim);padding:4px 7px;border-radius:7px;cursor:pointer;font-size:13.5px;line-height:1.35}
+.tree button:hover{color:var(--ink)}.tree button[aria-current=true]{background:rgba(59,130,246,.18);color:var(--ink)}
+.tree .lv1{font-weight:600;color:var(--ink);font-size:14.5px}
+.tree .s{flex:none;width:14px;text-align:center;font-size:12px}.s.ok{color:var(--ok)}.s.you{color:var(--watch)}.s.todo{color:var(--faint)}
+.tree .you-row{color:var(--watch)}.cnt{margin-left:auto;font:600 11px var(--mono);color:var(--watch);border:1px solid rgba(224,176,96,.5);border-radius:99px;padding:0 6px;flex:none}
+.tree .foot{margin-top:auto;border-top:1px solid var(--line);padding-top:8px}.tree .foot button{font-size:12.5px}
+.main{position:relative;min-width:0;overflow:hidden}
+.col{position:relative;z-index:1;width:min(100%,548px);max-height:calc(100% - 62px);overflow:auto;padding:14px 14px 4px 16px}
+.free{position:absolute;right:10px;top:10px;bottom:256px;left:562px;border:1px dashed var(--line);border-radius:10px;color:var(--faint);font-size:12.5px;padding:10px 12px;overflow:auto}
+.stagewrap{position:absolute;left:0;right:0;bottom:0;height:250px}
+#stage{display:block;width:100%;height:100%;cursor:pointer}
+#say{position:absolute;right:12px;top:0;max-width:min(330px,80%);text-align:right;font-size:12.5px;color:var(--dim);pointer-events:none}
+#live{margin:6px 0 0;padding:0;list-style:none;font:12px var(--mono);color:var(--dim)}#live li{padding:1px 0}
+.card{border:1px solid var(--line);background:var(--panel);border-radius:10px;padding:10px 12px;margin:10px 0}
+.next{margin:8px 0 10px;font-size:14px}.next b{font:600 11px var(--mono);letter-spacing:.14em;color:var(--acc-ink);margin-right:8px}
+.acts{display:flex;flex-wrap:wrap;gap:8px;margin-top:8px}
+.steps{list-style:none;margin:0;padding:0;font-size:13.5px}.steps li{display:grid;grid-template-columns:18px minmax(0,1fr) auto;gap:6px;padding:3px 0;border-top:1px solid var(--line)}.steps li:first-child{border:0}
+.feed{font:12px/1.6 var(--mono);color:var(--dim);margin:0;padding:0;list-style:none}.feed span{color:var(--faint);margin-right:8px}
+.small{font-size:12.5px;color:var(--dim)}
+.msg{border:1px solid var(--line);border-radius:10px;padding:7px 11px;margin:8px 0;font-size:13.5px;background:var(--panel)}.msg.me{background:var(--panel2);margin-left:40px}.msg .who{font:600 10.5px var(--mono);letter-spacing:.12em;color:var(--faint);display:block}
+.rec{display:flex;flex-wrap:wrap;gap:6px;align-items:center;margin-top:6px;font-size:12.5px;color:var(--ok)}
+.cache{border:1px solid var(--line);border-radius:10px;padding:8px 11px;font-size:12.5px;color:var(--dim);background:var(--panel)}
+.cache b{color:var(--ink)}.crow{display:grid;grid-template-columns:auto minmax(40px,1fr) auto;gap:10px;align-items:center}
+.bar{height:6px;border-radius:9px;background:var(--line);overflow:hidden}.bar i{display:block;height:100%;background:var(--acc)}
+.split{display:flex;height:6px;border-radius:9px;overflow:hidden;margin-top:6px;gap:2px}.split .r{background:var(--ok)}.split .w{background:var(--high)}
+.key{display:inline-block;width:8px;height:8px;border-radius:2px;margin:0 4px 0 8px}
+.warnbox{border:1px solid rgba(232,144,95,.6);border-radius:10px;padding:8px 11px;margin:8px 0;font-size:13px;background:rgba(232,144,95,.08)}
+select,input,textarea{font:13.5px var(--sans);background:var(--panel2);color:var(--ink);border:1px solid var(--line);border-radius:8px;padding:5px 8px;max-width:100%}
+textarea{width:100%;resize:vertical}
+.form{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}.form label{font-size:12px;color:var(--dim);display:grid;gap:3px}.form .wide{grid-column:1/-1}
+.pipe{display:grid;grid-template-columns:repeat(6,minmax(0,1fr));gap:4px;margin:8px 0}.pipe div{border:1px solid var(--line);border-radius:8px;padding:5px 4px;text-align:center;font-size:11.5px;color:var(--dim);background:var(--panel)}.pipe b{display:block;font-size:17px;color:var(--ink);font-variant-numeric:tabular-nums}.pipe .hand{border-color:rgba(59,130,246,.5)}
+.files{list-style:none;margin:0;padding:0;font:12.5px var(--mono)}.files li{display:flex;gap:8px;padding:1px 0;min-width:0}.files li span{overflow-wrap:anywhere}.files .grp{font:600 11px var(--mono);letter-spacing:.12em;color:var(--faint);margin-top:8px}.files .out{color:var(--faint);text-decoration:line-through}
+.ctl{display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin-top:12px}
+/* written design */
+.tw{overflow-x:auto;margin:10px 0}table{border-collapse:collapse;width:100%;font-size:13.5px}th,td{text-align:left;vertical-align:top;padding:6px 10px;border-top:1px solid var(--line)}th{font:600 11px var(--mono);letter-spacing:.1em;text-transform:uppercase;color:var(--faint);border-top:0}td.n{font-variant-numeric:tabular-nums;white-space:nowrap}
+.y{color:var(--ok)}.nn{color:var(--crit)}.m{color:var(--watch)}
+ul.plain{margin:6px 0;padding-left:20px;max-width:74ch}ul.plain li{margin:3px 0}
+.dec{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,300px),1fr));gap:10px;margin:10px 0}.dec .card{margin:0}.dec b.q{font:600 11px var(--mono);color:var(--watch);letter-spacing:.1em}
+code{font:12.5px var(--mono);color:var(--acc-ink);overflow-wrap:anywhere}
+@media(max-width:899px){.hub{grid-template-columns:minmax(0,1fr);grid-template-rows:auto auto auto}.tree{border-right:0;border-bottom:1px solid var(--line);max-height:230px}.col{width:100%;max-height:none}.free{position:static;margin:0 14px 10px}.stagewrap{position:relative;height:230px}.msg.me{margin-left:16px}.pipe{grid-template-columns:repeat(3,minmax(0,1fr))}.form{grid-template-columns:minmax(0,1fr)}}
+</style>
+
+<div class="wrap">
+<div class="eyebrow">Design only · nothing built · 2026-11-11</div>
+<h1>Mikkadr Hub v2</h1>
+<p class="dim">The master chat becomes the front door, one tree replaces four pages, the hub can commit, and the bot gets a real place to work. Below is a working mock, then the written design, the build steps and what each costs.</p>
+<div class="state"><span class="pill you">Waiting for your yes</span><span class="pill">7 build steps sent to the hub as plans</span><span class="pill">Build estimate 0.7 to 1.2 million tokens, mostly Sonnet</span><span class="pill">6 decisions for you</span></div>
+
+<h2>The screen</h2>
+<p class="dim">Click the tree. All names and numbers in the mock are examples. The bot at the bottom is live: use the buttons under the frame.</p>
+
+<div class="hub" id="hub">
+ <div class="top"><b>Mikkadr Hub</b><span class="g">This week <i style="--v:36%"></i><b>36%</b></span><span class="g">These 5 hours <i style="--v:51%"></i><b>51%</b></span><span class="sp"></span><span class="pill you">3 things need you</span></div>
+ <nav class="tree" aria-label="Hub areas">
+  <ul>
+   <li><button class="lv1" data-view="chat" aria-current="true"><span class="s">›</span>Chat</button></li>
+   <li><button class="lv1" data-view="work"><span class="s">›</span>Work<span class="cnt">3</span></button>
+    <ul>
+     <li><button data-view="work"><span class="s you">●</span>Scene editor · step 4 of 6</button>
+      <ul>
+       <li><button data-view="work"><span class="s ok">✓</span>E1 Rules and overlay file</button></li>
+       <li><button data-view="work"><span class="s ok">✓</span>E2 Game draws the overlay</button></li>
+       <li><button data-view="work"><span class="s ok">✓</span>E3 Editor core</button></li>
+       <li><button data-view="work" class="you-row"><span class="s you">●</span>E4 Library, inspector, look</button></li>
+       <li><button data-view="work"><span class="s todo">○</span>E5 Hub side</button></li>
+       <li><button data-view="work"><span class="s todo">○</span>E6 Notes</button></li>
+       <li><button data-view="scene" class="you-row"><span class="s you">●</span>Scene edits (arrives with E5)</button></li>
+      </ul></li>
+     <li><button data-view="work"><span class="s you">●</span>People A2 · cannot start yet</button></li>
+     <li><button data-view="work"><span class="s todo">○</span>Hub v2 · 7 steps</button></li>
+     <li><button data-view="work"><span class="s ok">✓</span>Finished (12)</button></li>
+    </ul></li>
+   <li><button class="lv1" data-view="assets"><span class="s">›</span>Assets<span class="cnt">2 new</span></button></li>
+  </ul>
+  <ul class="foot">
+   <li><button data-view="commit"><span class="s">⎇</span>Commit · 31 files changed</button></li>
+   <li><button data-view="tools"><span class="s">▸</span>Tools · tests passed 18:42</button></li>
+   <li><button data-view="tokens"><span class="s">◔</span>Tokens</button></li>
+  </ul>
+ </nav>
+ <div class="main">
+  <div class="col">
+
+   <div class="view" id="v-chat">
+    <h3>Chat with the master</h3>
+    <div class="cache" aria-label="Cache strip">
+     <div class="crow"><span>Conversation size</span><div class="bar"><i style="width:43%"></i></div><b>86k of 200k</b></div>
+     <div style="margin-top:6px"><span class="pill ok">Cache warm</span> last reply 4 min ago</div>
+     <div class="split" aria-hidden="true"><i class="r" style="flex:82.4"></i><i class="w" style="flex:3.1"></i></div>
+     <div style="margin-top:4px">Last message:<span class="key" style="background:var(--ok)"></span><b>82.4k</b> re-used from cache (cheap)<span class="key" style="background:var(--high)"></span><b>3.1k</b> written new</div>
+    </div>
+    <div class="ctl" style="margin-top:8px"><label class="small" for="model">Model</label><select id="model"><option>Sonnet 5.5</option><option>Opus 5.5</option><option>Haiku 5.5</option></select><button class="btn sm" id="newchat">New chat</button></div>
+    <div class="warnbox" id="mwarn" hidden><b>Switching model sends the whole conversation again.</b> About 86k tokens would be written new at the other model's price. Cheaper: a new chat on that model starts at about 9k.<div class="acts"><button class="btn sm">New chat on that model</button><button class="btn sm">Switch anyway</button><button class="btn sm" id="stay">Stay on Sonnet</button></div></div>
+    <div class="msg me"><span class="who">YOU</span>We are adding assets: the Grab3D man and woman. I am downloading them now.</div>
+    <div class="msg"><span class="who">MASTER · SONNET · 6,100 TOKENS</span>Noted in Assets. When the files land in assets-src the hub will mark them received by itself. Converting them needs a plan and a run; say when.
+     <div class="rec"><span>✓ Recorded: Grab3D man → Wanted</span><button class="btn sm undo">Undo</button></div>
+     <div class="rec"><span>✓ Recorded: Grab3D woman → Wanted</span><button class="btn sm undo">Undo</button></div></div>
+    <div class="msg me"><span class="who">YOU</span>commit</div>
+    <div class="msg"><span class="who">MASTER · SONNET · 5,400 TOKENS</span>One commit with everything finished since 45010b0: scene editor E1 to E3, the hub shell fix and the plan files. 31 files, 5 paths left out. I wrote a message; you can edit it.
+     <div class="acts"><button class="btn go" data-view="commit">Review commit (31 files)</button><button class="btn" data-view="tools">Run tests first</button></div></div>
+    <div class="ctl"><input id="say-in" style="flex:1;min-width:0" placeholder="Tell the master what you want" aria-label="Message"><button class="btn go">Send</button></div>
+   </div>
+
+   <div class="view" id="v-work" hidden>
+    <h3>Scene editor · E4 Library, inspector, look</h3>
+    <div><span class="pill you">Waiting for your approval</span> <span class="small">Nobody may build this until you approve it.</span></div>
+    <p class="next"><b>NEXT STEP</b>Read the plan and press Approve. After that, Start runs it on Sonnet (allowed up to 1.5M tokens; the last step used 64k).</p>
+    <div class="acts"><button class="btn go">Approve</button><button class="btn">Deny with a note</button><button class="btn">Read the plan</button></div>
+    <div class="card"><ol class="steps">
+     <li><span class="s ok">✓</span><span>E1 Rules and overlay file</span><span class="small">Finished</span></li>
+     <li><span class="s ok">✓</span><span>E2 Game draws the overlay</span><span class="small">Finished · 63,654 tokens</span></li>
+     <li><span class="s ok">✓</span><span>E3 Editor core</span><span class="small">Finished</span></li>
+     <li><span class="s you">●</span><span>E4 Library, inspector, look</span><span class="small" style="color:var(--watch)">Needs you</span></li>
+     <li><span class="s todo">○</span><span>E5 Hub side</span><span class="small">After E4</span></li>
+     <li><span class="s todo">○</span><span>E6 Notes</span><span class="small">After E5</span></li></ol></div>
+    <div class="card"><div class="small" style="margin-bottom:4px">What the last run did, in plain words</div><ul class="feed">
+     <li><span>17:41:02</span>Started on Sonnet with 6 tools</li><li><span>17:41:09</span>Reading dist/world.js</li><li><span>17:43:30</span>Editing dist/scene-editor.js</li><li><span>17:44:02</span>Tokens used so far: 41,200 of 1,500,000</li><li><span>17:46:18</span>Running npm test</li><li><span>17:49:55</span>Usage check: 36% of this week, 51% of these 5 hours</li><li><span>17:50:01</span>Finished after 14 turns</li></ul></div>
+   </div>
+
+   <div class="view" id="v-scene" hidden>
+    <h3>Scene edit from the game</h3>
+    <div><span class="pill you">Waiting for you</span> <span class="small">3 added, 2 moved, 1 removed near the cafe.</span></div>
+    <p class="next"><b>NEXT STEP</b>Accept writes dist/scene-edits.js. Then press Check (release and tests, no tokens).</p>
+    <div class="card"><svg viewBox="0 0 300 110" width="100%" role="img" aria-label="Before and after, seen from above"><rect x="4" y="4" width="140" height="102" rx="6" fill="#1b1e23" stroke="#2a2d33"/><rect x="156" y="4" width="140" height="102" rx="6" fill="#1b1e23" stroke="#2a2d33"/><text x="10" y="18" fill="#6e6f6c" font-size="9">Before</text><text x="162" y="18" fill="#6e6f6c" font-size="9">After</text><rect x="30" y="40" width="22" height="12" fill="#6e6f6c"/><rect x="80" y="64" width="12" height="12" fill="#6e6f6c"/><rect x="104" y="34" width="10" height="10" fill="#6e6f6c"/><rect x="198" y="48" width="22" height="12" fill="#6e6f6c"/><path d="M193 46 L206 52" stroke="#9cc2ff" stroke-width="1.5" fill="none"/><rect x="232" y="64" width="12" height="12" fill="#6e6f6c"/><rect x="262" y="30" width="10" height="10" fill="#5fbf85"/><rect x="262" y="50" width="10" height="10" fill="#5fbf85"/><rect x="262" y="70" width="10" height="10" fill="#5fbf85"/><path d="M254 32 l12 12 m0 -12 l-12 12" stroke="#f2766d" stroke-width="1.5" fill="none" transform="translate(-74 0) scale(.8) translate(84 10)"/></svg></div>
+    <div class="acts"><button class="btn go">Accept</button><button class="btn">Deny with a note</button><button class="btn">Check</button></div>
+   </div>
+
+   <div class="view" id="v-assets" hidden>
+    <h3>Assets</h3>
+    <p class="next"><b>NEXT STEP</b>2 new files arrived in assets-src. Say which asset each one is.</p>
+    <div class="pipe"><div class="hand"><b>4</b>Wanted</div><div class="hand"><b>3</b>Received</div><div class="hand"><b>2</b>Staged</div><div><b>9</b>Converted</div><div><b>131</b>In game</div><div><b>118</b>Credited</div></div>
+    <p class="small">Blue stages are set by you or the master. The other three are worked out from the game files, so they cannot be wrong by hand.</p>
+    <div class="card"><div class="small" style="margin-bottom:6px">Add asset</div>
+     <div class="form"><label>Name<input id="a-name" value="Grab3D man"></label><label>Kind<select id="a-kind"><option>Character</option><option>Model</option><option>Sound</option><option>Texture</option></select></label><label class="wide">Where it comes from (link)<input id="a-src" placeholder="https://"></label><label>Licence<input id="a-lic" placeholder="not known yet"></label><label>Stage<select id="a-stage"><option>Wanted</option><option>Received</option><option>Staged</option></select></label></div>
+     <div class="acts"><button class="btn go">Add</button><span class="small">Applies at once. Undo stays available.</span></div></div>
+    <div class="card"><ol class="steps">
+     <li><span class="s you">●</span><span>Grab3D man <span class="small">· added by the master 18:51</span></span><span><span class="pill acc">Wanted</span> <button class="btn sm undo">Undo</button></span></li>
+     <li><span class="s you">●</span><span>Grab3D woman <span class="small">· added by the master 18:51</span></span><span><span class="pill acc">Wanted</span> <button class="btn sm undo">Undo</button></span></li>
+     <li><span class="s todo">○</span><span>Bus stop shelter <span class="small">· file in assets-src</span></span><span><span class="pill">Staged</span></span></li>
+     <li><span class="s ok">✓</span><span>Forklift</span><span><span class="pill ok">In game · credited</span></span></li></ol>
+     <div class="acts"><button class="btn sm">All assets with pictures</button><button class="btn sm">3D viewer</button></div></div>
+   </div>
+
+   <div class="view" id="v-commit" hidden>
+    <h3>Commit</h3>
+    <p class="next"><b>NEXT STEP</b>Check the list and the message, then press Commit. Nothing is committed before that press.</p>
+    <div><span class="pill ok">Tests passed 18:42, after the last file change</span> <span class="pill">Last commit 45010b0</span></div>
+    <div class="card"><label class="small" for="cmsg">Message (written by the master, edit freely)</label>
+     <textarea id="cmsg" rows="4">Scene editor E1 to E3, hub shell fix
+
+Edit rules and overlay file, the game draws and collides with the overlay, editor core. Hub runs get a PowerShell shell and an index need. Plans E1 to E6.</textarea></div>
+    <div class="card"><ul class="files">
+     <li class="grp">GAME · 8 FILES</li><li><input type="checkbox" checked id="f1" aria-label="include"><span>dist/scene-edit.js</span></li><li><input type="checkbox" checked id="f2" aria-label="include"><span>dist/scene-editor.js</span></li><li><input type="checkbox" checked id="f3" aria-label="include"><span>dist/world.js <span class="small">(changed)</span> … 5 more</span></li>
+     <li class="grp">TESTS · 4 · HUB · 3 · PLANS · 9 · NOTES · 7</li><li><input type="checkbox" checked id="f4" aria-label="include"><span>hub/runner.js … 22 more</span></li>
+     <li class="grp">LEFT OUT, NEVER COMMITTED · 5 PATHS</li><li class="out"><span>.hub/ · assets-src/ · .claude/ · .dev.vars · simproject.code-workspace</span></li></ul></div>
+    <div class="acts"><button class="btn go" id="docommit">Commit 31 files</button><button class="btn">Cancel</button></div>
+    <div class="card"><div class="small">2 commits are not on GitHub yet. Pushing is its own press.</div><div class="acts"><button class="btn">Push 2 commits to GitHub</button></div></div>
+    <p class="small" id="cdone" hidden>✓ Committed as a1b2c3d (pretend). <button class="btn sm">Undo this commit, keep the files</button></p>
+   </div>
+
+   <div class="view" id="v-tools" hidden>
+    <h3>Tools</h3>
+    <p class="small">Scripts the hub runs itself. No model, no tokens, one at a time. The master can propose any of them as a button.</p>
+    <div class="card"><ol class="steps">
+     <li><span class="s ok">✓</span><span>Run the tests <span class="small">· 148 of 148 passed 18:42</span></span><button class="btn sm">Run</button></li>
+     <li><span class="s todo">○</span><span>Package the release</span><button class="btn sm">Run</button></li>
+     <li><span class="s todo">○</span><span>Check (release, then tests)</span><button class="btn sm">Run</button></li>
+     <li><span class="s ok">✓</span><span>Rebuild the brief and index <span class="small">· also after every finished run</span></span><button class="btn sm">Run</button></li>
+     <li><span class="s todo">○</span><span>Game dev server <span class="small">· stopped</span></span><button class="btn sm">Start</button></li>
+     <li><span class="s todo">○</span><span>Restart the hub <span class="small">· loads new hub code</span></span><button class="btn sm">Restart</button></li></ol></div>
+   </div>
+
+   <div class="view" id="v-tokens" hidden>
+    <h3>Tokens</h3>
+    <p class="small">Built fresh every time you open it.</p>
+    <div class="card"><div class="crow small"><span>This week</span><div class="bar"><i style="width:36%"></i></div><b>36%</b></div><div class="crow small" style="margin-top:6px"><span>These 5 hours</span><div class="bar"><i style="width:51%"></i></div><b>51% · new at 7:00 PM</b></div>
+     <p class="small">One million tokens costs about: <b>not known yet</b>. The hub needs two readings that carry a token total; from v2 every run and chat message saves one.</p></div>
+    <div class="card"><div class="tw" style="margin:0"><table><tr><th>When</th><th>From</th><th>Week</th><th>5 hours</th><th>Tokens so far</th></tr><tr><td>17:49</td><td>run E3</td><td class="n">36%</td><td class="n">51%</td><td class="n">18.42M</td></tr><tr><td>16:10</td><td>chat</td><td class="n">34%</td><td class="n">22%</td><td class="n">17.61M</td></tr><tr><td>14:02</td><td>run E2</td><td class="n">33%</td><td class="n">8%</td><td class="n">17.20M</td></tr></table></div>
+     <div class="acts"><button class="btn sm">Take a fresh reading (one small Haiku call, about 7,600 tokens)</button></div></div>
+   </div>
+
+  </div>
+  <div class="free"><div>This space stays free. Cards stop at the dashed line, so nothing runs under the bot. Click the bot for its live list.</div><ol id="live" hidden></ol></div>
+  <div class="stagewrap"><canvas id="stage" aria-label="The hub bot. Click for the live list." role="img"></canvas><div id="say">Nothing is running.</div></div>
+ </div>
+</div>
+<div class="ctl" id="botctl" aria-label="Bot states"><span class="small">What the hub is doing:</span>
+ <button class="btn sm" data-s="idle" aria-pressed="true">Idle</button><button class="btn sm" data-s="think">Thinking</button><button class="btn sm" data-s="read">Reading</button><button class="btn sm" data-s="write">Writing</button><button class="btn sm" data-s="test">Running tests</button><button class="btn sm" data-s="pass">Tests passed</button><button class="btn sm" data-s="fail">Tests failed</button><button class="btn sm" data-s="wait">Waiting for you</button><button class="btn sm" data-s="stopped">Stopped (press again: next reason)</button><button class="btn sm" data-s="done">Finished</button><button class="btn sm go" id="play">Play a pretend run</button></div>
+<div class="ctl" aria-label="Numbers from the feed"><span class="small">Numbers the panda shows:</span>
+ <label class="small">Run allowance used <input id="alw" type="range" min="0" max="100" value="0" style="vertical-align:middle;width:130px"> <b id="alwv">0%</b></label>
+ <label class="small">Cache <select id="cache"><option value="3">warm (3 min since the last reply)</option><option value="40">cooling (40 min)</option><option value="75">cold (75 min)</option></select></label>
+ <label class="small">Weekly or 5-hour gauge <select id="gauge"><option value="36">36%: calm</option><option value="70">70%: hurrying</option><option value="92">92%: tired</option></select></label>
+ <button class="btn sm" id="snd" aria-pressed="false">Sound: off</button></div>
+<p class="small">The bot reads the activity list the hub already keeps (which file, which tool, how many tokens). No model is asked, so it costs nothing while it plays. It stops drawing when the tab is hidden and stands still if Windows is set to reduce motion.</p>
+<p class="small"><b>Pass 2: what the scene tells you.</b> The <b>bamboo</b> is the run's token allowance: it grows to the dashed outline, turns amber past the 80% notch and red at the cap. The <b>tea cup</b> is the cache: steam while warm, thinner as minutes pass, frosted when cold. The <b>book cover and the screen</b> carry the file name; the lamp board carries the command. <b>Tests passed</b>: green board and a cheer. <b>Tests failed</b>: the failing lamps blink red with the count. <b>Stopped</b>: the panda sits with a sign that gives the reason. <b>Waiting for you</b>: a bigger sign, rings on the floor, the line turns amber, and one soft chime if Sound is on (it is off until you press it). <b>Gauges</b>: from 60% a sweat drop and quicker hands, from 90% heavy eyelids and slow steps; at 97% the hub stops the run and the sign says so.</p>
+
+<h2>Decisions I need from you</h2>
+<div class="dec">
+ <div class="card"><b class="q">D1 · PUSH</b><p><b>Decided:</b> Commit and Push are separate buttons, both in the hub. Committing never pushes; pushing needs its own press every time and never forces.</p></div>
+ <div class="card"><b class="q">D2 · TREE</b><p>The tree is always visible on a wide window and folds behind the Menu tab on a narrow one. The look of 45010b0 (pill, glass, flowing background) stays.</p></div>
+ <div class="card"><b class="q">D3 · QUICK FIX</b><p>For a small edit the master files a tiny plan with one button: "Approve and start (Haiku, up to 150k)". One press, not two. Yes or no?</p></div>
+ <div class="card"><b class="q">D4 · WHO DRAWS THE BOT</b><p><b>Decided:</b> the bot becomes a panda, smooth and impressive, built on Fable. The panda in the mock is the proposed look; say what to change.</p></div>
+ <div class="card"><b class="q">D5 · UNDO COMMIT</b><p>An "Undo this commit, keep the files" button, shown until the next commit. It never deletes work. Yes or no?</p></div>
+ <div class="card"><b class="q">D6 · "STAGED"</b><p>I read Staged as: the file is in assets-src, named and ready to convert. Correct?</p></div>
+</div>
+
+<h2>How the master drives the areas</h2>
+<ul class="plain">
+ <li><b>Records apply at once, with Undo.</b> The master writes a line the hub understands (<code>RECORD: asset add …</code>, <code>RECORD: asset stage …</code>). The hub checks it against a fixed form, writes the asset register, logs the change, and shows a chip with Undo in the chat and in Assets. Only Wanted, Received and Staged can be set this way.</li>
+ <li><b>Everything else is a button you press.</b> Approve, Start, Resume, Close exist today. New: run tests, release, check, index, commit, dev server, restart. The master proposes; nothing happens until your press.</li>
+ <li><b>The master stays read-only.</b> It never edits files or runs commands itself. File edits go through a run from an approved plan (or the Quick fix, D3).</li>
+ <li><b>The master sees more.</b> Each message already starts with a status block. v2 adds: files changed since the last commit, the last test result, asset counts by stage, and what is new in assets-src.</li>
+</ul>
+
+<h2>Plain words</h2>
+<div class="tw"><table><tr><th>Today</th><th>v2</th></tr>
+<tr><td>tokens · turn total · 41,200</td><td>Tokens used so far: 41,200 of 1,500,000</td></tr>
+<tr><td>gauges · fresh reading 36% weekly / 51% 5-hour</td><td>Usage check: 36% of this week, 51% of these 5 hours</td></tr>
+<tr><td>started · sonnet · 6 tools</td><td>Started on Sonnet with 6 tools</td></tr>
+<tr><td>answer · resumed · turn 2</td><td>Carried on after your answer</td></tr>
+<tr><td>tool · Read · dist/world.js</td><td>Reading dist/world.js</td></tr>
+<tr><td>cap · 80% of the cap used</td><td>Used 80% of this run's token allowance</td></tr>
+<tr><td>Ready to run</td><td>Approved. Press Start.</td></tr>
+<tr><td>Hit its cap</td><td>Stopped: it used its whole allowance. Give it more or close it.</td></tr>
+<tr><td>Stopped by the weekly guard</td><td>Stopped to protect your weekly limit.</td></tr>
+<tr><td>Needs a second yes</td><td>Press again to confirm (expensive model).</td></tr>
+<tr><td>Pages 01 to 06 in the menu</td><td>Chat, Work, Assets. Commit, Tools and Tokens sit small at the bottom, without numbers.</td></tr></table></div>
+<p class="dim">Every Work item shows one status with a one-line meaning, and one "Next step" line that says what to press and what it costs.</p>
+
+<h2>The cache strip</h2>
+<ul class="plain">
+ <li><b>Where:</b> at the top of the chat and of each run's page.</li>
+ <li><b>What it shows:</b> how big the conversation is, whether the cache is warm, and how the last message split into re-used tokens and newly written ones.</li>
+ <li><b>Where the numbers come from:</b> the usage figures every reply already carries. The hub saves them with the time of the reply. No model call.</li>
+ <li><b>The countdown is not shown yet.</b> The real cache lifetime on this PC is unverified. The hub will learn it from normal use: for every message it notes the gap since the last one and whether the cache was re-used. Until it has seen a clear limit it shows "last reply N minutes ago".</li>
+ <li><b>Warnings before a costly action:</b> switching model (the whole conversation is written again) and sending after a long break. Each offers the cheaper way, usually a new chat.</li>
+ <li><b>To confirm in the build:</b> the "of 200k" size comes from a field in the reply's summary; if it is absent the bar shows the count alone.</li>
+</ul>
+
+<h2>Commit</h2>
+<ul class="plain">
+ <li>You tell the master "commit", or open Commit at the bottom of the tree. Asking the master costs one chat message (about 5k to 10k tokens) because it writes the message. Opening Commit yourself costs nothing: the hub suggests a message from the titles of the finished steps.</li>
+ <li>One batch: every changed file since the last commit, minus <code>assets-src/</code>, <code>.claude/</code>, <code>.hub/</code>, <code>.dev.vars</code>, <code>simproject.code-workspace</code>. Those five can never be ticked.</li>
+ <li>Warnings, not blocks: tests not passed since the last change, a file over 5 MB, files written by a run that did not finish (unticked by default). No proposal while a run is working.</li>
+ <li>The press runs a script with GitHub Desktop's git: add exactly the listed files, commit with the message. Never "add everything", never amend, never push, never force. If files changed after the list was shown, the hub refuses and shows the new list.</li>
+</ul>
+
+<h2>Can the hub do what the chat in VS Code can?</h2>
+<div class="tw"><table><tr><th>Capability</th><th>Hub today</th><th>Hub v2</th><th>How</th></tr>
+<tr><td>Ask about the project, read files</td><td class="y">Yes</td><td class="y">Yes</td><td>Master chat (read-only)</td></tr>
+<tr><td>Write a plan, approve, start a build</td><td class="y">Yes</td><td class="y">Yes</td><td>Work tree</td></tr>
+<tr><td>Edit files</td><td class="m">Through a run</td><td class="y">Yes</td><td>Run, or Quick fix (D3)</td></tr>
+<tr><td>Run the tests</td><td class="m">Only inside a run</td><td class="y">Yes</td><td>Tools, step V2</td></tr>
+<tr><td>Package the release, Check</td><td class="m">Only inside a run</td><td class="y">Yes</td><td>Tools, V2</td></tr>
+<tr><td>Rebuild brief and index</td><td class="m">Only inside a run</td><td class="y">Yes, and after each run</td><td>Tools, V2</td></tr>
+<tr><td>Commit</td><td class="nn">No</td><td class="y">Yes</td><td>V3</td></tr>
+<tr><td>Push</td><td class="nn">No</td><td class="nn">No (D1)</td><td>GitHub Desktop</td></tr>
+<tr><td>Restart the hub</td><td class="nn">No</td><td class="y">Yes</td><td>Tools, V2. Also ends the "port 8765 in use" problem</td></tr>
+<tr><td>Start and stop the game dev server, open the game</td><td class="nn">No</td><td class="y">Yes</td><td>Tools, V2</td></tr>
+<tr><td>Add assets, move stages</td><td class="m">View only</td><td class="y">Yes</td><td>V4</td></tr>
+<tr><td>Rebuild asset pictures</td><td class="nn">No</td><td class="y">Yes</td><td>Tools, V2</td></tr>
+<tr><td>Fresh usage reading</td><td class="nn">Command line</td><td class="y">Yes</td><td>Tokens, V5 (a small Haiku call, your press)</td></tr>
+<tr><td>Accept scene edits</td><td class="nn">No</td><td class="y">Yes</td><td>Scene editor E5</td></tr>
+<tr><td>Other git work (history, branches, revert)</td><td class="nn">No</td><td class="m">VS Code only</td><td>The hub shows the last commits, nothing more</td></tr>
+<tr><td>Game screenshots (browser lab)</td><td class="nn">No</td><td class="m">VS Code only for now</td><td>Possible later as a Tool</td></tr>
+<tr><td>Web search and reading web pages</td><td class="nn">No</td><td class="m">VS Code only</td><td>Blocked in the hub on purpose</td></tr>
+<tr><td>Advisor and other agents</td><td class="nn">No</td><td class="m">VS Code only for now</td><td>You asked for agents in sync; it needs its own design after v2</td></tr>
+<tr><td>Deploy, installs, any free command</td><td class="nn">No</td><td class="m">VS Code only</td><td>Stays outside the allowed list</td></tr>
+<tr><td>Design pages like this one, memory notes</td><td class="nn">No</td><td class="m">VS Code only</td><td></td></tr></table></div>
+
+<h2>Scene editor E5 still fits</h2>
+<p>E5 can run as it is written. Its "Scene edit" item lands under Scene editor in the Work tree, as in the mock. Three things change around it, none needs a new E5 revision:</p>
+<ul class="plain">
+ <li>E5 says "the hub never commits". That stays true for E5's own routes; committing arrives separately in V3.</li>
+ <li>E5 builds its own Check (release, then tests). V2 moves that into Tools so there is one Check, whichever step is built first.</li>
+ <li>E5's Scene page must follow the layout rule: cards no wider than the dashed line. V1 applies it to all pages, the Scene page included.</li>
+</ul>
+
+<h2>Build steps and cost</h2>
+<p class="dim">Token figures are what the hub counts (new input, output, cache writes). The yardstick is the real E2 run: Sonnet, 63,654 tokens. Allowance is the hub's cap for that size, not the expected use.</p>
+<div class="tw"><table><tr><th>Step</th><th>What</th><th>Model · size</th><th>Likely tokens</th><th>Allowance</th></tr>
+<tr><td>V1</td><td>Tree, Work area, narrow cards, plain words, Next step lines</td><td>Sonnet · M</td><td class="n">150k to 250k</td><td class="n">1.5M</td></tr>
+<tr><td>V2</td><td>Tools: tests, release, check, index, dev server, restart; master can propose them</td><td>Sonnet · M</td><td class="n">120k to 200k</td><td class="n">1.5M</td></tr>
+<tr><td>V3</td><td>Commit</td><td>Sonnet · S</td><td class="n">90k to 150k</td><td class="n">600k</td></tr>
+<tr><td>V4</td><td>Assets area, Add asset, records with Undo</td><td>Sonnet · M</td><td class="n">120k to 200k</td><td class="n">1.5M</td></tr>
+<tr><td>V5</td><td>Cache strip, Tokens page fix, reading history</td><td>Sonnet · M</td><td class="n">100k to 170k</td><td class="n">1.5M</td></tr>
+<tr><td>V6</td><td>The big bot scene</td><td>Sonnet · M (or Fable, D4)</td><td class="n">100k to 180k</td><td class="n">1.5M</td></tr>
+<tr><td>V7</td><td>Notes: brief, record, index, parity list re-checked</td><td>Haiku · S</td><td class="n">15k to 30k</td><td class="n">150k</td></tr>
+<tr><td></td><td><b>All seven</b></td><td></td><td class="n"><b>0.7M to 1.2M</b></td><td></td></tr></table></div>
+<ul class="plain">
+ <li><b>Weekly share:</b> not known honestly. The hub's own placeholder (3% per million) gives 2% to 4% for all seven. The real rate is unlearned; V5 is the step that fixes that, so its estimate will be the first trustworthy one.</li>
+ <li><b>This design pass:</b> about 150k to 175k tokens on Fable, as quoted.</li>
+ <li><b>Order:</b> V1 first. V2 before V3 (commit uses the test result). V4, V5 and V6 in any order. V7 last. One step at a time, tests passing after each.</li>
+ <li><b>Frame rate:</b> none of this touches the game. The bot draws on the hub page only, at most 30 frames a second, well under 1 ms each, and not at all when the tab is hidden.</li>
+</ul>
+
+<h2>Everything you asked for, and where it went</h2>
+<div class="tw"><table><tr><th>#</th><th>Ask</th><th>Where</th></tr>
+<tr><td>1</td><td>Master is the front door; records at once with Undo</td><td>How the master drives the areas · V2, V4</td></tr>
+<tr><td>2</td><td>Tree view; Work; Assets with stages; Tokens small</td><td>The screen · V1, V4</td></tr>
+<tr><td>3</td><td>Plain words</td><td>Plain words · V1</td></tr>
+<tr><td>4</td><td>Big bot scene, narrow cards</td><td>The screen (live) · V1, V6</td></tr>
+<tr><td>5</td><td>Cache indicator</td><td>The cache strip · V5</td></tr>
+<tr><td>6</td><td>Tokens page fix</td><td>Tokens in the mock · V5</td></tr>
+<tr><td>7</td><td>Commit</td><td>Commit · V3 · decisions D1, D5</td></tr>
+<tr><td>8</td><td>Parity list</td><td>Can the hub do what the chat can? · V2, V7</td></tr>
+<tr><td>9</td><td>Scene editor's hub side</td><td>Scene editor E5 still fits</td></tr></table></div>
+
+<h2>Not verified, said plainly</h2>
+<ul class="plain">
+ <li>The cache lifetime, and whether replies carry the conversation-size limit.</li>
+ <li>Whether restarting the hub from inside the hub is smooth on Windows (V2 tests it with a pretend server first).</li>
+ <li>How Work groups old plans whose titles do not follow "Project step: title". They fall under "Other" until renamed.</li>
+ <li>This mock was not opened in your browser by me. If something looks off, tell me and I fix the page.</li>
+</ul>
+</div>
+
+<script>
+(()=>{
+const $=s=>document.querySelector(s),$$=s=>[...document.querySelectorAll(s)];
+// tree and views
+function show(k,btn){$$('.view').forEach(v=>v.hidden=v.id!=='v-'+k);const t=btn&&btn.closest('.tree')?btn:$('.tree [data-view="'+k+'"]');$$('.tree button').forEach(b=>b.setAttribute('aria-current',String(b===t)));$('.col').scrollTop=0}
+$$('[data-view]').forEach(b=>b.addEventListener('click',()=>show(b.dataset.view,b)));
+$$('.undo').forEach(b=>b.addEventListener('click',()=>{const on=b.textContent==='Undo';b.textContent=on?'Redo':'Undo';const row=b.closest('.rec')||b.closest('li');row.style.opacity=on?.45:1}));
+$('#model').addEventListener('change',e=>{$('#mwarn').hidden=e.target.selectedIndex===0});
+$('#stay').addEventListener('click',()=>{$('#model').selectedIndex=0;$('#mwarn').hidden=true});
+$('#docommit').addEventListener('click',()=>{$('#cdone').hidden=false});
+
+// the bot: a panda. Poses are targets; the drawn pose glides toward them, so every change is smooth.
+// pass 2: the scene also shows the feed's numbers (F): allowance as bamboo, cache as a tea cup, test result, stop reason, gauge mood, file names.
+const cv=$('#stage'),cx=cv.getContext('2d'),say=$('#say'),live=$('#live');
+const C={ink:'#f1efe9',dim:'#a3a39d',faint:'#6e6f6c',line:'#2a2d33',acc:'#3b82f6',eye:'#9cc2ff',ok:'#5fbf85',warn:'#e0b060',crit:'#f2766d',calm:'#8a93a6',screen:'#0b0c0e',paper:'#efece3',fur:'#353a43',fur2:'#191b20',rim:'#69707d',white:'#ffffff',white2:'#d6d2c9',pink:'#f0a9a4',wood:'#4a505c',leaf:'#6fcf8a'};
+const still=matchMedia('(prefers-reduced-motion: reduce)').matches,sin=Math.sin,PI=Math.PI;
+let W=0,H=0,now=0;
+const bot={x:40,dir:1,s:.5,state:'idle',want:'idle',t0:0,goal:null,pause:1,idleKind:'idle'};
+const P={Lx:-25,Ly:-28,Rx:25,Ry:-28,lx:0,ly:0,tilt:0,hy:0,open:1,smile:.15,wide:0,sit:0,lean:0,happy:0,worry:0,droop:0};
+// F: facts from the activity feed (names and counts only). S: the drawn values, gliding toward F.
+const F={used:0,cap:1500000,file:'dist/world.js',cmd:'npm test',total:148,fail:3,asks:1,reason:'cap',cacheMin:3,gauge:36,sound:false};
+const S={fill:0,warm:1,prop:0};
+const FONT='"Segoe UI",system-ui,sans-serif',RUN=['read','write','test','pass','fail','stopped'];
+const REASON={cap:'Cap reached',you:'Stopped by you',error:'Error',weekly:'Weekly limit'};
+const fillOf=()=>F.cap?F.used/F.cap:0,warmOf=()=>Math.max(0,Math.min(1,1-F.cacheMin/60));
+const pace=()=>F.gauge>=90?.6:F.gauge>=60?1.35:1;
+const homeX=()=>Math.max(W*.5,W-176),ground=()=>H-18,big=()=>W<430?.78:1;
+function size(){const r=cv.getBoundingClientRect(),d=Math.min(2,window.devicePixelRatio||1);W=r.width;H=r.height;cv.width=Math.round(W*d);cv.height=Math.round(H*d);cx.setTransform(d,0,0,d,0,0)}
+const rgba=(h,a)=>'rgba('+parseInt(h.slice(1,3),16)+','+parseInt(h.slice(3,5),16)+','+parseInt(h.slice(5,7),16)+','+a+')';
+const rr=(x,y,w,h,r)=>{cx.beginPath();cx.roundRect(x,y,w,h,r)};
+const ell=(x,y,rx,ry,rot=0)=>{cx.beginPath();cx.ellipse(x,y,rx,ry,rot,0,7)};
+const line=(a,b,c,d)=>{cx.beginPath();cx.moveTo(a,b);cx.lineTo(c,d);cx.stroke()};
+const poly=p=>{cx.beginPath();p.forEach(([x,y],i)=>i?cx.lineTo(x,y):cx.moveTo(x,y));cx.closePath()};
+const font=(px,w=600)=>{cx.font=w+' '+px+'px '+FONT};
+// a file or command name, cut to fit a prop (the last part of the path, then an ellipsis)
+function fit(s,max){s=String(s).split(/[\\/]/).pop();if(cx.measureText(s).width<=max)return s;while(s.length>1&&cx.measureText(s+'…').width>max)s=s.slice(0,-1);return s+'…'}
+function dark(x,y,rx,ry,rot=0){ell(x,y,rx,ry,rot);const g=cx.createLinearGradient(x-rx,y-ry,x+rx,y+ry);g.addColorStop(0,C.fur);g.addColorStop(1,C.fur2);cx.fillStyle=g;cx.fill();cx.strokeStyle=C.rim;cx.lineWidth=1.2;cx.stroke()}
+function light(x,y,rx,ry){ell(x,y,rx,ry);const g=cx.createRadialGradient(x-rx*.3,y-ry*.4,ry*.2,x,y,Math.max(rx,ry)*1.05);g.addColorStop(0,C.white);g.addColorStop(1,C.white2);cx.fillStyle=g;cx.fill()}
+function pads(x,y,r){cx.fillStyle=C.pink;ell(x,y+r*.18,r*.5,r*.42);cx.fill();for(const d of[-1,0,1]){ell(x+d*r*.5,y-r*.48,r*.17,r*.2);cx.fill()}}
+function arm(sx,sy,hx,hy){cx.lineCap='round';cx.beginPath();cx.moveTo(sx,sy);cx.quadraticCurveTo((sx+hx)/2+(hx>sx?6:-6),(sy+hy)/2+8,hx,hy);cx.strokeStyle=C.rim;cx.lineWidth=15.5;cx.stroke();cx.strokeStyle=C.fur;cx.lineWidth=13;cx.stroke();dark(hx,hy,8,8);if(hy<-78)pads(hx,hy,8)}
+
+function step(dt,t){
+ const working=bot.want!=='idle';bot.s+=((working?big():.5)-bot.s)*(1-Math.exp(-dt*3));
+ const k=1-Math.exp(-dt*2.5);S.fill+=(fillOf()-S.fill)*k;S.warm+=(warmOf()-S.warm)*k;S.prop+=((working?1:0)-S.prop)*(1-Math.exp(-dt*4));
+ const go=(tx,max)=>{const d=tx-bot.x,ad=Math.abs(d);if(ad<2){bot.x=tx;return true}bot.dir=d>0?1:-1;bot.x+=bot.dir*Math.min(ad,Math.min(max,Math.max(34,ad*2.5))*dt);bot.state='walk';return false};
+ if(working){if(go(homeX(),Math.max(170,W*.32)*(F.gauge>=90?.7:1))){bot.dir=1;if(bot.state!==bot.want){bot.state=bot.want;bot.t0=t}}}
+ else if(bot.pause>0){bot.pause-=dt;if(bot.state!==bot.idleKind){bot.state=bot.idleKind;bot.t0=t}}
+ else if(bot.goal==null)bot.goal=36+Math.random()*Math.max(40,W-80);
+ else if(go(bot.goal,62)){bot.goal=null;const r=Math.random();bot.idleKind=r<.35?'eat':r<.55?'nap':'idle';bot.pause=bot.idleKind==='idle'?1.5+Math.random()*2.5:4.5+Math.random()*3}}
+
+function target(st,tt,t){
+ const T={Lx:-25,Ly:-28,Rx:25,Ry:-28,lx:0,ly:0,tilt:0,hy:0,open:(t%4.1)<.13?0:1,smile:.15,wide:0,sit:0,lean:0,happy:0,worry:0,droop:0};
+ if(st==='walk'){const w=sin(t*9);T.Ly=-30+w*6;T.Ry=-30-w*6;T.Lx=-24;T.Rx=24;T.lx=4;T.lean=.07;T.tilt=w*.04;T.smile=.3}
+ else if(st==='idle'){T.lx=sin(t*.9)*5;T.tilt=sin(t*.7)*.06}
+ else if(st==='eat'){T.Rx=17;T.Ry=-57;T.ly=3;T.smile=.4+.35*sin(tt*10);T.tilt=.07;T.happy=sin(tt*1.3)>.55?1:0}
+ else if(st==='nap'){T.sit=1;T.open=0;T.tilt=.2;T.hy=3;T.Lx=-22;T.Ly=-22;T.Rx=22;T.Ry=-22;T.smile=0}
+ else if(st==='think'){T.Rx=12;T.Ry=-61;T.lx=3;T.ly=-5;T.tilt=-.1;T.smile=0}
+ else if(st==='read'){T.Lx=-23;T.Ly=-38;T.Rx=23;T.Ry=-38;T.ly=5;T.lx=Math.min(1,(tt%2.5)/1.75)*8-4;T.hy=3}
+ else if(st==='write'){T.Lx=36;T.Ly=-47;T.Rx=52;T.Ry=-47;T.lx=5;T.ly=1;T.lean=.05;T.tilt=.04}
+ else if(st==='test'){T.Lx=-23;T.Ly=-40;T.Rx=35;T.Ry=-70+sin(tt*3)*5;T.lx=5;T.ly=-3;T.smile=.4}
+ else if(st==='pass'){T.Lx=-40;T.Ly=-94+sin(tt*9)*4;T.Rx=40;T.Ry=-94-sin(tt*9)*4;T.smile=1;T.happy=1;T.tilt=sin(tt*4.5)*.07}
+ else if(st==='fail'){T.Lx=-31;T.Ly=-95;T.Rx=36;T.Ry=-64;T.lx=7;T.ly=-2;T.smile=-.8;T.worry=1;T.droop=1;T.tilt=-.09;T.wide=.6}
+ else if(st==='stopped'){T.sit=1;T.droop=1;T.worry=.7;T.smile=-.5;T.Lx=-22;T.Ly=-22;T.Rx=42;T.Ry=-46;T.ly=3;T.tilt=.07;T.hy=2}
+ else if(st==='wait'){T.Lx=-41;T.Ly=-88+sin(tt*8)*7;T.Rx=42;T.Ry=-54;T.wide=1;T.smile=.7;T.tilt=sin(tt*3)*.05}
+ else if(st==='done'){T.Lx=-46;T.Ly=-100;T.Rx=46;T.Ry=-100;T.smile=1;T.happy=1}
+ // the weekly and 5-hour gauges: from 90% the panda is tired; past 80% of the allowance it glances at the bamboo
+ if(F.gauge>=90&&st!=='nap'){T.open=Math.min(T.open,.5);T.hy+=2.5;if(T.smile>0)T.smile*=.4}
+ if(RUN.includes(st)&&st!=='stopped'&&fillOf()>=.8&&(t%5)<1.1){T.lx=-9;T.ly=1;T.worry=Math.max(T.worry,.6)}
+ return T}
+function glide(T,dt){for(const k in T)P[k]+=(T[k]-P[k])*(1-Math.exp(-dt*(k==='open'?32:13)))}
+
+function head(){
+ const dr=P.droop;
+ for(const d of[-1,1]){cx.save();cx.translate(d*(27+dr*4),-25+dr*8);cx.rotate(d*dr*.5);dark(0,0,12,12);cx.fillStyle=rgba(C.pink,.8);ell(0,1,6,6);cx.fill();cx.restore()}
+ light(0,0,36,31);
+ for(const d of[-1,1]){cx.fillStyle=C.fur2;ell(d*14.5,-1,10.5,13,d*-.38);cx.fill();
+  const ex=d*13.5+P.lx*.6,ey=-2+P.ly*.5,R=7+P.wide*1.5;
+  if(P.happy>.5){cx.strokeStyle='#fff';cx.lineWidth=2.6;cx.lineCap='round';cx.beginPath();cx.arc(ex,ey+3,5.5,PI*1.12,PI*1.88);cx.stroke()}
+  else{cx.save();cx.translate(ex,ey);cx.scale(1,Math.max(.08,P.open));cx.fillStyle='#fff';ell(0,0,R,R);cx.fill();cx.fillStyle='#3d261a';ell(P.lx*.35,P.ly*.3,R*.74,R*.74);cx.fill();cx.fillStyle='#0b0c0e';ell(P.lx*.4,P.ly*.34,R*.42,R*.42);cx.fill();cx.fillStyle='#fff';ell(P.lx*.3-R*.3,P.ly*.3-R*.34,R*.27,R*.27);cx.fill();ell(P.lx*.3+R*.28,P.ly*.3+R*.3,R*.11,R*.11);cx.fill();cx.restore()}
+  if(P.worry>.2){cx.globalAlpha=Math.min(1,P.worry*1.3);cx.strokeStyle=C.fur2;cx.lineWidth=2.4;cx.lineCap='round';line(d*23,-17,d*9,-17-P.worry*6);cx.globalAlpha=1}}
+ cx.fillStyle=rgba(C.pink,.38);for(const d of[-1,1]){ell(d*24,10,5.5,3.4);cx.fill()}
+ cx.fillStyle='#1a1c20';ell(0,10,4.4,3.1);cx.fill();cx.fillStyle='rgba(255,255,255,.5)';ell(-1.2,9,1.3,.8);cx.fill();
+ const m=P.smile;
+ if(m>.45){cx.beginPath();cx.moveTo(-6*m-1,15);cx.quadraticCurveTo(0,15+15*m,6*m+1,15);cx.closePath();cx.fillStyle='#7a2f35';cx.fill();cx.fillStyle=C.pink;ell(0,15+5.5*m,3.2*m,2.4*m);cx.fill()}
+ else if(m<-.2){cx.strokeStyle='#1a1c20';cx.lineWidth=1.8;cx.lineCap='round';cx.beginPath();cx.moveTo(-5.5,19);cx.quadraticCurveTo(0,19+m*8,5.5,19);cx.stroke()}
+ else{cx.strokeStyle='#1a1c20';cx.lineWidth=1.6;cx.lineCap='round';cx.beginPath();cx.moveTo(-5,15);cx.quadraticCurveTo(-2.5,18+m*4,0,15);cx.quadraticCurveTo(2.5,18+m*4,5,15);cx.stroke()}
+ // hurrying (gauges from 60%): a sweat drop slides down the side of the head
+ if(F.gauge>=60&&F.gauge<90&&RUN.includes(bot.state)&&bot.state!=='stopped'){const p=still?.4:(now*.7)%1;cx.globalAlpha=1-p*.8;cx.fillStyle=C.eye;cx.beginPath();cx.moveTo(33,-22+p*14);cx.quadraticCurveTo(38.5,-13+p*14,33,-11+p*14);cx.quadraticCurveTo(27.5,-13+p*14,33,-22+p*14);cx.fill();cx.globalAlpha=1}}
+
+// the run's token allowance: a bamboo stalk that grows to the dashed outline; the 80% warning is the amber notch
+function bamboo(t){
+ const x=-92,full=140,seg=14,f=Math.min(1.04,S.fill),h=Math.min(full,f*full),over=S.fill>=.995,warn=S.fill>=.8;
+ cx.setLineDash([3,4]);cx.strokeStyle=C.faint;cx.lineWidth=1;rr(x-5.5,-full,11,full,4);cx.stroke();cx.setLineDash([]);
+ cx.strokeStyle=C.warn;cx.lineWidth=2;cx.lineCap='round';line(x-11,-full*.8,x+11,-full*.8);
+ font(10);cx.textAlign='right';cx.fillStyle=C.warn;cx.fillText('80%',x-15,-full*.8);cx.textAlign='center';
+ for(let i=0;i*seg<h-.5;i++){const sh=Math.min(seg,h-i*seg),col=over?C.crit:i>=8?C.warn:C.leaf;
+  rr(x-4.5,-i*seg-sh+.8,9,Math.max(1,sh-1.4),3);cx.fillStyle=col;cx.fill();cx.fillStyle='rgba(255,255,255,.28)';cx.fillRect(x-3,-i*seg-sh+2,1.8,Math.max(0,sh-4));
+  if(sh>=seg&&i%2===1&&i!==7){const d=i%4===1?1:-1;cx.fillStyle=rgba(col,.85);ell(x+d*12,-(i+1)*seg-2,8,2.8,-d*.4);cx.fill()}}
+ const sw=still?0:sin(t*2.1)*.12,tip=over?C.crit:warn?C.warn:C.leaf;cx.fillStyle=tip;ell(x-6,-h-4,7,2.6,.7+sw);cx.fill();ell(x+6,-h-5,7.5,2.6,-.7+sw);cx.fill();
+ if(warn&&!still){cx.save();cx.globalAlpha=.35+.3*sin(t*5);cx.strokeStyle=tip;cx.lineWidth=1.5;rr(x-8.5,-full-3,17,full+3,6);cx.stroke();cx.restore()}
+ font(11,700);cx.fillStyle=over?C.crit:warn?C.warn:C.dim;cx.fillText(Math.round(S.fill*100)+'%',x,-full-18)}
+
+// the cache: a tea cup that steams while warm and frosts over when cold; the label is minutes since the last reply
+function cup(t){
+ const x=-50,w=S.warm,cold=w<.04;
+ cx.fillStyle=C.white2;ell(x,-1.5,12.5,2.6);cx.fill();
+ poly([[x-8.5,-16],[x+8.5,-16],[x+6,-2.5],[x-6,-2.5]]);cx.fillStyle=cold?'#b7cfee':C.paper;cx.fill();
+ cx.strokeStyle=cold?'#b7cfee':C.paper;cx.lineWidth=2.2;cx.beginPath();cx.arc(x+8.5,-9.5,4,-PI/2,PI/2);cx.stroke();
+ cx.fillStyle=cold?'#7fa3d4':'#b9763a';ell(x,-16,8.5,2.3);cx.fill();
+ if(cold){cx.strokeStyle='#fff';cx.lineWidth=1;for(const[a,b]of[[-4,-11],[2,-6],[4,-12]]){line(x+a-1.8,b,x+a+1.8,b);line(x+a,b-1.8,x+a,b+1.8)}}
+ else{cx.strokeStyle=C.ink;cx.lineWidth=1.7;cx.lineCap='round';for(let i=0;i<3;i++){const ph=still?i:t*1.8+i*2.1;cx.globalAlpha=w*(.6-i*.08);cx.beginPath();for(let k=0;k<=8;k++){const y=-21-k*(1.6+w*1.9),xx=x-5+i*5+sin(ph+k*.8)*(1.2+k*.28);k?cx.lineTo(xx,y):cx.moveTo(xx,y)}cx.stroke()}cx.globalAlpha=1}
+ font(10);cx.fillStyle=cold?C.eye:C.dim;cx.fillText('cache '+(cold?'cold':w<.5?'cooling':'warm')+' · '+F.cacheMin+' min',x-8,10)}
+
+// the lamp board (running, passed, failed)
+const BAD=[9,14,20,4,17,11];
+function board(st,tt){
+ cx.strokeStyle=C.wood;cx.lineWidth=3.5;cx.lineCap='round';line(62,-32,57,0);line(126,-32,131,0);
+ cx.save();if(st!=='test'){cx.shadowColor=st==='pass'?C.ok:C.crit;cx.shadowBlur=18}rr(44,-114,100,84,9);cx.fillStyle=C.screen;cx.fill();cx.restore();cx.strokeStyle=st==='pass'?C.ok:st==='fail'?C.crit:C.rim;cx.lineWidth=1.5;cx.stroke();
+ const n=st==='test'?Math.floor(tt*3.5)%30:24,bad=st==='fail'?BAD.slice(0,Math.max(1,Math.min(6,F.fail))):[],blink=still||(tt*2.4)%1<.62;
+ for(let i=0;i<24;i++){const x=56.5+(i%6)*15,y=-101+Math.floor(i/6)*15,isBad=bad.includes(i),cur=st==='test'&&i===n,on=i<n;
+  const col=isBad?(blink?C.crit:'#4a2422'):on?C.ok:cur?C.ink:C.line;cx.save();if((on&&!isBad)||cur||(isBad&&blink)){cx.shadowColor=col;cx.shadowBlur=isBad?12:7}cx.fillStyle=col;ell(x,y,cur||isBad?5:4,cur||isBad?5:4);cx.fill();cx.restore()}
+ font(11,st==='test'?600:700);cx.fillStyle=st==='pass'?C.ok:st==='fail'?C.crit:C.dim;
+ cx.fillText(st==='pass'?F.total+' passed':st==='fail'?F.fail+' failed':fit(F.cmd,88),94,-41)}
+
+function sign(x,y,w,h,col,glow,text,px,sub){
+ cx.strokeStyle=C.wood;cx.lineWidth=3.5;cx.lineCap='round';line(42,P.Ry-P.sit*9,42,y+h);
+ cx.save();cx.shadowColor=col;cx.shadowBlur=glow;rr(x,y,w,h,9);cx.fillStyle=col;cx.fill();cx.restore();
+ cx.fillStyle='#1b1e23';font(px,700);cx.fillText(fit(text,w-12),x+w/2,y+h/2-(sub?6:0));if(sub){font(11);cx.fillText(sub,x+w/2,y+h/2+10)}}
+
+function draw(t){
+ now=t;const g=ground(),st=bot.state,tt=(t-bot.t0)*(RUN.includes(st)?pace():1),walk=st==='walk',board3=st==='test'||st==='pass'||st==='fail';
+ cx.clearRect(0,0,W,H);
+ const fg=cx.createLinearGradient(0,g,0,H);fg.addColorStop(0,'rgba(255,255,255,.08)');fg.addColorStop(1,'rgba(255,255,255,0)');cx.fillStyle=fg;cx.fillRect(0,g,W,H-g);
+ cx.textAlign='center';cx.textBaseline='middle';
+ // the stage's fixed props: bamboo (allowance) and cup (cache). They fade in while the hub works.
+ if(S.prop>.02){cx.save();cx.globalAlpha=S.prop;cx.translate(homeX(),g);cx.scale(big(),big());bamboo(t);cup(t);cx.restore()}
+ const mood=st==='wait'?C.warn:st==='done'||st==='pass'?C.ok:st==='fail'||st==='stopped'?C.crit:(st==='idle'||st==='nap'||st==='eat'||(walk&&bot.want==='idle'))?C.calm:C.acc;
+ const hop=walk?-Math.abs(sin(t*9))*3.5:st==='done'?-Math.abs(sin(tt*5))*18:st==='pass'?-Math.abs(sin(tt*4.5))*9:st==='wait'?-Math.abs(sin(tt*3))*4:0,breath=sin(t*2.2)*.018;
+ cx.save();cx.translate(bot.x,g);cx.scale(bot.dir*bot.s,bot.s);
+ cx.save();cx.scale(1,.2);const gl=cx.createRadialGradient(0,0,4,0,0,100);gl.addColorStop(0,rgba(mood,.34));gl.addColorStop(1,rgba(mood,0));cx.fillStyle=gl;ell(0,0,100,100);cx.fill();
+ // needs you: two rings pulse outward on the floor
+ if(st==='wait')for(let i=0;i<2;i++){const p=still?.35+i*.4:(tt*.7+i*.5)%1;cx.globalAlpha=(1-p)*.75;cx.strokeStyle=C.warn;cx.lineWidth=5;ell(0,0,50+p*95,50+p*95);cx.stroke()}
+ cx.globalAlpha=1;cx.restore();
+ cx.fillStyle='rgba(0,0,0,.5)';ell(0,2,30+hop*.4,4.5);cx.fill();
+ font(11);
+ // things behind the panda
+ if(st==='write'){cx.strokeStyle=C.wood;cx.lineWidth=3.5;cx.lineCap='round';line(40,-42,40,0);line(128,-42,128,0);line(97,-58,97,-46);rr(28,-47,108,6,3);cx.fillStyle=C.wood;cx.fill();rr(33,-51,30,4,2);cx.fillStyle=C.faint;cx.fill();
+  cx.save();cx.shadowColor=C.acc;cx.shadowBlur=22;rr(60,-112,76,54,6);cx.fillStyle=C.screen;cx.fill();cx.restore();cx.strokeStyle=C.rim;cx.lineWidth=1.5;cx.stroke();
+  rr(60,-112,76,13,[6,6,0,0]);cx.fillStyle=C.line;cx.fill();font(8.5);cx.fillStyle=C.ink;cx.fillText(fit(F.file,70),98,-105.5);
+  const L=[46,30,54,22,40],col=[C.eye,C.ok,C.dim,C.eye,C.warn],p=(tt*1.3)%6.5,k=Math.floor(p);
+  for(let i=0;i<5;i++){const w=i<k?L[i]:i===k?L[i]*(p%1):0;if(w>0){rr(67,-94+i*7,w,3,1.5);cx.fillStyle=col[i];cx.fill()}if(i===k&&(tt*3)%1<.6){cx.fillStyle=C.ink;cx.fillRect(68+w,-95+i*7,3,5)}}}
+ if(board3)board(st,tt);
+ if(st==='read'){for(let i=0;i<5;i++){rr(46+(i%2)*2,-3-i*3.6,28,2.6,1);cx.fillStyle=i%2?C.white2:C.paper;cx.fill()}}
+ // the panda
+ cx.save();cx.translate(0,hop+P.sit*9);cx.rotate(P.lean);
+ for(const d of[-1,1]){const ph=t*9+(d>0?0:PI),lift=walk?Math.max(0,sin(ph))*6:0,fx=d*(13+P.sit*11)+(walk?sin(ph+1.2)*3:0),fy=-7-lift-P.sit*9;dark(fx,fy,12+P.sit*2,8.5+P.sit*3.5);if(P.sit>.5)pads(fx,fy,9)}
+ cx.save();cx.translate(0,-36);cx.scale(1+breath,1-breath);dark(0,0,27,26);light(0,4,16,17);cx.restore();
+ cx.strokeStyle=C.acc;cx.lineWidth=5;cx.lineCap='round';cx.beginPath();cx.ellipse(0,-58,17,6,0,.2,PI-.2);cx.stroke();
+ cx.save();cx.shadowColor=mood;cx.shadowBlur=10+sin(t*4)*4;cx.fillStyle=mood;ell(0,-50.5,4,4);cx.fill();cx.restore();
+ cx.save();cx.translate(0,-84+P.hy-breath*40);cx.rotate(P.tilt);head();cx.restore();
+ if(st==='eat'){const x=P.Rx,y=P.Ry;cx.strokeStyle=C.leaf;cx.lineWidth=4.5;cx.lineCap='round';line(x-12,y+3,x+26,y-22);cx.strokeStyle='#3f9a5c';cx.lineWidth=1.5;line(x+4,y-10,x+7,y-6);line(x+15,y-17,x+18,y-13);cx.fillStyle=C.leaf;ell(x+35,y-25,9,3.2,-.2);cx.fill();ell(x+28,y-31,8,3,-1.1);cx.fill()}
+ if(st==='wait')sign(-22,-186,128,48,C.warn,still?20:18+10*sin(tt*5),'I need you',18,F.asks+(F.asks===1?' question':' questions'));
+ if(st==='stopped')sign(-22,-152,128,32,'#c9a877',6,REASON[F.reason]||'Stopped',13.5);
+ const j=st==='write'?sin(tt*22)*2.5:0;arm(-20,-48,P.Lx,P.Ly+j);arm(20,-48,P.Rx,P.Ry-j);
+ if(st==='test'){rr(-33,-55,16,21,2);cx.fillStyle=C.paper;cx.fill();cx.fillStyle=C.faint;for(let i=0;i<3;i++)cx.fillRect(-30,-49+i*5,10,1.5);dark(-23,-38,6,5)}
+ if(st==='read'){ // the book faces us: the cover carries the file name; a page flips over the top edge
+  cx.fillStyle=C.paper;cx.strokeStyle='#a9a59b';cx.lineWidth=1;poly([[-26,-63],[0,-56],[26,-63],[26,-58],[0,-51],[-26,-58]]);cx.fill();cx.stroke();
+  const q=Math.max(0,((tt%2.5)-1.75)/.75);if(q>0){const x=24*Math.cos(q*PI),u=13*sin(q*PI);poly([[0,-55],[x,-62-u],[x,-56-u*.6],[0,-51]]);cx.fill();cx.stroke()}
+  poly([[-28,-60],[0,-53],[28,-60],[28,-38],[0,-31],[-28,-38]]);cx.fillStyle=C.acc;cx.fill();cx.strokeStyle=rgba(C.white,.35);cx.lineWidth=1;line(0,-53,0,-31);
+  rr(-26,-51.5,52,13,3);cx.fillStyle=C.paper;cx.fill();font(8.5,700);cx.fillStyle='#1b1e23';cx.fillText(fit(F.file,49),0,-44.5);
+  dark(-25,-39,6,6);dark(25,-39,6,6)}
+ if(st==='think'){cx.fillStyle=C.ink;for(const[x,y,r]of[[40,-120,3],[50,-132,4.5]]){ell(x,y,r,r);cx.fill()}rr(56,-168,52,28,14);cx.fill();for(let i=0;i<3;i++){cx.fillStyle=(Math.floor(tt*3)%3)===i?C.acc:'#9a9a94';ell(69+i*13,-154,3.2,3.2);cx.fill()}}
+ if(st==='nap'){cx.fillStyle=C.eye;for(let i=0;i<3;i++){const p=((tt*.45+i/3)%1);cx.globalAlpha=(1-p)*.9;font(10+p*9,700);cx.fillText('z',34+p*20,-112-p*36)}cx.globalAlpha=1}
+ cx.restore();
+ if(st==='done'||st==='pass'){const cc=st==='pass'?[C.ok,C.leaf,C.ink]:[C.acc,C.ok,C.warn,C.crit,C.ink],n=st==='pass'?12:22;for(let i=0;i<n;i++){const y=-180+((tt*75+i*37)%180),x=((i*53)%180)-90+sin(tt*3+i)*7;cx.save();cx.translate(x,y);cx.rotate(tt*4+i);cx.fillStyle=cc[i%cc.length];cx.globalAlpha=Math.min(1,(-y)/40);cx.fillRect(-2,-3,4,6);cx.restore()}}
+ cx.restore()}
+
+let last=0;
+function frame(ms){const t=ms/1000,dt=Math.min(.05,t-last||0);last=t;step(dt,t);glide(target(bot.state,(t-bot.t0)*(RUN.includes(bot.state)?pace():1),t),dt);draw(t);requestAnimationFrame(frame)}
+function settle(){const w=bot.want!=='idle';bot.x=w?homeX():Math.min(bot.x,W-40);bot.s=w?big():.5;bot.state=bot.want;bot.dir=1;bot.t0=0;S.fill=fillOf();S.warm=warmOf();S.prop=w?1:0;Object.assign(P,target(bot.state,1.2,1.2));draw(1.2)}
+
+// the speech line, built from the same facts
+const num=n=>Math.round(n).toLocaleString('en-US'),tok=()=>num(F.used)+' of '+num(F.cap)+' tokens'+(fillOf()>=1?'':fillOf()>=.8?' (past the 80% warning)':'')+'.';
+const LINES={idle:()=>'Nothing is running.',think:()=>'The master (Sonnet) is thinking.',read:()=>'Sonnet run is reading '+F.file+': '+tok(),write:()=>'Sonnet run is editing '+F.file+': '+tok(),test:()=>'Sonnet run is running '+F.cmd+': '+tok(),
+ pass:()=>'Tests passed: '+F.total+' of '+F.total+'. '+tok(),fail:()=>'Tests failed: '+F.fail+' of '+F.total+'. '+tok(),
+ stopped:()=>({cap:'The run stopped: its token allowance is used up.',you:'You stopped the run.',error:'The run stopped with an error.',weekly:'The run stopped: the weekly limit reached 97%.'})[F.reason],
+ wait:()=>'A run has '+(F.asks===1?'a question':F.asks+' questions')+' for you.',done:()=>'A run finished. Its result is waiting for you.'};
+let ac=null;
+function chime(){if(!ac||!F.sound)return;const t0=ac.currentTime;for(const[f,d]of[[659,0],[880,.17]]){const o=ac.createOscillator(),g=ac.createGain();o.type='sine';o.frequency.value=f;g.gain.setValueAtTime(.0001,t0+d);g.gain.linearRampToValueAtTime(.06,t0+d+.02);g.gain.exponentialRampToValueAtTime(.0001,t0+d+.8);o.connect(g);g.connect(ac.destination);o.start(t0+d);o.stop(t0+d+.85)}}
+function sync(){const a=$('#alw'),v=$('#alwv');if(a)a.value=Math.round(fillOf()*100);if(v)v.textContent=Math.round(fillOf()*100)+'%'}
+// feed(): new numbers arrive without a change of scene
+function feed(patch){Object.assign(F,patch);say.textContent=LINES[bot.want]();sync();if(still)settle()}
+function want(s,patch){if(s==='wait'&&bot.want!=='wait')chime();if(patch)Object.assign(F,patch);bot.want=s;if(s==='idle'){bot.goal=null;bot.pause=.6;bot.idleKind='idle'}say.textContent=LINES[s]();sync();
+ say.style.color=s==='wait'?C.warn:s==='fail'||s==='stopped'?C.crit:'';say.style.fontWeight=s==='wait'?'700':'';
+ $$('#botctl [data-s]').forEach(b=>b.setAttribute('aria-pressed',String(b.dataset.s===s)));
+ const d=new Date(),p=x=>String(x).padStart(2,'0'),li=document.createElement('li');li.textContent=p(d.getHours())+':'+p(d.getMinutes())+':'+p(d.getSeconds())+'  '+say.textContent;live.append(li);while(live.children.length>7)live.firstChild.remove();
+ if(still)settle()}
+let timers=[];const stop=()=>{timers.forEach(clearTimeout);timers=[]};
+const RS=['cap','you','error','weekly'];
+$$('#botctl [data-s]').forEach(b=>b.addEventListener('click',()=>{stop();const s=b.dataset.s;
+ if(s==='stopped'){const r=bot.want==='stopped'?RS[(RS.indexOf(F.reason)+1)%RS.length]:F.reason;want(s,r==='cap'?{reason:r,used:F.cap}:{reason:r})}else want(s)}));
+const on=(sel,ev,fn)=>{const e=$(sel);if(e)e.addEventListener(ev,fn)};
+on('#alw','input',e=>feed({used:F.cap*e.target.value/100}));
+on('#cache','change',e=>feed({cacheMin:+e.target.value}));
+on('#gauge','change',e=>feed({gauge:+e.target.value}));
+on('#snd','click',e=>{F.sound=!F.sound;e.target.setAttribute('aria-pressed',String(F.sound));e.target.textContent='Sound: '+(F.sound?'on':'off');if(F.sound){try{ac=ac||new (window.AudioContext||window.webkitAudioContext)();ac.resume();chime()}catch(_){}}});
+on('#play','click',()=>{stop();let at=0;const k=1000;
+ [['think',2500,{used:0}],['read',3200,{file:'PROJECT-BRIEF.md',used:45*k}],['read',3000,{file:'dist/world.js',used:180*k}],['write',5000,{file:'dist/scene-editor.js',used:420*k}],['test',6000,{used:610*k}],['fail',4000,{fail:3,used:640*k}],
+  ['write',4000,{file:'tests/scene-editor.mjs',used:900*k}],['wait',4500,{asks:1,used:930*k}],['write',3500,{file:'dist/scene-editor.js',used:1230*k}],['test',6000,{used:1290*k}],['pass',3500,{used:1310*k}],['done',4000],['idle',0]]
+ .forEach(([s,ms,patch])=>{timers.push(setTimeout(()=>want(s,patch),at));at+=ms})});
+cv.addEventListener('click',()=>{live.hidden=!live.hidden});
+addEventListener('resize',()=>{size();if(still)settle()});
+size();sync();if(still)settle();else requestAnimationFrame(frame);
+
+})();
+</script>

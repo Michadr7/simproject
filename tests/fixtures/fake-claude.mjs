@@ -11,7 +11,7 @@ const emit=o=>process.stdout.write(JSON.stringify(o)+'\n');
 let stdin='';for await(const c of process.stdin)stdin+=c;
 if(outFile)fs.writeFileSync(outFile,JSON.stringify({argv:process.argv.slice(2),cwd:process.cwd(),stdin,priority:os.getPriority(),claudeEnv:Object.keys(process.env).filter(k=>/^CLAUDE/i.test(k)),electron:'ELECTRON_RUN_AS_NODE' in process.env,pid:process.pid}));
 
-const tools=['Read','Grep','Glob','Edit','Write','Bash'];
+const tools=['Read','Grep','Glob','Edit','Write','Bash','PowerShell'];
 const init=(t=tools)=>emit({type:'system',subtype:'init',session_id:'11111111-1111-4111-8111-111111111111',model:'claude-sonnet-5-5',tools:t});
 const rate=(w=0.12,f=0.58)=>emit({type:'rate_limit_event',rate_limit_info:{unifiedWindows:{seven_day:{utilization:w,resetsAt:Math.floor(Date.now()/1000)+86400},five_hour:{utilization:f,resetsAt:Math.floor(Date.now()/1000)+3600}}}});
 let n=0;

@@ -28,8 +28,8 @@ a=buildActivity({chat:{working:true,model:'sonnet',cap:200000},chatFeed:{events:
 assert.equal(a.mood,'working');assert.equal(a.source,'chat');assert.equal(a.line,'The master (Sonnet 5.5) is reading PROJECT-BRIEF.md.');assert.equal(a.tokens,6350);assert.equal(a.cap,200000);
 assert.ok(a.items.every(i=>i.k!=='tokens'),'the short list leaves the token lines out');
 a=buildActivity({runs:[run('done',{id:'run-20261111-000000-bbbb'}),run('running')],runFeed:[tool('Edit','game.js')]});
-assert.equal(a.mood,'working');assert.equal(a.source,'run');assert.equal(a.runId,'run-20261111-000000-aaaa');assert.equal(a.line,'Sonnet 5.5 run is editing game.js: 120,000 of 600,000 tokens.');
-assert.equal(buildActivity({runs:[run('waiting-answer')]}).mood,'question');assert.match(buildActivity({runs:[run('confirming',{model:'opus'})]}).line,/Opus 5\.5 needs your second yes/);
+assert.equal(a.mood,'working');assert.equal(a.source,'run');assert.equal(a.runId,'run-20261111-000000-aaaa');assert.equal(a.line,'A Sonnet 5.5 run is editing game.js. Tokens used so far: 120,000 of 600,000.');
+assert.equal(buildActivity({runs:[run('waiting-answer')]}).mood,'question');assert.match(buildActivity({runs:[run('confirming',{model:'opus'})]}).line,/Press again to confirm Opus 5\.5 \(expensive model\)/);
 a=buildActivity({chat:{working:false,model:'sonnet',pending:{model:'fable',until:1}}});assert.equal(a.mood,'question');assert.match(a.line,/Fable 5\.2/);
 for(const s of ['capped','paused','interrupted','guard-stopped','failed','stopped']){const x=buildActivity({runs:[run(s)]});assert.equal(x.mood,'stopped',s);assert.ok(x.line.length>5)}
 assert.equal(buildActivity({runs:[run('done')]}).mood,'idle');assert.match(buildActivity({runs:[run('done')]}).line,/finished/);
@@ -38,7 +38,7 @@ assert.equal(buildActivity({chat:{working:false,model:'sonnet'},chatFeed:{events
 a=buildActivity({chat:{working:false,model:'sonnet'},chatFeed:{events:[{kind:'end',end:'capped',tokens:10}]}});assert.equal(a.mood,'idle','an unanswered message waits on nothing');assert.match(a.line,/no answer/);
 assert.equal(buildActivity({runs:[run('running')],runFeed:Array.from({length:30},(_,i)=>tool('Read','f'+i))}).items.length,MAX_ITEMS);
 assert.equal(feedRunOf([run('done',{id:'d'}),run('capped',{id:'c'})]),'c');assert.equal(feedRunOf([]),null);
-assert.equal(feedRow({kind:'end',end:'result',tokens:6350}).text,'answered');assert.equal(feedRow({kind:'end',end:'capped'}).cls,'bad');assert.equal(feedRow({kind:'end',end:'stopped'}).text,'stopped by you');
+assert.equal(feedRow({kind:'end',end:'result',tokens:6350}).text,'Answered');assert.equal(feedRow({kind:'end',end:'capped'}).cls,'bad');assert.equal(feedRow({kind:'end',end:'stopped'}).text,'Stopped by you');
 
 // ── the chat's feed
 const root=fs.mkdtempSync(path.join(os.tmpdir(),'hub-activity-'));fs.mkdirSync(path.join(root,'plans'));fs.mkdirSync(path.join(root,'.hub'));

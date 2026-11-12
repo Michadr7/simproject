@@ -1,21 +1,34 @@
-// Mikkadr Hub P4, S3: the shell's pure rules (no DOM, so tests can import it): the rows, the hash routes, the accent from the weekly gauge, the tab title.
-export const ROWS=[
- {key:'chat',num:'01',label:'Chat'},
- {key:'waiting',num:'02',label:'Waiting for you'},
- {key:'plans',num:'03',label:'Plans'},
- {key:'assets',num:'04',label:'Assets'},
- {key:'tokens',num:'05',label:'Tokens'},
- {key:'runs',num:'06',label:'Runs'}];
-// The scene of each page: the hue (0 to 360) of the flowing background and of the sliding highlight in the menu. Hovering a row previews its scene. hub.css has one html[data-scene=...] rule per key.
-export const SCENES={chat:262,waiting:26,plans:172,assets:135,tokens:215,runs:14};
-export const sceneOf=(route,hover)=>Object.hasOwn(SCENES,hover||'')?hover:Object.hasOwn(SCENES,route||'')?route:'waiting';
-export const ROUTES=ROWS.filter(r=>!r.off).map(r=>r.key);
-export const routeOf=hash=>{const k=String(hash||'').replace(/^#\/?/,'').split(/[?&/]/)[0].toLowerCase();return ROUTES.includes(k)?k:'waiting'};
-export const planIdOf=hash=>{const m=/^#\/?plans\/([a-z0-9][a-z0-9-]{0,79})(?:[?&].*)?$/.exec(String(hash||''));return m?m[1]:null}; // #plans/<id> opens that plan
-export const runIdOf=hash=>{const m=/^#\/?runs\/(run-[0-9]{8}-[0-9]{6}-[0-9a-f]{4})(?:[?&].*)?$/.exec(String(hash||''));return m?m[1]:null}; // #runs/<id> opens that run
+// Mikkadr Hub v2, V1: the shell's pure rules (no DOM, so tests can import it): the tree, the hash routes, the accent from the weekly gauge, the tab title.
+// The tree: three areas (Chat, Work, Assets) and three small rows at the foot (Commit, Tools, Tokens). No numbers. `soon` marks a placeholder and names the step that builds it.
+export const TREE={
+ areas:[{key:'chat',label:'Chat',glyph:'›'},{key:'work',label:'Work',glyph:'›'},{key:'assets',label:'Assets',glyph:'›'}],
+ foot:[{key:'commit',label:'Commit',glyph:'⎇'},
+  {key:'tools',label:'Tools',glyph:'▸'},
+  {key:'tokens',label:'Tokens',glyph:'◔'}]};
+const ALL=[...TREE.areas,...TREE.foot];
+export const rowOf=key=>ALL.find(r=>r.key===key)||null;
+// The scene of each page: the hue (0 to 360) of the flowing background and of the sliding highlight in the tree. Hovering a row previews its scene. hub.css has one html[data-scene=...] rule per key.
+export const SCENES={chat:262,work:26,assets:135,commit:172,tools:14,tokens:215};
+export const HOME='work'; // where an empty or unknown hash lands
+export const sceneOf=(route,hover)=>Object.hasOwn(SCENES,hover||'')?hover:Object.hasOwn(SCENES,route||'')?route:HOME;
+export const ROUTES=ALL.map(r=>r.key);
+// Old hashes keep working: Waiting, Plans and Runs are all inside Work now.
+export const OLD={waiting:'work',plans:'work',runs:'work'};
+export const routeOf=hash=>{const k=String(hash||'').replace(/^#\/?/,'').split(/[?&/]/)[0].toLowerCase(),r=Object.hasOwn(OLD,k)?OLD[k]:k;return ROUTES.includes(r)?r:HOME};
+export const planIdOf=hash=>{const m=/^#\/?(?:plans|work)\/([a-z0-9][a-z0-9-]{0,79})(?:[?&].*)?$/.exec(String(hash||''));return m?m[1]:null}; // #work/<id> and the old #plans/<id> open that step inside Work
+export const runIdOf=hash=>{const m=/^#\/?runs\/(run-[0-9]{8}-[0-9]{6}-[0-9a-f]{4})(?:[?&].*)?$/.exec(String(hash||''));return m?m[1]:null}; // #runs/<id> opens the step that run belongs to
 // Accent: blue under 60 percent weekly, orange from 60, red from 90. No reading means blue.
 export const accentOf=pct=>!Number.isFinite(pct)?'blue':pct>=90?'red':pct>=60?'orange':'blue';
 // Gauge bar colour class: the zone of its own window.
 export const barOf=(pct,orangeAt,redAt)=>!Number.isFinite(pct)?'none':pct>=redAt?'red':pct>=orangeAt?'orange':'ok';
-export const titleOf=(route,waitingCount)=>{const row=ROWS.find(r=>r.key===route)||ROWS.find(r=>r.key==='waiting');return `${waitingCount>0?`(${waitingCount}) `:''}${row.label} · Mikkadr Hub`};
-export const pageOf=route=>route==='assets'?'/assets':route==='tokens'?'/tokens':null; // routes that open an existing page inside the shell
+// The tab title, with how many things need you in front.
+export const titleOf=(route,needsYou)=>`${needsYou>0?`(${needsYou}) `:''}${(rowOf(route)||rowOf(HOME)).label} · Mikkadr Hub`;
+export const pageOf=route=>route==='tokens'?'/tokens':null; // routes that open an existing page inside the shell (Assets has its own page since V4; the pictures page is a link there)
+// "3 things need you", for the pill at the top of every page ('' when nothing does).
+export const needsText=n=>n>0?`${n} thing${n===1?'':'s'} need${n===1?'s':''} you`:'';
+// How old the usage reading is, in plain words.
+export const ageText=(ageMin,stale)=>ageMin==null?'':`Usage ${stale?'last ':''}checked ${ageMin>=120?Math.round(ageMin/60)+' h':ageMin+' min'} ago`;
+// The label of the Commit row: "Commit · 12 files changed" (from GET /api/commit/summary), plain "Commit" when nothing changed or commit is off.
+export const commitLabel=s=>s&&s.enabled&&s.files>0?`Commit · ${s.files} file${s.files===1?'':'s'} changed`:'Commit';
+// The tree is always visible from this window width; below it the tree folds behind the Menu tab.
+export const WIDE=1100;

@@ -1,3 +1,5 @@
+// P3: the watcher page
+
 // Mikkadr Hub, P3: the watcher page as one static HTML file (no scripts, no network, opens from disk). The look follows the hub's design: a dark calm surface,
 // monospace micro-labels, an accent that follows the weekly gauge (blue under 60, orange from 60, red from 90), colour never the only signal (every state also has words).
 import {LIMITS,canStart,effectiveStop} from './watcher.js';

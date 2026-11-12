@@ -1,3 +1,5 @@
+// P5 R1: the Run block, start rules
+
 // Mikkadr Hub P5, R1: the Run block of a plan and the rules for starting a run. Pure: no file, no process, no model call.
 // A plan may end with a "## Run" section. The hub reads ONLY four keys from it (model, why, size, needs), each against a fixed list; everything else in the plan is text for you to read and never becomes a flag.
 //   ## Run
@@ -13,8 +15,8 @@ export const SIZES=['S','M','L'];
 // Per-run token caps agreed 2026-11-11. A size missing from a model's list is not allowed for that model.
 export const CAPS={haiku:{S:150000},sonnet:{S:600000,M:1500000,L:3000000},opus:{S:400000,M:1000000}};
 // The only shell commands a run may be given. `needs` picks from these keys; the strings are what R2 will pass to the CLI.
-export const NEEDS={test:'npm test',release:'npm run release -- --force',check:'node --check'};
-const NEEDS_ALIASES={'npm test':'test','test':'test','release':'release','npm run release':'release','check':'check','node --check':'check'};
+export const NEEDS={test:'npm test',release:'npm run release -- --force',check:'node --check',index:'npm run index'};
+const NEEDS_ALIASES={'npm test':'test','test':'test','release':'release','npm run release':'release','check':'check','node --check':'check','index':'index','npm run index':'index'};
 export const MAX_WHY=200;
 // Percent of the weekly limit per million tokens, used until learnRate has a real figure. A guess, pessimistic on purpose; replace it when `learnRate` returns a rate.
 export const PLACEHOLDER_RATE=3;
@@ -85,6 +87,15 @@ export function startCheck({plan,picked,secondYes=false,state,rate=null,activeRu
  const needsSecondYes=model==='opus'||(model==='fable'&&gauge.secondYes);
  if(!reasons.length&&needsSecondYes&&!secondYes)return {ok:false,code:'second-yes',reasons:[`${model==='opus'?'Opus':'Fable'} needs a second yes.`],model,capTokens:cap,estimatePct,needs:parsed.run?.needs||[],needsSecondYes:true,needsProbe:gauge.needsProbe};
  return {ok:!reasons.length,code:reasons.length?'refused':'ok',reasons,model,capTokens:cap,estimatePct,needs:parsed.run?.needs||[],needsSecondYes,needsProbe:gauge.needsProbe}}
+
+// Hub v2 V2, Quick fix: may this plan get the one "Approve and start" button? Only a plan the master filed, still waiting for its answer (so never a revision you denied),
+// whose newest revision has a clean Run block saying haiku and S. Returns {model, size, capTokens, revision} or null. The press itself still goes through startCheck.
+export function quickFix(plan){
+ if(!plan||plan.from!=='master'||plan.status!=='waiting')return null;
+ const last=latestRevision(plan);if(plan.answers.some(a=>a.revision===last.n))return null;
+ const p=parseRunBlock(last.text);
+ if(!p.ok||p.run.model!=='haiku'||p.run.size!=='S')return null;
+ return {model:'haiku',size:'S',capTokens:capTokens('haiku','S'),revision:last.n}}
 
 // What `npm run plan -- --status` prints about the Run block (one line, or why there is none).
 export function describeRun(text){

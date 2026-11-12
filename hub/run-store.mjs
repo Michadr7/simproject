@@ -1,3 +1,5 @@
+// P5 R3: run storage
+
 // Mikkadr Hub P5, R3: where runs are kept. .hub/runs/<id>/run.json (the record, written to a temp file then renamed) and feed.jsonl (one event per line), plus .hub/run.lock.
 // Files only: no process, no model call. .hub is never committed.
 import fs from 'node:fs';

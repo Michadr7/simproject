@@ -21,7 +21,7 @@ const waitFor=async(fn,ms=8000)=>{const t=Date.now();while(Date.now()-t<ms){cons
 const RUN='run-20261111-160310-66c6';
 
 // ── the line
-assert.deepEqual(CHAT_OPS,['approve','start','resume','close']);
+assert.deepEqual(CHAT_OPS,['approve','start','resume','close','test','release','check','index','dev-start','dev-stop','restart','commit','push']);
 assert.deepEqual(parseActionLine('ACTION: approve minimap-plan 2'),{op:'approve',plan:'minimap-plan',revision:2});
 assert.deepEqual(parseActionLine('  **ACTION:** Start `minimap-plan` 1  '),{op:'start',plan:'minimap-plan',revision:1});
 assert.deepEqual(parseActionLine(`ACTION: resume ${RUN}`),{op:'resume',run:RUN});assert.deepEqual(parseActionLine(`ACTION: close ${RUN}`),{op:'close',run:RUN});
@@ -40,10 +40,10 @@ const runs=[{id:RUN,planId:'c',revision:1,planTitle:'Racks',status:'capped',mode
 let s=chatActionState({op:'approve',plan:'a',revision:2},{plans});assert.deepEqual(s,{label:'Approve: Minimap (revision 2)',enabled:true,why:'',primary:true});
 s=chatActionState({op:'approve',plan:'a',revision:1},{plans});assert.equal(s.enabled,false);assert.match(s.why,/newer revision \(2\)/);
 assert.match(chatActionState({op:'approve',plan:'b',revision:1},{plans}).why,/Already approved/);assert.equal(chatActionState({op:'approve',plan:'zz',revision:1},{plans}).enabled,false);
-s=chatActionState({op:'start',plan:'b',revision:1},{plans,ready});assert.equal(s.label,'Start on Opus 5.5: Fuel');assert.equal(s.enabled,true);assert.match(s.why,/400,000 tokens · needs your second yes/);
+s=chatActionState({op:'start',plan:'b',revision:1},{plans,ready});assert.equal(s.label,'Start on Opus 5.5: Fuel');assert.equal(s.enabled,true);assert.match(s.why,/400,000 tokens · asks for a second press/);
 s=chatActionState({op:'start',plan:'b',revision:1},{plans,ready:[{...ready[0],canStart:false,reasons:['A run is already active.']}]});assert.equal(s.enabled,false);assert.equal(s.why,'A run is already active.');
 assert.match(chatActionState({op:'start',plan:'a',revision:2},{plans,ready}).why,/Approve this revision first/);assert.match(chatActionState({op:'start',plan:'b',revision:1},{plans,ready:[]}).why,/no usable "## Run" block/);
-assert.match(chatActionState({op:'start',plan:'c',revision:1},{plans,runs,ready:[]}).why,/Already started \(Hit its cap\)/);
+assert.match(chatActionState({op:'start',plan:'c',revision:1},{plans,runs,ready:[]}).why,/Already started \(Stopped: it used its whole allowance\)/);
 assert.equal(chatActionState({op:'close',run:RUN},{runs}).label,'Close: Racks');assert.equal(chatActionState({op:'close',run:RUN},{runs}).enabled,true);
 s=chatActionState({op:'resume',run:RUN},{runs});assert.equal(s.enabled,false,'a capped run is continued, not resumed');assert.equal(chatActionState({op:'resume',run:RUN},{runs:[{...runs[0],status:'stopped'}]}).enabled,true);
 assert.equal(chatActionState({op:'close',run:RUN},{runs:[]}).enabled,false);assert.equal(chatActionState({op:'push'},{}).enabled,false);

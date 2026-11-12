@@ -1,3 +1,5 @@
+// P3: the watcher command
+
 // Mikkadr Hub, P3: the watcher command. `npm run watcher` rebuilds .hub/watcher.html from the stored readings and this PC's session logs, prints the gauges, and makes no model call.
 //   npm run watcher                       rebuild the page and print the state
 //   npm run watcher -- --record <file>    add the reading from a saved headless run (stream-json output); the file's modified time is the reading time

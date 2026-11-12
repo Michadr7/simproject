@@ -1,3 +1,5 @@
+// P3: the token watcher
+
 // Mikkadr Hub, P3: the token watcher. Pure rules plus small file readers; it never calls a model and never starts a process.
 // The real 5-hour and weekly percentages come from the rate_limit_event that every headless Claude Code run prints (P1): `parseRunOutput` reads them,
 // `.hub/usage.jsonl` keeps them, `evaluate` turns the newest into zones and warnings, `canStart` and `shouldStop` are the hub's rules, and `scanLogs` counts

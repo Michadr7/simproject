@@ -41,7 +41,7 @@ export function mountBot({doc=document,win=window,query=null,store=null}={}){
   const items=a&&Array.isArray(a.items)?a.items:[],s=JSON.stringify([items,linkOf(a)]);
   if(s!==sig){sig=s;rows.textContent='';
    if(!items.length)rows.append(h('div',{class:'bot-none'},'Nothing yet.'));
-   for(const r of items)rows.append(h('div',{class:'br '+(r.cls==='q'||r.cls==='bad'?r.cls:'')},h('span',{class:'t'},String(r.t||'')),h('span',{class:'k'},String(r.k||'')),h('span',{class:'x'},String(r.text||'')),h('span',{class:'n'},String(r.n||''))));
+   for(const r of items)rows.append(h('div',{class:'br '+(r.cls==='q'||r.cls==='bad'?r.cls:'')},h('span',{class:'t'},String(r.t||'')),h('span',{class:'x'},String(r.text||r.k||'')),h('span',{class:'n'},String(r.n||''))));
    foot.textContent='';const l=linkOf(a);if(l)foot.append(h('a',{href:l.href},l.label))}
   drawState()}
  async function tick(){

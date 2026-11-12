@@ -1,3 +1,5 @@
+// P3c: the asset command
+
 // Mikkadr Hub, P3c: the asset command. `npm run assets` draws any missing or changed pictures (headless Edge, no model call), then rebuilds .hub/assets.html with the pictures built in.
 //   npm run assets                    draw what changed, rebuild the page, print counts
 //   npm run assets -- --no-pictures   rebuild the page from the pictures already drawn

@@ -2,14 +2,15 @@
 // A run card has: the live feed (names and counts only), the side box (model, plan, folder, files), the cap bar, and the buttons for its status (Stop, the Opus second yes, Resume, Continue with more, Close).
 // A run's question and result are the model's own words: they are set with textContent in a pre-wrap box, so they are text and never markup (the server caps them at 8 KB).
 // Polls GET /api/runs every 2 s while a run works (10 s otherwise) and the feed after the last line it has. The page is rebuilt only when something that changes its shape changes, so a half-written answer stays.
-import {actionsFor,feedRow,capClass,secondsLeft,fmt,modelName,STATUS_LABEL} from './run-actions.js';
+import {actionsFor,feedRow,capClass,secondsLeft,fmt,modelName,STATUS_LABEL,startModels,draftStore} from './run-actions.js';
 import {runCall,errorText} from './runs-api.js';
 import {agoText} from './plans.js';
 
 const h=(tag,props,...kids)=>{const e=document.createElement(tag);for(const [k,v] of Object.entries(props||{})){if(k==='class')e.className=v;else if(k.startsWith('on'))e.addEventListener(k.slice(2),v);else if(v!==false&&v!=null)e.setAttribute(k,v===true?'':v)}for(const c of kids.flat())if(c!=null)e.append(c);return e};
 async function getJson(url){try{const r=await fetch(url,{cache:'no-store'});if(!r.ok)return null;return await r.json()}catch{return null}}
 
-export function mountRuns(view,{id,onChange}={}){
+// Hub v2 V1: the Work page mounts this inside a step. embedded: no back link and no title (the step has them). readyFor {plan, revision}: draw only that plan's Start row.
+export function mountRuns(view,{id,onChange,embedded=false,readyFor=null}={}){
  let alive=true,timer=null,sig=null,target=null,draft='',after=0,ui=null,busy=false;
  const stop=()=>{alive=false;clearTimeout(timer)};
 
@@ -18,7 +19,7 @@ export function mountRuns(view,{id,onChange}={}){
   if(busy)return;busy=true;note.hidden=true;setDisabled(true);
   const res=await runCall(op,args);busy=false;if(!alive)return;
   if(res.ok){
-   if(op==='answer')draft='';
+   if(op==='answer'){draft='';draftStore('hub.answer.'+args.id+'.'+args.question).set('')}
    if(op==='start'&&res.data&&res.data.run)location.hash='#runs/'+res.data.run.id;
    if(onChange)onChange();return load()}
   setDisabled(false);note.textContent=errorText(res);note.hidden=false}
@@ -30,7 +31,7 @@ export function mountRuns(view,{id,onChange}={}){
   const pct=run.capPct,note=h('p',{class:'msg err',role:'alert',hidden:true});
   ui={run,empty:h('div',{class:'n'},'Nothing yet.'),feed:h('div',{class:'feed',role:'log','aria-label':'Live feed'}),capFill:h('i'),capText:h('div',{class:'small dim'}),files:h('span'),tokens:h('span'),count:h('span'),countdown:h('p',{class:'small dim'})};
   ui.feed.append(ui.empty);
-  const left=h('div',{class:'feedwrap'},h('div',{class:'label'},'Live feed · names and counts only'),ui.feed);
+  const left=h('div',{class:'feedwrap'},h('div',{class:'label'},'What it is doing · names and counts only'),ui.feed);
   const kv=h('div',{class:'kv'},h('span',{},'Model'),h('span',{},modelName(run.model)),h('span',{},'Plan'),h('a',{href:'#plans/'+run.planId},`${run.planTitle} · revision ${run.revision}`),
    h('span',{},'Folder'),h('span',{},'your project folder'),h('span',{},'Turn'),h('span',{},String(run.turn)),h('span',{},'Files changed'),ui.files);
   const actions=actionsFor(run).filter(a=>a.op!=='answer');
@@ -38,9 +39,9 @@ export function mountRuns(view,{id,onChange}={}){
    if(a.extras){const sel=h('select',{class:'sel','aria-label':'Extra tokens'},a.extras.map((n,i)=>h('option',{value:String(n),selected:i===1},`+${fmt(n)} tokens`)));return h('span',{class:'cont'},sel,btn(a,run,note,()=>Number(sel.value)))}
    return btn(a,run,note)}));
   const side=h('div',{class:'side'},h('div',{class:'box'},kv),
-   h('div',{class:'box'},h('div',{class:'label'},'Run cap'),h('div',{class:'capbar'},ui.capFill),ui.capText),
+   h('div',{class:'box'},h('div',{class:'label'},'Token allowance'),h('div',{class:'capbar'},ui.capFill),ui.capText),
    ui.countdown,buttons,note);
-  const parts=[h('div',{class:'rhead'},h('h2',{class:'plan-name'},run.planTitle),h('span',{class:'pill rs-'+run.status},STATUS_LABEL[run.status]||run.status)),
+  const parts=[embedded?null:h('div',{class:'rhead'},h('h2',{class:'plan-name'},run.planTitle),h('span',{class:'pill rs-'+run.status},STATUS_LABEL[run.status]||run.status)),
    h('div',{class:'rgrid'},left,side)];
   if(run.reason&&run.status!=='running')parts.push(h('p',{class:'msg'},run.reason));
   if(run.status==='waiting-answer'&&run.question)parts.push(answerForm(run,note));
@@ -52,7 +53,8 @@ export function mountRuns(view,{id,onChange}={}){
 
  function answerForm(run,note){
   const ta=h('textarea',{rows:'4','aria-label':'Your answer',placeholder:'Your answer. It goes back into the same session.'});
-  ta.value=draft;ta.addEventListener('input',()=>{draft=ta.value});
+  const kept=draftStore('hub.answer.'+run.id+'.'+run.question.id);if(!draft)draft=kept.get(); // a typed answer survives leaving the page
+  ta.value=draft;ta.addEventListener('input',()=>{draft=ta.value;kept.set(draft)});
   return h('div',{class:'box answerbox'},h('div',{class:'label'},'Question from the run'),h('pre',{class:'mtext'},(run.question.text||'').replace(/^QUESTION:\s*/i,'')||'(no text)'),ta,
    h('div',{class:'btns'},h('button',{class:'btn pri',type:'button',onclick:()=>{if(!draft.trim()){note.textContent='Write an answer first.';note.hidden=false;ta.focus();return}press('answer',{id:run.id,question:run.question.id,text:draft.trim()},note)}},'Send answer')))}
 
@@ -73,7 +75,7 @@ export function mountRuns(view,{id,onChange}={}){
   const f=await getJson(`/api/runs/${run.id}/feed?after=${after}`);if(!alive||!f||!ui||ui.run.id!==run.id)return;
   const stick=ui.feed.scrollTop+ui.feed.clientHeight>=ui.feed.scrollHeight-30;
   if(f.events.length)ui.empty.remove();
-  for(const ev of f.events){const r=feedRow(ev);ui.feed.append(h('div',{class:'fr '+r.cls},h('span',{class:'t'},r.t),h('span',{class:'k'},r.k),h('span',{},r.text),h('span',{class:'n'},r.n)))}
+  for(const ev of f.events){const r=feedRow(ev,{cap:run.capTokens});ui.feed.append(h('div',{class:'fr '+r.cls},h('span',{class:'t'},r.t),h('span',{class:'x'},r.text||r.k),h('span',{class:'n'},r.n)))}
   for(const ev of f.events)if(ev.kind==='tool'&&(ev.tool==='Edit'||ev.tool==='Write')&&ev.target&&ui.touched.size<300)ui.touched.add(ev.target);
   showFiles();after=f.last;
   if(stick)ui.feed.scrollTop=ui.feed.scrollHeight}
@@ -82,23 +84,26 @@ export function mountRuns(view,{id,onChange}={}){
  const row=r=>h('a',{class:'plan-row',href:'#runs/'+r.id},h('span',{class:'plan-main'},h('span',{class:'plan-title'},r.planTitle),h('span',{class:'plan-meta'},`${modelName(r.model)} · ${fmt(r.tokens)} of ${fmt(r.capTokens)} tokens · ${r.files.length} file${r.files.length===1?'':'s'} · ${agoText(r.updatedAt)}`)),h('span',{class:'pill rs-'+r.status},STATUS_LABEL[r.status]||r.status));
  function readyRow(p){
   const note=h('p',{class:'msg err',role:'alert',hidden:true}),m=modelName(p.model);
+  // the model picker: the plan's own model, or Fable by the owner's own pick (the server checks the gauges and asks for the second yes)
+  const sel=h('select',{class:'sel','aria-label':'Model for this run'},startModels(p.model).map(x=>h('option',{value:x,selected:x===p.model},x===p.model?`${modelName(x)} (the plan's model)`:`${modelName(x)} (your pick; uses the Opus cap for this size)`)));
   return h('div',{class:'plan-row ready'},h('span',{class:'plan-main'},h('span',{class:'plan-title'},p.title),
    h('span',{class:'plan-meta'},`Revision ${p.revision} · ${m} · size ${p.size} · up to ${fmt(p.capTokens)} tokens${p.why?' · '+p.why:''}${p.secondYes?' · asks for a second yes':''}`),
    p.canStart?null:h('span',{class:'plan-meta warn'},'Cannot start now: '+p.reasons.join(' ')),note),
-   h('span',{class:'acts'},p.canStart?h('button',{class:'btn pri',type:'button',onclick:()=>press('start',{plan:p.planId,revision:p.revision,model:p.model},note)},p.secondYes?`Start on ${m}`:'Start'):null,h('a',{class:'btn',href:'#plans/'+p.planId},'Open plan')))}
+   h('span',{class:'acts'},p.canStart?sel:null,p.canStart?h('button',{class:'btn pri',type:'button',onclick:()=>press('start',{plan:p.planId,revision:p.revision,model:sel.value},note)},'Start'):null,embedded?null:h('a',{class:'btn',href:'#work/'+p.planId},'Open plan')))}
 
  // ── draw
  function draw(list){
   view.textContent='';ui=null;after=0;
   if(!list){view.append(h('p',{class:'soon'},'Could not read the runs. Is the hub still running?'));return}
   if(!list.enabled){view.append(h('div',{class:'box'},h('div',{class:'label'},'Runs are off'),h('p',{},'Runs are switched on when the hub starts. Stop the hub and start it again with:'),h('code',{class:'cmd'},'npm run hub -- --runs'),h('p',{class:'small dim'},'A run is a model call and starts only from an approved plan, by your click. Nothing starts by itself.')));return}
-  if(id)view.append(h('a',{class:'back',href:'#runs'},'← All runs'));
+  if(readyFor){const p=list.ready.find(x=>x.planId===readyFor.plan&&x.revision===readyFor.revision);view.append(p?h('div',{class:'plan-list ready'},readyRow(p)):h('p',{class:'soon small'},'The hub does not list this plan as ready to start. If you just approved it, wait a moment.'));return}
+  if(id&&!embedded)view.append(h('a',{class:'back',href:'#work'},'← All work'));
   if(target)view.append(card(target,list));
   else if(id)view.append(h('p',{class:'soon'},'That run was not found.'));
   else view.append(h('p',{class:'soon'},list.locked?'A run is working.':'No run is active.'));
   if(!id){
    view.append(h('h2',{class:'sect'},'Ready to run',h('span',{class:'n'},list.ready.length||'')));
-   view.append(list.ready.length?h('div',{class:'plan-list ready'},list.ready.map(readyRow)):h('p',{class:'soon small'},'No approved plan with a Run block is waiting to start. Approve one on Plans first.'));
+   view.append(list.ready.length?h('div',{class:'plan-list ready'},list.ready.map(readyRow)):h('p',{class:'soon small'},'No approved plan with a Run block is waiting to start. Approve one in Work first.'));
    const rest=list.runs.filter(r=>!target||r.id!==target.id);
    view.append(h('h2',{class:'sect'},'Recent runs',h('span',{class:'n'},rest.length||'')));
    view.append(rest.length?h('div',{class:'plan-list'},rest.slice(0,30).map(row)):h('p',{class:'soon small'},'No runs yet.'))}}
@@ -106,8 +111,8 @@ export function mountRuns(view,{id,onChange}={}){
  async function load(){
   clearTimeout(timer);
   const list=await getJson('/api/runs');if(!alive)return;
-  target=list?(id?list.runs.find(r=>r.id===id):list.runs.find(r=>r.id===list.holding))||null:null;
-  const shape=!list?'x':!list.enabled?'off':[id||'',target?[target.id,target.status,target.question&&target.question.id,target.pending&&target.pending.kind,target.reason,target.flagged.length,target.resultText.length].join(':'):'-',list.ready.map(p=>p.planId+p.revision+p.canStart).join(','),id?'':list.runs.map(r=>r.id+r.status).join(',')].join('|');
+  target=list&&!readyFor?(id?list.runs.find(r=>r.id===id):list.runs.find(r=>r.id===list.holding))||null:null;
+  const shape=!list?'x':!list.enabled?'off':[id||'',target?[target.id,target.status,target.question&&target.question.id,target.pending&&target.pending.kind,target.reason,target.flagged.length,target.resultText.length].join(':'):'-',list.ready.map(p=>p.planId+p.revision+p.canStart+p.reasons.join()).join(','),id?'':list.runs.map(r=>r.id+r.status).join(',')].join('|');
   if(shape!==sig){sig=shape;draw(list)}
   if(target){paint(target);await pullFeed(target)}
   if(!alive)return;

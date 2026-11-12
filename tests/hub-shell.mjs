@@ -1,22 +1,22 @@
-// Mikkadr Hub P4 S3: the shell's rules (rows, hash routes, accent thresholds, tab title) and that its page, script and style are wired and served.
+// Mikkadr Hub P4 S3, tree from Hub v2 V1: the shell's rules (the tree, hash routes, accent thresholds, tab title) and that its page, script and style are wired and served.
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import path from 'node:path';
 import {fileURLToPath} from 'node:url';
-import {ROWS,ROUTES,routeOf,runIdOf,accentOf,barOf,titleOf,pageOf} from '../hub/web/shell.js';
+import {TREE,ROUTES,routeOf,runIdOf,accentOf,barOf,titleOf,pageOf} from '../hub/web/shell.js';
 import {resolveRoute} from '../hub/server.js';
 
 const root=path.resolve(path.dirname(fileURLToPath(import.meta.url)),'..');
-assert.deepEqual(ROWS.map(r=>r.num+' '+r.label),['01 Chat','02 Waiting for you','03 Plans','04 Assets','05 Tokens','06 Runs']);
-assert.equal(ROWS[5].off,undefined);assert.deepEqual(ROUTES,['chat','waiting','plans','assets','tokens','runs'],'Chat is row 01, Runs row 06, each with its own route');
+assert.deepEqual(TREE.areas.map(r=>r.label),['Chat','Work','Assets']);assert.deepEqual(TREE.foot.map(r=>r.label),['Commit','Tools','Tokens']);
+assert.deepEqual(ROUTES,['chat','work','assets','commit','tools','tokens'],'three areas and three foot rows, each with its own route; Waiting, Plans and Runs live inside Work');
 assert.equal(runIdOf('#runs/run-20261111-140211-ab12'),'run-20261111-140211-ab12');assert.equal(runIdOf('#runs/../x'),null);assert.equal(runIdOf('#runs'),null);assert.equal(runIdOf('#plans/run-20261111-140211-ab12'),null);
-for(const [h,r] of [['#waiting','waiting'],['#plans','plans'],['#assets','assets'],['#tokens','tokens'],['#/plans','plans'],['#Plans?id=x','plans'],['#plans/2026-11-10-x','plans'],['','waiting'],[undefined,'waiting'],['#sessions','waiting'],['#chat','chat'],['#runs','runs'],['#runs/run-20261111-140211-ab12','runs'],['#nope','waiting'],['#__proto__','waiting']])assert.equal(routeOf(h),r,`route of ${JSON.stringify(h)}`);
+for(const [h,r] of [['#waiting','work'],['#plans','work'],['#assets','assets'],['#tokens','tokens'],['#/plans','work'],['#Plans?id=x','work'],['#plans/2026-11-10-x','work'],['','work'],[undefined,'work'],['#sessions','work'],['#chat','chat'],['#runs','work'],['#runs/run-20261111-140211-ab12','work'],['#nope','work'],['#__proto__','work']])assert.equal(routeOf(h),r,`route of ${JSON.stringify(h)}`);
 // the accent follows the weekly gauge: blue under 60, orange from 60, red from 90
 for(const [p,a] of [[0,'blue'],[7,'blue'],[59.9,'blue'],[60,'orange'],[89.9,'orange'],[90,'red'],[100,'red'],[null,'blue'],[undefined,'blue'],[NaN,'blue']])assert.equal(accentOf(p),a,`accent at ${p}`);
 // each gauge bar uses its own thresholds (weekly 60/90, 5-hour 50/90)
 assert.equal(barOf(55,60,90),'ok');assert.equal(barOf(55,50,90),'orange');assert.equal(barOf(90,50,90),'red');assert.equal(barOf(null,60,90),'none');
-assert.equal(titleOf('waiting',4),'(4) Waiting for you · Mikkadr Hub');assert.equal(titleOf('plans',0),'Plans · Mikkadr Hub');assert.equal(titleOf('zzz',0),'Waiting for you · Mikkadr Hub');
-assert.equal(pageOf('assets'),'/assets');assert.equal(pageOf('tokens'),'/tokens');assert.equal(pageOf('plans'),null);
+assert.equal(titleOf('work',4),'(4) Work · Mikkadr Hub');assert.equal(titleOf('chat',0),'Chat · Mikkadr Hub');assert.equal(titleOf('zzz',0),'Work · Mikkadr Hub');
+assert.equal(pageOf('assets'),null,'Assets draws its own page since V4');assert.equal(pageOf('tokens'),'/tokens');assert.equal(pageOf('plans'),null);
 
 // S4: opening one plan by hash, and the Plans page's pure helpers
 import {planIdOf} from '../hub/web/shell.js';

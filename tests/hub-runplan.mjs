@@ -34,7 +34,7 @@ p=parseRunBlock('## Run\nmodel: sonnet\nsize: S\nwhy: '+'x'.repeat(500)+'\n');as
 // caps
 assert.equal(capTokens('haiku','S'),150000);assert.equal(capTokens('sonnet','M'),1500000);assert.equal(capTokens('opus','S'),400000);
 assert.equal(capTokens('haiku','M'),null);assert.equal(capTokens('nothing','S'),null);
-assert.deepEqual(Object.keys(NEEDS),['test','release','check']);
+assert.deepEqual(Object.keys(NEEDS),['test','release','check','index']);
 assert.match(describeRun(block()),/model sonnet · size M · cap 1,500,000 tokens · needs npm test, npm run release -- --force · why: builds against tests/);
 assert.match(describeRun('# x'),/no "## Run"/);
 assert.match(describeRun('## Run\nmodel: fable\nsize: S\n'),/fable \(ask refused/);

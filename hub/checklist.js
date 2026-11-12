@@ -1,3 +1,5 @@
+// P3c: the import checklist
+
 // Mikkadr Hub, P3c: the import checklist. For a received or wanted asset, the steps between "we have it" and "it is in the game", worked out from the register's facts
 // (format, triangles, unit, class, textures, files). Pure: no files, no model calls. The page shows the steps as boxes; `blockers` are the steps that stop an import today.
 // Credit and licence steps are marked `later`: they do not count in the progress until the public release (the user, 2026-11-10).

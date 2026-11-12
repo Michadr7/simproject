@@ -1,12 +1,14 @@
+// P5 R3: the run controller
+
 // Mikkadr Hub P5, R3: the run controller. It owns what happens to a run: start (all gates), the Opus second yes, one process per turn, questions and answers, stop, resume, "continue with more", close, and the clean-up after a hub restart.
 // It is the only place that starts a run; hub/server.js calls it and contains no process code. Every method returns {run, ...} or {error, code}.
-// It never runs git, never commits and never pushes. It makes a model call only when a caller starts or resumes a run, and only through runTurn.
+// Runs never use git: the hub commits and pushes only on the owner's press, each with its own button (hub/commit-ctl.mjs), never from a run. It makes a model call only when a caller starts or resumes a run, and only through runTurn.
 import path from 'node:path';
 import {execFile} from 'node:child_process';
 import {randomBytes,randomUUID,timingSafeEqual} from 'node:crypto';
-import {readPlan,listPlans} from './plans-store.mjs';
-import {latestRevision,hashText} from './plans.js';
-import {startCheck,parseRunBlock,capTokens as capFor,PLACEHOLDER_RATE} from './runplan.js';
+import {readPlan,listPlans,savePlan} from './plans-store.mjs';
+import {latestRevision,hashText,answerPlan} from './plans.js';
+import {startCheck,parseRunBlock,quickFix,capTokens as capFor,PLACEHOLDER_RATE} from './runplan.js';
 import {canStart,evaluate,loadReadings,appendReading,learnRate} from './watcher.js';
 import {buildArgs,firstPrompt,runTurn,killTree,isAlive} from './runner.js';
 import {newRunId,saveRun,readRun,listRuns,appendFeed,readFeed,acquireLock,releaseLock} from './run-store.mjs';
@@ -25,7 +27,9 @@ export const processName=pid=>new Promise(res=>{
  if(process.platform!=='win32')return res(null);
  execFile('tasklist',['/FI',`PID eq ${pid}`,'/FO','CSV','/NH'],{windowsHide:true},(e,out)=>{const m=/^"([^"]+)"/.exec(String(out||'').trim());res(e||!m?null:m[1].toLowerCase())})});
 
-export function createRuns({root,claude=null,now=Date.now,extraEnv={},runTurnFn=runTurn,kill=killTree,nameOf=processName,confirmMs=CONFIRM_MS,saveEveryMs=1000,busy=()=>false}){
+export const QUICK_NOTE='Quick fix: approved and started with one press.';
+// onEnd(run view): called after every turn's end is saved (Hub v2 V2: the hub rebuilds the index after a run finishes). It can never change the run.
+export function createRuns({root,claude=null,now=Date.now,extraEnv={},runTurnFn=runTurn,kill=killTree,nameOf=processName,confirmMs=CONFIRM_MS,saveEveryMs=1000,busy=()=>false,onEnd=()=>{}}){
  const token=randomBytes(24).toString('hex'),usageFile=path.join(root,'.hub','usage.jsonl'),plansDir=path.join(root,'plans');
  let active=null; // {runId, handle}: a turn process is running
  const checkToken=t=>{if(typeof t!=='string'||t.length!==token.length)return false;try{return timingSafeEqual(Buffer.from(t),Buffer.from(token))}catch{return false}};
@@ -99,10 +103,10 @@ export function createRuns({root,claude=null,now=Date.now,extraEnv={},runTurnFn=
    case 'interrupted':run.status='interrupted';run.reason='The hub closed while the run was working.';break;
    case 'violation':run.status='failed';run.violation=true;run.reason='The run offered a tool outside its list and was stopped.';break;
    default:run.status='failed';run.reason=out.stderr?`The run ended without a result (${String(out.stderr).slice(0,100)}).`:'The run ended without a result.'}
-  releaseLock(root,run.id);save(run)}
+  releaseLock(root,run.id);save(run);
+  try{onEnd(view(run))}catch{}}
 
-
- return {
+ const api={
   token,checkToken,
   locked:()=>active!==null,           // a process is working: plan approvals and starts are refused
   holding:()=>!!holding(null),
@@ -127,6 +131,27 @@ export function createRuns({root,claude=null,now=Date.now,extraEnv={},runTurnFn=
     status:'confirming',reason:'',turn:0,turns:[],tokens:0,files:[],paths:[],flagged:[],question:null,resultText:'',pending:null,confirmUntil:null,pid:null,exeName:null,hubPid:process.pid,createdAt:t,updatedAt:t};
    if(chk.code==='second-yes'){run.pending={kind:'start'};run.confirmUntil=t+confirmMs;save(run);return {run:view(run),needsConfirm:true}}
    return launch(run,{resume:false,prompt:firstPrompt({id:plan.id,title:plan.title,revision:last.n,text:last.text})})},
+
+  // Hub v2 V2, Quick fix: one press approves this exact revision and starts it. Only a Haiku S plan the master filed, still waiting (never a revision you denied).
+  // Every check of the two separate presses is made BEFORE the approval is saved (the plan as it would be once approved goes through startCheck: gauges, weekly guard, nothing else working),
+  // so a refused press leaves the plan exactly as it was. Then the ordinary start runs, with its own checks and the lock.
+  quick({planId,revision}){
+   if(!claude?.path)return err('claude.exe was not found. Is the Claude Code extension installed in VS Code?',503);
+   const plan=readPlan(plansDir,planId);if(!plan)return err('No such plan.',404);
+   const last=latestRevision(plan);
+   if(revision!==last.n)return err(`The newest revision is ${last.n}; read that one first.`);
+   if(plan.from!=='master')return err('One-press start is only for a plan the master filed in the chat. Approve it, then press Start.');
+   if(plan.status==='denied'||plan.answers.some(a=>a.revision===last.n&&a.verdict==='denied'))return err('You denied this revision. One-press start is not offered for it.');
+   if(plan.status!=='waiting')return err('This plan is already approved. Press Start.');
+   if(!quickFix(plan))return err('One-press start is only for a Haiku plan of size S. Approve it, then press Start.');
+   if(hashText(last.text)!==last.hash)return err('The plan text does not match its stored hash. Send the plan again.');
+   if(active)return err('Plans are locked while a run works. Stop the run or wait for it.',423);
+   const a=answerPlan(plan,{verdict:'approved',note:QUICK_NOTE,revision,now:now()});if(a.error)return err(a.error,a.code);
+   const {state,rate}=gauges(),chk=startCheck({plan:a.plan,picked:'haiku',secondYes:false,state,rate,activeRun:!!holding(null)||busy()});
+   if(chk.code!=='ok')return err(chk.reasons.join(' '),409,{reasons:chk.reasons});
+   const lock=acquireLock(root,'quick');if(!lock.ok)return err(`Another job holds the lock (${lock.holder}). Wait for it to finish.`);releaseLock(root,'quick'); // the lock must be free before the approval is saved
+   savePlan(plansDir,a.plan);
+   return api.start({planId,revision,model:'haiku'})},
 
   confirm(id){
    const run=load(id);if(!run)return err('No such run.',404);
@@ -192,4 +217,5 @@ export function createRuns({root,claude=null,now=Date.now,extraEnv={},runTurnFn=
    return reaped},
 
   // At hub exit (Ctrl+C): stop the working process tree so it does not outlive the hub.
-  async shutdown(){if(active){await active.handle.stop('interrupted');await active.handle.done}}}}
+  async shutdown(){if(active){await active.handle.stop('interrupted');await active.handle.done}}};
+ return api}

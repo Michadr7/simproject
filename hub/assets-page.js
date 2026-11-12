@@ -1,3 +1,5 @@
+// P3c: the asset tracker page
+
 // Mikkadr Hub, P3c step 4: the asset tracker page. A static page (no scripts) in the token watcher's look: every pack is a folded row with a few pictures and its stage counts,
 // opening it shows each asset as a card with its picture, stage, triangles, size, licence and credit. The stage filter is CSS only (radio buttons and :has()).
 // Pure: `renderAssetsPage` takes the grouped assets, the pictures as data URIs and the studio's measurements, and returns the HTML text.
@@ -7,7 +9,7 @@ import {hashText} from './plans.js';
 
 const esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const num=n=>n==null?'-':Number(n).toLocaleString('en-US');
-const STAGE_LABEL={wanted:'Wanted',received:'Received',converted:'Converted','in-game':'In game',retired:'Retired'};
+const STAGE_LABEL={wanted:'Wanted',received:'Received',staged:'Staged',converted:'Converted','in-game':'In game',retired:'Retired'};
 const ACCENT='59,130,246';
 const slug=s=>s.toLowerCase().replace(/[^a-z0-9]+/g,'-').replace(/^-|-$/g,'');
 export const sizeText=s=>s?`${s.w} × ${s.d} × ${s.h} m`:'';

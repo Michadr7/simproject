@@ -1,3 +1,5 @@
+// P4 S1: the plan reader
+
 // Mikkadr Hub P4, S1: a small Markdown reader for plans. It escapes everything first, then adds only the tags it builds itself:
 // headings, paragraphs, bullet and numbered lists, fenced code, inline code, bold, and tables. Links and raw HTML are never made, so a plan cannot inject markup.
 export const escapeHtml=s=>String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;');

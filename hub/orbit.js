@@ -1,3 +1,5 @@
+// P3c: viewer orbit control
+
 // Mikkadr Hub, P3c: a small orbit control for the 3D viewer (the repo vendors no OrbitControls). Drag to turn, wheel to zoom, double-click to reset, right-drag or shift-drag to move
 // the view sideways, two fingers to pinch. The maths is pure and exported (`orbitPosition`, `applyDrag`, `applyZoom`, `applyPan`) so tests can pin it; the class only wires events.
 // State: {target:{x,y,z}, yaw, pitch, distance}. yaw 0 looks from +z toward the target, pitch is up from the horizon, +y is up, 1 unit = 1 m.

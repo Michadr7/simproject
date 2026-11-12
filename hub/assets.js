@@ -1,9 +1,17 @@
+// P3c: asset tracker rules
+
 // Mikkadr Hub, P3c: the asset tracker's pure rules. No file or model access here: hub/assets-load.mjs reads the dist modules and hands plain data in.
 // `describeModules` turns the asset modules' metadata into one record per shipped asset (never the huge base64 fields), `buildAssets` merges those with the register
 // (assets-register.json: wanted and received items, and a pack entry for every shipped source folder) and the game's text (to decide what is really in the game),
 // and `groupByPack` makes the sub-categories the page shows, so a kit of 117 pieces folds into one row.
 import {createHash} from 'node:crypto';
-export const STAGES=Object.freeze(['wanted','received','converted','in-game','retired']);
+// Hub v2 V4: `staged` (the file is in assets-src/, named and ready to convert) is a third hand-set stage. The dist modules decide `converted` and `in-game`; `credited` is not a stage
+// but a worked-out flag on an in-game row (see isCredited). A register entry may be wanted, received, staged or retired and nothing else.
+export const STAGES=Object.freeze(['wanted','received','staged','converted','in-game','retired']);
+export const HAND_STAGES=Object.freeze(['wanted','received','staged']);
+export const REGISTER_STAGES=Object.freeze([...HAND_STAGES,'retired']);
+// In game AND covered by the credits: the same test as the credit-gap list (a module row whose hasCredit is false is a gap), plus a licence on record. Picture rows need no credit (hasCredit null).
+export const isCredited=r=>!!r&&r.stage==='in-game'&&r.hasCredit!==false&&typeof r.licence==='string'&&r.licence.trim()!=='';
 export const KINDS=Object.freeze(['model','sound','texture','picture']);
 
 // Readable names from game ids: "f-tv-cabinet" -> "TV cabinet", "industrial-q" -> "Industrial building Q", "sports-car-2" -> "Sports car 2". A few ids get a hand-written name.

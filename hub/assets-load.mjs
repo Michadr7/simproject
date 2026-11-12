@@ -1,3 +1,5 @@
+// P3c: asset metadata loader
+
 // Mikkadr Hub, P3c: reads the register, the dist asset modules and the game's text, and hands plain metadata to hub/assets.js.
 // It keeps only small fields (source, size, triangles): `pos` and `nor` in PROPS are huge base64 strings and never leave this file.
 import fs from 'node:fs';

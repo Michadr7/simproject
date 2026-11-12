@@ -1,9 +1,10 @@
 {
   "version": 1,
-  "note": "The asset register: one entry per asset or pack. Stages: wanted, received, converted, in-game, retired. Seeded 2026-11-10 from ASSETS.md (received-not-imported tables) plus wanted items. 'files' lists paths under assets-src/ that exist on the machine that seeded it; an empty list means the original is not on disk there. 'pack' is the sub-category the page folds a kit into. An entry with 'covers' (source-path prefixes) accounts for every shipped asset whose source starts with one of them; hub/assets.js finds the shipped assets in the dist modules. 'inGameOverrides' maps a game id to {file, why} for an asset the game uses without quoting its id. Fields for the import checklist (hub/checklist.js): targetTriangles (overrides the class budget), format (glb, gltf, fbx), triangles (the largest piece of a pack), unit (metres per model unit), class (building, furniture, prop, tool, vehicle, animal, character: picks the triangle budget), textures ('tga' needs converting), skinned.",
+  "note": "The asset register: one entry per asset or pack. Stages: wanted, received, staged, converted, in-game, retired (a register entry may only be wanted, received, staged or retired; the hub writes it through hub/records-store.mjs and keeps this layout). Seeded 2026-11-10 from ASSETS.md (received-not-imported tables) plus wanted items. 'files' lists paths under assets-src/ that exist on the machine that seeded it; an empty list means the original is not on disk there. 'pack' is the sub-category the page folds a kit into. An entry with 'covers' (source-path prefixes) accounts for every shipped asset whose source starts with one of them; hub/assets.js finds the shipped assets in the dist modules. 'inGameOverrides' maps a game id to {file, why} for an asset the game uses without quoting its id. Fields for the import checklist (hub/checklist.js): targetTriangles (overrides the class budget), format (glb, gltf, fbx), triangles (the largest piece of a pack), unit (metres per model unit), class (building, furniture, prop, tool, vehicle, animal, character: picks the triangle budget), textures ('tga' needs converting), skinned.",
   "stages": [
     "wanted",
     "received",
+    "staged",
     "converted",
     "in-game",
     "retired"

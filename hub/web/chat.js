@@ -2,7 +2,8 @@
 // R7c: "ACTION:" lines in a reply are drawn as buttons under it (Approve, Start, Resume, Close). A click sends the same request as the button on Plans or Runs, through the same gates; the master itself can do nothing.
 // The master's words are text only (textContent in a pre-wrap box, never markup). Polls GET /api/chat every 2 s while the master works and every 15 s otherwise. The writes carry the hub token (runs-api.js).
 import {runCall,errorText} from './runs-api.js';
-import {modelName,fmt,chatActionState,chatActionCall,withoutActions} from './run-actions.js';
+import {modelName,fmt,chatActionState,chatActionCall,withoutActions,withoutRecords,draftStore} from './run-actions.js';
+import {recordsCall} from './records-api.js';
 import {agoText} from './plans.js';
 
 export const MODEL_CHOICES=['haiku','sonnet','opus','fable'];
@@ -16,11 +17,12 @@ const h=(tag,props,...kids)=>{const e=document.createElement(tag);for(const [k,v
 async function getJson(url){try{const r=await fetch(url,{cache:'no-store'});if(!r.ok)return null;return await r.json()}catch{return null}}
 
 export function mountChat(view,{onChange}={}){
- let alive=true,timer=null,sig=null,draft='',busy=false,data=null,ctx={plans:[],runs:[],ready:[]};
+ let alive=true,timer=null,sig=null,draft='',busy=false,data=null,ctx={plans:[],runs:[],ready:[],jobs:null},undone=new Set(); // undone: record ids the hub says are undone (from the last 10 records)
  const stop=()=>{alive=false;clearTimeout(timer)};
  const top=h('div',{class:'chat-top'}),list=h('div',{class:'chat-list',role:'log','aria-label':'Chat with the master'}),note=h('p',{class:'msg err',role:'alert',hidden:true});
  const ta=h('textarea',{rows:'3','aria-label':'Message to the master',placeholder:'Describe the task. The master reads the project and writes a plan for you to approve.'});
- ta.addEventListener('input',()=>{draft=ta.value});
+ const kept=draftStore('hub.chat.draft');draft=kept.get();ta.value=draft; // what you typed survives leaving the page (this browser only), until it is sent
+ ta.addEventListener('input',()=>{draft=ta.value;kept.set(draft)});
  ta.addEventListener('keydown',e=>{if(e.key==='Enter'&&(e.ctrlKey||e.metaKey)){e.preventDefault();send()}});
  const sendBtn=h('button',{class:'btn pri',type:'button',onclick:()=>send()},'Send');
  const stopBtn=h('button',{class:'btn danger',type:'button',onclick:()=>act('chat-stop',{})},'Stop');
@@ -30,8 +32,10 @@ export function mountChat(view,{onChange}={}){
  async function act(op,args){
   if(busy)return;busy=true;note.hidden=true;
   const res=await runCall(op,args);busy=false;if(!alive)return;
-  if(res.ok){if(op==='chat-send'){draft='';ta.value=''}
-   if(op==='start'&&res.data&&res.data.run){location.hash='#runs/'+res.data.run.id;if(onChange)onChange();return} // the run's own page: live feed, Stop, and the second yes for Opus
+  if(res.ok){if(op==='chat-send'||op==='chat-new'){draft='';ta.value='';kept.set('')}
+   if((op==='start'||op==='quick')&&res.data&&res.data.run){location.hash='#runs/'+res.data.run.id;if(onChange)onChange();return} // the run's own page: live feed, Stop, and the second yes for Opus
+   if(op==='job-start'){location.hash='#tools';if(onChange)onChange();return} // the Tools page shows the job working and its result
+   if(op==='hub-restart'){note.textContent='The hub is restarting. This page carries on by itself in a few seconds.';note.hidden=false;setTimeout(()=>{if(alive){note.hidden=true;load(true)}},6000);return}
    await load(true);if(onChange)onChange();return}
   note.textContent=errorText(res);note.hidden=false}
  const send=()=>{if(!draft.trim()){note.textContent='Write a message first.';note.hidden=false;ta.focus();return}return act('chat-send',{text:draft.trim()})};
@@ -50,14 +54,25 @@ export function mountChat(view,{onChange}={}){
   for(const m of d.messages){
    const meta=metaOf(m);
    list.append(h('div',{class:'cmsg c-'+m.role+(m.error?' bad':'')},h('div',{class:'chead'},h('b',{},MESSAGE_LABEL[m.role]||m.role),h('span',{class:'small dim'},[agoText(m.at),meta].filter(Boolean).join(' · '))),
-    h('pre',{class:'mtext'},m.role==='master'?withoutActions(m.text)||m.text:m.text),
+    h('pre',{class:'mtext'},m.role==='master'?withoutRecords(withoutActions(m.text))||m.text:m.text),
+    m.records&&m.records.length?h('div',{class:'cacts','aria-label':'Recorded by the hub from the master\'s reply'},m.records.map(r=>{const gone=undone.has(r.id);return h('div',{class:'cact'},h('span',{class:'small'},gone?r.text+' · undone':r.text),h('button',{class:'btn',type:'button',disabled:gone,onclick:()=>undoRecord(r.id)},'Undo'))})):null,
+    m.recordErrors&&m.recordErrors.length?h('div',{},m.recordErrors.map(t=>h('p',{class:'small warn'},'Not recorded: '+t))):null,
+    m.notUnderstood&&m.notUnderstood.length?h('div',{},m.notUnderstood.map(t=>h('p',{class:'small warn'},'Not understood: '+t))):null,
     m.actions&&m.actions.length?h('div',{class:'cacts','aria-label':'Proposed by the master: nothing happens until you click'},h('span',{class:'label'},'Proposed · your click decides'),m.actions.map(a=>{const s=chatActionState(a,ctx);
-     return h('div',{class:'cact'},h('button',{class:'btn'+(s.primary?' pri':''),type:'button',disabled:!s.enabled,onclick:()=>{const c=chatActionCall(a,ctx);if(c)act(c.op,c.args)}},s.label),s.why?h('span',{class:'small dim'},s.why):null)})):null,
+     return h('div',{class:'cact'},h('button',{class:'btn'+(s.primary?' pri':''),type:'button',disabled:!s.enabled,onclick:()=>{const c=chatActionCall(a,ctx);if(!c)return;
+       if(c.nav){if(a.op==='commit'&&m.commitMessage)draftStore('hub.commit.suggested').set(m.commitMessage);location.hash=c.nav;if(onChange)onChange();return} // opens the Commit page only; the master's message waits in the box there
+       act(c.op,c.args)}},s.label),s.why?h('span',{class:'small dim'},s.why):null)})):null,
     m.plan?h('a',{class:'chip-plan',href:'#plans/'+m.plan.id},`${m.plan.action==='noop'?'Already filed':'Filed as plan'}: ${m.plan.title} · revision ${m.plan.revision} · read it`):null,
     m.planError?h('p',{class:'small warn'},'The plan could not be filed: '+m.planError):null))}
   if(d.working)list.append(h('div',{class:'cmsg c-working'},h('span',{class:'small dim'},'The master is reading and thinking…')));
   if(stick)list.scrollTop=list.scrollHeight}
 
+ // Undo on a "Recorded" line: the same route as the Assets page; a 409 (the row changed since) is shown as the hub words it
+ async function undoRecord(id){
+  if(busy)return;busy=true;note.hidden=true;
+  const res=await recordsCall('undo',{id});busy=false;if(!alive)return;
+  if(!res.ok){note.textContent=errorText(res);note.hidden=false}
+  await load(true);if(onChange)onChange()}
  async function load(force){
   clearTimeout(timer);
   const d=await getJson('/api/chat');if(!alive)return;
@@ -68,8 +83,9 @@ export function mountChat(view,{onChange}={}){
    composer.hidden=false;
    // R7c: buttons proposed by the master need the plans and runs as they are now (a stale proposal is drawn switched off)
    const acts=d.messages.flatMap(m=>m.actions||[]);
-   if(acts.length){const [p,r]=await Promise.all([getJson('/api/plans'),getJson('/api/runs')]);if(!alive)return;ctx={plans:p&&p.plans||[],runs:r&&r.runs||[],ready:r&&r.ready||[]}}
-   const s=[d.model,d.working,d.tokens,d.pending&&d.pending.model,d.messages.length&&d.messages[d.messages.length-1].id,JSON.stringify(acts.map(a=>chatActionState(a,ctx)))].join('|');
+   if(acts.length){const [p,r,j,g]=await Promise.all([getJson('/api/plans'),getJson('/api/runs'),getJson('/api/jobs'),acts.some(a=>a.op==='commit'||a.op==='push')?getJson('/api/commit/summary'):null]);if(!alive)return;ctx={plans:p&&p.plans||[],runs:r&&r.runs||[],ready:r&&r.ready||[],jobs:j,git:g}}
+   if(d.messages.some(m=>m.records&&m.records.length)){const a=await getJson('/api/assets/summary');if(!alive)return;undone=new Set(a&&Array.isArray(a.records)?a.records.filter(r=>r.undone).map(r=>r.id):[])}
+   const s=[d.model,d.working,d.tokens,d.pending&&d.pending.model,d.messages.length&&d.messages[d.messages.length-1].id,JSON.stringify(acts.map(a=>chatActionState(a,ctx))),[...undone].join(',')].join('|');
    if(force||s!==sig){sig=s;drawTop(d);drawList(d)}
    sendBtn.disabled=d.working;stopBtn.hidden=!d.working;ta.disabled=false}
   if(!alive)return;

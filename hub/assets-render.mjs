@@ -1,3 +1,5 @@
+// P3c: asset pictures
+
 // Mikkadr Hub, P3c step 3: draws one 256 px picture per asset into .hub/previews/<key>.png, with the method of scripts/render-vehicle-pictures.mjs:
 // headless Edge (software WebGL) opens hub/studio.html from the local asset server and the PNG of each asset comes back to this script, which writes it.
 // A picture's key is a content hash (see previewKey in assets.js), so only new or changed assets are drawn. `.hub/previews/manifest.json` records, per asset id, its key,
