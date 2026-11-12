@@ -7,7 +7,7 @@ import {terrain,SURFACE,roadCenterline} from './terrain.js';
 import {lampSpots} from './streetfurniture.js';
 import {markingBars,townSpots,FOUNTAIN,BUS_STOP} from './town.js';
 import {propInfo,createProp} from './props.js';
-import {createEastbank} from './eastbank.js';
+import {createEastbank} from './eastbank.js';import {createSceneOverlay} from './scene-overlay.js';
 
 // ─── Layout (pure data, safe to import from rules and tests) ──────────────────
 // The city keeps its original footprint. Oak Farms lies west of it, Alder Woods east.
@@ -436,7 +436,7 @@ export function createWorld(scene,{label,cullRadius}={}){
   poles.name='street-lamp-poles';heads.name='street-lamp-heads';poles.castShadow=true;group.add(poles,heads);
 }
  // Eastbank Works (0.33): the merged paving, painted bays and the per-yard prop chunks (eastbank.js); the buildings are landmarks above.
- const eastbank=createEastbank({group,fade,groundLayer,asphalt,colliders});
+ const eastbank=createEastbank({group,fade,groundLayer,asphalt,colliders});createSceneOverlay({parent:group,fade,heightAt,colliders}); // scene editor overlay (scene-overlay.js): empty in the shipped game; the editor reaches it as group.userData.sceneOverlay
  // ── The town (0.31): raised pavements and the town square, the parking lot, painted markings, street furniture, the fountain and the bus stop ──────────────────────────────
  {
   const T=terrain(),m4=new THREE.Matrix4(),quat=new THREE.Quaternion(),yAxis=new THREE.Vector3(0,1,0),at=new THREE.Vector3(),one=new THREE.Vector3(1,1,1),flat=new THREE.Vector3();

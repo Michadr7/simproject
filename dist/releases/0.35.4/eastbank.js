@@ -7,6 +7,8 @@ import * as THREE from './vendor/three.module.js';
 import {MAP,CANOPY_COLUMNS,CANOPY_MODEL_X,CANOPY_COLUMN_X} from './map-definition.js';
 import {heightAt} from './height.js';
 import {propInfo,propGeometry,createPropInstances} from './props.js';
+import {editedYardItems} from './scene-edit.js';
+import {SCENE_EDITS} from './scene-edits.js';
 
 const quads=(rects,y)=>{const position=[],index=[];
  for(const r of rects){const n=position.length/3;position.push(r.x0,y,r.z0,r.x0,y,r.z1,r.x1,y,r.z0,r.x1,y,r.z1);index.push(n,n+1,n+2,n+1,n+3,n+2)} // counter-clockwise seen from above: the normal is +y
@@ -47,7 +49,8 @@ export function createEastbank({group,fade,groundLayer,asphalt,colliders}){
  const canopies=[]; // the forecourt roof(s): hidden while the player stands under one (the roof would block the view into the station)
  const chunks=MAP.yards.map(yard=>{
   const holder=new THREE.Group();holder.name='yard-'+yard.id;root.add(holder);
-  const byModel=new Map();for(const it of yard.items){if(!byModel.has(it.prop))byModel.set(it.prop,[]);byModel.get(it.prop).push(it)}
+  const yardItems=editedYardItems(yard,SCENE_EDITS); // the scene editor's moves and removals (scene-edit.js); the shipped overlay is empty, so this is yard.items itself
+  const byModel=new Map();for(const it of yardItems){if(!byModel.has(it.prop))byModel.set(it.prop,[]);byModel.get(it.prop).push(it)}
   const meshes=[];let triangles=0;
   for(const [prop,items] of byModel){
    const info=propInfo(prop),spots=items.map(it=>({x:it.x,z:it.z,y:heightAt(it.x,it.z)+(it.y||0),yaw:it.yaw})),keep=NO_FADE.has(prop)?{apply:m=>m}:fade;
@@ -58,7 +61,7 @@ export function createEastbank({group,fade,groundLayer,asphalt,colliders}){
     if(prop==='prop.forecourt-canopy'){const c=Math.round(Math.cos(it.yaw)),s=Math.round(Math.sin(it.yaw));for(const [dx,dz] of CANOPY_COLUMNS)colliders.box(it.x+dx*c+dz*s,it.z-dx*s+dz*c,.4,.4); continue} // a roof on four columns: the columns block, the space under the roof does not (the converted canopy has no box)
     const cos=Math.round(Math.cos(it.yaw)),sin=Math.round(Math.sin(it.yaw)),turned=sin!==0;
     for(const b of info.colliders)colliders.box(it.x+b.x*cos+b.z*sin,it.z-b.x*sin+b.z*cos,turned?b.hz:b.hx,turned?b.hx:b.hz)}}
-  return {id:yard.id,holder,bounds:yard.bounds,cull:yard.cull,meshes,instances:yard.items.length,triangles};
+  return {id:yard.id,holder,bounds:yard.bounds,cull:yard.cull,meshes,instances:yardItems.length,triangles};
  });
  return {
   root,chunks,paving,

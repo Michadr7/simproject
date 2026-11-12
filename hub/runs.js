@@ -11,6 +11,7 @@ import {latestRevision,hashText,answerPlan} from './plans.js';
 import {startCheck,parseRunBlock,quickFix,capTokens as capFor,PLACEHOLDER_RATE} from './runplan.js';
 import {canStart,evaluate,loadReadings,appendReading,learnRate} from './watcher.js';
 import {buildArgs,firstPrompt,runTurn,killTree,isAlive} from './runner.js';
+import {replyCache,lifeOf} from './cache-store.mjs';
 import {newRunId,saveRun,readRun,listRuns,appendFeed,readFeed,acquireLock,releaseLock} from './run-store.mjs';
 
 export const CONFIRM_MS=120000; // the Opus second yes must come within 2 minutes
@@ -29,11 +30,12 @@ export const processName=pid=>new Promise(res=>{
 
 export const QUICK_NOTE='Quick fix: approved and started with one press.';
 // onEnd(run view): called after every turn's end is saved (Hub v2 V2: the hub rebuilds the index after a run finishes). It can never change the run.
-export function createRuns({root,claude=null,now=Date.now,extraEnv={},runTurnFn=runTurn,kill=killTree,nameOf=processName,confirmMs=CONFIRM_MS,saveEveryMs=1000,busy=()=>false,onEnd=()=>{}}){
+export function createRuns({root,claude=null,now=Date.now,extraEnv={},runTurnFn=runTurn,kill=killTree,nameOf=processName,confirmMs=CONFIRM_MS,saveEveryMs=1000,busy=()=>false,onEnd=()=>{},logTotal=()=>null}){
  const token=randomBytes(24).toString('hex'),usageFile=path.join(root,'.hub','usage.jsonl'),plansDir=path.join(root,'plans');
  let active=null; // {runId, handle}: a turn process is running
  const checkToken=t=>{if(typeof t!=='string'||t.length!==token.length)return false;try{return timingSafeEqual(Buffer.from(t),Buffer.from(token))}catch{return false}};
 
+ const withTotal=r=>{let t=null;try{t=logTotal()}catch{}return Number.isFinite(t)?{...r,tokensTotal:t}:r}; // the token total in the logs when the reading arrives, so learnRate has pairs to use
  const gauges=()=>{const readings=loadReadings(usageFile);return {state:evaluate(readings,{now:now()}),rate:learnRate(readings)?.rate??null}};
  const save=run=>{run.updatedAt=now();saveRun(root,run)};
  // A confirmation that was not given in time is dropped: a start goes to closed, an extension goes back to capped.
@@ -42,7 +44,7 @@ export function createRuns({root,claude=null,now=Date.now,extraEnv={},runTurnFn=
  const all=()=>listRuns(root).map(expire);
  // holding: a run that keeps the one slot (a turn is running, it waits for your answer, or it waits for the second yes).
  const holding=exceptId=>all().find(r=>r.id!==exceptId&&(r.status==='running'||r.status==='waiting-answer'||r.status==='confirming'))||null;
- const view=r=>r&&{id:r.id,planId:r.planId,planTitle:r.planTitle,revision:r.revision,model:r.model,size:r.size,capTokens:r.capTokens,tokens:r.tokens,capPct:Math.round(r.tokens/r.capTokens*1000)/10,status:r.status,reason:r.reason,turn:r.turn,needs:r.needs,files:r.files,flagged:r.flagged,question:r.question,resultText:r.resultText,pending:r.pending,confirmUntil:r.confirmUntil,createdAt:r.createdAt,updatedAt:r.updatedAt};
+ const view=r=>r&&{id:r.id,planId:r.planId,planTitle:r.planTitle,revision:r.revision,model:r.model,size:r.size,capTokens:r.capTokens,tokens:r.tokens,capPct:Math.round(r.tokens/r.capTokens*1000)/10,status:r.status,reason:r.reason,turn:r.turn,needs:r.needs,files:r.files,flagged:r.flagged,question:r.question,resultText:r.resultText,pending:r.pending,confirmUntil:r.confirmUntil,createdAt:r.createdAt,updatedAt:r.updatedAt,cache:r.cache||null,life:r.cache?lifeOf(root):null};
 
  // An approval stamped while any run's process was working cannot be trusted: a run has write tools in this folder.
  const approvalVoided=at=>all().some(r=>r.turns.some(t=>at>=t.startedAt&&(t.endedAt==null||at<=t.endedAt)));
@@ -92,7 +94,8 @@ export function createRuns({root,claude=null,now=Date.now,extraEnv={},runTurnFn=
   for(const f of out.files||[])if(!run.files.includes(f)&&run.files.length<300)run.files.push(f);
   for(const p of out.paths||[])if(!run.paths.includes(p)&&run.paths.length<300)run.paths.push(p);
   run.flagged=flaggedPaths(run.paths);
-  const rd=(out.readings||[]).at(-1);if(rd){try{appendReading(usageFile,{at:now(),source:'run',...rd})}catch{}}
+  run.cache=replyCache(root,run.cache,run.model,out,turn.startedAt,now());
+  const rd=(out.readings||[]).at(-1);if(rd){try{appendReading(usageFile,withTotal({at:now(),source:'run',...rd}))}catch{}}
   switch(out.end){
    case 'result':if(out.result?.isError){run.status='failed';run.reason='The run reported an error.'}else{run.status='done';run.resultText=out.result?.text||''}break;
    case 'question':run.status='waiting-answer';run.question={id:run.turn,text:out.question||'',at:now()};break;

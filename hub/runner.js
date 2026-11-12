@@ -10,6 +10,7 @@ import {spawn,execFile} from 'node:child_process';
 import {parseRunOutput,evaluate,shouldStop,DEFAULTS} from './watcher.js';
 import {cleanEnv} from './probe.js';
 import {NEEDS,PLACEHOLDER_RATE} from './runplan.js';
+import {usageOf} from './web/cache.js';
 
 export const MODEL_IDS={haiku:'claude-haiku-5-5',sonnet:'claude-sonnet-5-5',opus:'claude-opus-5-5',fable:'claude-fable-5-2'};
 export const READ_TOOLS=['Read','Grep','Glob'],RUN_TOOLS=[...READ_TOOLS,'Edit','Write'];
@@ -52,6 +53,8 @@ export function relPath(p,cwd){
  let s=String(p??'').replace(/\\/g,'/');
  if(cwd){const c=String(cwd).replace(/\\/g,'/').replace(/\/+$/,'');if(s.toLowerCase().startsWith(c.toLowerCase()+'/'))s=s.slice(c.length+1)}
  return s.split('/').filter(x=>x&&x!=='.'&&x!=='..').map(x=>x.replace(/[^\w.\- ]/g,'').slice(0,60)).filter(Boolean).slice(-8).join('/')}
+// The context window of the model, when the run's summary carries one (modelUsage.<model>.contextWindow); otherwise null. Never guessed.
+export const windowOf=e=>{const m=e&&e.modelUsage&&typeof e.modelUsage==='object'?Object.values(e.modelUsage):[];const w=m.map(x=>x&&x.contextWindow).find(Number.isFinite);return w>0?w:null};
 const billable=u=>(u.input_tokens||0)+(u.output_tokens||0)+(u.cache_creation_input_tokens||0); // as the watcher counts: cache reads are not in it
 export function createCapTracker({cap,warnAt=0.8}){
  let total=0,warned=false;const seen=new Set();
@@ -62,7 +65,7 @@ export function createCapTracker({cap,warnAt=0.8}){
    return {counted:true,total,capped:total>=cap,warn}}}}
 
 export function createReducer({tools=[],cwd=null,maxText=MAX_TEXT}={}){
- const allowed=new Set(tools);let session=null,question=null,result=null,violation=null;const files=new Set(),paths=new Set(),readings=[];
+ const allowed=new Set(tools);let session=null,question=null,result=null,violation=null,window=null;const files=new Set(),paths=new Set(),readings=[];
  function toolEvent(b){
   const n=String(b.name||'?').slice(0,30),i=b.input||{};
   if(n==='Read')return {kind:'tool',tool:n,target:safeName(i.file_path)};
@@ -82,9 +85,9 @@ export function createReducer({tools=[],cwd=null,maxText=MAX_TEXT}={}){
     for(const b of blocks){if(b.type==='tool_use')out.push(toolEvent(b));
      else if(b.type==='text'&&typeof b.text==='string'){const m=/^QUESTION:[ \t]*([\s\S]*)$/m.exec(b.text);if(m){question=m[0].slice(0,maxText);out.push({kind:'question'})}}}
     return {events:out,usage:e.message.usage?{id:e.message.id??null,usage:e.message.usage}:null}}
-   else if(e.type==='result'){const p=parseRunOutput(line).result;result={isError:!!e.is_error,costUsd:e.total_cost_usd??null,text:typeof e.result==='string'?e.result.slice(0,maxText):''};out.push({kind:'result',isError:result.isError,turns:p?.turns??null})}
+   else if(e.type==='result'){const p=parseRunOutput(line).result;window=windowOf(e);result={isError:!!e.is_error,costUsd:e.total_cost_usd??null,text:typeof e.result==='string'?e.result.slice(0,maxText):''};out.push({kind:'result',isError:result.isError,turns:p?.turns??null})}
    return {events:out,usage:null}},
-  get session(){return session},get question(){return question},get result(){return result},get violation(){return violation},
+  get session(){return session},get question(){return question},get result(){return result},get window(){return window},get violation(){return violation},
   get files(){return [...files]},get paths(){return [...paths]},get readings(){return readings}}}
 
 // ── Killing a whole process tree. child.kill() on Windows leaves npm and node children running, so use taskkill /T /F; async, because a sync call would freeze the hub's event loop.
@@ -105,13 +108,13 @@ export function runTurn({claude,args,prompt,cwd,cap,state,rate=null,extraEnv={},
  const child=spawnFn(claude.path,[...(claude.prefix||[]),...args],{cwd,env:{...cleanEnv(),...extraEnv},stdio:['pipe','pipe','pipe'],windowsHide:true});
  if(lowPriority&&child.pid){try{os.setPriority(child.pid,os.constants.priority.PRIORITY_BELOW_NORMAL)}catch{}}
  const reducer=createReducer({tools:toolsOf(args),cwd,maxText}),tracker=createCapTracker({cap});
- let gaugeState=state,baseTokens=0,killReason=null,killing=null,buf='',err='';
+ let firstU=null,lastU=null,gaugeState=state,baseTokens=0,killReason=null,killing=null,buf='',err='';
  const stop=(reason='stopped')=>{if(!killing){killReason=reason;killing=kill(child.pid)}return killing};
  const emit=ev=>{onEvent({at:now(),...ev})};
  const handle=line=>{
   const {events,usage}=reducer.take(line);for(const ev of events)emit(ev);
   const rd=reducer.readings;if(events.some(x=>x.kind==='gauges')&&rd.length){gaugeState=evaluate([{at:now(),...rd[rd.length-1]}],{now:now(),config:state?.config||DEFAULTS});baseTokens=tracker.total}
-  if(usage){const r=tracker.add(usage.id,usage.usage);if(r.counted){emit({kind:'tokens',total:r.total,capPct:tracker.pct});
+  if(usage){const r=tracker.add(usage.id,usage.usage);if(r.counted){const uu={...usageOf(usage.usage),at:now()};firstU=firstU||uu;lastU=uu;emit({kind:'tokens',total:r.total,capPct:tracker.pct,last:usageOf(usage.usage)});
    if(r.warn)emit({kind:'cap-warning',capPct:tracker.pct});
    if(r.capped){emit({kind:'cap-stop',capPct:tracker.pct});stop('capped')}
    else if(gaugeState){const g=shouldStop(gaugeState,{tokensSince:r.total-baseTokens,rate:rate??PLACEHOLDER_RATE});if(g.stop){emit({kind:'gauge-stop',stopKind:g.kind});stop(g.kind==='pause'?'pause':'gauge-stop')}}}}
@@ -124,7 +127,7 @@ export function runTurn({claude,args,prompt,cwd,cap,state,rate=null,extraEnv={},
   const finish=code=>{if(finished)return;finished=true;clearTimeout(grace);if(buf.trim()){try{handle(buf.replace(/\r$/,''))}catch{}}
    let end=killReason;
    if(!end)end=code!==0?'crashed':reducer.question?'question':reducer.result?'result':'crashed';
-   resolve({end,exitCode:code,tokens:tracker.total,capPct:tracker.pct,question:reducer.question,result:reducer.result,session:reducer.session,files:reducer.files,paths:reducer.paths,readings:reducer.readings,violation:reducer.violation,stderr:err.replace(/\s+/g,' ').trim()})};
+   resolve({end,exitCode:code,tokens:tracker.total,capPct:tracker.pct,question:reducer.question,result:reducer.result,window:reducer.window,first:firstU,last:lastU,session:reducer.session,files:reducer.files,paths:reducer.paths,readings:reducer.readings,violation:reducer.violation,stderr:err.replace(/\s+/g,' ').trim()})};
   let grace=null;
   child.on('error',e=>{err=String(e.message).slice(0,200);finish(-1)});
   child.on('close',code=>finish(code??-1));

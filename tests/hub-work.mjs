@@ -115,11 +115,11 @@ const feedWords=JSON.stringify(['started','turn','tool','tokens','gauges','quest
 assert.ok(!/turn total|fresh reading|gauges|the cap\b|weekly guard/i.test(feedWords),'no jargon in a feed line: '+feedWords);
 
 // ── the layout rule and the page files
-const css=fs.readFileSync(path.join(REPO,'hub','web','hub.css'),'utf8'),wideCss=css.slice(css.indexOf('@media(min-width:1100px)'));
-assert.ok(css.includes('@media(min-width:1100px)'));assert.match(wideCss,/\.view\{max-width:560px\}|,\.view\{max-width:560px\}/,'content is at most 560 px wide on a wide window');
-assert.match(wideCss,/\.view>\*[^{]*\{max-width:100%\}/,'no card may be wider than the column');assert.match(wideCss,/\.menutab\{visibility:hidden\}/,'the tree does not fold on a wide window');
+const css=fs.readFileSync(path.join(REPO,'hub','web','hub.css'),'utf8');
+assert.match(css,/\.wrap\{max-width:1280px/,'content is centred, at most 1280 px wide');assert.match(css,/@container page \(min-width:900px\)/,'two panes from 900 px of page width');assert.match(css,/@media\(min-width:1100px\)\{\.menutab\{visibility:hidden\}\}/,'the menu does not fold on a wide window');assert.ok(!/\.view\{max-width:560px\}/.test(css),'the old narrow column is gone');
 assert.match(css,/--panelw:236px/);
 for(const f of ['work.js','app.js']){const code=fs.readFileSync(path.join(REPO,'hub','web',f),'utf8');assert.ok(!/innerHTML|outerHTML|insertAdjacentHTML|document\.write|eval\(/.test(code),f+' sets text only');assert.ok(!/https?:\/\//.test(code),f+' loads nothing from outside')}
+{const {statusLine,groupOf}=await import('../hub/web/work.js');assert.equal(statusLine({projects:[{items:[{}],steps:[{needsYou:true,status:'waiting'},{status:'working'},{status:'blocked'},{status:'done'},{status:'done'}]}]}),'2 need you · 1 working · 1 waiting · 2 done','the status line counts every group');assert.equal(groupOf({status:'blocked'}),'wait');assert.equal(groupOf({needsYou:true,status:'approved'}),'you')}
 const workJs=fs.readFileSync(path.join(REPO,'hub','web','work.js'),'utf8');
 assert.equal((workJs.match(/method:'POST'/g)||[]).length,1,'the Work page has one write of its own (Add or Hide a found plan file); every run and plan button goes through runs.js and plans.js');
 assert.ok(workJs.includes("mountRuns(")&&workJs.includes("mountPlans(")&&workJs.includes("mountHome("),'the old buttons are reused, not rebuilt');

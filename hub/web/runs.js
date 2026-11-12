@@ -2,6 +2,7 @@
 // A run card has: the live feed (names and counts only), the side box (model, plan, folder, files), the cap bar, and the buttons for its status (Stop, the Opus second yes, Resume, Continue with more, Close).
 // A run's question and result are the model's own words: they are set with textContent in a pre-wrap box, so they are text and never markup (the server caps them at 8 KB).
 // Polls GET /api/runs every 2 s while a run works (10 s otherwise) and the feed after the last line it has. The page is rebuilt only when something that changes its shape changes, so a half-written answer stays.
+import {mountCacheStrip} from './cache-strip.js';
 import {actionsFor,feedRow,capClass,secondsLeft,fmt,modelName,STATUS_LABEL,startModels,draftStore} from './run-actions.js';
 import {runCall,errorText} from './runs-api.js';
 import {agoText} from './plans.js';
@@ -29,7 +30,8 @@ export function mountRuns(view,{id,onChange,embedded=false,readyFor=null}={}){
  // ── the run card
  function card(run,list){
   const pct=run.capPct,note=h('p',{class:'msg err',role:'alert',hidden:true});
-  ui={run,empty:h('div',{class:'n'},'Nothing yet.'),feed:h('div',{class:'feed',role:'log','aria-label':'Live feed'}),capFill:h('i'),capText:h('div',{class:'small dim'}),files:h('span'),tokens:h('span'),count:h('span'),countdown:h('p',{class:'small dim'})};
+  ui={run,empty:h('div',{class:'n'},'Nothing yet.'),feed:h('div',{class:'feed',role:'log','aria-label':'Live feed'}),capFill:h('i'),capText:h('div',{class:'small dim'}),files:h('span'),tokens:h('span'),count:h('span'),countdown:h('p',{class:'small dim'}),cacheBox:h('div',{})};
+  ui.cachePaint=mountCacheStrip(ui.cacheBox);
   ui.feed.append(ui.empty);
   const left=h('div',{class:'feedwrap'},h('div',{class:'label'},'What it is doing · names and counts only'),ui.feed);
   const kv=h('div',{class:'kv'},h('span',{},'Model'),h('span',{},modelName(run.model)),h('span',{},'Plan'),h('a',{href:'#plans/'+run.planId},`${run.planTitle} · revision ${run.revision}`),
@@ -40,7 +42,7 @@ export function mountRuns(view,{id,onChange,embedded=false,readyFor=null}={}){
    return btn(a,run,note)}));
   const side=h('div',{class:'side'},h('div',{class:'box'},kv),
    h('div',{class:'box'},h('div',{class:'label'},'Token allowance'),h('div',{class:'capbar'},ui.capFill),ui.capText),
-   ui.countdown,buttons,note);
+   ui.cacheBox,ui.countdown,buttons,note);
   const parts=[embedded?null:h('div',{class:'rhead'},h('h2',{class:'plan-name'},run.planTitle),h('span',{class:'pill rs-'+run.status},STATUS_LABEL[run.status]||run.status)),
    h('div',{class:'rgrid'},left,side)];
   if(run.reason&&run.status!=='running')parts.push(h('p',{class:'msg'},run.reason));
@@ -69,6 +71,7 @@ export function mountRuns(view,{id,onChange,embedded=false,readyFor=null}={}){
   for(const f of run.files)ui.touched.add(f);showFiles();
   ui.capFill.style.width=Math.min(100,run.capPct)+'%';ui.capFill.parentElement.dataset.state=capClass(run.capPct);
   ui.capText.textContent=`${fmt(run.tokens)} of ${fmt(run.capTokens)} tokens · ${run.capPct}%${run.status==='running'?' · stops itself at 100%':''}`;
+  ui.cachePaint(run);
   const s=secondsLeft(run);ui.countdown.textContent=run.status==='confirming'?`Press the yes button within ${s} s, or this is dropped.`:'';ui.countdown.hidden=run.status!=='confirming'}
  async function pullFeed(run){
   if(!ui||ui.run.id!==run.id)return;

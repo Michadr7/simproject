@@ -34,6 +34,7 @@ export function callFor(op,a={}){
  if(op==='job-start')return a.job?{url:'/api/jobs/start',body:{job:a.job}}:null;
  if(op==='job-stop')return a.id?{url:'/api/jobs/stop',body:{id:a.id}}:null;
  if(op==='hub-restart')return {url:'/api/hub/restart',body:{}};
+ if(op==='probe')return {url:'/api/probe',body:{}};
  if(op==='quick')return a.plan?{url:`/api/plans/${a.plan}/quick`,body:{revision:a.revision}}:null;
  // Hub v2 V3: the Commit page's own buttons (commit, undo, push are three separate presses)
  if(op==='commit-do')return Array.isArray(a.files)&&typeof a.message==='string'&&a.hash?{url:'/api/commit',body:{files:a.files,message:a.message,hash:a.hash}}:null;

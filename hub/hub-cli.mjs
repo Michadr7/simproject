@@ -30,15 +30,15 @@ let runs=null,chat=null,jobs=null,commits=null,restart=null,claudePath=null;
 // Hub v2 V4: asset records (the Assets page and the master's RECORD: lines). No model call; works with or without --runs.
 const {createRecords}=await import('./records-store.mjs'),records=createRecords({root:ROOT});
 if(args.includes('--runs')){
- const {findClaude}=await import('./probe.js'),{createRuns,processName}=await import('./runs.js'),{createChat}=await import('./chat.js'),{createJobs}=await import('./job-runner.mjs');
+ const {findClaude,runProbe}=await import('./probe.js'),{createRuns,processName}=await import('./runs.js'),{createChat}=await import('./chat.js'),{createJobs}=await import('./job-runner.mjs'),{logTotal}=await import('./tokens-page.mjs');
  const {createGit}=await import('./git.mjs'),{createCommits}=await import('./commit-ctl.mjs');
  claudePath=findClaude();
  const claude=claudePath?{path:claudePath}:null;
  const {statusText}=await import('./status.js');
  jobs=createJobs({root:ROOT,busy:()=>runs.locked()||chat.working(),nameOf:processName});
- chat=createChat({root:ROOT,claude,records,contextFn:()=>statusText({root:ROOT,runs,chat,jobs,commits,records})});
+ chat=createChat({root:ROOT,claude,records,logTotal:()=>logTotal(),contextFn:()=>statusText({root:ROOT,runs,chat,jobs,commits,records})});
  // after a run finishes, the hub rebuilds the brief and the index by itself (a script, no tokens)
- runs=createRuns({root:ROOT,claude,busy:()=>chat.working()||jobs.active(),onEnd:r=>{if(r.status==='done')jobs.start('index',{auto:true})}});
+ runs=createRuns({root:ROOT,claude,logTotal:()=>logTotal(),busy:()=>chat.working()||jobs.active(),onEnd:r=>{if(r.status==='done')jobs.start('index',{auto:true})}});
  // Hub v2 V3: commit and push, each only on the owner's press (hub/commit-ctl.mjs); GitHub Desktop's git is the only git used
  commits=createCommits({root:ROOT,git:createGit({root:ROOT}),busy:()=>runs.locked()||chat.working()||jobs.active(),runs,jobs});
  // Restart: refused while anything works; otherwise stop what the hub started and exit with the code the supervisor restarts on. Only offered when a supervisor is there to start it again.
@@ -48,7 +48,7 @@ if(args.includes('--runs')){
   if(jobs.active())return {error:'A job is running. Wait for it, or stop it, then restart.'};
   return {go:async()=>{try{await jobs.shutdown();await chat.shutdown();await runs.shutdown()}catch{}process.exit(RESTART_CODE)}}};
 }
-const make=()=>createHubServer({root:ROOT,port:wantPort,runs,chat,jobs,commits,records,restart,startedAt});
+const make=()=>createHubServer({root:ROOT,port:wantPort,runs,chat,jobs,commits,records,restart,startedAt,probeFn:claude?(o=>runProbe({...o,claudePath:claude.path})):null});
 let srv=make(),port;
 try{port=await srv.listen()}catch(e){
  if(e.code!=='EADDRINUSE'){console.error('Could not start: '+e.message);process.exit(1)}
@@ -70,7 +70,8 @@ if(runs){
  if(j)console.log(`  ${j} job${j>1?'s were':' was'} still marked running when the hub last stopped; marked interrupted.`);
 }
 const url=`http://127.0.0.1:${port}/`;
-console.log(`Mikkadr Hub: ${url}  (Ctrl+C to stop)`);
+const {HUB_VERSION}=await import('./web/shell.js');
+console.log(`Mikkadr Hub ${HUB_VERSION}: ${url}  (Ctrl+C to stop)`);
 console.log(`  Assets ${url}assets · 3D viewer ${url}viewer.html · Tokens ${url}tokens`);
 console.log('  The asset and token pages are built by npm run assets and npm run watcher.');
 if(runs){const bye=async()=>{try{await jobs.shutdown();await chat.shutdown();await runs.shutdown()}catch{}process.exit(0)};process.on('SIGINT',bye);process.on('SIGTERM',bye)}

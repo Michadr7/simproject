@@ -1,0 +1,16 @@
+{
+ "id": "2026-11-11-appdata-local-temp-claude-8fae7b33d78fadc6-6c461c1-7",
+ "title": "Hub v2 V7: notes",
+ "from": "claude",
+ "source": "../../../AppData/Local/Temp/claude/8fae7b33d78fadc6/6c461c1e-388f-4733-a362-ae8a7d822053/scratchpad/plans/hub-v2-v7-plan.md",
+ "status": "waiting",
+ "revisions": [
+  {
+   "n": 1,
+   "at": 1794440618340,
+   "hash": "941b1411aeee97fe",
+   "text": "# Hub v2 V7: notes\n\nStep 7 of 7 of Hub v2. Needs V1 to V6 (write only about the steps that were really built; say which were not). Read PROJECT-BRIEF.md first. No model call in any code. No code changes except the notes below.\n\n## Goal\nThe project's notes say what Hub v2 is and how to use it, so the next chat does not have to read the hub's code.\n\n## Build\n1. `context.md`: add one section \"Mikkadr Hub v2\" at the end (do not read the file whole; Grep for the heading \"Mikkadr Hub P5\" and add after that section). Contents: the tree (Chat, Work, Assets; Commit, Tools, Tokens at the foot) and the old hashes that still work; the Work statuses and their meanings; Tools (the job table, the lock, the restart with exit code 75, `--replace`); Commit (forbidden paths, the 409 rule, undo, never pushes); Assets (the six stages, which are hand-set, RECORD: lines, Undo, `.hub/records.jsonl`); the cache strip (where the numbers come from, that the lifetime is learned and may still be \"not sure\"); Tokens (fresh on every visit, `tokensTotal` on readings); the bot scene (scenes, limits). Then a list \"Not verified\" taken from the build results of V1 to V6.\n2. In the same section, the capability list: for each thing the Claude Code chat can do (ask and read, plan, edit files, tests, release, check, index, commit, push, restart the hub, dev server, assets, usage reading, scene edits, other git work, game screenshots, web search, advisor and other agents, deploy and free commands, design pages and memory notes), one line: \"hub: yes, how\" or \"VS Code only, why\". Check each \"yes\" against the code (Grep for the route or the job key) and write \"missing\" where it is not there.\n3. `brief-notes.md`: in the State paragraph and the Commands line, replace the hub wording so it says: Hub v2 (tree, Work, Tools, Commit on the owner's press, never pushes), and the standing rule about commits becomes \"The user commits by hand, in the chat on request, or with the hub's Commit button.\" The brief has a guard of 3,000 tokens and is at about 2,995: replace words, do not add length. Run `npm run index` and make sure `tests/brief.mjs` passes; if it does not, shorten your own new wording until it does.\n4. `README.md`: under the current version, three lines on Hub v2.\n\n## Rules\n- No BOM. Do not edit PROJECT-BRIEF.md or PROJECT-INDEX.md by hand: `npm run index` writes them.\n- Finish with `npm run index`, then `npm test`. Stop with tests passing; report failures honestly. Do not commit.\n\n## Done when\nThe context section, the capability list, the brief and the README are written, the brief is under its guard, and tests pass.\n\n## Run\nmodel: haiku\nwhy: notes only\nsize: S\nneeds: test, index\n"
+  }
+ ],
+ "answers": []
+}

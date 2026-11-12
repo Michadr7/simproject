@@ -111,7 +111,7 @@ export function installDevMode(api){
    make('button',{id:'devInteriorReset',textContent:'Reset to generated',onclick:()=>{ix.reset();selected=null;say('Back to the generated layout (not saved until you press Save).');sync(true)}}),
    make('button',{id:'devInteriorSave',textContent:'Save to code',onclick:async()=>{say('Saving…');const r=await ix.save();say(r.message,r.ok?'':'error')}})));
  const interiorToggle=make('button',{id:'devInteriorToggle',textContent:'Interior editor ▸',onclick:()=>{interiorBody.hidden=!interiorBody.hidden;ix.select(null);interiorToggle.textContent='Interior editor '+(interiorBody.hidden?'▸':'▾');sync(true)}});
- // Unstick
+ const editorButton=make('button',{id:'devOpenEditor',textContent:'Open Editor',title:'Pause the game and edit the scene props',onclick:async()=>{if(!api.editor)return;if(api.editor.on()){say('The editor is already open.');return}const why=api.editor.blocked();if(why){say(why,'error');return}try{const mod=await import('./scene-editor.js'),r=mod.openSceneEditor(api.editor);if(r.ok)close();else say(r.message,'error')}catch(error){say('The editor could not start: '+error.message,'error')}}}); // Scene editor (scene-editor.js): fetched only when this is pressed. Unstick follows.
  const unstick=make('button',{id:'devUnstick',textContent:'Unstick',onclick:()=>{const r=api.unstick();say(r.moved?'Moved to the nearest clear spot.':r.found?'You are already on clear ground.':'No clear ground within 30 m of here.',r.found?'':'error');refresh()}});
  const home=make('button',{id:'devSpawnPoint',textContent:'Back to spawn',onclick:()=>{const r=api.reset();say(r.moved?'Back at the starting point (nearest clear spot).':'Back at the starting point.');refresh()}});
 
@@ -124,7 +124,7 @@ export function installDevMode(api){
   make('h3',{},'Stat drain'),make('div',{className:'dev-row'},drain),make('h3',{},'Spawn items'),make('div',{className:'dev-row'},item,qty,spawn),
   make('h3',{},'Careers'),make('div',{className:'dev-row'},csel,cRun('hire'),cRun('promote'),cRun('quit')),make('p',{className:'dev-note'},'Hire skips the interview at the office (which is not built yet). Promote needs the rank\'s level, shifts and reputation.'),make('h3',{},'Drivable vehicles'),make('div',{className:'dev-row'},vsel,vSpawn,vRemove),make('p',{className:'dev-note'},'Spawn puts the vehicle a few metres in front of you (or the nearest free spot). Remove takes it out of the world; neither works while you are in it.'),
   make('h3',{},'Rendering'),make('div',{className:'dev-row'},shadows,fade),
-  make('h3',{},'Furniture'),interiorToggle,
+  make('h3',{},'Furniture'),interiorToggle,make('h3',{},'Scene'),make('div',{className:'dev-row'},editorButton),make('p',{className:'dev-note'},'Open Editor pauses the game and lets you fly over the map to pick, move, turn and remove props. Close puts you back.'),
   make('h3',{},'Safety'),make('div',{className:'dev-row'},unstick,home),
   message,
   make('p',{className:'dev-note'},'F2 shows or hides this panel. Changes are saved to your normal save.'));
@@ -141,7 +141,7 @@ export function installDevMode(api){
  button.style.flex='1';
  const off=make('button',{id:'menuDevOff',className:'menu-button',textContent:'Turn off',title:'Hide Dev Mode again (press D four times on the menu to bring it back)'});
  const row=make('div',{id:'menuDevRow',className:'menu-row'});row.append(button,off);$('menuHome').append(row);
- window.addEventListener('keydown',e=>{if(entered&&e.code==='F2'){e.preventDefault();toggle()}});
+ window.addEventListener('keydown',e=>{if(entered&&e.code==='F2'&&!api.editor?.on()){e.preventDefault();toggle()}});
  // Hidden until unlocked: press D four times on the main menu (each within 1.5 s of the last; not while typing in a field). Remembered in this browser (UNLOCK_KEY).
  // This only hides the button from casual players: anyone reading the source can find it. Set DEV_MODE=false for a build with no dev mode at all.
  let unlocked=false,presses=0,last=-1e9;try{unlocked=localStorage.getItem(UNLOCK_KEY)==='1'}catch{}

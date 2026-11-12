@@ -219,7 +219,7 @@ const call=(method,url,{body,json=true,origin=ORIGIN,token=runs.token,ct='applic
  const q=http.request({host:'127.0.0.1',port:to,method,path:url,headers:h},x=>{let s='';x.on('data',c=>s+=c);x.on('end',()=>res({status:x.statusCode,body:parseBody(s)}))});q.on('error',rej);q.end(body===undefined?undefined:(json?JSON.stringify(body):body))});
 let t=await call('GET','/api/jobs');assert.equal(t.status,200);assert.equal(t.body.enabled,true);assert.deepEqual(t.body.jobs.map(j=>j.key),Object.keys(table));assert.equal(t.body.jobs.find(j=>j.key==='index').last.auto,true);
 assert.ok(!JSON.stringify(t.body).match(/fx\/|"pid"|hubPid/),'no script path and no pid leaves the hub');
-t=await call('GET','/api/hub-id',{token:null,origin:null});assert.deepEqual(t.body,{hub:HUB_NAME,pid:process.pid,startedAt:1234,canRestart:true});
+t=await call('GET','/api/hub-id',{token:null,origin:null});assert.match(t.body.version,/^2\.\d+(\.\d+)?$/,'hub-id carries the hub version');delete t.body.version;assert.deepEqual(t.body,{hub:HUB_NAME,pid:process.pid,startedAt:1234,canRestart:true});
 // refusals, in the order of the checks
 for(const url of ['/api/jobs/start','/api/jobs/stop','/api/hub/restart',`/api/plans/${q3.id}/quick`]){
  assert.equal((await call('GET',url)).status,405,url+' is not a GET');

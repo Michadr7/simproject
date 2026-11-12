@@ -1,0 +1,23 @@
+{
+ "id": "2026-11-11-appdata-local-temp-claude-8fae7b33d78fadc6-d2bb8a3",
+ "title": "Scene editor E1: edit rules and the overlay file",
+ "from": "claude",
+ "source": "../../../AppData/Local/Temp/claude/8fae7b33d78fadc6/d2bb8a31-fb65-4d26-b949-48463c10a7fa/scratchpad/plans/scene-editor-e1-plan.md",
+ "status": "approved",
+ "revisions": [
+  {
+   "n": 1,
+   "at": 1794430420691,
+   "hash": "99ae6e4d42b43762",
+   "text": "# Scene editor E1: edit rules and the overlay file\n\nStep 1 of 6 of the in-game scene editor. Design page: https://claude.ai/artifact/GZf1vP9iD5ChT2cx2BGD6p. Read PROJECT-BRIEF.md first and follow its standing rules. This step is pure data and rules: nothing is drawn and no existing module changes.\n\n## Goal\nA tested, pure rules module for scene edits, and the (empty) overlay file that the game will later read.\n\n## Build\n1. `dist/scene-edits.js`: `export const SCENE_EDITS={version:1,added:[],moved:{},removed:[]};` with a header comment saying the hub's Accept writes this file and nothing else should.\n   - `added`: `[{id,prop,x,z,yaw}]` (id like `e-0007`, prop is a prop id known to `propInfo`, yaw in radians, y is always the ground).\n   - `moved`: `{<key>:{x,z,yaw}}` for named map props. `removed`: `[<key>]`.\n2. `dist/scene-edit.js` (pure, no THREE, no DOM; importable from Node tests and from the hub):\n   - `emptyEdits()`, `normaliseEdits(raw)` (drops unknown fields, rounds x and z to 0.01 m, yaw to 0.0001, sorts for a stable output).\n   - Transactions, each `(edits, action) -> {ok, edits} | {ok:false, error}`: `place`, `move`, `turn`, `remove`, `copy`. Removing an editor-placed prop deletes it from `added`; removing a named map prop adds its key to `removed`; moving a named map prop writes `moved[key]`.\n   - `snap(value, step)` (default 0.5 m) and `snapYaw(yaw, stepDeg)` (default 15).\n   - `validateEdits(edits, {knownProps, knownKeys, bounds, caps})` returning a list of plain-language errors: unknown prop, unknown key, outside `MAP.playable`, non-finite number, duplicate id, more than `YARD_CAPS.perModel` (32) of one model or `YARD_CAPS.total` (160) in all.\n   - `drawCallCost(edits, modelsAlreadyOnScreen)`: one per distinct added model not already on screen.\n   - `summary(edits, base)`: `{added, moved, removed}` counts between two edit sets (for \"3 added, 2 moved, 1 removed\").\n   - A small history helper: `createHistory()` with `push`, `undo`, `redo`, `canUndo`, `canRedo` (cap 100 entries).\n   - `nextId(edits)` giving the next free `e-NNNN`.\n3. `tests/scene-edit.mjs`: every function above, including each validation error, the caps, undo and redo, and that `normaliseEdits` output is stable (same input order-independent result).\n4. A test that the shipped `SCENE_EDITS` passes `validateEdits` against the real prop list and `MAP.playable`.\n\n## Rules\n- Do not change `map-definition.js`, `world.js` or `town.js` in this step.\n- No BOM in any file. Match the dense one-statement-per-line style of nearby dist modules.\n- After the change run `npm run release -- --force`, then `npm test`. Stop with tests passing and report honestly. If a test fails only because PROJECT-INDEX.md is stale, say so and do not edit generated files.\n- Do not commit.\n\n## Done when\n`tests/scene-edit.mjs` passes, all other tests still pass, and the game behaves exactly as before.\n\n## Run\nmodel: sonnet\nwhy: builds pure rules against tests\nsize: S\nneeds: release, test, check\n"
+  }
+ ],
+ "answers": [
+  {
+   "revision": 1,
+   "at": 1794430722381,
+   "verdict": "approved",
+   "note": "Approved from the chat."
+  }
+ ]
+}

@@ -1,0 +1,16 @@
+{
+ "id": "2026-11-11-appdata-local-temp-claude-8fae7b33d78fadc6-d2bb8a3-6",
+ "title": "Scene editor E6: notes",
+ "from": "claude",
+ "source": "../../../AppData/Local/Temp/claude/8fae7b33d78fadc6/d2bb8a31-fb65-4d26-b949-48463c10a7fa/scratchpad/plans/scene-editor-e6-plan.md",
+ "status": "waiting",
+ "revisions": [
+  {
+   "n": 1,
+   "at": 1794430422316,
+   "hash": "9508d627836c323d",
+   "text": "# Scene editor E6: notes\n\nStep 6 of 6 of the in-game scene editor. Design page: https://claude.ai/artifact/GZf1vP9iD5ChT2cx2BGD6p. Read PROJECT-BRIEF.md first and follow its standing rules. Needs E1 to E5. No code changes in this step.\n\n## Goal\nThe project's notes describe the scene editor, so a fresh chat can use and extend it.\n\n## Build\n1. `context.md`: append a section \"Scene editor (E1 to E5)\". Do not read context.md whole; Grep for the last heading and append after it. Cover: what it does; how to open it (Dev Mode > Open Editor); the keys; the overlay file `dist/scene-edits.js` and that only the hub's Accept writes it; the three scene routes and their origin rule; the Check button; what version 1 does not cover (interiors, generated street furniture and trees, buildings, resizing); what was not verified in a real browser, taken from the E3 to E5 run reports.\n2. `brief-notes.md`: one or two lines in \"State\" and one in \"Where to change things\" (Scene edits: `scene-edit.js`, `scene-overlay.js`, `scene-editor.js`, `hub/scene.js`). The brief has a 3,000-token guard (`tests/brief.mjs`): keep the additions short and trim an older line if needed.\n3. `README.md`: a short entry for the current version.\n4. `DESIGN.md`: a short subsection recording the decisions: overlay file instead of editing the map, hub writes on Accept, free camera with the game paused, both Send to hub and Apply to game.\n5. Run `npm test`. `npm run index` is not available to this run: say in the report that the user or the next chat must run `npm run index` afterwards, and that `tests/brief.mjs` may fail until then.\n\n## Rules\n- No BOM. Do not commit. Do not edit PROJECT-BRIEF.md or PROJECT-INDEX.md by hand (they are generated).\n\n## Done when\nThe four files are updated and the report lists exactly what must be run next.\n\n## Run\nmodel: haiku\nwhy: short note edits\nsize: S\nneeds: test\n"
+  }
+ ],
+ "answers": []
+}

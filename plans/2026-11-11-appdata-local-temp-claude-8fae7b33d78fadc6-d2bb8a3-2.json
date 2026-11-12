@@ -1,0 +1,23 @@
+{
+ "id": "2026-11-11-appdata-local-temp-claude-8fae7b33d78fadc6-d2bb8a3-2",
+ "title": "Scene editor E2: the game draws and collides with the overlay",
+ "from": "claude",
+ "source": "../../../AppData/Local/Temp/claude/8fae7b33d78fadc6/d2bb8a31-fb65-4d26-b949-48463c10a7fa/scratchpad/plans/scene-editor-e2-plan.md",
+ "status": "approved",
+ "revisions": [
+  {
+   "n": 1,
+   "at": 1794430421004,
+   "hash": "8abd82907a2bfec2",
+   "text": "# Scene editor E2: the game draws and collides with the overlay\n\nStep 2 of 6 of the in-game scene editor. Design page: https://claude.ai/artifact/GZf1vP9iD5ChT2cx2BGD6p. Read PROJECT-BRIEF.md first and follow its standing rules. Needs E1 (`dist/scene-edit.js`, `dist/scene-edits.js`) to be built.\n\n## Goal\nWhat `SCENE_EDITS` lists shows up in the game: added props are drawn and solid, named map props can be moved or removed. With the shipped empty overlay the game is unchanged.\n\n## Build\n1. `dist/scene-overlay.js` (new): given the edits, a fade and the ground height function, builds the added props.\n   - Group `added` by model and draw each group with `createPropInstances` (props.js): one draw call per distinct model.\n   - Return the colliders for each spot from `propInfo(id).colliders`, turned by yaw, in the shape the world's collision list already uses.\n   - `rebuild(edits)` so the editor (E3) can swap the drawn set live without reloading: dispose the old instanced meshes, build new ones, replace the overlay's colliders.\n2. Named map props: give each prop that the map lists by name a stable key (for example `eastbank-gas.island` from the station id and its role). Add a pure `applyToNamed(key, spot, edits)` in `dist/scene-edit.js` that returns the moved spot, `null` when removed, or the original. Call it at the places that read those named entries. Start with the entries that are plain `{prop,x,z,yaw}` records; list in your report any named prop you left out and why.\n3. `world.js`: ONE small additive hook that calls the overlay builder and adds its meshes and colliders. No other change to `world.js`; none to `map-definition.js` or `town.js`. Say in the report exactly which lines were added. Use single-line anchors when editing `world.js` and `game.js` (CRLF files) and check each edit landed.\n4. Export a `sceneKeys()` list (every key a named prop answers to, with its prop id and original spot) so the editor and the hub can validate and list them.\n5. Tests: `tests/scene-overlay.mjs` (grouping, collider turning, rebuild disposes and replaces, `applyToNamed` for moved, removed, untouched); a packaged-game test that boots with a non-empty overlay injected and finds the added prop's mesh and collider; and that the empty overlay leaves draw calls and the map hash test unchanged.\n\n## Frame rate\nEach distinct added model is +1 draw call (budget 300). Nothing is added with the empty overlay. Report the draw-call count before and after with a 3-model test overlay.\n\n## Rules\n- No BOM. After the change run `npm run release -- --force`, then `npm test`. Stop with tests passing; report failures honestly. If a test fails only because PROJECT-INDEX.md is stale, say so and do not edit generated files.\n- Do not commit.\n\n## Done when\nA non-empty overlay shows solid props in the game, named props move and disappear as the overlay says, and with the shipped empty overlay every existing test passes untouched.\n\n## Run\nmodel: sonnet\nwhy: builds against tests, small additive world hook\nsize: M\nneeds: release, test, check\n"
+  }
+ ],
+ "answers": [
+  {
+   "revision": 1,
+   "at": 1794435491069,
+   "verdict": "approved",
+   "note": ""
+  }
+ ]
+}

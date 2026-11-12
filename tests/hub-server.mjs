@@ -18,7 +18,7 @@ for(const p of ['/api/plans/../x','/api/plans/UPPER','/api/plans/a/b','/api/wait
 assert.deepEqual(at('/api/plans/found'),{api:'found'});assert.deepEqual(at('/api/waiting'),{api:'waiting'});assert.deepEqual(at('/api/waiting/hide'),{api:'waiting-hide',write:true});assert.deepEqual(at('/api/plans/found/add'),{api:'found-add',write:true});assert.deepEqual(at('/api/plans/found/hide'),{api:'found-hide',write:true});assert.deepEqual(at('/api/plans/2026-11-10-x/answer'),{api:'answer',id:'2026-11-10-x',write:true});
 assert.equal(path.relative(real,at('/').file).split(path.sep).join('/'),'hub/web/index.html');
 assert.equal(path.relative(real,at('/assets').file).split(path.sep).join('/'),'.hub/assets.html');
-assert.equal(path.relative(real,at('/tokens').file).split(path.sep).join('/'),'.hub/watcher.html');
+assert.equal(at('/tokens').api,'tokens','/tokens is built on every visit (since 2.5c)');
 assert.ok(at('/web/app.js').file&&at('/web/hub.css').file&&at('/web/index.html').file);
 for(const p of ['/web/x.json','/web/sub/x.js','/web/../package.json','/web/.env','/plans/ignored.json','/plans/x.json','/hub/plans.js','/.hub/usage.jsonl','/hub/server.js','/package.json','/server.js'])assert.ok(!at(p).file,`${p} is not served`);
 assert.equal(resolveRoute(real,'/api/plans','evil.example:7777',P).status,403,'Host is checked on API routes too');
@@ -37,14 +37,14 @@ sendPlan(plans,{source:'b.md',title:'Beta',from:'claude',text:'# Beta\ntext',now
 const beta=readPlan(plans,'2026-11-10-beta');savePlan(plans,answerPlan(beta,{verdict:'approved',note:'go',revision:1,now:T+2}).plan);
 fs.writeFileSync(path.join(plans,'ignored.json'),'[]');
 
-const srv=createHubServer({root}),port=await srv.listen(),O=`http://127.0.0.1:${port}`;
+const srv=createHubServer({root,logsDir:path.join(root,'no-logs')}),port=await srv.listen(),O=`http://127.0.0.1:${port}`;
 const call=(method,url,headers={},body)=>new Promise((res,rej)=>{const r=http.request({host:'127.0.0.1',port,method,path:url,headers:Object.fromEntries(Object.entries(headers).filter(([,v])=>v!==undefined))},x=>{let s='';x.on('data',c=>s+=c);x.on('end',()=>res({status:x.statusCode,type:x.headers['content-type'],body:s,headers:x.headers}))});r.on('error',rej);r.end(body)});
 try{
  assert.equal(srv.server.address().address,'127.0.0.1','bound to loopback only');
  // pages
  const home=await call('GET','/');assert.equal(home.status,200);assert.match(home.type,/text\/html/);assert.equal(home.headers['x-content-type-options'],'nosniff');assert.equal(home.headers['cache-control'],'no-store');
  assert.equal((await call('GET','/assets')).body,'<p>assets</p>');
- assert.equal((await call('GET','/tokens')).status,404,'a page that has not been built is 404');
+ {const tk=await call('GET','/tokens');assert.equal(tk.status,200,'built fresh, with or without a stored page');assert.match(tk.type,/text\/html/);assert.match(tk.body,/Tokens so far/);assert.match(tk.body,/Not known yet/,'the learned rate says why it is not known');assert.ok(!/<script/i.test(tk.body),'still no scripts')}
  assert.equal((await call('HEAD','/')).status,200);
  // security
  assert.equal((await call('GET','/',{Host:'evil.example'})).status,403,'wrong Host');
@@ -116,6 +116,17 @@ try{
 }finally{await srv.close();fs.rmSync(root,{recursive:true,force:true})}
 
 // no route starts a process or calls a model: the server's source does not import them
-const src=fs.readFileSync(path.join(real,'hub','server.js'),'utf8');
+// Hub v2.5c: the probe route. Token needed, refused while anything works, one reading appended with its token total; the probe itself is a stub here (no model call).
+{const root2=fs.mkdtempSync(path.join(os.tmpdir(),'hub-probe-'));fs.mkdirSync(path.join(root2,'.hub'));
+ let calls=0,busy=false;const runsStub={checkToken:t=>t==='tk',locked:()=>busy},probeFn=async o=>{calls++;assert.equal(o.approved,true);return {at:Date.now(),source:'probe',weekly:{pct:31,resetsAt:2e9},fiveHour:{pct:7,resetsAt:2e9},costUsd:0.004}};
+ const s2=createHubServer({root:root2,runs:runsStub,probeFn,logsDir:path.join(root2,'no-logs')}),p2=await s2.listen();
+ const post=(h)=>new Promise((res,rej)=>{const r=http.request({host:'127.0.0.1',port:p2,method:'POST',path:'/api/probe',headers:{'Content-Type':'application/json',Origin:'http://127.0.0.1:'+p2,...h}},x=>{let b='';x.on('data',c=>b+=c);x.on('end',()=>res({status:x.statusCode,body:JSON.parse(b||'{}')}))});r.on('error',rej);r.end('{}')});
+ try{assert.equal((await post({})).status,403,'no token, no reading');assert.equal(calls,0);assert.equal(calls,0,'and no model call');
+  busy=true;assert.equal((await post({'X-Hub-Token':'tk'})).status,423,'refused while a run works');assert.equal(calls,0);busy=false;
+  const ok=await post({'X-Hub-Token':'tk'});assert.equal(ok.status,200);assert.equal(ok.body.reading.weekly,31);assert.equal(calls,1);
+  const rows=fs.readFileSync(path.join(root2,'.hub','usage.jsonl'),'utf8').trim().split('\n').map(l=>JSON.parse(l));assert.equal(rows.length,1);assert.equal(rows[0].source,'probe');
+  const noProbe=createHubServer({root:root2,runs:runsStub}),p3=await noProbe.listen();await noProbe.close?.()}
+ finally{await s2.close?.()}
+ fs.rmSync(root2,{recursive:true,force:true})}const src=fs.readFileSync(path.join(real,'hub','server.js'),'utf8');
 assert.ok(!/child_process|\bspawn\b|(?<![.\w])exec(File|Sync)?\(|fetch\(|https?\.request|probe\.js/.test(src.replace(/\/\/.*$/gm,'')),'server.js starts no process and makes no request');
 console.log('hub-server ok');

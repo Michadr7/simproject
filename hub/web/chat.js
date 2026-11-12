@@ -5,6 +5,8 @@ import {runCall,errorText} from './runs-api.js';
 import {modelName,fmt,chatActionState,chatActionCall,withoutActions,withoutRecords,draftStore} from './run-actions.js';
 import {recordsCall} from './records-api.js';
 import {agoText} from './plans.js';
+import {mountCacheStrip} from './cache-strip.js';
+import {contextOf,stateOf,coldSendWarning,modelSwitchWarning,newChatHint} from './cache.js';
 
 export const MODEL_CHOICES=['haiku','sonnet','opus','fable'];
 export const needsSecondYes=m=>m==='opus'||m==='fable';
@@ -27,7 +29,11 @@ export function mountChat(view,{onChange}={}){
  const sendBtn=h('button',{class:'btn pri',type:'button',onclick:()=>send()},'Send');
  const stopBtn=h('button',{class:'btn danger',type:'button',onclick:()=>act('chat-stop',{})},'Stop');
  const composer=h('div',{class:'chat-composer'},ta,h('div',{class:'btns'},sendBtn,stopBtn,h('span',{class:'small dim'},'Ctrl+Enter sends. Every message is a model call and counts on the gauges.')));
- view.append(top,note,list,composer);
+ const cbox=h('div',{}),hint=h('p',{class:'small dim'}),warn=h('div',{class:'cwarn',role:'status',hidden:true}),paintCache=mountCacheStrip(cbox);hint.hidden=true;
+ view.append(top,cbox,hint,warn,note,list,composer);
+ const clearWarn=()=>{warn.hidden=true;warn.textContent=''};
+ const showWarn=(text,...buttons)=>{warn.textContent='';warn.append(h('p',{},text),h('div',{class:'btns'},buttons));warn.hidden=false};
+ const wbtn=(label,fn,pri)=>h('button',{class:'btn'+(pri?' pri':''),type:'button',onclick:fn},label);
 
  async function act(op,args){
   if(busy)return;busy=true;note.hidden=true;
@@ -38,12 +44,17 @@ export function mountChat(view,{onChange}={}){
    if(op==='hub-restart'){note.textContent='The hub is restarting. This page carries on by itself in a few seconds.';note.hidden=false;setTimeout(()=>{if(alive){note.hidden=true;load(true)}},6000);return}
    await load(true);if(onChange)onChange();return}
   note.textContent=errorText(res);note.hidden=false}
- const send=()=>{if(!draft.trim()){note.textContent='Write a message first.';note.hidden=false;ta.focus();return}return act('chat-send',{text:draft.trim()})};
+ const send=(sure=false)=>{if(!draft.trim()){note.textContent='Write a message first.';note.hidden=false;ta.focus();return}
+  // a cold cache and a big conversation: say what this send costs before it goes (a note, not a block)
+  const w=sure===true||!data?null:coldSendWarning(stateOf({lastReplyAt:data.cache&&data.cache.at,now:Date.now(),lifetime:data.life}),contextOf(data.cache));
+  if(w){showWarn(w,wbtn('Send anyway',()=>{clearWarn();send(true)},true),wbtn('New chat',async()=>{const keep=draft;clearWarn();await act('chat-new',{});draft=keep;ta.value=keep;kept.set(keep)}),wbtn('Cancel',clearWarn));return}
+  clearWarn();return act('chat-send',{text:draft.trim()})};
 
  function drawTop(d){
   top.textContent='';
   const sel=h('select',{class:'sel','aria-label':'Master model',disabled:d.working},MODEL_CHOICES.map(m=>h('option',{value:m,selected:m===d.model},modelName(m))));
-  sel.addEventListener('change',()=>act('chat-model',{model:sel.value}));
+  sel.addEventListener('change',()=>{const to=sel.value,w=modelSwitchWarning(contextOf(d.cache));if(!w)return act('chat-model',{model:to});
+   showWarn(w,wbtn('New chat on that model',async()=>{clearWarn();await act('chat-new',{});await act('chat-model',{model:to})},true),wbtn('Switch anyway',()=>{clearWarn();act('chat-model',{model:to})}),wbtn('Stay',()=>{clearWarn();sel.value=d.model}))});
   top.append(h('span',{class:'label'},'Master'),sel);
   if(d.pending)top.append(h('span',{class:'cont'},h('button',{class:'btn pri',type:'button',onclick:()=>act('chat-model',{model:d.pending.model,confirm:true})},`Yes, switch to ${modelName(d.pending.model)}`),h('span',{class:'small dim'},`within ${secondsLeft(d.pending)} s`)));
   top.append(h('span',{class:'small dim chat-tokens'},`${fmt(d.tokens)} tokens in this chat`),h('button',{class:'btn',type:'button',disabled:d.working,onclick:()=>{if(confirm('Start a new chat? The old one is forgotten.'))act('chat-new',{})}},'New chat'))}
@@ -77,7 +88,7 @@ export function mountChat(view,{onChange}={}){
   clearTimeout(timer);
   const d=await getJson('/api/chat');if(!alive)return;
   data=d;
-  if(!d){top.textContent='';list.textContent='';list.append(h('p',{class:'soon'},'Could not read the chat. Is the hub still running?'));composer.hidden=true}
+  if(!d){top.textContent='';cbox.hidden=true;list.textContent='';list.append(h('p',{class:'soon'},'Could not read the chat. Is the hub still running?'));composer.hidden=true}
   else if(!d.enabled){top.textContent='';list.textContent='';composer.hidden=true;list.append(h('div',{class:'box'},h('div',{class:'label'},'The chat is off'),h('p',{},'The chat and runs are switched on when the hub starts. Stop the hub and start it again with:'),h('code',{class:'cmd'},'npm run hub -- --runs'),h('p',{class:'small dim'},'Every message is a model call and is sent only by your click.')))}
   else{
    composer.hidden=false;
@@ -86,6 +97,7 @@ export function mountChat(view,{onChange}={}){
    if(acts.length){const [p,r,j,g]=await Promise.all([getJson('/api/plans'),getJson('/api/runs'),getJson('/api/jobs'),acts.some(a=>a.op==='commit'||a.op==='push')?getJson('/api/commit/summary'):null]);if(!alive)return;ctx={plans:p&&p.plans||[],runs:r&&r.runs||[],ready:r&&r.ready||[],jobs:j,git:g}}
    if(d.messages.some(m=>m.records&&m.records.length)){const a=await getJson('/api/assets/summary');if(!alive)return;undone=new Set(a&&Array.isArray(a.records)?a.records.filter(r=>r.undone).map(r=>r.id):[])}
    const s=[d.model,d.working,d.tokens,d.pending&&d.pending.model,d.messages.length&&d.messages[d.messages.length-1].id,JSON.stringify(acts.map(a=>chatActionState(a,ctx))),[...undone].join(',')].join('|');
+   paintCache(d);const hn=newChatHint(contextOf(d.cache),d.cache&&d.cache.window);hint.textContent=hn||'';hint.hidden=!hn;
    if(force||s!==sig){sig=s;drawTop(d);drawList(d)}
    sendBtn.disabled=d.working;stopBtn.hidden=!d.working;ta.disabled=false}
   if(!alive)return;

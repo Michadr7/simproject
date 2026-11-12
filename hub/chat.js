@@ -17,6 +17,7 @@ import {buildArgs,runTurn,killTree,isAlive} from './runner.js';
 import {acquireLock,releaseLock} from './run-store.mjs';
 import {writeAtomic} from './plans-store.mjs';
 import {processName} from './runs.js';
+import {replyCache,lifeOf} from './cache-store.mjs';
 import {withStatus} from './status.js';
 import {parseActionLine,MAX_CHAT_ACTIONS} from './web/run-actions.js';
 import {validateAdd,validateStage,validateFile,CONTROL,ADD_KEYS,MAX_PER_REPLY,MAX_LINE} from './records.js';
@@ -88,10 +89,10 @@ export function extractRecords(reply){
  return {ops,notUnderstood:notUnderstood.slice(0,MAX_PER_REPLY+2)}}
 
 const err=(error,code=409,extra={})=>({error,code,...extra});
-const blank=(now)=>({id:randomUUID().slice(0,8),sessionId:randomUUID(),started:false,model:'sonnet',working:false,pid:null,exeName:null,pending:null,tokens:0,messages:[],createdAt:now,updatedAt:now});
+const blank=(now)=>({id:randomUUID().slice(0,8),sessionId:randomUUID(),started:false,model:'sonnet',working:false,pid:null,exeName:null,pending:null,tokens:0,cache:null,messages:[],createdAt:now,updatedAt:now});
 
 // records: the asset record store (hub/records-store.mjs) or null. RECORD: lines are applied at once through it, by 'master', and each applied change id is kept on the message so the page can offer Undo.
-export function createChat({root,claude=null,now=Date.now,extraEnv={},runTurnFn=runTurn,kill=killTree,nameOf=processName,contextFn=()=>'',records=null}){
+export function createChat({root,claude=null,now=Date.now,extraEnv={},runTurnFn=runTurn,kill=killTree,nameOf=processName,contextFn=()=>'',records=null,logTotal=()=>null}){
  const file=path.join(root,'.hub','chat.json'),usageFile=path.join(root,'.hub','usage.jsonl'),plansDir=path.join(root,'plans');
  let active=null; // {handle}
  // R7b: the live feed of the current (or last) turn, names and counts only (the runner makes sure). Kept in memory: a new message starts it over, a hub restart forgets it.
@@ -101,12 +102,13 @@ export function createChat({root,claude=null,now=Date.now,extraEnv={},runTurnFn=
  let st=null;
  const load=()=>{if(st)return st;try{const j=JSON.parse(fs.readFileSync(file,'utf8').replace(/^﻿/,''));if(j&&Array.isArray(j.messages)&&typeof j.sessionId==='string')return st={...blank(now()),...j}}catch{}return st=blank(now())};
  const save=()=>{st.updatedAt=now();st.messages=st.messages.slice(-MAX_KEPT);fs.mkdirSync(path.dirname(file),{recursive:true});writeAtomic(file,JSON.stringify(st,null,1)+'\n')};
+ const withTotal=r=>{let t=null;try{t=logTotal()}catch{}return Number.isFinite(t)?{...r,tokensTotal:t}:r}; // the token total in the logs when the reading arrives, so learnRate has pairs to use
  const gauges=()=>{const readings=loadReadings(usageFile);return {state:evaluate(readings,{now:now()}),rate:learnRate(readings)?.rate??null}};
  const expire=()=>{if(st.pending&&now()>st.pending.until){st.pending=null;save()}};
  let nextId=()=>load().messages.reduce((m,x)=>Math.max(m,x.id),0)+1;
  const add=(role,text,extra={})=>{const m={id:nextId(),role,text:String(text).slice(0,MAX_REPLY),at:now(),...extra};st.messages.push(m);return m};
 
- const view=()=>{load();expire();return {enabled:!!claude?.path,id:st.id,model:st.model,working:st.working,tokens:st.tokens,pending:st.pending?{model:st.pending.model,until:st.pending.until}:null,cap:CHAT_CAP,messages:st.messages.map(m=>({...m}))}};
+ const view=()=>{load();expire();return {enabled:!!claude?.path,id:st.id,model:st.model,working:st.working,tokens:st.tokens,cache:st.cache||null,life:st.cache?lifeOf(root):null,pending:st.pending?{model:st.pending.model,until:st.pending.until}:null,cap:CHAT_CAP,messages:st.messages.map(m=>({...m}))}};
 
  // Hub v2 V4: apply the RECORD: lines. applied: [{id,text}] (shown as "Recorded: ..." with Undo); refused: ["Add X: why"]; notUnderstood: lines the parser did not accept. A throw never loses the reply.
  function fileRecords(text,msg){
@@ -132,8 +134,8 @@ export function createChat({root,claude=null,now=Date.now,extraEnv={},runTurnFn=
 
  function finish(turn,out){
   active=null;st.working=false;st.pid=null;st.exeName=null;releaseLock(root,'chat');
-  const tokens=out.tokens||0;feedAdd({at:now(),kind:'end',end:String(out.end||'crashed').slice(0,20),tokens});st.tokens+=tokens;if(out.session||out.end==='result'||out.end==='question')st.started=true;
-  const rd=(out.readings||[]).at(-1);if(rd){try{appendReading(usageFile,{at:now(),source:'chat',...rd})}catch{}}
+  st.cache=replyCache(root,st.cache,turn.model,out,turn.startedAt,now());const tokens=out.tokens||0;feedAdd({at:now(),kind:'end',end:String(out.end||'crashed').slice(0,20),tokens});st.tokens+=tokens;if(out.session||out.end==='result'||out.end==='question')st.started=true;
+  const rd=(out.readings||[]).at(-1);if(rd){try{appendReading(usageFile,withTotal({at:now(),source:'chat',...rd}))}catch{}}
   const reply=out.result?.text||out.question||'';
   switch(out.end){
    case 'result':case 'question':{const m=add('master',reply||'(no text)',{tokens,model:turn.model});if(out.result?.isError)m.error=true;else fileReply(reply,m);break}
@@ -165,7 +167,7 @@ export function createChat({root,claude=null,now=Date.now,extraEnv={},runTurnFn=
    if(reasons.length)return err(reasons.join(' '),409,{reasons});
    const lock=acquireLock(root,'chat');if(!lock.ok)return err(`Another job holds the lock (${lock.holder}). Wait for it to finish.`);
    const um=add('user',text.trim());st.working=true;st.pending=null;st.exeName=path.basename(claude.path).toLowerCase();
-   const turn={model:st.model},resume=st.started;
+   const turn={model:st.model,startedAt:now()},resume=st.started;
    feed={turn:um.id,events:[]};feedAdd({at:now(),kind:'turn',n:st.messages.filter(m=>m.role==='user').length,resumed:resume});
    let handle;
    try{handle=runTurnFn({claude,args:buildArgs({model:st.model,sessionId:st.sessionId,resume,capTokens:CHAT_CAP,readOnly:true,rules:MASTER_RULES}),prompt:withStatus(safeContext(),text.trim()),cwd:root,cap:CHAT_CAP,state,rate,extraEnv:{...extraEnv},now,maxText:MAX_REPLY,onEvent:feedAdd})}

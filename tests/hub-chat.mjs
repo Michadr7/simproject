@@ -36,7 +36,7 @@ const root=fs.mkdtempSync(path.join(os.tmpdir(),'hub-chat-'));fs.mkdirSync(path.
 const setWeekly=(pct,five=20)=>fs.writeFileSync(path.join(root,'.hub','usage.jsonl'),JSON.stringify({at:Date.now(),source:'t',weekly:{pct,resetsAt:Math.floor(Date.now()/1000)+86400},fiveHour:{pct:five,resetsAt:Math.floor(Date.now()/1000)+3600}})+'\n');
 const env={HUB_FAKE_SCENARIO:'master',HUB_FAKE_OUT:path.join(root,'fake-out.json')};
 let clock=Date.now();const now=()=>clock;
-const chat=createChat({root,claude:{path:process.execPath,prefix:[FAKE]},extraEnv:env,now});
+const chat=createChat({root,claude:{path:process.execPath,prefix:[FAKE]},extraEnv:env,now,logTotal:()=>4242});
 setWeekly(12);
 const rec=()=>JSON.parse(fs.readFileSync(env.HUB_FAKE_OUT,'utf8'));
 const idle=async()=>waitFor(()=>!chat.working());
@@ -49,7 +49,8 @@ let r=chat.send({text:'Plan a minimap for me.'});assert.ok(r.chat,JSON.stringify
 assert.equal(chat.send({text:'again'}).code,409,'one message at a time');
 assert.ok(fs.existsSync(path.join(root,'.hub','run.lock')),'the lock is held while the master works');
 await idle();
-let v=chat.view();assert.deepEqual(v.messages.map(m=>m.role),['user','master']);
+let v=chat.view();assert.deepEqual(v.messages.map(m=>m.role),['user','master']);{const rows=fs.readFileSync(path.join(root,'.hub','usage.jsonl'),'utf8').trim().split('\n').map(l=>JSON.parse(l));assert.ok(rows.some(r=>r.source==='chat'&&r.tokensTotal===4242),'a chat reading carries the token total from the logs')}
+assert.ok(v.cache&&v.cache.at>0&&Number.isFinite(v.cache.input)&&Number.isFinite(v.cache.cacheRead),'the chat keeps the last reply\'s four numbers and its time');assert.ok(v.life&&v.life.sure===false,'and no lifetime is claimed on one reply');
 const first=rec();
 assert.ok(first.argv.includes('--session-id')&&!first.argv.includes('--resume'));
 assert.ok(first.argv.includes('--tools=Read,Grep,Glob'),'the master is read-only: Read, Grep, Glob');

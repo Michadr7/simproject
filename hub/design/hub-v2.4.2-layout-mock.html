@@ -1,0 +1,333 @@
+<!doctype html>
+<html lang="en" class="boot" data-accent="blue" data-menu="open" data-bot="open"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Hub 2.4.2 layout mock</title>
+<!-- Mikkadr Hub 2.4.2: layout mock. Fake data, no hub needed, nothing here is wired to anything. Open the file in a browser.
+     Address extras (used for the screenshots): #work #assets #chat #commit #tools #tokens · ?layout=board · ?group=project · ?open=<step id> · ?stage=<stage> · ?notes=1 · ?panda=idle|write|wait|done · ?bot=bar · ?menu=open -->
+<style>
+:root{--bg:#0b0c0e;--panel:#14161a;--panel2:#1b1e23;--ink:#f1efe9;--dim:#a3a39d;--faint:#96978f;--line:#2a2d33;
+ --ok:#5fbf85;--watch:#e0b060;--high:#e8905f;--crit:#f2766d;--acc:#3b82f6;--acc-ink:#9cc2ff;--acc-glow:59,130,246;
+ --sans:"Segoe UI",system-ui,-apple-system,sans-serif;--mono:ui-monospace,"Cascadia Mono",Consolas,monospace;--rail:44px;--panelw:236px;color-scheme:dark}
+@property --hue{syntax:'<number>';inherits:true;initial-value:26}
+html{--hue:26;--glow:.36;--bot-h:54px;--bot-hp:54px;transition:--hue 1.1s ease}
+html[data-bot=open]{--bot-h:180px;--bot-hp:0px}
+html[data-scene=chat]{--hue:262}html[data-scene=work]{--hue:26}html[data-scene=assets]{--hue:135}html[data-scene=commit]{--hue:172}html[data-scene=tools]{--hue:14}html[data-scene=tokens]{--hue:215}
+*{box-sizing:border-box}html,body{height:100%}
+body{margin:0;background:radial-gradient(34% 26% at 100% 0,rgba(var(--acc-glow),.2),transparent 70%),var(--bg);color:var(--ink);font:15px/1.55 var(--sans);overflow:hidden}
+button,input,select,textarea{font:inherit;color:inherit}
+:focus-visible{outline:2px solid var(--acc-ink);outline-offset:2px}
+a{color:var(--acc-ink)}
+/* the scene, the wave, the rail, the menu: as in hub.css today */
+.scene{position:fixed;inset:0;z-index:0;overflow:hidden;pointer-events:none}
+.scene i{position:absolute;inset:-30%;animation:scene-a 26s ease-in-out infinite alternate;
+ background:radial-gradient(34% 36% at 84% 82%,hsl(calc(var(--hue) + 14) 58% 40% / var(--glow)),transparent 72%),radial-gradient(26% 26% at 94% 92%,hsl(calc(var(--hue) + 30) 58% 50% / calc(var(--glow) * .9)),transparent 72%),radial-gradient(40% 44% at 52% 70%,hsl(var(--hue) 50% 24% / calc(var(--glow) * .85)),transparent 74%)}
+.scene i+i{animation:scene-b 34s ease-in-out infinite alternate;background:radial-gradient(34% 40% at 24% 84%,hsl(calc(var(--hue) - 16) 50% 22% / calc(var(--glow) * .8)),transparent 72%),radial-gradient(30% 30% at 70% 44%,hsl(calc(var(--hue) + 6) 55% 34% / calc(var(--glow) * .32)),transparent 74%)}
+@keyframes scene-a{from{transform:translate3d(-3%,2%,0) rotate(-4deg)}to{transform:translate3d(4%,-4%,0) rotate(6deg) scale(1.12)}}
+@keyframes scene-b{from{transform:translate3d(3%,-2%,0) rotate(5deg) scale(1.08)}to{transform:translate3d(-4%,3%,0) rotate(-5deg)}}
+.wave{position:fixed;inset:0;z-index:0;pointer-events:none;opacity:0;--wx:50%;--wy:50%;--wh:215;clip-path:circle(0 at var(--wx) var(--wy));
+ background:radial-gradient(circle at var(--wx) var(--wy),hsl(var(--wh) 60% 50% / .32),hsl(calc(var(--wh) + 18) 55% 42% / .18) 45%,hsl(var(--wh) 50% 34% / .1))}
+.wave[data-scene=chat]{--wh:262}.wave[data-scene=work]{--wh:26}.wave[data-scene=assets]{--wh:135}.wave[data-scene=commit]{--wh:172}.wave[data-scene=tools]{--wh:14}.wave[data-scene=tokens]{--wh:215}
+.wave.go{animation:wave-go 1.15s cubic-bezier(.2,.7,.2,1) forwards}
+@keyframes wave-go{0%{opacity:1;clip-path:circle(0 at var(--wx) var(--wy))}70%{opacity:.9}100%{opacity:0;clip-path:circle(160vmax at var(--wx) var(--wy))}}
+.rail{position:fixed;left:0;top:0;bottom:0;width:var(--rail);border-right:1px solid var(--line);background:rgba(255,255,255,.02);z-index:6}
+.menutab{position:absolute;left:0;top:50%;width:var(--rail);height:120px;transform:translateY(-50%);background:none;border:0;color:var(--dim);cursor:pointer;font:600 11px var(--mono);letter-spacing:.24em;writing-mode:vertical-rl;rotate:180deg;padding:0;border-radius:0 14px 14px 0;transition:color .2s,letter-spacing .25s,width .25s cubic-bezier(.3,1.3,.4,1),background-color .25s}
+.menutab:hover{color:var(--ink);letter-spacing:.34em;width:calc(var(--rail) + 8px);background:rgba(255,255,255,.07)}.menutab[aria-expanded=true]{color:var(--acc-ink)}
+html[data-wide] .menutab{visibility:hidden}
+.panel{position:fixed;left:var(--rail);top:22px;bottom:calc(16px + var(--bot-hp));width:var(--panelw);border-radius:0 20px 20px 0;border:1px solid rgba(255,255,255,.1);border-left:0;background:rgba(22,24,30,.8);-webkit-backdrop-filter:blur(20px);backdrop-filter:blur(20px);padding:20px 14px;box-shadow:0 20px 50px rgba(0,0,0,.45);z-index:5;transition:transform .2s,opacity .2s,bottom .2s;display:flex;flex-direction:column}
+.panel::before,.panel::after{content:"";position:absolute;left:0;width:18px;height:18px;pointer-events:none}
+.panel::before{top:-18px;background:radial-gradient(circle at 100% 0,transparent 17.5px,rgba(22,24,30,.8) 18px)}
+.panel::after{bottom:-18px;background:radial-gradient(circle at 100% 100%,transparent 17.5px,rgba(22,24,30,.8) 18px)}
+html[data-menu=closed] .panel{transform:translateX(-120%);opacity:0;pointer-events:none;visibility:hidden}
+html:not([data-wide]) .panel{background:rgba(22,24,30,.94)}
+.label{font:600 11px/1.2 var(--mono);letter-spacing:.14em;text-transform:uppercase;color:var(--dim);margin:0 6px 10px}.label .ver{color:var(--acc-ink);margin-left:4px;letter-spacing:.06em}
+.nav{list-style:none;margin:0;padding:0;position:relative;flex:1;min-height:0;display:flex;flex-direction:column;gap:2px}
+.nav li{position:relative;z-index:1}
+.nav a{display:flex;gap:12px;align-items:baseline;padding:10px 12px;font-size:15.5px;border-radius:999px;color:#d6d4ce;text-decoration:none;transition:transform .28s cubic-bezier(.3,1.2,.4,1),color .2s}
+.nav b{font:600 12px var(--mono);color:var(--faint);width:16px;text-align:center}
+.nav .count{margin-left:auto;font:600 11px var(--mono);color:var(--watch);border:1px solid rgba(224,176,96,.5);border-radius:99px;padding:0 7px;align-self:center}
+.nav .hint{margin-left:auto;font-size:12px;color:var(--faint);align-self:center}
+.nav li.hot>a,.nav li.foot.hot>a{transform:translateX(5px);color:#fff;font-weight:600}.nav li.hot>a b,.nav li.hot>a .hint{color:#fff}.nav li.hot>a .count{color:#fff;border-color:rgba(255,255,255,.6)}
+.nav li.foot-first{margin-top:auto;padding-top:8px;border-top:1px solid var(--line)}.nav li.foot>a{font-size:13.5px;padding:7px 12px;color:var(--dim);white-space:nowrap}
+.nav-pill{position:absolute;left:-14px;right:-30px;top:0;height:0;z-index:0;border-radius:0 999px 999px 0;pointer-events:none;opacity:0;
+ background:linear-gradient(90deg,hsl(var(--hue) 45% 21%),hsl(calc(var(--hue) + 6) 50% 28%) 46%,hsl(calc(var(--hue) + 10) 46% 25%));
+ box-shadow:0 8px 22px hsl(var(--hue) 60% 35% / .35),inset 0 1px 0 rgba(255,255,255,.18),inset 0 -1px 0 rgba(0,0,0,.25);transition:transform .34s cubic-bezier(.3,1.25,.4,1),height .2s,opacity .25s}
+html.opening .nav li,html.opening .panel .label{animation:rise .5s cubic-bezier(.2,.8,.2,1) backwards}
+@keyframes rise{from{opacity:0;transform:translateY(10px);filter:blur(6px)}}
+
+/* NEW in 2.4.2: the page area fills the window between the menu and the right edge; its content sits in the middle, at most 1280 px wide */
+.main{position:fixed;z-index:1;right:22px;top:14px;bottom:calc(14px + var(--bot-h));left:calc(var(--rail) + 22px);transition:left .2s,bottom .2s;min-width:0;padding:12px 16px 10px;border-radius:18px;border:1px solid rgba(255,255,255,.07);background:rgba(12,13,16,.7);-webkit-backdrop-filter:blur(18px);backdrop-filter:blur(18px)}
+html.boot *,html.boot{transition:none!important}html.boot .nav li,html.boot .panel .label{animation:none!important}
+html[data-wide] .main{left:calc(var(--rail) + var(--panelw) + 34px)}
+.wrap{max-width:1280px;margin:0 auto;height:100%;display:flex;flex-direction:column;gap:10px;min-width:0}
+.head{display:flex;gap:10px 18px;align-items:center;flex-wrap:wrap}
+.title{font-size:24px;font-weight:650;letter-spacing:-.01em;margin:0}
+.needs{font:600 11px var(--mono);letter-spacing:.06em;color:var(--watch);border:1px solid rgba(224,176,96,.55);border-radius:99px;padding:3px 11px;text-decoration:none;background:rgba(15,17,21,.6)}
+.gauges{margin-left:auto;display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+.g{width:176px;border:1px solid var(--line);background:rgba(15,17,21,.74);border-radius:10px;padding:6px 10px}
+.g .grow{display:flex;justify-content:space-between;font:600 11.5px var(--mono);color:var(--dim)}.g .val{color:var(--ink)}
+.bar{position:relative;height:6px;border-radius:4px;background:rgba(255,255,255,.1);margin-top:5px;overflow:hidden}.bar i{position:absolute;inset:0 auto 0 0;border-radius:4px;background:var(--ok)}.bar i.o{background:var(--watch)}.bar i.a{background:var(--acc)}
+.age{font:11px var(--mono);color:var(--faint)}
+.view{flex:1;min-height:0;container:page/inline-size;position:relative}
+.page{height:100%;overflow:auto;scrollbar-width:thin;padding-bottom:8px}
+.next{margin:0 0 12px;font-size:15px;line-height:1.5;border:1px solid rgba(var(--acc-glow),.4);background:rgba(15,17,21,.74);border-radius:12px;padding:10px 14px;display:flex;gap:6px 14px;align-items:baseline;flex-wrap:wrap}
+.next b{font:600 11px var(--mono);letter-spacing:.14em;color:var(--acc-ink);flex:none}.next span{flex:1 1 320px;min-width:0}.next a{flex:none;font-size:14px}
+.cols{display:block}.pane{min-width:0}.pane+.pane{margin-top:14px}
+@container page (min-width:900px){
+ .page.two{display:flex;flex-direction:column;overflow:hidden;padding-bottom:0}
+ .page.two>.cols{flex:1;min-height:0;display:grid;grid-template-columns:minmax(340px,5fr) minmax(0,7fr);gap:18px}
+ .page.two>.cols.even{grid-template-columns:minmax(0,5fr) minmax(0,6fr)}
+ .page.two .pane{overflow:auto;scrollbar-width:thin;min-height:0;padding:0 4px 10px 0}.page.two .pane+.pane{margin-top:0}
+}
+@container page (max-width:899px){.work:not(.has-sel) .pane.detail{display:none}.work.has-sel .pane.list{display:none}.work.has-sel>.next{display:none}}
+@container page (min-width:900px){.back{display:none}}
+.sect{font:600 11px/1.2 var(--mono);letter-spacing:.14em;text-transform:uppercase;color:var(--dim);margin:16px 2px 7px;display:flex;gap:8px;align-items:baseline}
+.sect:first-child{margin-top:2px}.sect .n{color:var(--watch)}.sect .x{margin-left:auto;text-transform:none;letter-spacing:0;font:12.5px var(--sans);color:var(--faint)}
+.small{font-size:13px}.dim{color:var(--dim)}.warn{color:var(--watch)}
+.box{border:1px solid var(--line);background:rgba(20,22,26,.9);border-radius:12px;padding:12px 14px;min-width:0;margin-bottom:12px}
+.box .label{margin:0 0 8px}
+.btn{font:13.5px var(--sans);border:1px solid var(--line);background:var(--panel2);color:var(--ink);border-radius:8px;padding:6px 12px;cursor:pointer;transition:border-color .18s,background-color .18s,box-shadow .18s}
+.btn:hover{border-color:var(--acc);background:rgba(var(--acc-glow),.2);box-shadow:0 0 0 3px rgba(var(--acc-glow),.14)}
+.btn.pri{border-color:var(--acc);background:rgba(var(--acc-glow),.3);font-weight:600;padding:8px 18px;font-size:14.5px}.btn.danger{border-color:rgba(242,118,109,.6);color:#ffd9d6;background:rgba(242,118,109,.16)}
+.btns{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
+.pill{font:600 10.5px var(--mono);letter-spacing:.08em;text-transform:uppercase;border:1px solid currentColor;border-radius:99px;padding:2px 9px;color:var(--dim)}
+.pill.you{color:var(--watch)}.pill.ok{color:var(--ok)}.pill.run{color:var(--acc-ink)}
+.s{flex:none;width:16px;text-align:center;font-size:13px}.s.ok{color:var(--ok)}.s.you{color:var(--watch)}.s.todo{color:var(--faint)}.s.run{color:var(--acc-ink);font-size:11px}
+input[type=text],select,textarea{width:100%;min-width:0;background:var(--panel2);border:1px solid var(--line);border-radius:8px;padding:7px 10px;font-size:14px}
+code,.path{font:12.5px var(--mono);overflow-wrap:anywhere}
+/* Work: the list of steps (the tree, on the page) */
+.seg{display:inline-flex;border:1px solid var(--line);border-radius:9px;overflow:hidden;background:rgba(15,17,21,.74)}
+.seg button{border:0;background:none;padding:4px 11px;font-size:13px;color:var(--dim);cursor:pointer}.seg button[aria-pressed=true]{background:rgba(var(--acc-glow),.26);color:var(--ink)}
+.listtop{display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-bottom:4px;font-size:13px;color:var(--dim)}
+.rows{display:grid;gap:6px}
+.row{display:grid;grid-template-columns:16px minmax(0,1fr) auto;gap:10px;align-items:start;width:100%;text-align:left;border:1px solid var(--line);background:rgba(15,17,21,.74);border-radius:10px;padding:9px 12px;cursor:pointer;transition:border-color .2s,transform .25s cubic-bezier(.3,1.2,.4,1)}
+.row:hover{border-color:hsl(var(--hue) 70% 60% / .55);transform:translateX(3px)}
+.row .s{margin-top:2px}.row .t{font-size:14.5px;font-weight:600;overflow-wrap:anywhere}.row .t em{font-style:normal;font-weight:400;color:var(--dim)}
+.row .d{font-size:13px;color:var(--dim);overflow-wrap:anywhere}.row .go{color:var(--faint);align-self:center}
+.row.you{border-color:rgba(224,176,96,.5);box-shadow:inset 3px 0 0 var(--watch)}.row.you .d{color:var(--watch)}
+.row.run{border-color:rgba(var(--acc-glow),.5)}.row.run .bar{margin-top:6px}
+.row.lite{padding:6px 12px;background:rgba(15,17,21,.55)}.row.lite .t{font-weight:500;font-size:14px}
+.row[aria-current=true]{background:linear-gradient(rgba(var(--acc-glow),.2),rgba(var(--acc-glow),.2)),rgba(15,17,21,.85);border-color:var(--acc)}
+details.fold>summary{cursor:pointer;font:600 11px/1.2 var(--mono);letter-spacing:.14em;text-transform:uppercase;color:var(--dim);padding:6px 2px;margin-top:10px}details.fold>summary:hover{color:var(--ink)}
+/* Work: the step that is open */
+.detail .card{border:1px solid var(--line);background:rgba(20,22,26,.92);border-radius:14px;padding:16px 18px}
+.crumb{font:600 11px var(--mono);letter-spacing:.14em;text-transform:uppercase;color:var(--dim)}
+.dname{font-size:21px;font-weight:650;margin:2px 0 6px;overflow-wrap:anywhere}
+.dstat{display:flex;gap:8px 10px;flex-wrap:wrap;align-items:center;font-size:13.5px;color:var(--dim)}
+.track{display:flex;gap:4px 6px;flex-wrap:wrap;align-items:center;margin:12px 0;font-size:13px;color:var(--faint)}
+.track button{display:inline-flex;gap:6px;align-items:baseline;border:1px solid var(--line);background:none;border-radius:99px;padding:2px 10px 2px 6px;cursor:pointer;color:var(--dim);font-size:13px}.track button[aria-current=true]{border-color:var(--acc);color:var(--ink);background:rgba(var(--acc-glow),.18)}
+.act{border:1px solid rgba(var(--acc-glow),.45);background:rgba(var(--acc-glow),.08);border-radius:12px;padding:12px 14px;margin:6px 0 12px}.act.you{border-color:rgba(224,176,96,.5);background:rgba(224,176,96,.07)}
+.act p{margin:0 0 10px;font-size:14.5px}.act .small{margin:8px 0 0}
+.reader{font-size:14.5px;line-height:1.6;max-width:76ch}.reader h3{font-size:15.5px;margin:14px 0 4px}.reader p{margin:0 0 8px}.reader ul{margin:2px 0 10px;padding-left:22px}
+.feed{border:1px solid var(--line);background:rgba(255,255,255,.03);border-radius:10px;padding:8px 12px;font:12.5px/1.75 var(--mono);color:#cfcdc6}.feed div{display:grid;grid-template-columns:62px minmax(0,1fr);gap:8px}.feed span{color:var(--faint)}.feed div>b{font-weight:400;overflow-wrap:anywhere}
+.files{margin:4px 0 0;padding-left:20px}.files li{overflow-wrap:anywhere}
+.back{display:inline-block;margin-bottom:8px;text-decoration:none;font-size:13.5px}
+/* Work, the alternative: one column per project */
+.board{display:grid;grid-template-columns:repeat(auto-fit,minmax(215px,1fr));gap:12px;align-items:start}
+.col{border:1px solid var(--line);background:rgba(20,22,26,.6);border-radius:14px;padding:10px}
+.col h3{margin:2px 4px 8px;font-size:15px;display:flex;justify-content:space-between;gap:8px;align-items:baseline}.col h3 span{font:12.5px var(--sans);color:var(--dim);font-weight:400}.col h3 span.warn{color:var(--watch)}
+.drawer{position:absolute;right:0;top:0;bottom:0;width:min(520px,100%);overflow:auto;z-index:3;box-shadow:-20px 0 50px rgba(0,0,0,.6);border-radius:14px}.drawer .card{min-height:100%;background:rgb(20,22,26)}
+/* Assets */
+.strip{display:grid;grid-template-columns:repeat(6,minmax(0,1fr));gap:8px;margin:0 0 14px}
+@container page (max-width:640px){.strip{grid-template-columns:repeat(3,minmax(0,1fr))}}
+.cell{border:1px solid var(--line);background:rgba(20,22,26,.9);border-radius:10px;padding:8px 12px;display:grid;gap:0;min-width:0;text-align:left;cursor:pointer}
+.cell b{font:650 21px var(--sans)}.cell span{font:600 11px var(--mono);letter-spacing:.08em;text-transform:uppercase;color:var(--dim);overflow-wrap:anywhere}.cell i{font:normal 12px var(--sans);color:var(--faint)}
+.cell.hand i{color:var(--acc-ink)}.cell[aria-pressed=true]{border-color:hsl(var(--hue) 70% 55%);box-shadow:0 0 0 2px hsl(var(--hue) 70% 55% / .3);background:hsl(var(--hue) 40% 14% / .95)}
+.form{display:grid;gap:6px;margin-bottom:10px}.pair{display:grid;grid-template-columns:1fr 1fr;gap:6px}
+.item{border-top:1px solid var(--line);padding:9px 0}.item:first-of-type{border-top:0;padding-top:2px}.item .t{font-size:14.5px;font-weight:600;overflow-wrap:anywhere}.item .btns{margin-top:6px}
+.arow{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:6px 12px;align-items:center;border-top:1px solid var(--line);padding:8px 0}.arow:first-of-type{border-top:0}
+.arow .t{font-size:14.5px;font-weight:600;overflow-wrap:anywhere}.arow .d{font-size:13px;color:var(--dim);overflow-wrap:anywhere}.arow select{width:auto}
+.rec{display:flex;gap:10px;align-items:center;justify-content:space-between;flex-wrap:wrap;border-top:1px solid var(--line);padding:7px 0;font-size:13px;color:var(--dim)}.rec:first-of-type{border-top:0}
+.names{margin:4px 0 0;padding-left:18px;columns:3 150px;font-size:13.5px;color:var(--dim)}
+/* Chat, Commit, Tools, Tokens (sketches) */
+.chatcol{display:flex;flex-direction:column;height:100%;min-height:300px}.msgs{flex:1;min-height:0;overflow:auto;display:grid;gap:10px;align-content:start;padding-right:4px}
+.cmsg{border:1px solid var(--line);background:rgba(15,17,21,.74);border-radius:12px;padding:10px 14px;max-width:78ch}.cmsg.u{background:linear-gradient(rgba(var(--acc-glow),.14),rgba(var(--acc-glow),.14)),rgba(15,17,21,.8);border-color:rgba(var(--acc-glow),.35);justify-self:end}
+.cmsg .who{font:600 11px var(--mono);letter-spacing:.1em;color:var(--dim);text-transform:uppercase}.chip{display:inline-block;margin-top:6px;border:1px solid var(--acc);background:rgba(var(--acc-glow),.18);color:var(--ink);border-radius:99px;padding:3px 12px;font-size:13px;text-decoration:none}
+.composer{margin-top:10px;display:grid;grid-template-columns:minmax(0,1fr) auto;gap:8px;align-items:end}.composer textarea{resize:none;height:64px}
+.kv{display:grid;grid-template-columns:auto 1fr;gap:3px 12px;font-size:13.5px}.kv span:nth-child(odd){color:var(--dim)}
+.cmf{list-style:none;margin:0 0 8px;padding:0;display:grid;gap:4px}.cmf label{display:flex;gap:8px;align-items:baseline;flex-wrap:wrap}.cmf input{accent-color:var(--acc)}
+.kind{font:600 10px var(--mono);letter-spacing:.08em;text-transform:uppercase;color:var(--dim);border:1px solid var(--line);border-radius:99px;padding:1px 7px}.kind.new{color:var(--ok)}
+.grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(300px,1fr));gap:12px}.grid .box{margin:0;display:grid;gap:6px;align-content:start}.grid .t{font-size:15.5px;font-weight:600}
+.big{font:650 34px var(--sans)}.tk{display:grid;grid-template-columns:minmax(120px,1.2fr) 3fr auto;gap:10px;align-items:center;font-size:13.5px;padding:5px 0}.tk .bar{margin:0}
+/* NEW in 2.4.2: the panda shelf. It lies along the bottom of the page area; the page ends above it, so it never covers or squeezes anything. Folded, it is the small bar of today. */
+.shelf{position:fixed;z-index:4;left:calc(var(--rail) + var(--panelw) + 34px);right:22px;bottom:12px;height:164px;border-radius:16px;border:1px solid rgba(255,255,255,.1);background:rgba(18,20,25,.82);-webkit-backdrop-filter:blur(14px);backdrop-filter:blur(14px);box-shadow:0 14px 36px rgba(0,0,0,.4);overflow:hidden}
+#stage{position:absolute;inset:0;width:100%;height:100%;display:block}
+.shelf-txt{position:absolute;left:16px;top:12px;width:min(46%,520px);display:grid;gap:3px;pointer-events:none}.shelf-txt a{pointer-events:auto;font:13px var(--sans);letter-spacing:0;text-transform:none;margin-left:8px}
+.mood{font:600 10.5px var(--mono);letter-spacing:.14em;text-transform:uppercase;color:var(--acc-ink);display:flex;gap:7px;align-items:center}.mood::before{content:"";width:7px;height:7px;border-radius:50%;background:var(--acc);box-shadow:0 0 8px rgba(var(--acc-glow),.9)}
+.shelf[data-mood=wait] .mood{color:var(--watch)}.shelf[data-mood=wait] .mood::before{background:var(--watch);box-shadow:0 0 8px rgba(224,176,96,.9)}.shelf[data-mood=idle] .mood{color:var(--dim)}.shelf[data-mood=idle] .mood::before{background:var(--faint);box-shadow:none}
+#say{font-size:14.5px;color:var(--ink);overflow-wrap:anywhere}
+#live{margin:2px 0 0;padding:0;list-style:none;font:12px/1.6 var(--mono);color:var(--dim)}#live li{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}#live li:nth-last-child(n+3){display:none}
+.fold-btn{position:absolute;right:8px;top:8px;width:28px;height:28px;border-radius:8px;border:1px solid transparent;background:none;cursor:pointer;color:var(--dim);font-size:17px;line-height:1;z-index:2}.fold-btn:hover{border-color:var(--line);color:var(--ink);background:rgba(255,255,255,.06)}
+html[data-bot=bar] .shelf{left:var(--rail);right:auto;bottom:8px;width:min(640px,calc(100vw - var(--rail) - 12px));height:40px;border-radius:0 16px 16px 0;border-left:0}
+html[data-bot=bar] #stage,html[data-bot=bar] #live,html[data-bot=bar] .shelf-txt a{display:none}html[data-bot=bar] .mood{flex:none}
+html[data-bot=bar] .shelf-txt{position:static;width:auto;display:flex;gap:10px;align-items:center;height:100%;padding:0 44px 0 14px}html[data-bot=bar] #say{white-space:nowrap;overflow:hidden;text-overflow:ellipsis;min-width:0;flex:1;font-size:14px}
+html[data-bot=bar] .fold-btn{top:5px}
+.face{position:fixed;left:6px;bottom:12px;width:32px;height:32px;z-index:7;border:1px solid rgba(255,255,255,.22);border-radius:11px 11px 11px 5px;background:linear-gradient(155deg,rgba(var(--acc-glow),1),rgba(var(--acc-glow),.55));display:none;gap:6px;align-items:center;justify-content:center;cursor:pointer;padding:0}
+.face i{width:4px;height:9px;border-radius:2px;background:#0b0c0e}html[data-bot=bar] .face{display:flex}
+/* mock-only parts are dashed */
+.mockbar{display:flex;gap:6px 14px;flex-wrap:wrap;align-items:center;border:1px dashed #4a4d55;border-radius:10px;padding:4px 10px;font-size:12.5px;color:var(--dim);background:rgba(11,12,14,.6)}
+.mockbar b{font:600 11px var(--mono);letter-spacing:.1em;color:var(--watch)}.mockbar .seg button{font-size:12.5px;padding:2px 9px}
+.notes{position:fixed;z-index:9;top:14px;right:14px;bottom:14px;width:min(560px,calc(100vw - 28px));overflow:auto;border:1px dashed #6a6d75;border-radius:14px;background:rgb(17,19,23);padding:16px 20px;box-shadow:-20px 0 60px rgba(0,0,0,.7);font-size:14.5px}
+.notes[hidden]{display:none}.notes h2{font-size:19px;margin:0 0 6px}.notes h3{font-size:15px;margin:16px 0 4px;color:var(--acc-ink)}.notes p{margin:0 0 8px}.notes ul{margin:0 0 8px;padding-left:20px}.notes li{margin-bottom:4px}
+@media(max-width:699px){.g{width:auto;flex:1}.gauges{margin-left:0;width:100%}.age{display:none}.main{right:12px;left:calc(var(--rail) + 12px)}}
+@media(prefers-reduced-motion:reduce){*{transition:none!important;animation:none!important}}
+</style></head>
+<body>
+<div class="scene" aria-hidden="true"><i></i><i></i></div><div class="wave" id="wave" aria-hidden="true"></div>
+<div class="rail"><button id="menutab" class="menutab" type="button" aria-controls="panel" aria-expanded="true">MENU</button></div>
+<nav id="panel" class="panel" aria-label="Hub areas"><div class="label">Mikkadr Hub <span class="ver">v2.4.2</span></div><ul id="nav" class="nav"></ul></nav>
+<main class="main"><div class="wrap">
+ <div class="mockbar"><b>MOCK</b><span>Fake data. Dashed boxes are not part of the hub.</span>
+  <button class="btn" id="notesbtn" type="button" style="padding:2px 10px;font-size:12.5px">Design notes</button>
+  <span>Work layout <span class="seg" id="layoutseg"><button type="button" data-v="list">List + open step</button><button type="button" data-v="board">Board</button></span></span>
+  <span id="botctl">Panda <span class="seg"><button type="button" data-s="idle">idle</button><button type="button" data-s="write">working</button><button type="button" data-s="wait">needs you</button><button type="button" data-s="done">finished</button></span></span>
+ </div>
+ <div class="head"><h1 id="title" class="title">Work</h1><a class="needs" href="#work">3 things need you</a>
+  <div class="gauges" aria-label="Token use"><span class="age">Usage checked 3 min ago</span>
+   <div class="g"><div class="grow"><span>This week</span><span class="val">12%</span></div><div class="bar"><i style="width:12%"></i></div></div>
+   <div class="g"><div class="grow"><span>These 5 hours</span><span class="val">58%</span></div><div class="bar"><i class="o" style="width:58%"></i></div></div></div></div>
+ <section id="view" class="view"></section>
+</div></main>
+<div class="shelf" id="shelf" data-mood="write" aria-label="The panda: what the hub is doing">
+ <canvas id="stage" role="img" aria-label="The hub panda"></canvas>
+ <div class="shelf-txt"><div class="mood"><span id="mood">Working</span><a href="#work">Open this run</a></div><div id="say">Nothing is running.</div><ul id="live"><li>14:02:11  Read plans/k1-racks.md</li><li>14:03:40  Edited dist/warehouse.js</li></ul></div>
+ <button class="fold-btn" id="foldbtn" type="button" title="Fold the panda away" aria-label="Fold the panda away">▾</button>
+</div>
+<button class="face" id="face" type="button" title="Show the panda" aria-label="Show the panda"><i></i><i></i></button>
+<aside class="notes" id="notes" hidden>
+ <div class="btns" style="justify-content:space-between"><h2>Hub 2.4.2: what changes</h2><button class="btn" id="notesclose" type="button">Close</button></div>
+ <p>You asked: clicking an area must fully open its page; Work is too crowded and squashed to the left. This mock shows the answer. The menu and its effects stay as they are.</p>
+ <h3>1. The page uses the middle of the window</h3>
+ <p>The page area runs from the menu to the right edge. Its content sits in the middle and is never wider than 1280 px, so lines stay readable on a very wide window. The two usage gauges move up beside the page title to save height.</p>
+ <h3>2. The steps leave the menu</h3>
+ <p>The Work row in the menu keeps only the count of things that need you. The projects and steps are on the Work page.</p>
+ <p><b>Chosen: a list on the left, the open step on the right.</b> The list is sorted by what it needs from you: Needs you, Working, Waiting, Done (folded). One click opens a step beside the list, with one main button. Why: the first thing you see is what to do, and you never lose the list while you read a plan. "Group by: Project" shows the same list as the old tree.</p>
+ <p><b>The one alternative: a board,</b> one column per project (switch at the top). It shows every project at once, but it gets cramped with more than five projects and the open step has to cover part of it.</p>
+ <h3>3. The panda gets a shelf along the bottom</h3>
+ <p>A glass shelf, 164 px high, lies under the page area. On the left: what the hub is doing and the last two lines of the live list. The panda walks the whole width when idle and sits at the right when working. The page ends above the shelf, so the shelf never covers or narrows it. The arrow folds it to the small bar of today (the face in the rail brings it back). Why a shelf and not a corner on the right: a wide window has width to spare, and a right corner would narrow the page again at 1400 px.</p>
+ <h3>Calmer colours, readable text</h3>
+ <p>Each page keeps its own colour, the flowing background, the gliding highlight and the wave, but all of them are darker and less saturated. The selected menu row is now white, bold text on a deep colour (at least 5.5 to 1; today about 1.3 to 1). The page area lies on a dark glass sheet, so text never sits directly on the moving colours. Worst case anywhere: main text 12 to 1, grey text 5.5 to 1, the faintest grey 4.7 to 1 (it was 3.9 to 1 and is now a lighter grey). The standard asks for 4.5 to 1.</p>
+ <h3>4. Assets</h3>
+ <p>The six stage cells run across the top and work as a switch: click a cell to see its rows on the right. Left: new files, the Add asset form, recent changes. Nothing was removed. Why: today all 34 rows are stacked in one long scroll.</p>
+ <h3>5. Widths</h3>
+ <ul><li><b>1240 px and wider:</b> menu visible, two columns, panda shelf.</li><li><b>1100 to 1239:</b> menu visible, one column (a step opens in place of the list, with "All work" to go back), panda shelf.</li><li><b>Under 1100:</b> the menu folds behind the MENU tab and opens over the page; one or two columns as they fit; the panda is the small bar.</li></ul>
+</aside>
+<script>
+(()=>{
+const $=s=>document.querySelector(s),$$=s=>[...document.querySelectorAll(s)];window.$=$;window.$$=$$; // the panda file expects these two
+const root=document.documentElement,Q=new URLSearchParams(location.search);
+const TREE={areas:[['chat','Chat','›'],['work','Work','›'],['assets','Assets','›']],foot:[['commit','Commit · 10 files changed','⎇'],['tools','Tools','▸'],['tokens','Tokens','◔']]};
+const LABEL={chat:'Chat',work:'Work',assets:'Assets',commit:'Commit',tools:'Tools',tokens:'Tokens'};
+const GLYPH={you:'●',ok:'✓',todo:'○',run:'▶'};
+const esc=s=>String(s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'})[c]);
+const g=k=>`<span class="s ${k}" aria-hidden="true">${GLYPH[k]}</span>`;
+let route='work',hover=null,layout=Q.get('layout')==='board'?'board':'list',group=Q.get('group')==='project'?'project':'need',sel=Q.get('open'),stage=Q.get('stage')||'wanted',userBot=Q.get('bot')==='bar'?'bar':'open',menuOpen=Q.get('menu')==='open';
+
+// ---- fake work: 4 projects, 12 steps
+const STEPS=[
+ {id:'a2',p:'People',code:'A2',name:'Walking animations',grp:'done',gl:'ok',label:'Finished and closed',kind:'done'},
+ {id:'a3',p:'People',code:'A3',name:'NPC cars',grp:'you',gl:'you',label:'Waiting for your approval',what:'Read the plan and press Approve.',kind:'approve',cap:'3,000,000'},
+ {id:'b1',p:'People',code:'B1',name:'Knockdown',grp:'wait',gl:'todo',label:'The master is still writing the plan',kind:'later'},
+ {id:'k1',p:'Warehouse',code:'K1',name:'Racks',grp:'run',gl:'run',label:'Running now: editing dist/warehouse.js',kind:'running'},
+ {id:'k2',p:'Warehouse',code:'K2',name:'Forklift pallets',grp:'you',gl:'you',label:'Waiting for your approval',what:'Read the plan and press Approve.',kind:'approve',cap:'1,500,000'},
+ {id:'k3',p:'Warehouse',code:'K3',name:'Loading dock',grp:'wait',gl:'todo',label:'Approved. Starts when K1 is finished',kind:'ready'},
+ {id:'m1',p:'Minimap',code:'M1',name:'Round map in the corner',grp:'you',gl:'you',label:'Finished, but 2 files need a look',what:'It changed 2 files the plan did not name. Check them, then close it.',kind:'flagged'},
+ {id:'m2',p:'Minimap',code:'M2',name:'Map markers',grp:'wait',gl:'todo',label:'Approved. Waits for M1 to be closed',kind:'ready'},
+ {id:'e1',p:'Scene editor',code:'E1',name:'Prop picker',grp:'done',gl:'ok',label:'Finished and closed',kind:'done'},
+ {id:'e2',p:'Scene editor',code:'E2',name:'Move and rotate',grp:'done',gl:'ok',label:'Finished and closed',kind:'done'},
+ {id:'e3',p:'Scene editor',code:'E3',name:'Save to file',grp:'wait',gl:'todo',label:'Approved. Ready to start',kind:'ready'},
+ {id:'e4',p:'Scene editor',code:'E4',name:'Undo',grp:'wait',gl:'todo',label:'The master is still writing the plan',kind:'later'}];
+const GROUPS=[['you','Needs you'],['run','Working'],['wait','Waiting'],['done','Done']];
+const PROJECTS=[...new Set(STEPS.map(s=>s.p))];
+const byId=id=>STEPS.find(s=>s.id===id);
+const current=()=>byId(sel)||STEPS.find(s=>s.grp==='you');
+function row(s,withProject){const c=s.grp==='you'?'you':s.grp==='run'?'run':'lite';
+ return `<button type="button" class="row ${c}" data-step="${s.id}" ${current().id===s.id?'aria-current="true"':''}>${g(s.gl)}<span><span class="t">${withProject?`<em>${esc(s.p)} · </em>`:''}${s.code} ${esc(s.name)}</span><br><span class="d">${esc(s.label)}</span>${s.grp==='run'?'<span class="bar" style="display:block"><i class="a" style="width:41%"></i></span>':''}</span><span class="go" aria-hidden="true">›</span></button>`}
+function listPane(){
+ let h=`<div class="listtop"><span>Group by</span><span class="seg" id="groupseg"><button type="button" data-v="need" aria-pressed="${group==='need'}">What it needs</button><button type="button" data-v="project" aria-pressed="${group==='project'}">Project</button></span><span style="margin-left:auto">12 steps in 4 projects</span></div>`;
+ if(group==='need')for(const [k,name] of GROUPS){const list=STEPS.filter(s=>s.grp===k),rows=`<div class="rows">${list.map(s=>row(s,true)).join('')}</div>`;
+  h+=k==='done'?`<details class="fold"><summary>Done · ${list.length}</summary>${rows}</details>`:`<h2 class="sect">${name}<span class="${k==='you'?'n':''}">${list.length}</span>${k==='wait'?'<span class="x">nothing to do here yet</span>':''}</h2>${rows}`}
+ else for(const p of PROJECTS){const list=STEPS.filter(s=>s.p===p),you=list.filter(s=>s.grp==='you').length,done=list.filter(s=>s.grp==='done').length;
+  h+=`<h2 class="sect">${esc(p)}<span class="${you?'n':''}">${you?you+(you===1?' needs you':' need you'):''}</span><span class="x">${done} of ${list.length} done</span></h2><div class="rows">${list.map(s=>row(s,false)).join('')}</div>`}
+ return h}
+const PLAN=s=>`<details class="fold" open><summary>The plan</summary><div class="reader"><h3>What you get</h3><p>${s.id==='a3'?'Cars driven by townspeople. They follow the roads, stop at crossings and park at the shops.':'Pallets in the warehouse that the forklift can lift, carry and stack on the racks.'}</p><h3>What will be changed</h3><ul><li><code>dist/${s.id==='a3'?'traffic':'warehouse'}.js</code>: the new behaviour</li><li><code>tests/${s.id==='a3'?'traffic':'pallets'}.mjs</code>: 9 new tests</li></ul><h3>What will not be touched</h3><p>Saved games, the player's own car, the menus.</p></div></details>`;
+function detail(){const s=current(),sib=STEPS.filter(x=>x.p===s.p);let body='';
+ if(s.kind==='approve')body=`<div class="act you"><p><b>Your turn.</b> Read the plan below, then answer. Nothing runs until you say yes.</p><div class="btns"><button class="btn pri" type="button">Approve</button><button class="btn" type="button">Deny</button><input type="text" placeholder="Note for the master (optional)" aria-label="Note" style="flex:1 1 200px;width:auto"></div><p class="small dim">After Approve, Start runs it on Sonnet (allowed up to ${s.cap} tokens).</p></div>${PLAN(s)}`;
+ else if(s.kind==='running')body=`<div class="act"><p><b>Nothing to do.</b> Sonnet is working on it. It has used 612,000 of 1,500,000 tokens.</p><div class="bar" style="height:9px;margin:0 0 10px"><i class="a" style="width:41%"></i></div><div class="btns"><button class="btn danger" type="button">Stop the run</button><span class="small dim">Started 14 minutes ago</span></div></div><h2 class="sect">Live</h2><div class="feed"><div><span>14:02:11</span><b>Read plans/k1-racks.md</b></div><div><span>14:02:35</span><b>Read dist/warehouse.js</b></div><div><span>14:03:40</span><b>Edited dist/warehouse.js</b></div><div><span>14:09:02</span><b>Ran npm test: 3 of 148 failed</b></div><div><span>14:12:27</span><b>Edited dist/warehouse.js</b></div></div><details class="fold"><summary>The plan</summary><p class="small dim">Folded while it runs.</p></details>`;
+ else if(s.kind==='flagged')body=`<div class="act you"><p><b>Your turn.</b> The run finished and the tests pass, but it changed 2 files the plan did not name. Look at them, then close the step.</p><ul class="files"><li><code>dist/hud.js</code> <span class="small dim">(12 lines changed)</span></li><li><code>package.json</code> <span class="small dim">(1 line changed)</span></li></ul><div class="btns" style="margin-top:10px"><button class="btn pri" type="button">They are fine: close the step</button><button class="btn" type="button">Ask the master about them</button></div></div><h2 class="sect">Result</h2><p style="margin:0 0 6px">Added the minimap: a round map in the top-right corner that follows the player. npm test passes (148 of 148).</p><p class="small dim">Used 1,498,175 of 1,500,000 tokens.</p><details class="fold"><summary>The plan</summary><p class="small dim">Folded.</p></details><details class="fold"><summary>What the run did (64 lines)</summary><p class="small dim">Folded.</p></details>`;
+ else if(s.kind==='ready')body=`<div class="act"><p>${s.id==='e3'?'<b>Ready.</b> You approved this plan. Start it when you like.':'<b>Nothing to do yet.</b> You approved this plan. '+esc(s.label.replace('Approved. ',''))+'.'}</p><div class="btns"><button class="btn pri" type="button">Start</button><span class="small dim">Runs on Sonnet, allowed up to 1,500,000 tokens</span></div></div><details class="fold"><summary>The plan</summary><p class="small dim">Folded.</p></details>`;
+ else if(s.kind==='later')body=`<div class="act"><p><b>Nothing to do yet.</b> The master is still writing this plan. It will appear under Needs you when it is ready.</p></div>`;
+ else body=`<div class="act"><p><b>Done.</b> Finished and closed. Nothing is waiting.</p></div><details class="fold"><summary>The result</summary><p class="small dim">Folded.</p></details><details class="fold"><summary>The plan</summary><p class="small dim">Folded.</p></details>`;
+ return `<a class="back" href="#work" data-back>← All work</a><div class="card"><div class="crumb">${esc(s.p)} · step ${sib.indexOf(s)+1} of ${sib.length}</div><h2 class="dname">${s.code} ${esc(s.name)}</h2>
+  <div class="dstat"><span class="pill ${s.gl==='todo'?'':s.gl}">${esc(s.label)}</span></div>
+  <div class="track" aria-label="All steps of ${esc(s.p)}">${sib.map((x,i)=>`${i?'<span aria-hidden="true">→</span>':''}<button type="button" data-step="${x.id}" ${x===s?'aria-current="true"':''}>${g(x.gl)}${x.code} ${esc(x.name)}</button>`).join('')}</div>${body}</div>`}
+function workPage(){const n=STEPS.find(s=>s.grp==='you');
+ const next=`<p class="next"><b>NEXT STEP</b><span>${esc(n.p)} · ${n.code} ${esc(n.name)}: read the plan and press Approve. Two more things need you after that.</span><a href="#work" data-step="${n.id}">Show me</a></p>`;
+ if(layout==='board')return `<div class="page work">${next}<div class="board">${PROJECTS.map(p=>{const list=STEPS.filter(s=>s.p===p),you=list.filter(s=>s.grp==='you').length;return `<div class="col"><h3>${esc(p)}<span class="${you?'warn':''}">${you?you+(you===1?' needs you':' need you'):list.filter(s=>s.grp==='done').length+' of '+list.length+' done'}</span></h3><div class="rows">${list.map(s=>row(s,false)).join('')}</div></div>`}).join('')}</div>${sel?`<div class="drawer">${detail()}</div>`:''}</div>`;
+ return `<div class="page two work${sel?' has-sel':''}">${next}<div class="cols"><div class="pane list">${listPane()}</div><div class="pane detail">${detail()}</div></div></div>`}
+
+// ---- fake assets
+const STAGES=[['wanted','Wanted',11,1],['received','Received',22,1],['staged','Staged',1,1],['converted','Converted',1,0],['in-game','In game',5,0],['credited','Credited',4,0]];
+const AROWS={wanted:[['Oak tree','model · CC0 · wanted for the park'],['Park bench','model · CC0'],['Real sounds','sound · Only water_drink.wav exists in assets-src/Sounds so far'],['Base man character (Grab3D)','model · CC0 · Light GLB 131k triangles (heavy: decimate); the rigged copy is a separate download'],['Base woman character (Grab3D)','model · CC0 · Light GLB 153k triangles (heavy: decimate)'],['Bus','model · Still missing per ASSETS.md'],['Hospital (City Pack)','model · Various (check) · 12,576 triangles; simplify before use'],['Car dealership building','model'],['Street lamp','model · CC0'],['Bicycle','model'],['Fire hydrant','model · CC0']],
+ received:[['Forklift','model · CC-BY · 1 file: forklift_v2.glb'],['Pallet','model · CC0 · 1 file: pallet.glb'],['Warehouse rack','model · CC0 · 2 files: rack_a.glb, rack_b.glb'],['Door slam','sound · CC0 · 1 file: door_slam_old.wav'],['Brick wall','texture · CC0 · 3 files'],['Traffic cone','model · CC0 · 1 file: cone.glb'],['Mailbox','model · 1 file: mailbox.glb · licence not filled in'],['Shop sign set','picture · CC0 · 12 files']],
+ staged:[['Fox (rigged)','model · CC0 · 1 file: fox_rigged.glb · named and ready to convert']]};
+const GAME={converted:['Fox'],'in-game':['Chair','Table','Lamp','Pine tree','Sign pictures (12)'],credited:['Chair','Table','Pine tree','Sign pictures (12)']};
+function assetsPage(){const st=STAGES.find(s=>s[0]===stage)||STAGES[0],rows=AROWS[st[0]];
+ const strip=`<div class="strip" aria-label="Assets by stage">${STAGES.map(s=>`<button type="button" class="cell${s[3]?' hand':''}" data-stage="${s[0]}" aria-pressed="${s[0]===st[0]}"><b>${s[2]}</b><span>${s[1]}</span><i>${s[3]?'you set':'by the game'}</i></button>`).join('')}</div>`;
+ const files=[['oak_tree_01.glb','Incoming/oak_tree_01.glb','Oak tree'],['Park_Bench.glb','Incoming/Park_Bench.glb','Park bench'],['door_slam.wav','Sounds/door_slam.wav','Real sounds']];
+ const left=`<div class="box"><div class="label">New files (3)</div>${files.map(f=>`<div class="item"><div class="t">New file: ${f[0]}. Which asset is it?</div><code>${f[1]}</code><div class="btns"><button class="btn" type="button">It is ${f[2]}</button><button class="btn" type="button">Add as a new asset</button><button class="btn" type="button">Hide</button></div></div>`).join('')}</div>
+  <div class="box"><div class="label">Add asset</div><div class="form"><input type="text" placeholder="Name, for example Oak tree" aria-label="Name"><div class="pair"><select aria-label="Kind"><option>model</option></select><select aria-label="Stage"><option>Wanted</option></select></div><input type="text" placeholder="Link to the page it came from (optional)" aria-label="Source"><div class="pair"><input type="text" placeholder="Licence, for example CC0 (optional)" aria-label="Licence"><input type="text" placeholder="Note (optional)" aria-label="Note"></div></div><div class="btns"><button class="btn pri" type="button">Add asset</button><span class="small dim">Wanted, received or staged. The hub fills in the rest.</span></div></div>
+  <div class="box"><div class="label">Recent changes</div><div class="rec"><span>4 min ago · Mailbox moved to Received</span><button class="btn" type="button">Undo</button></div><div class="rec"><span>1 h ago · Added Fire hydrant (by the master)</span><button class="btn" type="button">Undo</button></div><div class="rec"><span>yesterday · forklift_v2.glb attached to Forklift</span><button class="btn" type="button">Undo</button></div></div>
+  <p class="small dim"><a href="#assets">The pictures page</a> · <a href="#assets">3D viewer</a></p>`;
+ const right=rows?`<h2 class="sect">${st[1]}<span>${st[2]}</span><span class="x">${rows.length<st[2]?'the first '+rows.length+' shown in this mock':'you set this stage by hand'}</span></h2><div class="box">${rows.map((r,i)=>`<div class="arow"><div><div class="t">${esc(r[0])}</div><div class="d">${esc(r[1])}</div></div><div class="btns">${st[0]==='received'&&i===6?'<button class="btn" type="button">Undo</button>':''}<select aria-label="Move ${esc(r[0])} to"><option>Move to…</option></select></div></div>`).join('')}</div><details class="fold"><summary>Retired · 2</summary><p class="small dim">Folded.</p></details>`
+  :`<h2 class="sect">${st[1]}<span>${st[2]}</span><span class="x">the game decides this stage</span></h2><div class="box"><ul class="names">${GAME[st[0]].map(n=>`<li>${esc(n)}</li>`).join('')}</ul></div>`;
+ return `<div class="page two"><p class="next"><b>NEXT STEP</b><span>3 new files in assets-src/ have no row. Tell the hub which asset each one is, or add it below.</span></p>${strip}<div class="cols even"><div class="pane">${left}</div><div class="pane">${right}</div></div></div>`}
+
+// ---- sketches of the other four pages on the same frame
+const chatPage=()=>`<div class="page two"><div class="cols" style="grid-template-columns:minmax(0,1fr) 300px"><div class="pane"><div class="chatcol"><div class="msgs"><div class="cmsg u"><div class="who">You</div>The warehouse needs pallets the forklift can lift.</div><div class="cmsg"><div class="who">Master</div>I wrote a plan for it: pallets that can be lifted, carried and stacked on the racks. It is step K2 of Warehouse and waits for your approval.<br><a class="chip" href="#work">Open K2 Forklift pallets</a></div><div class="cmsg u"><div class="who">You</div>Good. And add markers to the minimap after M1.</div><div class="cmsg"><div class="who">Master</div>Done: M2 Map markers is approved and waits for M1 to be closed.</div></div><div class="composer"><textarea placeholder="Tell the master what you want" aria-label="Message"></textarea><button class="btn pri" type="button">Send</button></div></div></div>
+ <div class="pane"><div class="box"><div class="label">This chat</div><div class="kv"><span>Tokens used</span><span>6,350</span><span>Messages</span><span>4</span><span>Started</span><span>today 13:40</span></div><div class="btns" style="margin-top:10px"><button class="btn" type="button">New chat</button></div></div><div class="box"><div class="label">Plans from this chat</div><a class="chip" href="#work">K2 Forklift pallets</a> <a class="chip" href="#work">M2 Map markers</a></div></div></div></div>`;
+const commitPage=()=>`<div class="page two"><p class="next"><b>NEXT STEP</b><span>10 files changed since the last commit. Tick what belongs together, write one line, press Commit.</span></p><div class="cols even"><div class="pane"><div class="box"><div class="label">Changed files (10)</div>${[['The game',['dist/warehouse.js','dist/hud.js','dist/minimap.js','dist/world.js']],['Tests',['tests/minimap.mjs','tests/pallets.mjs']],['The hub',['hub/web/app.js','hub/web/hub.css','hub/web/work.js','hub/web/shell.js']]].map(([n,fs])=>`<div class="sect" style="margin-top:8px">${n}<span>${fs.length}</span></div><ul class="cmf">${fs.map((f,i)=>`<li><label><input type="checkbox" checked><code>${f}</code><span class="kind${i===2?' new':''}">${i===2?'new':'changed'}</span></label></li>`).join('')}</ul>`).join('')}</div></div>
+ <div class="pane"><div class="box"><div class="label">Message</div><textarea style="height:84px;resize:vertical" aria-label="Commit message">Minimap M1: round map in the corner</textarea><div class="btns" style="margin-top:8px"><button class="btn pri" type="button">Commit 10 files</button><button class="btn" type="button">Push</button><span class="small dim">2 commits not pushed yet</span></div></div><div class="box"><div class="label">Last commits</div><div class="rec"><span>2 h ago · Scene editor E2: move and rotate</span></div><div class="rec"><span>yesterday · People A2: walking animations</span></div><div class="rec"><span>yesterday · Hub 2.4.1: attach a file to an asset</span></div></div></div></div></div>`;
+const toolsPage=()=>`<div class="page"><p class="next"><b>NEXT STEP</b><span>Nothing is failing. The tests last ran 20 minutes ago.</span></p><div class="grid">${[['Run the tests','148 of 148 passed · 20 min ago','ok','Run'],['Build the release','Built 2 h ago · 4.1 MB','ok','Build'],['Check the assets','1 asset has no licence filled in','you','Check'],['Take hub screenshots','Never run','todo','Take'],['Start the game','Not running','todo','Start']].map(t=>`<div class="box"><div class="t">${t[0]}</div><div class="small" style="color:var(--${t[2]==='ok'?'ok':t[2]==='you'?'watch':'dim'})">${t[1]}</div><div class="btns"><button class="btn" type="button">${t[3]}</button><span class="small dim">Output folded away</span></div></div>`).join('')}</div></div>`;
+const tokensPage=()=>`<div class="page two"><div class="cols even"><div class="pane"><div class="grid" style="grid-template-columns:1fr 1fr;margin-bottom:12px"><div class="box"><div class="label">This week</div><div class="big">12%</div><div class="bar"><i style="width:12%"></i></div><div class="small dim">Resets Monday 09:00</div></div><div class="box"><div class="label">These 5 hours</div><div class="big">58%</div><div class="bar"><i class="o" style="width:58%"></i></div><div class="small dim">Resets today 15:14</div></div></div><div class="box"><div class="label">Rules the hub follows</div><p class="small dim" style="margin:0">It never lets the week reach 100%. From 90% it stops starting runs and asks you first.</p></div></div>
+ <div class="pane"><div class="box"><div class="label">Where the tokens went this week</div>${[['Warehouse · K1 Racks','612,000',41],['Minimap · M1','1,498,175',100],['Scene editor · E2','840,300',56],['Chat with the master','96,350',7]].map(r=>`<div class="tk"><span>${r[0]}</span><span class="bar"><i class="a" style="width:${r[2]}%"></i></span><span>${r[1]}</span></div>`).join('')}</div></div></div></div>`;
+const PAGES={work:workPage,assets:assetsPage,chat:chatPage,commit:commitPage,tools:toolsPage,tokens:tokensPage};
+
+// ---- the shell: menu, pill, scene, wave (the same rules as app.js today; the Work row has no tree under it)
+const pill=document.createElement('i');pill.className='nav-pill';
+function placePill(){const key=hover||route;root.dataset.scene=key;let hit=null;for(const li of $$('#nav li[data-key]')){const on=li.dataset.key===key;li.classList.toggle('hot',on);if(on)hit=li}
+ const a=hit&&hit.firstElementChild;if(!a){pill.style.opacity='0';return}pill.style.opacity='1';pill.style.height=a.offsetHeight+'px';pill.style.transform=`translateY(${hit.offsetTop+a.offsetTop}px)`}
+function drawNav(){const ul=$('#nav');ul.textContent='';ul.append(pill);
+ const add=([key,label,glyph],foot,first)=>{const li=document.createElement('li');li.dataset.key=key;if(foot)li.className='foot'+(first?' foot-first':'');
+  li.innerHTML=`<a href="#${key}" ${key===route?'aria-current="page"':''}><b aria-hidden="true">${glyph}</b>${label}${key==='work'?'<span class="count" title="3 things need you">3</span>':key==='assets'?'<span class="hint">3 new files</span>':''}</a>`;ul.append(li)};
+ TREE.areas.forEach(r=>add(r,false,false));TREE.foot.forEach((r,i)=>add(r,true,i===0));placePill()}
+function drawView(){$('#view').innerHTML=PAGES[route]();$('#title').textContent=LABEL[route];
+ $$('#layoutseg button').forEach(b=>b.setAttribute('aria-pressed',String(b.dataset.v===layout)))}
+function go(){const k=location.hash.replace('#','');route=PAGES[k]?k:'work';drawNav();drawView()}
+const wide=()=>innerWidth>=1100;
+function setMenu(open){const shown=open||wide();if(shown&&root.dataset.menu==='closed'){root.classList.add('opening');setTimeout(()=>root.classList.remove('opening'),800)}
+ menuOpen=open;root.dataset.menu=shown?'open':'closed';$('#menutab').setAttribute('aria-expanded',String(shown));if(wide())root.dataset.wide='';else delete root.dataset.wide}
+function setBot(){const was=root.dataset.bot;root.dataset.bot=wide()?userBot:'bar';$('#foldbtn').textContent=root.dataset.bot==='bar'?'▴':'▾';if(was!==root.dataset.bot)setTimeout(()=>dispatchEvent(new Event('resize')),0)}
+$('#menutab').addEventListener('click',()=>setMenu(!menuOpen));
+$('#nav').addEventListener('mouseover',e=>{const li=e.target.closest('li[data-key]');if(li&&li.dataset.key!==hover){hover=li.dataset.key;placePill()}});
+$('#nav').addEventListener('mouseleave',()=>{hover=null;placePill()});
+$('#nav').addEventListener('click',e=>{const li=e.target.closest('li[data-key]');if(!li||li.dataset.key===route)return;const r=li.firstElementChild.getBoundingClientRect(),w=$('#wave');
+ w.style.setProperty('--wx',Math.round(r.left+r.width/2)+'px');w.style.setProperty('--wy',Math.round(r.top+r.height/2)+'px');w.dataset.scene=li.dataset.key;w.classList.remove('go');void w.offsetWidth;w.classList.add('go')});
+$('#view').addEventListener('click',e=>{const t=e.target.closest('[data-step],[data-back],[data-stage],#groupseg button');if(!t)return;
+ if(t.dataset.step){sel=t.dataset.step;e.preventDefault()}else if(t.hasAttribute('data-back')){sel=null;e.preventDefault()}else if(t.dataset.stage)stage=t.dataset.stage;else group=t.dataset.v;drawView()});
+$('#layoutseg').addEventListener('click',e=>{const b=e.target.closest('button');if(b){layout=b.dataset.v;sel=null;location.hash='#work';drawView()}});
+$('#notesbtn').addEventListener('click',()=>{$('#notes').hidden=false});$('#notesclose').addEventListener('click',()=>{$('#notes').hidden=true});
+$('#foldbtn').addEventListener('click',()=>{userBot=root.dataset.bot==='bar'?'open':'bar';setBot()});$('#face').addEventListener('click',()=>{userBot='open';setBot()});
+const MOOD={idle:'Idle',write:'Working',wait:'Needs you',done:'Finished'};
+$('#botctl').addEventListener('click',e=>{const b=e.target.closest('[data-s]');if(b){$('#shelf').dataset.mood=b.dataset.s;$('#mood').textContent=MOOD[b.dataset.s]}});
+addEventListener('hashchange',()=>{go();if(!wide())setMenu(false)});addEventListener('resize',()=>{setMenu(menuOpen);setBot();placePill()});
+if(Q.get('notes'))$('#notes').hidden=false;
+// The panda file draws at one size. The shelf is lower than its stage, so the canvas reports a larger size and the picture is shown smaller (mock only; the build gives the panda a size setting).
+{const cv=$('#stage'),K=.7,real=Element.prototype.getBoundingClientRect;cv.getBoundingClientRect=()=>{const r=real.call(cv);return {width:r.width/K,height:r.height/K,left:r.left,top:r.top}}}
+setMenu(menuOpen);setBot();go();if(!Q.get('shot'))setTimeout(()=>root.classList.remove('boot'),80);
+})();
+</script>
+<script src="hub-v2-panda.js"></script>
+<script>
+// start the panda in the state the fake data describes: one run is editing a file
+{const s=new URLSearchParams(location.search).get('panda')||'write';
+ if(typeof want==='function'){want(s,{file:'dist/warehouse.js',used:612000,cap:1500000,asks:1});const sh=document.getElementById('shelf');sh.dataset.mood=s;document.getElementById('mood').textContent=({idle:'Idle',write:'Working',wait:'Needs you',done:'Finished'})[s]||'Working';if(new URLSearchParams(location.search).get('shot')&&typeof settle==='function'){size();settle();addEventListener('resize',()=>{size();settle()})}}}
+</script>
+</body></html>

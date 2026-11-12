@@ -136,7 +136,7 @@ a.btn{text-decoration:none;display:inline-block}
 .small.warn{color:var(--watch)}
 
 /* ---- P5 R7b: the corner bot. The face sits at the foot of the rail; the speech line and the live list grow out of the rail in a strip the page makes room for (--bot-h), so nothing is ever covered. ---- */
-html{--bot-h:0px}html[data-bot=line]{--bot-h:54px}html[data-bot=open]{--bot-h:258px}
+html{--bot-h:0px}html[data-bot=line]{--bot-h:54px}html[data-bot=open]{--bot-h:176px}
 .main{bottom:calc(18px + var(--bot-h));transition:left .2s,bottom .2s}
 .panel{bottom:calc(16px + var(--bot-h));transition:transform .2s,opacity .2s,bottom .2s}
 .chat-list{max-height:calc(100vh - 380px - var(--bot-h))}
@@ -173,7 +173,7 @@ html{--bot-h:0px}html[data-bot=line]{--bot-h:54px}html[data-bot=open]{--bot-h:25
 .bot-chev{width:7px;height:7px;margin:3px 3px 0 4px;border:solid var(--dim);border-width:1.5px 1.5px 0 0;transform:rotate(-45deg);transition:transform .2s}
 html[data-bot=open] .bot-chev{transform:rotate(135deg);margin-top:-3px}
 .bot-line:hover .bot-chev{border-color:var(--ink)}
-.bot-list{height:204px;padding:12px 14px 0;display:flex;flex-direction:column;border-bottom:1px solid rgba(255,255,255,.08)}
+.bot-list{height:124px;padding:12px 14px 0;display:flex;flex-direction:column;border-bottom:1px solid rgba(255,255,255,.08)}
 .bot-list .label{margin:0 0 6px}
 .bot-rows{flex:1;min-height:0;overflow:auto;font:12.5px/1.75 var(--mono);color:#cfcdc6}
 .bot-rows .br{display:grid;grid-template-columns:62px 1fr auto;gap:8px}
@@ -195,10 +195,10 @@ html[data-bot=open] .bot-chev{transform:rotate(135deg);margin-top:-3px}
 @property --hue{syntax:'<number>';inherits:true;initial-value:215}
 @property --glow{syntax:'<number>';inherits:true;initial-value:.48}
 html{--hue:215;--glow:.48;transition:--hue 1.1s ease,--glow 1.1s ease}
-html[data-scene=chat]{--hue:262}html[data-scene=work]{--hue:26}html[data-scene=assets]{--hue:135}html[data-scene=commit]{--hue:172}html[data-scene=tools]{--hue:14}html[data-scene=tokens]{--hue:215}
+html[data-scene=chat]{--hue:220}html[data-scene=work]{--hue:26}html[data-scene=assets]{--hue:135}html[data-scene=commit]{--hue:172}html[data-scene=tools]{--hue:14}html[data-scene=tokens]{--hue:215}
 /* what the hub is doing wins over the page, unless you are pointing at a menu row */
 html[data-mood=working]{--glow:.8}
-html[data-mood=working][data-doing=chat]:not([data-hover]){--hue:262}html[data-mood=working][data-doing=run]:not([data-hover]){--hue:14}
+html[data-mood=working][data-doing=chat]:not([data-hover]){--hue:220}html[data-mood=working][data-doing=run]:not([data-hover]){--hue:14}
 html[data-mood=question]:not([data-hover]){--hue:30;--glow:.68}
 html[data-mood=stopped]:not([data-hover]){--hue:356;--glow:.62}
 body{background:radial-gradient(34% 26% at 100% 0,rgba(var(--acc-glow),.2),transparent 70%),var(--bg)}
@@ -243,7 +243,7 @@ html[data-menu=closed] .nav-pill{opacity:0!important}
 /* the colour wave from the row you pick, the items rising in when the menu opens, and the tab swelling under the pointer (after the spine-menu reference) */
 .wave{position:fixed;inset:0;z-index:0;pointer-events:none;opacity:0;--wx:50%;--wy:50%;--wh:215;clip-path:circle(0 at var(--wx) var(--wy));
  background:radial-gradient(circle at var(--wx) var(--wy),hsl(var(--wh) 95% 62% / .5),hsl(calc(var(--wh) + 18) 90% 50% / .28) 45%,hsl(var(--wh) 80% 40% / .16))}
-.wave[data-scene=chat]{--wh:262}.wave[data-scene=work]{--wh:26}.wave[data-scene=assets]{--wh:135}.wave[data-scene=commit]{--wh:172}.wave[data-scene=tools]{--wh:14}.wave[data-scene=tokens]{--wh:215}
+.wave[data-scene=chat]{--wh:220}.wave[data-scene=work]{--wh:26}.wave[data-scene=assets]{--wh:135}.wave[data-scene=commit]{--wh:172}.wave[data-scene=tools]{--wh:14}.wave[data-scene=tokens]{--wh:215}
 .wave.go{animation:wave-go 1.15s cubic-bezier(.2,.7,.2,1) forwards}
 @keyframes wave-go{0%{opacity:1;clip-path:circle(0 at var(--wx) var(--wy))}70%{opacity:.9}100%{opacity:0;clip-path:circle(160vmax at var(--wx) var(--wy))}}
 html.opening .nav li,html.opening .panel .label{animation:rise .5s cubic-bezier(.2,.8,.2,1) backwards}
@@ -298,13 +298,6 @@ html.opening .nav li:nth-child(2){animation-delay:.04s}html.opening .nav li:nth-
 .tool-fails{margin-top:8px}.tool-fails .files{color:var(--crit);font:12.5px var(--mono);overflow-wrap:anywhere}
 .tool-fold{margin:8px 0 0}
 .tool-out{margin:6px 0 0;max-height:260px;overflow:auto;font:12px/1.45 var(--mono);color:var(--dim);background:var(--panel2);border:1px solid var(--line);border-radius:8px;padding:8px 10px;white-space:pre-wrap;overflow-wrap:anywhere}
-@media(min-width:1100px){
- .menutab{visibility:hidden}
- .gauges{justify-content:flex-start}.age{text-align:left}
- .gauges,.age,.titlerow,.view{max-width:560px}
- .view>*,.view .rcard,.view .items,.view .reader,.view .answer,.view .msg,.view .chat-list,.view .chat-composer{max-width:100%}
- .g{flex:1;width:auto}
-}
 .view .it{grid-template-columns:4px 1fr}.view .it .acts{grid-column:2;padding-bottom:2px}
 /* Hub v2 V3: the Commit page */
 .cm-group{font:600 12px var(--mono);letter-spacing:.08em;color:var(--dim);margin:12px 0 4px}
@@ -331,5 +324,88 @@ html.opening .nav li:nth-child(2){animation-delay:.04s}html.opening .nav li:nth-
 .as-rec{display:flex;gap:10px;align-items:center;justify-content:space-between;flex-wrap:wrap}.as-rec:first-of-type{border-top:0}
 .as-file .btns{margin-top:6px}.as-c{align-self:center}
 .as-gap{margin-bottom:10px}
+.panel .label .ver{color:var(--acc-ink);margin-left:4px;letter-spacing:.06em}
 .as-names{margin:4px 0 0;padding-left:18px;columns:2;font-size:13px;color:var(--dim)}.as-names li{break-inside:avoid;overflow-wrap:anywhere}
 @media(max-width:560px){.as-names{columns:1}}
+/* ---- Hub 2.4.2 step 1: the shell. The page is a dark glass sheet; its content is centred, at most 1280 px wide; the menu lists no steps (Work is one row with the "needs you" count); calmer colours; the selected row is white and bold. ---- */
+:root{--faint:#96978f}
+body{background:radial-gradient(34% 26% at 100% 0,rgba(var(--acc-glow),.2),transparent 70%),var(--bg)}
+.scene i{background:radial-gradient(34% 36% at 84% 82%,hsl(calc(var(--hue) + 14) 58% 40% / var(--glow)),transparent 72%),radial-gradient(26% 26% at 94% 92%,hsl(calc(var(--hue) + 30) 58% 50% / calc(var(--glow) * .9)),transparent 72%),radial-gradient(40% 44% at 52% 70%,hsl(var(--hue) 50% 24% / calc(var(--glow) * .85)),transparent 74%)}
+.scene i+i{background:radial-gradient(34% 40% at 24% 84%,hsl(calc(var(--hue) - 16) 50% 22% / calc(var(--glow) * .8)),transparent 72%),radial-gradient(30% 30% at 70% 44%,hsl(calc(var(--hue) + 6) 55% 34% / calc(var(--glow) * .32)),transparent 74%)}
+.wave{background:radial-gradient(circle at var(--wx) var(--wy),hsl(var(--wh) 60% 50% / .32),hsl(calc(var(--wh) + 18) 55% 42% / .18) 45%,hsl(var(--wh) 50% 34% / .1))}
+.nav-pill{background:linear-gradient(90deg,hsl(var(--hue) 45% 21%),hsl(calc(var(--hue) + 6) 50% 28%) 46%,hsl(calc(var(--hue) + 10) 46% 25%));box-shadow:0 8px 22px hsl(var(--hue) 60% 35% / .35),inset 0 1px 0 rgba(255,255,255,.18),inset 0 -1px 0 rgba(0,0,0,.25)}
+.nav li.hot>a,.nav li.foot.hot>a{transform:translateX(5px);color:#fff;font-weight:600}.nav li.hot>a b{color:#fff}.nav li.hot>a .count{color:#fff;border-color:rgba(255,255,255,.6)}
+.panel{z-index:5;background:rgba(22,24,30,.8)}
+.panel::before{background:radial-gradient(circle at 100% 0,transparent 17.5px,rgba(22,24,30,.8) 18px)}.panel::after{background:radial-gradient(circle at 100% 100%,transparent 17.5px,rgba(22,24,30,.8) 18px)}
+html:not([data-wide]) .panel{background:rgba(22,24,30,.94)}
+.rail{z-index:6}
+.main{display:block;z-index:1;right:22px;top:14px;bottom:calc(14px + var(--bot-h));padding:12px 16px 10px;border-radius:18px;border:1px solid rgba(255,255,255,.07);background:rgba(12,13,16,.7);-webkit-backdrop-filter:blur(18px);backdrop-filter:blur(18px)}
+html[data-wide] .main{left:calc(var(--rail) + var(--panelw) + 34px)}
+.wrap{max-width:1280px;margin:0 auto;height:100%;display:flex;flex-direction:column;gap:10px;min-width:0}
+.head{display:flex;gap:10px 18px;align-items:center;flex-wrap:wrap}
+.head .gauges{margin-left:auto;display:flex;gap:8px;align-items:center;flex-wrap:wrap;justify-content:flex-end}
+.head .g{width:176px;flex:none}.head .age{text-align:left;margin:0;min-height:0}
+.view{padding-bottom:8px}
+@media(min-width:1100px){.menutab{visibility:hidden}}
+@media(max-width:699px){.head .g{width:auto;flex:1}}
+/* ---- Hub 2.4.2 step 2: the Work page. Two panes at 900 px of page width or more: the list, and the open step beside it. Narrower: the list, or the open step with a back link. ---- */
+.view{container:page/inline-size;position:relative}
+.page{height:100%;overflow:auto;scrollbar-width:thin;padding-bottom:8px}
+.page>.next{margin:0 0 12px;font-size:15px;line-height:1.5;border:1px solid rgba(var(--acc-glow),.4);background:rgba(15,17,21,.74);border-radius:12px;padding:10px 14px;display:flex;gap:6px 14px;align-items:baseline;flex-wrap:wrap}
+.page>.next span{flex:1 1 320px;min-width:0}
+.cols{display:block}.pane{min-width:0}
+@container page (min-width:900px){
+ .page.two{display:flex;flex-direction:column;overflow:hidden;padding-bottom:0}
+ .page.two>.cols{flex:1;min-height:0;display:grid;grid-template-columns:minmax(340px,5fr) minmax(0,7fr);gap:18px}
+ .page.two .pane{overflow:auto;scrollbar-width:thin;min-height:0;padding:0 4px 10px 0}
+ .page .back{display:none}
+}
+@container page (max-width:899px){.work:not(.has-sel) .pane.detail{display:none}.work.has-sel .pane.list{display:none}.work.has-sel>.next{display:none}}
+.listtop{display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-bottom:4px;font-size:13px;color:var(--dim)}.listtop .count-line{margin-left:auto}
+.seg{display:inline-flex;border:1px solid var(--line);border-radius:9px;overflow:hidden;background:rgba(15,17,21,.74)}
+.seg button{border:0;background:none;padding:4px 11px;font-size:13px;color:var(--dim);cursor:pointer}.seg button[aria-pressed=true]{background:rgba(var(--acc-glow),.26);color:var(--ink)}
+.rows{display:grid;gap:6px}
+.row{display:grid;grid-template-columns:16px minmax(0,1fr) auto;gap:10px;align-items:start;width:100%;text-align:left;border:1px solid var(--line);background:rgba(15,17,21,.74);border-radius:10px;padding:9px 12px;cursor:pointer;color:var(--ink);text-decoration:none;transition:border-color .2s,transform .25s cubic-bezier(.3,1.2,.4,1)}
+.row:hover{border-color:hsl(var(--hue) 70% 60% / .55);transform:translateX(3px)}
+.row .s{margin-top:2px}.row .t{font-size:14.5px;font-weight:600;overflow-wrap:anywhere}.row .t em{font-style:normal;font-weight:400;color:var(--dim)}
+.row .d{font-size:13px;color:var(--dim);overflow-wrap:anywhere}.row .go{color:var(--faint);align-self:center}
+.row.you{border-color:rgba(224,176,96,.5);box-shadow:inset 3px 0 0 var(--watch)}.row.you .d{color:var(--watch)}
+.row.run{border-color:rgba(var(--acc-glow),.5)}
+.row.lite{padding:6px 12px;background:rgba(15,17,21,.55)}.row.lite .t{font-weight:500;font-size:14px}
+.row[aria-current=true]{background:linear-gradient(rgba(var(--acc-glow),.2),rgba(var(--acc-glow),.2)),rgba(15,17,21,.85);border-color:var(--acc)}
+.crumb{font:600 11px var(--mono);letter-spacing:.14em;text-transform:uppercase;color:var(--dim)}
+.act{border:1px solid rgba(var(--acc-glow),.45);background:rgba(var(--acc-glow),.08);border-radius:12px;padding:4px 14px;margin:8px 0 12px}.act.you{border-color:rgba(224,176,96,.5);background:rgba(224,176,96,.07)}
+.act .next{margin:8px 0;border:0;background:none;padding:0}
+.track{display:flex;gap:4px 6px;flex-wrap:wrap;align-items:center;margin:4px 0 12px}
+.trk{display:inline-flex;gap:6px;align-items:baseline;border:1px solid var(--line);border-radius:99px;padding:2px 10px 2px 6px;color:var(--dim);font-size:13px;text-decoration:none}.trk[aria-current=true]{border-color:var(--acc);color:var(--ink);background:rgba(var(--acc-glow),.18)}
+/* ---- Hub 2.4.2 step 3: Assets. The six stage cells switch the rows on the right. ---- */
+.page.two>.cols.even{grid-template-columns:minmax(0,5fr) minmax(0,6fr)}
+.strip,.as-strip{display:grid;grid-template-columns:repeat(6,minmax(0,1fr));gap:8px;margin:0 0 14px}
+@container page (max-width:640px){.strip,.as-strip{grid-template-columns:repeat(3,minmax(0,1fr))}}
+.as-cell,.cell{border:1px solid var(--line);background:rgba(20,22,26,.9);border-radius:10px;padding:8px 12px;display:grid;gap:0;min-width:0;text-align:left;cursor:pointer;color:var(--ink)}
+.cell b{font:650 21px var(--sans)}.cell span{font:600 11px var(--mono);letter-spacing:.08em;text-transform:uppercase;color:var(--dim);overflow-wrap:anywhere}.cell i{font:normal 12px var(--sans);color:var(--faint)}
+.cell.hand i{color:var(--acc-ink)}.cell[aria-pressed=true]{border-color:hsl(var(--hue) 70% 55%);box-shadow:0 0 0 2px hsl(var(--hue) 70% 55% / .3);background:hsl(var(--hue) 40% 14% / .95)}
+.as-gap{margin-bottom:12px}
+@container page (max-width:899px){.page.two>.cols .pane+.pane{margin-top:14px}}
+/* ---- Hub 2.4.2 step 4: the panda shelf. Open, the bot lies along the bottom of the page area (164 px) with the panda drawn behind its text; the page ends above it. Folded to the line or the face, it is the small bar of before. ---- */
+.bot-stage{display:none;position:absolute;inset:0;width:100%;height:100%;pointer-events:none}
+html[data-bot=open] .bot-stage{display:block}
+html[data-bot=open] .bot-bubble{left:calc(var(--rail) + 22px);right:22px;width:auto;height:164px;border-radius:16px;border:1px solid rgba(255,255,255,.1);background:rgba(18,20,25,.82);overflow:hidden;box-shadow:0 14px 36px rgba(0,0,0,.4)}
+html[data-wide][data-bot=open] .bot-bubble{left:calc(var(--rail) + var(--panelw) + 34px)}
+html[data-bot=open] .bot-bubble::before,html[data-bot=open] .bot-bubble::after{display:none}
+html[data-bot=open] .bot-line{order:-1;position:relative;z-index:1;width:min(62%,680px);border-radius:16px 0 0 0}
+html[data-bot=open] .bot-list{position:relative;z-index:1;width:min(46%,520px);border-bottom:0;padding:0 14px}
+html[data-bot=open] .bot-list .label{display:none}
+html[data-bot=open] .bot-rows .br:nth-last-child(n+3){display:none}
+html[data-bot=open] .bot-foot{height:auto;padding-top:2px}
+html[data-wide][data-bot=open] .panel{bottom:16px}
+@media(max-width:699px){html[data-bot=open] .bot-bubble{left:calc(var(--rail) + 6px);right:8px}}
+html[data-bot=open] .bot-face{display:none}
+
+/* ---- Hub 2.5b: the cache strip ---- */
+.cstrip{border:1px solid var(--line);background:rgba(20,22,26,.9);border-radius:12px;padding:10px 14px;margin:0 0 10px;display:grid;gap:4px;max-width:900px}.cstrip[hidden]{display:none}
+.cstrip .label{margin:0 0 2px}.cstrip .capbar{margin:2px 0}
+.cparts{display:flex;height:8px;border-radius:5px;overflow:hidden;background:rgba(255,255,255,.1);margin:2px 0}.cparts[hidden]{display:none}
+.c-re{background:var(--ok)}.c-wr{background:var(--watch)}
+.cwarn{border:1px solid rgba(224,176,96,.5);background:rgba(224,176,96,.07);border-radius:12px;padding:10px 14px;margin:0 0 10px;max-width:900px}.cwarn p{margin:0 0 8px}.cwarn[hidden]{display:none}
+.tokbar{display:flex;gap:10px 14px;align-items:center;flex-wrap:wrap;margin:0 0 8px}.tokbar[hidden]{display:none}

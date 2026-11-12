@@ -397,7 +397,7 @@ function getMeWorldPosition(target){
  return player.parent.localToWorld(target);
 }
 
-setMePosition(MAP.spawn.x,MAP.spawn.y,MAP.spawn.z);let yaw=0,pitch=.38,zoom=7,zoomTarget=7,active=false,modal=false,discovered=false,phase=0,busy=null,worldPanel=null,selectedInteraction=null;const keys=createMovementInput(window,document,()=>active&&!modal&&!creatorOpen&&!actionBusy());const updateCamera=createCameraController(camera,cameraSolids,trees,lampMeshes);
+setMePosition(MAP.spawn.x,MAP.spawn.y,MAP.spawn.z);let editorHook=null,yaw=0,pitch=.38,zoom=7,zoomTarget=7,active=false,modal=false,discovered=false,phase=0,busy=null,worldPanel=null,selectedInteraction=null;const keys=createMovementInput(window,document,()=>active&&!modal&&!creatorOpen&&!actionBusy());const updateCamera=createCameraController(camera,cameraSolids,trees,lampMeshes);
 // Reset safety net (safe-spot.js). Every reset, teleport and rescue goes through placeSafely: a destination that is blocked (a car parked on the spawn, a
 // closed shop door's blocker) becomes the nearest clear spot instead, never a place you cannot walk out of. Runs when asked, never per frame.
 function placeSafely(x,y,z,{keepIfNone=false}={}){
@@ -796,7 +796,7 @@ function updateWork(dt){
 window.addEventListener('keydown',e=>{
  if(cargoUI?.isOpen&&cargoUI.key(e.code)){e.preventDefault();return}
  if(sleepElapsed!==null){if(['Tab','Space'].includes(e.code))e.preventDefault();return}
- if(creatorOpen||e.target.matches('input,select,textarea,[contenteditable=true]'))return;
+ if(creatorOpen||editorHook||e.target.matches('input,select,textarea,[contenteditable=true]'))return;
  if(e.code==='KeyY'&&active&&!inside&&(!shop||inWarehouse())&&!e.ctrlKey&&!e.metaKey&&!e.altKey){e.preventDefault();if(!e.repeat)setFocus(nextFocus(GameState.progress,trackerItems(GameState.progress,me.position,trackerRoom())));return}
  if((e.code==='KeyT'||e.code==='KeyJ')&&active&&!e.ctrlKey&&!e.metaKey&&!e.altKey){e.preventDefault();if(!e.repeat)toggleObjective();return}
  if(e.code==='KeyM'&&active&&!e.ctrlKey&&!e.metaKey&&!e.altKey){e.preventDefault();if(!e.repeat)minimap.toggle();return}
@@ -817,15 +817,15 @@ window.addEventListener('keydown',e=>{
  }
  if((e.code==='KeyI'||e.code==='KeyQ')&&!e.ctrlKey&&!e.metaKey&&!e.altKey&&active){e.preventDefault();if(!e.repeat)inventoryUI.open(e.code==='KeyI'?'grid':'wheel');return}
 if(['ArrowUp','ArrowDown','ArrowLeft','ArrowRight','Space'].includes(e.code))e.preventDefault();if(e.code==='Escape'&&active){if(!$('dialog').hidden){$('dialog').hidden=true;clearWorldPanel();modal=false;keys.clear();look.capture()}else {pause(!modal);if(!modal)look.capture()}}if(e.code==='KeyE'&&!e.repeat){eHeld=!modal;interact()}if(e.code==='KeyF'&&!e.repeat)fHeld=!modal;if(e.code==='KeyH'&&!e.repeat&&!modal)interact('H');});
-window.addEventListener('blur',()=>{eHeld=false;fHeld=false;if(active&&!modal&&!creatorOpen)pause(true)});
+window.addEventListener('blur',()=>{eHeld=false;fHeld=false;if(active&&!modal&&!creatorOpen&&!editorHook)pause(true)});
 window.addEventListener('keyup',e=>{if(e.code==='KeyE')eHeld=false;if(e.code==='KeyF')fHeld=false});
 // Left click acts like E once the mouse is captured (the click that captures it only captures); hold to keep chopping.
 window.addEventListener('mousedown',e=>{if(e.button!==0||!active||modal||creatorOpen||!look.locked())return;e.preventDefault();eHeld=true;interact()});
 window.addEventListener('mouseup',e=>{if(e.button===0)eHeld=false});
-const canvas=$('world');const look=createLookControls(canvas,document,()=>active&&!modal&&!creatorOpen&&!document.hidden,(dx,dy)=>{yaw-=dx*.003;pitch=THREE.MathUtils.clamp(pitch+dy*.002,.08,1.05);driveIdle=0},()=>{keys.clear();if(active&&!modal&&!creatorOpen)pause(true)},info=>{$('mouseMode').textContent=info.mode==='captured'?'Mouse look: captured':info.mode==='free'?'Mouse look: free · move to screen edges to keep turning':'Click the game to look around';if(info.reason)$('mouseMode').title=info.reason});
+const canvas=$('world');const look=createLookControls(canvas,document,()=>active&&!modal&&!creatorOpen&&!editorHook&&!document.hidden,(dx,dy)=>{yaw-=dx*.003;pitch=THREE.MathUtils.clamp(pitch+dy*.002,.08,1.05);driveIdle=0},()=>{keys.clear();if(active&&!modal&&!creatorOpen)pause(true)},info=>{$('mouseMode').textContent=info.mode==='captured'?'Mouse look: captured':info.mode==='free'?'Mouse look: free · move to screen edges to keep turning':'Click the game to look around';if(info.reason)$('mouseMode').title=info.reason});
 $('retryCapture').onclick=()=>{pause(false);look.retry()};
 $('lookLeft').onclick=()=>{yaw+=Math.PI/8};$('lookRight').onclick=()=>{yaw-=Math.PI/8};
-canvas.addEventListener('wheel',e=>{e.preventDefault();if(active&&!modal&&!creatorOpen){const delta=e.deltaY*(e.deltaMode===1?16:e.deltaMode===2?innerHeight:1);zoomTarget=THREE.MathUtils.clamp(zoomTarget+delta*.008,3,driving.active?Math.max(12,driving.cameraZoom()*1.4):12)}},{passive:false});
+canvas.addEventListener('wheel',e=>{e.preventDefault();if(active&&!modal&&!creatorOpen&&!editorHook){const delta=e.deltaY*(e.deltaMode===1?16:e.deltaMode===2?innerHeight:1);zoomTarget=THREE.MathUtils.clamp(zoomTarget+delta*.008,3,driving.active?Math.max(12,driving.cameraZoom()*1.4):12)}},{passive:false});
 document.querySelectorAll('[data-key]').forEach(b=>{b.onpointerdown=e=>{e.preventDefault();keys.pressPointer(e.pointerId,b.dataset.key);b.setPointerCapture(e.pointerId)};b.onpointerup=b.onpointercancel=b.onlostpointercapture=e=>keys.releasePointer(e.pointerId)});$('touchE').onclick=()=>interact();
 function applyQuality(value){const high=value==='high';renderer.setPixelRatio(Math.min(devicePixelRatio,high?1.6:1));renderer.shadowMap.enabled=high;scene.traverse(m=>{if(m.material)m.material.needsUpdate=true});renderer.setSize(innerWidth,innerHeight)}
 $('quality').onchange=()=>{$('menuQuality').value=$('quality').value;$('menuQuality').onchange()}; // the main menu's setting saves and applies it
@@ -1411,6 +1411,7 @@ function frame(now){
  prev=now;
  if(GameState.progress.properties!==signsFor){signsFor=GameState.progress.properties;houseSigns.sync(heldIds(GameState.progress))} // rent, buy, move out, eviction: the sign follows
  if(creatorOpen){previewAvatar.update(view);drawCreator();return}
+ if(editorHook){editorHook.frame(view);renderer.render(scene,camera);return} // the scene editor (scene-editor.js) is open: the world is paused, only its camera and helpers move
  // Before the game starts only the main menu is visible: draw the world once (this warms the shaders and textures), then stop until Play.
  if(!active){if(menuDrawn)return;menuDrawn=true}else menuDrawn=false;
  frames++;elapsed+=real;if(elapsed> .75){$('fps').textContent=Math.round(frames/elapsed)+' FPS';frames=0;elapsed=0}
@@ -1495,6 +1496,11 @@ if(DEV_MODE){try{
    }
   },
   start:startGame,active:()=>active,releaseCursor:()=>look.release(),reset,unstick,
+  editor:{camera,scene,canvas:$('world'),world,on:()=>!!editorHook, // the scene editor (scene-editor.js): it pauses the world by taking over frame(); leave() puts the player back with placeSafely
+   blocked:()=>!active?'Start the game first.':modal?'Close the open menu first.':inside||shop?'Go outdoors first.':driving.active||fork.on?'Get out of the vehicle first.':null,
+   player:()=>({x:me.position.x,z:me.position.z}),
+   enter(hook){editorHook=hook;keys.clear();eHeld=false;fHeld=false;look.release()},
+   leave(){editorHook=null;keys.clear();eHeld=false;fHeld=false;return placeSafely(me.position.x,me.position.y,me.position.z)}},
   teleport(x,z){
    if(inside||shop)return {ok:false,message:'Go outside first: teleporting works on the street.'};
    if(!Number.isFinite(x)||!Number.isFinite(z))return {ok:false,message:'That is not a place.'};

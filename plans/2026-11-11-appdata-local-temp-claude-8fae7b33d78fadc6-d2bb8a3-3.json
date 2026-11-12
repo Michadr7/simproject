@@ -1,0 +1,23 @@
+{
+ "id": "2026-11-11-appdata-local-temp-claude-8fae7b33d78fadc6-d2bb8a3-3",
+ "title": "Scene editor E3: Open Editor, free camera, select, move, turn, remove",
+ "from": "claude",
+ "source": "../../../AppData/Local/Temp/claude/8fae7b33d78fadc6/d2bb8a31-fb65-4d26-b949-48463c10a7fa/scratchpad/plans/scene-editor-e3-plan.md",
+ "status": "approved",
+ "revisions": [
+  {
+   "n": 1,
+   "at": 1794430421315,
+   "hash": "b5117cfcc1822975",
+   "text": "# Scene editor E3: Open Editor, free camera, select, move, turn, remove\n\nStep 3 of 6 of the in-game scene editor. Design page: https://claude.ai/artifact/GZf1vP9iD5ChT2cx2BGD6p. Read PROJECT-BRIEF.md first and follow its standing rules. Needs E1 and E2.\n\n## Goal\nFrom Dev Mode you press \"Open Editor\", the game pauses, and you can fly over the map, pick a prop, drag it on the ground, turn it, remove it, and undo. Plain panels; the library and the polished look come in E4.\n\n## Build\n1. `dist/scene-editor.js` (new), loaded with a dynamic `import()` only when the Dev Mode button is pressed, so the deployed game never loads it unless Dev Mode is on (`dev-flag.js`).\n2. Dev panel (`dev.js`): an \"Open Editor\" button. Keep the existing \"Interior editor\" as it is.\n3. While the editor is open: the game clock and `stepWorld` are paused, the HUD is hidden, player input is ignored. Closing restores everything and puts the player back with `placeSafely`.\n4. Free camera: WASD or arrows pan over the ground, wheel zooms, right-drag orbits, Q and E lower and raise. Clamp to `MAP.ground`.\n5. Picking: a click picks an editor-placed prop or a named map prop (keys from `sceneKeys()`); an outline box shows the selection. Instanced props are picked by their spot's footprint from `propInfo`, not by raycasting every triangle.\n6. Tools: drag moves on the ground plane with `snap` (0.5 m; hold Alt for no snap); R and Shift+R turn by 15 degrees; Delete removes; Ctrl+D copies; Ctrl+Z and Ctrl+Y undo and redo; Esc deselects, then closes. Every change goes through the E1 transactions and then `rebuild(edits)` from E2, so what you see is what the overlay would draw.\n7. A simple top bar: \"N added, N moved, N removed\" (E1 `summary`), Discard (back to the shipped `SCENE_EDITS`), Close. The working edit is kept in `localStorage` (try/catch) so a reload does not lose it. Send to hub and Apply to game come in E5; leave two disabled buttons for them.\n8. Refuse an action that fails `validateEdits` and show the plain-language reason.\n9. Tests: `tests/scene-editor.mjs` on the packaged game through the existing boot helper: open the editor, the world is paused, select by key, move with snap, turn, remove, undo, redo, discard, close restores the player and the HUD. Keep pointer maths in small pure functions so they are tested without a GPU.\n\n## Frame rate\nEditor-only cost: an outline box and a ground grid, about 3 to 5 draw calls, only while open and paused. Nothing in normal play. The agent's browser is software WebGL (about 4 FPS), so the feel of the camera and dragging is NOT verified by this run: say so in the report.\n\n## Rules\n- `game.js` changes: as few lines as possible, in its dense one-statement-per-line style, single-line anchors, check each edit landed. No change to `map-definition.js`, `world.js` or `town.js`.\n- No BOM. After the change run `npm run release -- --force`, then `npm test`. Stop with tests passing; report failures honestly. If a test fails only because PROJECT-INDEX.md is stale, say so and do not edit generated files.\n- Do not commit.\n\n## Done when\nThe editor opens from Dev Mode, edits props through the E1 rules with a live redraw, survives a reload, and closing it leaves the game exactly as it was.\n\n## Run\nmodel: sonnet\nwhy: builds the editor against packaged-game tests\nsize: M\nneeds: release, test, check\n"
+  }
+ ],
+ "answers": [
+  {
+   "revision": 1,
+   "at": 1794436942462,
+   "verdict": "approved",
+   "note": ""
+  }
+ ]
+}

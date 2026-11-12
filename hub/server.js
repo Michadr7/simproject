@@ -27,16 +27,19 @@ import {renderMarkdown} from './markdown.js';
 import {loadReadings,evaluate} from './watcher.js';
 import {buildWaiting} from './waiting.js';
 import {buildActivity,feedRunOf} from './activity.js';
+import {buildTokensPage,logTotal} from './tokens-page.mjs';
+import {appendReading} from './watcher.js';
 import {buildWork,projectLine} from './work.js';
 import {parseRunBlock,quickFix} from './runplan.js';
 import {JOB_ID} from './jobs.js';
+import {HUB_VERSION} from './web/shell.js';
 
 export const MAX_BODY=64*1024,MAX_RUN_ANSWER=8000;
 const TYPES={'.html':'text/html; charset=utf-8','.js':'text/javascript; charset=utf-8','.css':'text/css; charset=utf-8','.json':'application/json; charset=utf-8','.png':'image/png','.jpg':'image/jpeg','.jpeg':'image/jpeg','.glb':'model/gltf-binary','.gltf':'model/gltf+json','.bin':'application/octet-stream'};
 export const typeOf=file=>TYPES[path.extname(file).toLowerCase()]||'application/octet-stream';
 
 export const hostAllowed=(host,port)=>typeof host==='string'&&(host===`127.0.0.1:${port}`||host===`localhost:${port}`);
-const FIXED={'/':'hub/web/index.html','/assets':'.hub/assets.html','/tokens':'.hub/watcher.html','/register':'assets-register.json','/studio.html':'hub/studio.html','/viewer.html':'hub/viewer.html','/builders.js':'hub/builders.js','/orbit.js':'hub/orbit.js','/compare.js':'hub/compare.js'};
+const FIXED={'/':'hub/web/index.html','/assets':'.hub/assets.html','/register':'assets-register.json','/studio.html':'hub/studio.html','/viewer.html':'hub/viewer.html','/builders.js':'hub/builders.js','/orbit.js':'hub/orbit.js','/compare.js':'hub/compare.js'};
 const WEB=/^\/web\/[A-Za-z0-9._-]+\.(html|js|css)$/;
 const DIST=/^\/dist\/(vendor\/)?[A-Za-z0-9._-]+\.(js|json|png|jpg)$/;
 const SRC=/\.(glb|gltf|bin|png|jpg|jpeg)$/i;
@@ -44,7 +47,7 @@ const PREVIEW=/^\/previews\/([a-f0-9]{16,40}\.png|manifest\.json|catalog\.json)$
 const PLAN_API=/^\/api\/plans\/([a-z0-9][a-z0-9-]{0,79})$/;
 const ANSWER_API=/^\/api\/plans\/([a-z0-9][a-z0-9-]{0,79})\/answer$/;
 const QUICK_API=/^\/api\/plans\/([a-z0-9][a-z0-9-]{0,79})\/quick$/;
-const TOOL_WRITES={'/api/jobs/start':'job-start','/api/jobs/stop':'job-stop','/api/hub/restart':'hub-restart'};
+const TOOL_WRITES={'/api/jobs/start':'job-start','/api/jobs/stop':'job-stop','/api/hub/restart':'hub-restart','/api/probe':'probe'};
 // Hub v2 V3: commit and push, each its own press. [api name, is a write]. The reads need no token (like the other lists); every write needs the hub token.
 const COMMIT_ROUTES={'/api/commit/proposal':['commit-proposal',false],'/api/commit/summary':['commit-summary',false],'/api/push/status':['push-status',false],'/api/commit':['commit-do',true],'/api/commit/undo':['commit-undo',true],'/api/push':['push-do',true]};
 // Hub v2 V4: the Assets area. They work without --runs, with their own token (records.token, given by GET /api/hub-token as recordsToken).
@@ -62,6 +65,7 @@ export function resolveRoute(root,pathname,host,port){
  if(!hostAllowed(host,port))return {status:403,why:'host not allowed'};
  if(typeof pathname!=='string'||!pathname.startsWith('/')||pathname.includes('\0')||pathname.includes('\\'))return {status:400,why:'bad path'};
  const segments=pathname.split('/');if(segments.includes('..')||segments.includes('.'))return {status:403,why:'path escapes'};
+ if(pathname==='/tokens')return {api:'tokens'};
  if(pathname==='/api/gauges')return {api:'gauges'};
  if(pathname==='/api/plans')return {api:'plans'};
  if(pathname==='/api/waiting')return {api:'waiting'};
@@ -144,7 +148,8 @@ const readBody=req=>new Promise(ok=>{let size=0,chunks=[],big=false;req.on('data
 // jobs: the job runner (hub/job-runner.mjs) or null. restart: () => {error} or {go}, given by the program that can end this process (hub/hub-cli.mjs), or null.
 // commits: the commit and push controller (hub/commit-ctl.mjs) or null. This file has no process code: git is started only by hub/git.mjs.
 // records: the asset record store (hub/records-store.mjs) or null.
-export function createHubServer({root,port=0,runs=null,chat=null,jobs=null,commits=null,records=null,restart=null,startedAt=Date.now()}={}){
+let probing=false;
+export function createHubServer({root,port=0,runs=null,chat=null,jobs=null,commits=null,records=null,restart=null,startedAt=Date.now(),logsDir=undefined,probeFn=null}={}){
  const plansDir=path.join(root,'plans');
  const server=http.createServer(async(req,res)=>{
   const headers=type=>({'Content-Type':type,'X-Content-Type-Options':'nosniff','Cache-Control':'no-store','Cross-Origin-Resource-Policy':'same-origin'});
@@ -216,7 +221,19 @@ export function createHubServer({root,port=0,runs=null,chat=null,jobs=null,commi
       out=await jobs.stop(b.id)}
      if(out.error)return json(out.code||409,{error:out.error});
      return json(200,{job:out.job})}
-    if(r.api==='commit-do'||r.api==='commit-undo'||r.api==='push-do'){
+    if(r.api==='probe'){
+     // Hub v2.5c: "Take a fresh reading". One small Haiku call (about 7,600 tokens). Pressing the button is the owner's go-ahead; the token rule is the same as runs, and nothing else may be working.
+     if(!runs)return json(503,{error:'readings need the hub to be started with --runs'});
+     if(!runs.checkToken(req.headers['x-hub-token']))return json(403,{error:'hub token required'});
+     if(!probeFn)return json(503,{error:'This hub cannot take a reading.'});
+     if(probing)return json(423,{error:'A reading is already being taken.'});
+     if(runs.locked()||(chat&&chat.working())||(jobs&&jobs.active()))return json(423,{error:'Something is working. Take a reading when it has finished.'});
+     probing=true;
+     try{const rd=await probeFn({approved:true}),row={...rd,tokensTotal:logTotal(logsDir||undefined)};if(row.tokensTotal==null)delete row.tokensTotal;
+      appendReading(path.join(root,'.hub','usage.jsonl'),row);
+      return json(200,{reading:{weekly:rd.weekly?rd.weekly.pct:null,fiveHour:rd.fiveHour?rd.fiveHour.pct:null,costUsd:rd.costUsd??null}})}
+     catch(e){return json(502,{error:String(e&&e.message||'The reading failed.').slice(0,200)})}
+     finally{probing=false}}    if(r.api==='commit-do'||r.api==='commit-undo'||r.api==='push-do'){
      // Hub v2 V3: the owner's press. The token rule is the same as runs; the controller refuses while anything works, and checks every path against its own proposal.
      if(!commits||!runs)return json(503,{error:'commit is not switched on (start the hub with --runs)'});
      if(!runs.checkToken(req.headers['x-hub-token']))return json(403,{error:'hub token required'});
@@ -272,6 +289,7 @@ export function createHubServer({root,port=0,runs=null,chat=null,jobs=null,commi
     if(s.error)return json(400,{error:s.error});
     return json(200,{action:s.action,plan:planSummary(s.plan),...foundOf(root)})}
    if(r.api){
+    if(r.api==='tokens')return send(200,buildTokensPage({root,logs:logsDir}),'text/html; charset=utf-8');
     if(r.api==='gauges')return json(200,gaugesOf(root));
     if(r.api==='plans')return json(200,plansOf(root));
     if(r.api==='waiting')return json(200,waitingOf(root,Date.now(),runs));
@@ -283,7 +301,7 @@ export function createHubServer({root,port=0,runs=null,chat=null,jobs=null,commi
     if(r.api==='chatfeed')return json(200,chat?chat.feed(Number.parseInt(url.searchParams.get('after'),10)||0):{turn:0,working:false,events:[],last:0});
     if(r.api==='activity')return json(200,activityOf(runs,chat));
     if(r.api==='jobs')return json(200,jobs&&runs?jobs.list():{enabled:false,busy:false,running:null,jobs:[]});
-    if(r.api==='hub-id')return json(200,{hub:HUB_NAME,pid:process.pid,startedAt,canRestart:!!(restart&&runs)});
+    if(r.api==='hub-id')return json(200,{hub:HUB_NAME,version:HUB_VERSION,pid:process.pid,startedAt,canRestart:!!(restart&&runs)});
     if(r.api==='commit-proposal')return json(200,commits&&runs?commits.proposal():{enabled:false});
     if(r.api==='commit-summary')return json(200,commits&&runs?commits.summary():{enabled:false,files:0,unpushed:0});
     if(r.api==='push-status')return json(200,commits&&runs?commits.pushStatus():{enabled:false,canPush:false,count:0,commits:[]});

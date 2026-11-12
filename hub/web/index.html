@@ -5,15 +5,19 @@
 <body>
 <div class="rail"><button id="menutab" class="menutab" type="button" aria-controls="panel" aria-expanded="true">MENU</button></div>
 <nav id="panel" class="panel" aria-label="Hub areas"><div class="label">Mikkadr Hub</div><ul id="nav" class="nav"></ul></nav>
-<main class="main">
- <div class="gauges" aria-label="Token use">
-  <div id="g-weekly" class="g" data-name="This week" data-bar="none"><div class="row"><span>This week</span><span class="val">…</span></div><div class="bar"><i></i></div></div>
-  <div id="g-five" class="g" data-name="These 5 hours" data-bar="none"><div class="row"><span>These 5 hours</span><span class="val">…</span></div><div class="bar"><i></i></div></div>
+<main class="main"><div class="wrap">
+ <div class="head">
+  <h1 id="title" class="title">Work</h1><a id="needs" class="needs" href="#work" hidden></a>
+  <div class="gauges" aria-label="Token use">
+   <div id="g-weekly" class="g" data-name="This week" data-bar="none"><div class="row"><span>This week</span><span class="val">…</span></div><div class="bar"><i></i></div></div>
+   <div id="g-five" class="g" data-name="These 5 hours" data-bar="none"><div class="row"><span>These 5 hours</span><span class="val">…</span></div><div class="bar"><i></i></div></div>
+   <div id="g-age" class="age"></div>
+  </div>
  </div>
- <div id="g-age" class="age"></div>
- <div class="titlerow"><h1 id="title" class="title">Work</h1><a id="needs" class="needs" href="#work" hidden></a></div>
  <section id="view" class="view"></section>
+ <div id="tokbar" class="tokbar" hidden><button id="probebtn" class="btn pri" type="button">Take a fresh reading</button><span class="small dim">One small Haiku call, about 7,600 tokens. Pressing the button is your go-ahead.</span><span id="probenote" class="small" role="status"></span></div>
  <iframe id="frame" class="frame" title="Hub page" hidden></iframe>
+</div>
 </main>
 <script type="module" src="/web/app.js"></script>
 </body></html>

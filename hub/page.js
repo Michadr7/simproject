@@ -24,13 +24,14 @@ function gauge(win,config){
   <div class="note">${esc(reset)}${win.readingAt?`${reset?' · ':''}read ${esc(duration(Date.now()-win.readingAt))} ago`:''}</div>
  </section>`}
 
-export function renderPage({state,today,week,readings=[],rate=null,generatedAt=Date.now(),probeCommand='npm run watcher -- --probe'}){
+export function renderPage({state,today,week,readings=[],rate=null,generatedAt=Date.now(),fresh=false,probeCommand='npm run watcher -- --probe'}){
  const accent=ACCENT[state.weekly.known?state.weekly.zone:'unknown'];
  const banners=state.warnings.map(w=>`<div class="banner b-${w.level}" role="${w.level==='stop'?'alert':'status'}"><b>${esc(({stop:'STOP',critical:'CRITICAL',high:'HIGH',watch:'WATCH',info:'NOTE'})[w.level])}</b> ${esc(w.text)}</div>`).join('')||'<div class="banner b-ok" role="status"><b>OK</b> Both gauges are inside their limits.</div>';
  const cases=[['Sonnet, small task',{estimatePct:1,model:'sonnet'}],['Sonnet, large task',{estimatePct:5,model:'sonnet'}],['Opus, medium task',{estimatePct:3,model:'opus'}],['Any model, no estimate',{estimatePct:null,model:'sonnet'}],['Opus, huge task',{estimatePct:15,model:'opus'}]];
  const rows=cases.map(([label,opts])=>{const r=canStart(state,opts);return `<tr><td>${esc(label)}</td><td>${opts.estimatePct==null?'unknown':opts.estimatePct+'%'}</td><td><span class="chip ${!r.ok?'c-no':r.needsProbe||r.secondYes?'c-warn':'c-ok'}">${!r.ok?'refused':r.needsProbe?'new reading first':r.secondYes?'needs a second yes':'allowed'}</span></td><td>${esc(r.reasons.join('; ')||(r.needsProbe?'take a new reading first':''))}</td></tr>`}).join('');
  const modelRows=m=>Object.entries(m).sort((a,b)=>b[1].billable-a[1].billable).map(([name,t])=>`<tr><td>${esc(name)}</td><td class="n">${num(t.messages)}</td><td class="n">${num(t.billable)}</td><td class="n">${num(t.output)}</td><td class="n dim">${num(t.cacheRead)}</td></tr>`).join('')||'<tr><td colspan="5" class="dim">Nothing logged.</td></tr>';
- const history=[...readings].reverse().slice(0,10).map(r=>`<tr><td>${esc(new Date(r.at).toLocaleString('en-US',{month:'short',day:'numeric',hour:'numeric',minute:'2-digit'}))}</td><td>${esc(r.source||'')}</td><td class="n">${r.weekly?r.weekly.pct+'%':'-'}</td><td class="n">${r.fiveHour?r.fiveHour.pct+'%':'-'}</td></tr>`).join('')||'<tr><td colspan="4" class="dim">No readings yet.</td></tr>';
+ const withTotals=readings.filter(r=>r.weekly&&Number.isFinite(r.tokensTotal)).length;
+ const history=[...readings].reverse().slice(0,30).map(r=>`<tr><td>${esc(new Date(r.at).toLocaleString('en-US',{month:'short',day:'numeric',hour:'numeric',minute:'2-digit'}))}</td><td>${esc(r.source||'')}</td><td class="n">${r.weekly?r.weekly.pct+'%':'-'}</td><td class="n">${r.fiveHour?r.fiveHour.pct+'%':'-'}</td><td class="n dim">${Number.isFinite(r.tokensTotal)?num(r.tokensTotal):'-'}</td></tr>`).join('')||'<tr><td colspan="5" class="dim">No readings yet.</td></tr>';
  return `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Mikkadr Hub · Token watcher</title>
 <style>
 :root{--acc:${accent};--bg:#0b0c0e;--ink:#f1efe9;--dim:rgba(241,239,233,.55);--line:rgba(255,255,255,.14);--panel:rgba(255,255,255,.045);--ok:#5fbf85;--watch:#e0b060;--high:#e8905f;--crit:#f2766d}
@@ -58,11 +59,11 @@ footer{margin-top:30px;color:var(--dim);font-size:13.5px}code{font:13px ui-monos
 <h2>Warnings</h2>${banners}
 <h2>Gauges</h2><div class="gauges">${gauge(state.weekly,state.config)}${gauge(state.fiveHour,state.config)}</div>
 <h2>Would a run start now?</h2><div class="wrap"><table><thead><tr><th>Run</th><th>Estimate</th><th>Decision</th><th>Why</th></tr></thead><tbody>${rows}</tbody></table></div>
-<div class="note" style="margin-top:8px">${rate?`Learned rate: about ${rate.rate}% of the weekly limit per million tokens (${rate.n} pair${rate.n===1?'':'s'} of readings, rough).`:'No learned rate yet: estimates stay unknown until two readings a few percent apart have been taken.'}</div>
+<div class="note" style="margin-top:8px">${rate?`Learned rate: about ${rate.rate}% of the weekly limit per million tokens (${rate.n} pair${rate.n===1?'':'s'} of readings, rough).`:`Not known yet: it needs two readings in the same week, at least 2 percent apart, that each carry a token total. ${withTotals} of your ${readings.length} reading${readings.length===1?'':'s'} carry${withTotals===1?'s':''} one.`}</div>
 <h2>Tokens used on this PC</h2><div class="split">
 <div><div class="mono" style="margin-bottom:8px">TODAY</div><div class="wrap"><table><thead><tr><th>Model</th><th class="n">Msgs</th><th class="n">Used</th><th class="n">Output</th><th class="n">Cache read</th></tr></thead><tbody>${modelRows(today)}</tbody></table></div></div>
 <div><div class="mono" style="margin-bottom:8px">LAST 7 DAYS</div><div class="wrap"><table><thead><tr><th>Model</th><th class="n">Msgs</th><th class="n">Used</th><th class="n">Output</th><th class="n">Cache read</th></tr></thead><tbody>${modelRows(week)}</tbody></table></div></div></div>
 <div class="note" style="margin-top:8px">Used = input + output + cache writes. Counted from Claude Code session logs on this PC only; other devices and the web are not included, so the gauges above are the truth and this is a guide.</div>
-<h2>Readings</h2><div class="wrap"><table><thead><tr><th>When</th><th>Source</th><th class="n">Weekly</th><th class="n">5-hour</th></tr></thead><tbody>${history}</tbody></table></div>
-<footer>To take a new reading: <code>${esc(probeCommand)}</code> (one Haiku call, about 7,600 tokens, under a cent). Any agent run the hub starts also records one. This page is rebuilt each time <code>npm run watcher</code> runs; it does not refresh itself.</footer>
+<h2>Readings</h2><div class="wrap"><table><thead><tr><th>When</th><th>Source</th><th class="n">Weekly</th><th class="n">5-hour</th><th class="n">Tokens so far</th></tr></thead><tbody>${history}</tbody></table></div>
+<footer>To take a new reading: <code>${esc(probeCommand)}</code> (one Haiku call, about 7,600 tokens, under a cent). Any agent run the hub starts also records one. ${fresh?'This page is built again each time you open it.':'This page is rebuilt each time <code>npm run watcher</code> runs; it does not refresh itself.'}</footer>
 </main></body></html>`}

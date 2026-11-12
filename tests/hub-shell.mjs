@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import path from 'node:path';
 import {fileURLToPath} from 'node:url';
-import {TREE,ROUTES,routeOf,runIdOf,accentOf,barOf,titleOf,pageOf} from '../hub/web/shell.js';
+import {HUB_VERSION,TREE,ROUTES,routeOf,runIdOf,accentOf,barOf,titleOf,pageOf} from '../hub/web/shell.js';
 import {resolveRoute} from '../hub/server.js';
 
 const root=path.resolve(path.dirname(fileURLToPath(import.meta.url)),'..');
@@ -16,6 +16,7 @@ for(const [p,a] of [[0,'blue'],[7,'blue'],[59.9,'blue'],[60,'orange'],[89.9,'ora
 // each gauge bar uses its own thresholds (weekly 60/90, 5-hour 50/90)
 assert.equal(barOf(55,60,90),'ok');assert.equal(barOf(55,50,90),'orange');assert.equal(barOf(90,50,90),'red');assert.equal(barOf(null,60,90),'none');
 assert.equal(titleOf('work',4),'(4) Work · Mikkadr Hub');assert.equal(titleOf('chat',0),'Chat · Mikkadr Hub');assert.equal(titleOf('zzz',0),'Work · Mikkadr Hub');
+assert.match(HUB_VERSION,/^2\.\d+(\.\d+)?$/,'the hub shows its own version, 2.<step>');
 assert.equal(pageOf('assets'),null,'Assets draws its own page since V4');assert.equal(pageOf('tokens'),'/tokens');assert.equal(pageOf('plans'),null);
 
 // S4: opening one plan by hash, and the Plans page's pure helpers

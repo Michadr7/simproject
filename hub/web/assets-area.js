@@ -47,7 +47,10 @@ export function mountAssets(view,{onChange}={}){
  let alive=true,timer=null,busy=false,data=null,sig=null,hidden=readHidden(store.get('hub.assets.hidden'));
  const next=h('p',{class:'next'}),note=h('p',{class:'msg err',role:'alert',hidden:true}),ok=h('p',{class:'msg approved',role:'status',hidden:true});
  const strip=h('div',{class:'as-strip','aria-label':'Assets by stage'}),formBox=h('div',{class:'box as-gap'}),filesBox=h('div',{}),rowsBox=h('div',{}),recBox=h('div',{class:'box as-gap'}),links=h('p',{class:'small dim'});
- view.append(next,note,ok,strip,formBox,filesBox,rowsBox,recBox,links);
+ // 2.4.2: the six stage cells are a switch; the rows of the chosen stage sit on the right, the new files, the form and the recent changes on the left (no long scroll)
+ let stage=store.get('hub.assets.stage');if(!STAGE_ORDER.includes(stage))stage='wanted';
+ const left=h('div',{class:'pane'},filesBox,formBox,recBox,links),right=h('div',{class:'pane'},rowsBox);
+ view.append(h('div',{class:'page two'},next,note,ok,strip,h('div',{class:'cols even'},left,right)));
  const say=t=>{note.textContent=t;note.hidden=!t;if(t)ok.hidden=true},good=t=>{ok.textContent=t;ok.hidden=!t;if(t)note.hidden=true};
 
  // the form is built once and never rebuilt, so typing is never interrupted by a redraw
@@ -70,7 +73,7 @@ export function mountAssets(view,{onChange}={}){
  const pill=s=>h('span',{class:'as-pill st-'+s},stageName(s));
  function drawStrip(){
   strip.textContent='';
-  for(const s of stripOf(data.stages))strip.append(h('div',{class:'as-cell'+(s.hand?' hand':'')},h('b',{},String(s.count)),h('span',{},s.label),s.hand?h('i',{title:'You set this stage by hand'},'you set'):h('i',{title:"The game's modules decide this stage"},'by the game')))}
+  for(const s of stripOf(data.stages))strip.append(h('button',{type:'button',class:'cell'+(s.hand?' hand':''),'aria-pressed':String(s.key===stage),onclick:()=>{stage=s.key;store.set('hub.assets.stage',stage);drawStrip();drawRows()}},h('b',{},String(s.count)),h('span',{},s.label),s.hand?h('i',{title:'You set this stage by hand'},'you set'):h('i',{title:"The game's modules decide this stage"},'by the game')))}
  function drawFiles(){
   filesBox.textContent='';
   const nf=data.newFiles||{total:0,items:[]},items=(nf.items||[]).filter(i=>!hidden.includes(i.path));
@@ -86,8 +89,10 @@ export function mountAssets(view,{onChange}={}){
  function drawRows(){
   rowsBox.textContent='';
   const g=groupRows(data.rows);
-  for(const s of [...HAND_STAGES,'retired']){
-   const list=g[s],det=h('details',{class:'fold as-group',open:s!=='retired'&&list.length>0});
+  const hand=HAND_STAGES.includes(stage);
+  rowsBox.append(h('h2',{class:'sect'},stageName(stage),h('span',{},String(data.stages&&data.stages[stage]!=null?data.stages[stage]:0)),h('span',{class:'x'},hand?'you set this stage by hand':'the game decides this stage')));
+  for(const s of hand?[stage,'retired']:[]){
+   const list=g[s],det=h('details',{class:'fold as-group',open:s===stage});
    det.append(h('summary',{},`${stageName(s)} · ${list.length}`));
    if(!list.length)det.append(h('p',{class:'small dim'},'None.'));
    for(const r of list){
@@ -99,7 +104,8 @@ export function mountAssets(view,{onChange}={}){
    rowsBox.append(det)}
   const shipped=Array.isArray(data.shipped)?data.shipped:[];
   for(const [s,label,pick] of [['converted','Converted',x=>x.stage==='converted'],['in-game','In game',x=>x.stage==='in-game'],['credited','Credited',x=>x.credited]]){
-   const list=shipped.filter(pick),det=h('details',{class:'fold as-group'});
+   if(s!==stage)continue;
+   const list=shipped.filter(pick),det=h('details',{class:'fold as-group',open:true});
    det.append(h('summary',{},`${label} · ${data.stages?data.stages[s]:list.length} (the game decides)`));
    const ul=h('ul',{class:'as-names'},list.map(x=>h('li',{},x.name)));if(!list.length)det.append(h('p',{class:'small dim'},'None.'));else det.append(ul);
    rowsBox.append(det)}}

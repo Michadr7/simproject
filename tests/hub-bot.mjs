@@ -12,7 +12,7 @@ import {activityOf,resolveRoute} from '../hub/server.js';
 
 const root=path.join(path.dirname(fileURLToPath(import.meta.url)),'..');
 assert.deepEqual(BOT_STATES,['mini','line','open']);assert.deepEqual(Object.keys(MOOD_LABEL).sort(),[...MOODS].sort(),'a label for every mood the server can send');
-assert.equal(botStateOf(null,null),'line');assert.equal(botStateOf('open','mini'),'open','the query wins');assert.equal(botStateOf('nope','mini'),'mini');assert.equal(botStateOf(null,'x'),'line');
+assert.equal(botStateOf(null,null),'open','the panda shelf is the default');assert.equal(botStateOf('open','mini'),'open','the query wins');assert.equal(botStateOf('nope','mini'),'mini');assert.equal(botStateOf(null,'x'),'open');
 assert.equal(afterFace('mini'),'line');assert.equal(afterFace('line'),'mini');assert.equal(afterFace('open'),'mini');
 assert.equal(afterLine('line'),'open');assert.equal(afterLine('open'),'line');
 assert.equal(pollMs('working'),2000);for(const m of ['idle','question','stopped'])assert.equal(pollMs(m),10000);
@@ -42,4 +42,5 @@ assert.deepEqual(Object.keys(SCENES).sort(),[...ROUTES].sort(),'a scene for ever
 assert.equal(sceneOf('chat',null),'chat');assert.equal(sceneOf('chat','tools'),'tools','the hovered row wins');assert.equal(sceneOf('nope',null),'work');assert.equal(sceneOf('chat','constructor'),'chat');
 assert.ok(css.includes("@property --hue{syntax:'<number>'")&&/html\[data-mood=working\]\{--glow:/.test(css)&&/html\[data-mood=question\]:not\(\[data-hover\]\)\{--hue:/.test(css)&&/html\[data-mood=stopped\]:not\(\[data-hover\]\)\{--hue:/.test(css));
 assert.ok(js.includes('root.dataset.mood=m')&&app.includes("pill.className='nav-pill'")&&css.includes('.nav-pill{')&&/prefers-reduced-motion:reduce\)\{\.scene i\{animation:none/.test(css));
+{const m=await import('../hub/web/bot.js');assert.equal(m.pandaOf({mood:'working',source:'chat'}),'think');assert.equal(m.pandaOf({mood:'working',source:'run'}),'write');assert.equal(m.pandaOf({mood:'question'}),'wait');assert.equal(m.pandaOf({mood:'stopped'}),'stopped');assert.equal(m.pandaOf(null),'idle');assert.equal(m.fileOf({items:[{text:'Read plans/k1.md'},{text:'Edited dist/warehouse.js'}]}),'dist/warehouse.js');assert.equal(m.fileOf({items:[]}),'');assert.ok(fs.existsSync(resolveRoute(root,'/web/panda.js','127.0.0.1:1',1).file));const pj=fs.readFileSync(path.join(root,'hub','web','panda.js'),'utf8');assert.ok(!/fetch\(|innerHTML|document\./.test(pj),'the panda only draws; it reads and sends nothing');assert.ok(js.includes('mountPanda(')&&/html\[data-bot=open\] \.bot-bubble\{[^}]*height:164px/.test(css),'the open bot is the 164 px shelf')}
 console.log('hub-bot: fold states, clicks, poll pace, speech line, count, link, room made on the page, text-only DOM with one read, and the runs-off notice passed.');
