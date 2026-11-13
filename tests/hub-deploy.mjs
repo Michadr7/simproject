@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import path from 'node:path';
 import {fileURLToPath} from 'node:url';
-import {cmpVersion,deployChecks,verdictText,LIVE_URL,canPublish,confirmText,CHECK_FRESH_MS} from '../hub/web/deploy-rules.js';
+import {cmpVersion,deployChecks,verdictText,LIVE_URL,canPublish,confirmText,CHECK_FRESH_MS,nextVersion,bumpPlan,bumpConfirmText,LEVELS} from '../hub/web/deploy-rules.js';
 import {spawnSync} from 'node:child_process';
 import os from 'node:os';
 import http from 'node:http';
@@ -82,4 +82,43 @@ assert.ok(dep.indexOf("refuse('The hub did not confirm")<dep.indexOf("'deploy']"
   r=await post({job:'deploy',confirm:'0.36.0'});assert.equal(r.status,200);assert.equal(started,1);const cf=JSON.parse(fs.readFileSync(path.join(root2,'.hub','deploy-confirm.json'),'utf8'));assert.equal(cf.version,'0.36.0');assert.ok(Date.now()-cf.at<5000,'the confirmation names the version and the time');
  }finally{await s2.close()}
  fs.rmSync(root2,{recursive:true,force:true})}
-console.log('hub-deploy: the version rules, every blocking and warning result, the job summary, the page sentence, and the proof that the check publishes nothing, the Publish rules, the refusals of the script, and the route of the hub passed.');
+// ── Bump version
+assert.deepEqual(LEVELS,['patch','minor','major']);assert.equal(nextVersion('0.35.4','patch'),'0.35.5');assert.equal(nextVersion('0.35.4','minor'),'0.36.0');assert.equal(nextVersion('0.35.4','major'),'1.0.0');assert.equal(nextVersion('0.9.9','patch'),'0.9.10','numbers, not text');assert.equal(nextVersion('x','patch'),null);assert.equal(nextVersion('0.1.0','huge'),null);
+const liveOk={summary:{ok:true,version:'0.36.0',live:'0.36.0',checks:deployChecks(good).checks},endedAt:1e6};
+assert.deepEqual(bumpPlan(liveOk,'patch'),{ok:true,from:'0.36.0',to:'0.36.1',why:''});assert.equal(bumpPlan(null,'patch').ok,false);
+assert.equal(bumpPlan({...liveOk,summary:{...liveOk.summary,live:'0.35.3'}},'patch').ok,false,'the current version is not live yet: publish it first');assert.match(bumpPlan({...liveOk,summary:{...liveOk.summary,live:'0.35.3'}},'patch').why,/Publish it first/);
+assert.equal(bumpPlan({...liveOk,summary:{...liveOk.summary,live:'0.40.0'}},'patch').ok,false,'live is newer than here');assert.equal(bumpPlan({...liveOk,summary:{...liveOk.summary,live:null}},'patch').ok,false,'live unknown');
+assert.equal(bumpPlan(liveOk,'patch',{endedAt:2e6}).ok,false,'a bump after the check means the check is out of date');assert.match(bumpPlan(liveOk,'patch',{endedAt:2e6}).why,/Press Check again/);assert.equal(bumpPlan(liveOk,'patch',{endedAt:5e5}).ok,true);assert.equal(bumpPlan(liveOk,'nope').ok,false);
+assert.match(bumpConfirmText('0.36.0','0.36.1'),/Raise the version from 0\.36\.0 to 0\.36\.1\?/);assert.match(bumpConfirmText('0.36.0','0.36.1'),/Nothing goes online/);
+assert.ok(JOBS.bump&&JOBS.bump.steps.join()==='bump-step,release,test'&&JOBS['bump-step'].script==='scripts/bump-version.mjs'&&tableProblems(JOBS).length===0);
+{const sb=(o,c,st)=>summarise('bump',o,c,{step:st}),B='BUMPED '+JSON.stringify({from:'0.36.0',to:'0.36.1',level:'patch'});
+ assert.equal(sb('REFUSED nope',2,'bump-step').text,'Nothing changed: nope');assert.equal(sb('REFUSED nope',2,'bump-step').refused,true);
+ let r=sb(B+'\nAll 157 test files passed.',0,'test');assert.equal(r.ok,true);assert.equal(r.version,'0.36.1');assert.match(r.text,/^Version 0\.36\.1 \(was 0\.36\.0\)\. Release made, 157 of 157 tests passed\.$/);
+ r=sb(B+'\n2 of 157 test files failed.',1,'test');assert.equal(r.ok,false);assert.match(r.text,/tests did not all pass/);assert.match(sb(B,1,'release').text,/release failed/);assert.equal(sb('',1,'bump-step').ok,false);assert.equal(summarise('bump',B,1,{step:'test',stopped:true}).text,'Stopped by you')}
+// the script refuses before it touches package.json, in every case that does not reach the live check
+{const reqFile=path.join(root,'.hub','bump-request.json'),had=fs.existsSync(reqFile)?fs.readFileSync(reqFile,'utf8'):null,pkgBefore=fs.readFileSync(path.join(root,'package.json'),'utf8'),cur=JSON.parse(pkgBefore).version;fs.mkdirSync(path.join(root,'.hub'),{recursive:true});
+ const run=()=>{const r=spawnSync(process.execPath,[path.join(root,'scripts','bump-version.mjs')],{cwd:root,encoding:'utf8',timeout:60000,windowsHide:true});return {code:r.status,out:String(r.stdout||'')}};
+ try{try{fs.unlinkSync(reqFile)}catch{}
+  let r=run();assert.equal(r.code,2);assert.match(r.out,/did not ask for a version change/);
+  fs.writeFileSync(reqFile,JSON.stringify({level:'patch',from:cur,to:nextVersion(cur,'patch'),at:Date.now()-6*60000}));r=run();assert.match(r.out,/more than 5 minutes old/);assert.ok(!fs.existsSync(reqFile),'used up even when refused');
+  fs.writeFileSync(reqFile,JSON.stringify({level:'patch',from:'0.0.1',to:'0.0.2',at:Date.now()}));r=run();assert.match(r.out,/You saw 0\.0\.1, but package\.json says/);
+  fs.writeFileSync(reqFile,JSON.stringify({level:'patch',from:cur,to:'9.9.9',at:Date.now()}));r=run();assert.match(r.out,/is not the next patch version/);
+  assert.equal(fs.readFileSync(path.join(root,'package.json'),'utf8'),pkgBefore,'package.json is untouched by every refusal')
+ }finally{fs.writeFileSync(path.join(root,'package.json'),pkgBefore);if(had!==null)fs.writeFileSync(reqFile,had);else try{fs.unlinkSync(reqFile)}catch{}}}
+{const bs=fs.readFileSync(path.join(root,'scripts','bump-version.mjs'),'utf8').replace(/\/\/.*$/gm,'');assert.ok(bs.indexOf('refuse(`You saw')<bs.indexOf('writeFileSync(pkgFile'),'every refusal comes before the write');assert.ok(!/child_process|\bspawn|execFile|execSync/.test(bs),'the bump starts no process')}
+// the hub's route for it
+{const root2=fs.mkdtempSync(path.join(os.tmpdir(),'hub-bump-'));fs.mkdirSync(path.join(root2,'.hub'));
+ let started=0,chk=null,bmp=null;const jobsStub={has:k=>['deploy','deploy-check','bump'].includes(k),last:k=>k==='deploy-check'?chk:k==='bump'?bmp:null,start:()=>{started++;return {job:{id:'job-20260101-000000-abcd'}}},list:()=>({running:null,jobs:[]}),active:()=>false},runsStub={checkToken:t=>t==='tk',locked:()=>false};
+ const s2=createHubServer({root:root2,runs:runsStub,jobs:jobsStub}),p2=await s2.listen();
+ const post=body=>new Promise((res,rej)=>{const q=http.request({host:'127.0.0.1',port:p2,method:'POST',path:'/api/jobs/start',headers:{'Content-Type':'application/json',Origin:'http://127.0.0.1:'+p2,'X-Hub-Token':'tk'}},x=>{let b='';x.on('data',c=>b+=c);x.on('end',()=>res({status:x.statusCode,body:JSON.parse(b||'{}')}))});q.on('error',rej);q.end(JSON.stringify(body))});
+ try{
+  let r=await post({job:'bump',level:'patch',confirm:'0.36.1'});assert.equal(r.status,409,'no check yet');assert.equal(started,0);
+  chk=liveOk;chk={...liveOk,endedAt:Date.now()};
+  assert.equal((await post({job:'bump',level:'huge',confirm:'0.36.1'})).status,400);assert.equal((await post({job:'bump',confirm:'0.36.1'})).status,400);
+  r=await post({job:'bump',level:'patch',confirm:'0.37.0'});assert.equal(r.status,409,'the wrong number typed back');assert.match(r.body.error,/next patch version is 0\.36\.1/);assert.equal(started,0);
+  chk={...chk,summary:{...chk.summary,live:'0.35.3'}};r=await post({job:'bump',level:'patch',confirm:'0.36.1'});assert.equal(r.status,409,'the current version is not live yet');assert.equal(started,0);
+  chk={...liveOk,endedAt:Date.now()};bmp={endedAt:Date.now()+1000};r=await post({job:'bump',level:'patch',confirm:'0.36.1'});assert.equal(r.status,409,'a bump newer than the check');bmp=null;
+  r=await post({job:'bump',level:'minor',confirm:'0.37.0'});assert.equal(r.status,200);assert.equal(started,1);const rq=JSON.parse(fs.readFileSync(path.join(root2,'.hub','bump-request.json'),'utf8'));assert.deepEqual([rq.level,rq.from,rq.to],['minor','0.36.0','0.37.0']);assert.ok(Date.now()-rq.at<5000)
+ }finally{await s2.close()}
+ fs.rmSync(root2,{recursive:true,force:true})}
+console.log('hub-deploy: the version rules, every blocking and warning result, the job summary, the page sentence, and the proof that the check publishes nothing, the Publish rules, the refusals of the script, the route of the hub, and Bump version (the number rules, the refusals of the script, the route) passed.');

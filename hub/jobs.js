@@ -15,6 +15,8 @@ export const JOBS={
  check:{key:'check',label:'Check (release, then tests)',kind:'job',steps:['release','test'],about:'Makes the release, then runs the tests. Stops at the first failure.'},
  index:{key:'index',label:'Rebuild the index',kind:'job',script:'scripts/build-index.mjs',args:[],about:'Rewrites PROJECT-BRIEF.md and PROJECT-INDEX.md. The hub also does this by itself after a run finishes.'},
  'deploy-check':{key:'deploy-check',label:'Check before going online',kind:'job',script:'scripts/deploy-check.mjs',args:[],about:'Reads what is live, the version, the tests, the git status and the Cloudflare login. Sends and publishes nothing.'},
+ 'bump-step':{key:'bump-step',label:'Raise the version number',kind:'job',script:'scripts/bump-version.mjs',args:[],about:'Changes the version in package.json after the hub confirmed it. Only as the first step of Bump version.'},
+ bump:{key:'bump',label:'Bump version',kind:'job',steps:['bump-step','release','test'],about:'Raises the version number, makes the release for it, and runs the tests. Started from the Deploy page. Nothing goes online.'},
  deploy:{key:'deploy',label:'Publish the game',kind:'job',script:'scripts/deploy.mjs',args:[],about:'Runs wrangler deploy after the same checks pass again. Started only from the Deploy page, with the version you confirmed.'},
  assets:{key:'assets',label:'Draw the asset pictures',kind:'job',script:'hub/assets-cli.mjs',args:[],ownLock:true,about:'Draws missing or changed asset pictures and rebuilds the Assets page.'},
  dev:{key:'dev',label:'Game dev server',kind:'service',script:'scripts/dev-server.mjs',args:[],url:'http://localhost:8000',about:'Serves the game on this PC so you can play it in the browser.'},
@@ -41,6 +43,14 @@ export const stepsOf=(table,key)=>{const j=table[key];if(!j)return [];return j.s
 export function summarise(key,output,exitCode,{step=key,stopped=false}={}){
  const text=String(output||'').replace(/\r\n/g,'\n'),ok=exitCode===0&&!stopped;
  if(stopped)return {ok:false,text:'Stopped by you'};
+ if(key==='bump'){const ref=/^REFUSED (.+)$/m.exec(text),b=/^BUMPED (\{.*\})$/m.exec(text);let d=null;try{d=b&&JSON.parse(b[1])}catch{}
+  if(ref)return {ok:false,refused:true,text:'Nothing changed: '+ref[1].slice(0,200)};
+  if(!d)return {ok:false,text:'The version change did not finish'};
+  const base=`Version ${String(d.to).slice(0,20)} (was ${String(d.from).slice(0,20)})`;
+  if(step==='release'&&!ok)return {ok:false,version:d.to,text:base+'. The release failed.'};
+  const all=/^All (\d+) test files passed\.$/m.exec(text);
+  if(step==='test'&&ok&&all)return {ok:true,version:d.to,from:d.from,text:base+`. Release made, ${all[1]} of ${all[1]} tests passed.`};
+  return {ok:false,version:d.to,text:base+'. The release was made, but the tests did not all pass.'}}
  if(key==='test'||(key==='check'&&step==='test')){
   const all=/^All (\d+) test files passed\.$/m.exec(text),some=/^(\d+) of (\d+) test files failed\.$/m.exec(text);
   const failing=[...text.matchAll(/^FAIL (\S+)$/gm)].map(m=>m[1].slice(0,80)).slice(0,40);

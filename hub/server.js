@@ -29,7 +29,7 @@ import {buildWaiting} from './waiting.js';
 import {buildActivity,feedRunOf,gaugeOf} from './activity.js';
 import {lifeOf} from './cache-store.mjs';
 import {buildTokensPage,logTotal} from './tokens-page.mjs';
-import {canPublish} from './web/deploy-rules.js';
+import {canPublish,bumpPlan,LEVELS} from './web/deploy-rules.js';
 import {appendReading} from './watcher.js';
 import {buildWork,projectLine} from './work.js';
 import {parseRunBlock,quickFix} from './runplan.js';
@@ -218,12 +218,17 @@ export function createHubServer({root,port=0,runs=null,chat=null,jobs=null,commi
      let out;
      if(r.api==='job-start'){
       if(typeof b.job!=='string'||!jobs.has(b.job))return json(400,{error:'job must be one of the jobs the hub knows'});
-      if(b.job==='deploy'){ // going online: only on a passing check of the last 10 minutes, with the version it named typed back; the script checks all of it again
+      if(b.job==='bump'){ // raising the version: only on a passing-or-not check that names the current and the live version, with the level and the new number typed back; the script checks it all again
+       if(!LEVELS.includes(b.level))return json(400,{error:'level must be patch, minor or major'});
+       const chk=jobs.last('deploy-check'),last=jobs.last('bump'),plan=bumpPlan(chk,b.level,last);
+       if(!plan.ok)return json(409,{error:plan.why});
+       if(b.confirm!==plan.to)return json(409,{error:'You confirmed '+String(b.confirm).slice(0,20)+', but the next '+b.level+' version is '+plan.to+'. Press Bump again.'});
+       writeAtomic(path.join(root,'.hub','bump-request.json'),JSON.stringify({level:b.level,from:plan.from,to:plan.to,at:Date.now()}))}      if(b.job==='deploy'){ // going online: only on a passing check of the last 10 minutes, with the version it named typed back; the script checks all of it again
        const chk=jobs.last('deploy-check'),can=canPublish(chk,Date.now());
        if(!can.ok)return json(409,{error:can.why});
        if(b.confirm!==chk.summary.version)return json(409,{error:`You confirmed ${String(b.confirm).slice(0,20)}, but the check names ${chk.summary.version}. Press Check again.`});
        writeAtomic(path.join(root,'.hub','deploy-confirm.json'),JSON.stringify({version:chk.summary.version,at:Date.now()}))}
-      out=jobs.start(b.job);if(b.job==='deploy'&&out.error){try{fs.unlinkSync(path.join(root,'.hub','deploy-confirm.json'))}catch{}}}
+      out=jobs.start(b.job);if(out.error){for(const f of ['deploy-confirm.json','bump-request.json']){try{fs.unlinkSync(path.join(root,'.hub',f))}catch{}}}}
      else{
       if(typeof b.id!=='string'||!JOB_ID.test(b.id))return json(400,{error:'id must be a job id'});
       out=await jobs.stop(b.id)}

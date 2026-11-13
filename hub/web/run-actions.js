@@ -31,7 +31,7 @@ export function callFor(op,a={}){
  if(op==='chat-model')return {url:'/api/chat/model',body:{model:a.model,confirm:a.confirm===true}};
  if(op==='chat-new'||op==='chat-stop')return {url:'/api/chat/'+op.slice(5),body:{}};
  // Hub v2 V2: the tools (a job is named by its key, a running one by the id the hub gave it), the restart, and the one-press start of a Haiku S plan
- if(op==='job-start')return a.job?{url:'/api/jobs/start',body:typeof a.confirm==='string'?{job:a.job,confirm:a.confirm}:{job:a.job}}:null;
+ if(op==='job-start')return a.job?{url:'/api/jobs/start',body:{job:a.job,...(typeof a.confirm==='string'?{confirm:a.confirm}:{}),...(typeof a.level==='string'?{level:a.level}:{})}}:null;
  if(op==='job-stop')return a.id?{url:'/api/jobs/stop',body:{id:a.id}}:null;
  if(op==='hub-restart')return {url:'/api/hub/restart',body:{}};
  if(op==='probe')return {url:'/api/probe',body:{}};

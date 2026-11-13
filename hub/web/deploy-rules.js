@@ -51,3 +51,19 @@ export function canPublish(check,now=Date.now()){
 export function confirmText(s){
  const dev=(s.checks||[]).some(c=>c.key==='dev'&&c.state==='warn');
  return `Publish ${s.version}?\n\n${s.live?s.live+' is live now.':'The live version could not be read.'} This puts the game online for everyone with the link.${dev?'\n\nDev Mode is on in this build (free money, teleport).':''}`}
+// ── Bump version: the next number, and when raising it makes sense.
+export const LEVELS=Object.freeze(['patch','minor','major']);
+// "0.35.4" + patch -> "0.35.5"; minor -> "0.36.0"; major -> "1.0.0". null for a version that is not plain x.y.z or a level that does not exist.
+export function nextVersion(v,level){const m=PARTS.exec(String(v));if(!m||!LEVELS.includes(level))return null;let [a,b,c]=[Number(m[1]),Number(m[2]),Number(m[3])];if(level==='major'){a++;b=0;c=0}else if(level==='minor'){b++;c=0}else c++;return `${a}.${b}.${c}`}
+// May the version be raised now? check: the last deploy-check record; bumped: the last finished bump record or null. Raising only makes sense once the current version is live, so no number is skipped.
+export function bumpPlan(check,level,bumped=null){
+ const s=check&&check.summary;
+ if(!s||!Array.isArray(s.checks)||!s.version)return {ok:false,why:'Press Check first, so the hub knows the current and the live version.'};
+ if(bumped&&Number.isFinite(bumped.endedAt)&&Number.isFinite(check.endedAt)&&bumped.endedAt>check.endedAt)return {ok:false,why:'The version was just raised. Press Check again.'};
+ const to=nextVersion(s.version,level);if(!to)return {ok:false,why:'Choose patch, minor or major.'};
+ if(!s.live)return {ok:false,why:'The live version could not be read, so the hub cannot tell whether '+s.version+' was published. Press Check again.'};
+ const c=cmpVersion(s.version,s.live);
+ if(c===1)return {ok:false,why:`${s.version} is not live yet (the live site has ${s.live}). Publish it first, so no number is skipped.`};
+ if(c===-1)return {ok:false,why:`The live site (${s.live}) is newer than ${s.version}. Check what happened before raising the version.`};
+ return {ok:true,from:s.version,to,why:''}}
+export const bumpConfirmText=(from,to)=>`Raise the version from ${from} to ${to}?\n\nThen the hub makes the release for ${to} and runs the tests (a few minutes). Nothing goes online.`;
