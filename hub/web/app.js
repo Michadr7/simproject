@@ -97,10 +97,15 @@ async function refresh(){
  try{tree=await getJson('/api/work')}catch{tree=null}
  drawNav();drawNeeds();if(work)work.update(tree)}
 
-// Tokens: one press takes a fresh reading (one small Haiku call). The press is the go-ahead; the hub refuses while anything else works.
-$('probebtn').addEventListener('click',async()=>{const b=$('probebtn'),n=$('probenote');b.disabled=true;n.textContent='Taking a reading…';const res=await runCall('probe',{});b.disabled=false;
- if(res.ok&&res.data&&res.data.reading){const r=res.data.reading;n.textContent=`Reading taken: this week ${r.weekly??'-'}%, these 5 hours ${r.fiveHour??'-'}%.`;try{$('frame').contentWindow.location.reload()}catch{}refresh()}
- else n.textContent=errorText(res)});
+// One press takes a fresh usage reading (one small Haiku call, about 7,600 tokens). The press is the go-ahead; the hub refuses while anything else works, and without the hub token.
+// Two buttons do it: "Refresh" beside the gauges on every page, and the one on the Tokens page. Each shows the answer next to itself.
+async function takeReading(btns,say){
+ for(const b of btns)b.disabled=true;say('Taking a reading…');
+ const res=await runCall('probe',{});for(const b of btns)b.disabled=false;
+ if(res.ok&&res.data&&res.data.reading){const r=res.data.reading;say(`Reading taken: this week ${r.weekly??'-'}%, these 5 hours ${r.fiveHour??'-'}%.`);try{$('frame').contentWindow.location.reload()}catch{}return refresh()}
+ say(errorText(res))}
+$('probebtn').addEventListener('click',()=>takeReading([$('probebtn'),$('gaugebtn')],t=>{$('probenote').textContent=t;$('g-age').textContent=t}));
+$('gaugebtn').addEventListener('click',()=>takeReading([$('probebtn'),$('gaugebtn')],t=>{$('g-age').textContent=t;$('probenote').textContent=t}));
 $('menutab').addEventListener('click',()=>setMenu(!menuOpen,true));
 $('nav').addEventListener('mouseover',e=>{const k=rowOf(e);if(k)setHover(k)});$('nav').addEventListener('mouseleave',()=>setHover(null));
 $('nav').addEventListener('focusin',e=>{const k=rowOf(e);if(k)setHover(k)});$('nav').addEventListener('focusout',()=>setHover(null));

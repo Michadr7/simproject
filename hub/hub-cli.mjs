@@ -26,7 +26,7 @@ if(!args.includes('--child')){
  process.exit(code)}
 
 const startedAt=Date.now(),wantPort=want?+want.split('=')[1]:8765;
-let runs=null,chat=null,jobs=null,commits=null,restart=null,claudePath=null;
+let runs=null,chat=null,jobs=null,commits=null,restart=null,claudePath=null,probeFn=null;
 // Hub v2 V4: asset records (the Assets page and the master's RECORD: lines). No model call; works with or without --runs.
 const {createRecords}=await import('./records-store.mjs'),records=createRecords({root:ROOT});
 if(args.includes('--runs')){
@@ -34,6 +34,7 @@ if(args.includes('--runs')){
  const {createGit}=await import('./git.mjs'),{createCommits}=await import('./commit-ctl.mjs');
  claudePath=findClaude();
  const claude=claudePath?{path:claudePath}:null;
+ probeFn=claude?(o=>runProbe({...o,claudePath:claude.path})):null; // Publish and Refresh need these; the server file itself starts no process
  const {statusText}=await import('./status.js');
  jobs=createJobs({root:ROOT,busy:()=>runs.locked()||chat.working(),nameOf:processName});
  chat=createChat({root:ROOT,claude,records,logTotal:()=>logTotal(),contextFn:()=>statusText({root:ROOT,runs,chat,jobs,commits,records})});
@@ -48,7 +49,7 @@ if(args.includes('--runs')){
   if(jobs.active())return {error:'A job is running. Wait for it, or stop it, then restart.'};
   return {go:async()=>{try{await jobs.shutdown();await chat.shutdown();await runs.shutdown()}catch{}process.exit(RESTART_CODE)}}};
 }
-const make=()=>createHubServer({root:ROOT,port:wantPort,runs,chat,jobs,commits,records,restart,startedAt,probeFn:claude?(o=>runProbe({...o,claudePath:claude.path})):null});
+const make=()=>createHubServer({root:ROOT,port:wantPort,runs,chat,jobs,commits,records,restart,startedAt,probeFn});
 let srv=make(),port;
 try{port=await srv.listen()}catch(e){
  if(e.code!=='EADDRINUSE'){console.error('Could not start: '+e.message);process.exit(1)}

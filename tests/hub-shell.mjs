@@ -41,4 +41,6 @@ assert.ok(fs.existsSync(resolveRoute(root,'/web/shell.js','127.0.0.1:1',1).file)
 assert.ok(!/innerHTML|outerHTML|insertAdjacentHTML|document\.write|eval\(/.test(app),'the shell builds its DOM with text only');
 assert.ok(!/https?:\/\//.test(html+app+fs.readFileSync(path.join(root,'hub','web','hub.css'),'utf8')),'nothing is loaded from outside');
 assert.ok(/method\s*:\s*'POST'/.test(app)===false,'S3 sends no writes');
+{const fs=(await import('node:fs')).default,path=(await import('node:path')).default,root=path.resolve(path.dirname((await import('node:url')).fileURLToPath(import.meta.url)),'..'),html=fs.readFileSync(path.join(root,'hub','web','index.html'),'utf8'),app=fs.readFileSync(path.join(root,'hub','web','app.js'),'utf8');
+ assert.ok(html.includes('id="gaugebtn"')&&html.includes('7,600 tokens'),'a Refresh button beside the gauges says what it costs');assert.equal((app.match(/runCall\('probe'/g)||[]).length,1,'one place takes the reading, for both buttons');assert.ok(app.includes("$('gaugebtn').addEventListener('click'"),'pressing it, and only pressing it, takes a reading')}
 console.log('hub-shell ok');
