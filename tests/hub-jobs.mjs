@@ -39,7 +39,7 @@ fx('green.mjs',"console.log('PASS a.mjs: ok');console.log('All 5 test files pass
 
 // ── the real table: every script is a plain path inside the repo that exists, every argument a plain flag, nothing a shell would read
 assert.deepEqual(tableProblems(JOBS),[]);
-assert.deepEqual(Object.keys(JOBS),['test','release','check','index','deploy-check','bump-step','bump','fetch-asset','deploy','assets','dev','relay']);
+assert.deepEqual(Object.keys(JOBS),['test','release','check','index','gate','deploy-check','bump-step','bump','fetch-asset','deploy','assets','dev','relay']);
 for(const j of Object.values(JOBS)){if(j.steps)continue;assert.ok(fs.existsSync(path.join(REPO,j.script)),j.script+' exists');assert.ok(!/npm|cmd|powershell|[ &|;<>"'`$%^]/.test([j.script,...j.args].join('')),j.key+' has no shell words')}
 assert.deepEqual(JOBS.release.args,['--force']);assert.deepEqual(JOBS.check.steps,['release','test']);assert.equal(JOBS.dev.kind,'service');assert.equal(JOBS.relay.kind,'service');assert.equal(JOBS.assets.ownLock,true);
 assert.deepEqual(stepsOf(JOBS,'check'),[{key:'release',script:'scripts/package-release.mjs',args:['--force']},{key:'test',script:'scripts/run-tests.mjs',args:[]}]);
@@ -60,6 +60,10 @@ assert.deepEqual(summarise('test','PASS a.mjs: ok\r\nFAIL b.mjs\r\nstack\r\nFAIL
 assert.equal(summarise('test','All 148 test files passed.',1).ok,false,'a pass line with a failing exit code is not a pass');assert.equal(summarise('test','',1).text,'The tests ended without a count');
 assert.deepEqual(summarise('check','All 3 test files passed.',0,{step:'test'}),{ok:true,passed:3,total:3,failing:[],text:'3 of 3 passed'});
 assert.deepEqual(summarise('check','boom',1,{step:'release'}),{ok:false,text:'The release failed, so the tests did not run'});
+assert.deepEqual(summarise('gate','All 3 test files passed.\nIndex written.',0,{step:'index'}),{ok:true,passed:3,total:3,failing:[],text:'3 of 3 passed'});
+assert.deepEqual(summarise('gate','1 of 3 test files failed.\nFAIL a.mjs',1,{step:'test'}).ok,false);
+assert.equal(summarise('gate','boom',1,{step:'release'}).text,'The release failed, so the tests did not run');
+assert.equal(summarise('gate','All 3 test files passed.',1,{step:'index'}).text,'The tests passed, but the index did not rebuild');
 assert.deepEqual(summarise('index','',0),{ok:true,text:'Done'});assert.deepEqual(summarise('release','',2),{ok:false,text:'Failed (exit code 2)'});
 assert.deepEqual(summarise('test','All 3 test files passed.',0,{stopped:true}),{ok:false,text:'Stopped by you'});
 assert.match(newJobId(Date.UTC(2026,10,11,14,2,11)),/^job-20261111-140211-[0-9a-f]{4}$/);assert.ok(JOB_ID.test(newJobId()));

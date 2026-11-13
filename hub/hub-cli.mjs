@@ -39,7 +39,7 @@ if(args.includes('--runs')){
  jobs=createJobs({root:ROOT,busy:()=>runs.locked()||chat.working(),nameOf:processName});
  chat=createChat({root:ROOT,claude,records,logTotal:()=>logTotal(),contextFn:()=>statusText({root:ROOT,runs,chat,jobs,commits,records})});
  // after a run finishes, the hub rebuilds the brief and the index by itself (a script, no tokens)
- runs=createRuns({root:ROOT,claude,logTotal:()=>logTotal(),busy:()=>chat.working()||jobs.active(),onEnd:r=>{if(r.status==='done')jobs.start('index',{auto:true})}});
+ runs=createRuns({root:ROOT,claude,logTotal:()=>logTotal(),busy:()=>chat.working()||jobs.active(),onEnd:r=>{if(r.status==='done')jobs.start('gate',{auto:true})}});
  // Hub v2 V3: commit and push, each only on the owner's press (hub/commit-ctl.mjs); GitHub Desktop's git is the only git used
  commits=createCommits({root:ROOT,git:createGit({root:ROOT}),busy:()=>runs.locked()||chat.working()||jobs.active(),runs,jobs});
  // Restart: refused while anything works; otherwise stop what the hub started and exit with the code the supervisor restarts on. Only offered when a supervisor is there to start it again.

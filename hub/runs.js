@@ -8,7 +8,7 @@ import {execFile} from 'node:child_process';
 import {randomBytes,randomUUID,timingSafeEqual} from 'node:crypto';
 import {readPlan,listPlans,savePlan} from './plans-store.mjs';
 import {latestRevision,hashText,answerPlan} from './plans.js';
-import {startCheck,parseRunBlock,quickFix,capTokens as capFor,PLACEHOLDER_RATE} from './runplan.js';
+import {startCheck,parseRunBlock,quickFix,capTokens as capFor,CAPS,PLACEHOLDER_RATE} from './runplan.js';
 import {canStart,evaluate,loadReadings,appendReading,learnRate} from './watcher.js';
 import {buildArgs,firstPrompt,runTurn,killTree,isAlive} from './runner.js';
 import {replyCache,lifeOf} from './cache-store.mjs';
@@ -57,12 +57,15 @@ export function createRuns({root,claude=null,now=Date.now,extraEnv={},runTurnFn=
    if(s.status!=='approved')continue;
    const plan=readPlan(plansDir,s.id);if(!plan)continue;
    const last=latestRevision(plan),parsed=parseRunBlock(last.text);
-   if(!parsed.ok||!parsed.run.model)continue;
+   if(!parsed.run)continue; // no "## Run" section at all: nothing to start from
+   // A Run block with a bad model or size (Opus L, or Fable asked for) is still listed: the owner picks a model and size that are allowed. The plan's ask is kept in `asked`.
+   const model=parsed.run.model||'sonnet',size=capFor(model,parsed.run.size)!=null?parsed.run.size:Object.keys(CAPS[model]).at(-1),asked=parsed.ok?null:{model:parsed.run.model||(parsed.fableAsked?'fable':null),size:parsed.run.size};
+   if(!parsed.ok&&parsed.errors.some(e=>!/^Run block: (model|size)/.test(e)))continue; // some other fault (e.g. needs) is not the owner's to pick around
    if(rs.some(r=>r.planId===plan.id&&r.revision===last.n&&(r.turn>0||ACTIVE_STATES.includes(r.status))))continue;
-   const ans=[...plan.answers].reverse().find(a=>a.revision===last.n),chk=startCheck({plan,picked:parsed.run.model,secondYes:true,state,rate,activeRun:taken}),reasons=[...chk.reasons];
+   const ans=[...plan.answers].reverse().find(a=>a.revision===last.n),chk=startCheck({plan,picked:model,pickedSize:size,secondYes:true,state,rate,activeRun:taken}),reasons=[...chk.reasons];
    if(ans&&approvalVoided(ans.at))reasons.push('That approval was stamped while a run was working, so it is void. Approve the plan again.');
    if(!claude?.path)reasons.push('claude.exe was not found.');
-   out.push({planId:plan.id,title:plan.title,revision:last.n,model:parsed.run.model,size:parsed.run.size,capTokens:chk.capTokens,needs:chk.needs,why:parsed.run.why,secondYes:chk.needsSecondYes,canStart:!reasons.length,reasons,at:ans?ans.at:last.at})}
+   out.push({planId:plan.id,title:plan.title,revision:last.n,model,size,asked,caps:CAPS,capTokens:chk.capTokens,needs:chk.needs,why:parsed.run.why,secondYes:chk.needsSecondYes,canStart:!reasons.length,reasons,at:ans?ans.at:last.at})}
   return out.sort((a,b)=>a.at-b.at)}
 
  // gate: may another turn of this run go ahead? (not the first start: that is startCheck.)
@@ -119,7 +122,7 @@ export function createRuns({root,claude=null,now=Date.now,extraEnv={},runTurnFn=
   get:id=>view(load(id)),
   feed(id,after){return load(id)?readFeed(root,id,after):null},
 
-  start({planId,revision,model}){
+  start({planId,revision,model,size=null}){
    if(!claude?.path)return err('claude.exe was not found. Is the Claude Code extension installed in VS Code?',503);
    const plan=readPlan(plansDir,planId);if(!plan)return err('No such plan.',404);
    const last=latestRevision(plan);
@@ -127,10 +130,10 @@ export function createRuns({root,claude=null,now=Date.now,extraEnv={},runTurnFn=
    if(hashText(last.text)!==last.hash)return err('The plan text does not match its stored hash. Send the plan again.');
    const ans=[...plan.answers].reverse().find(a=>a.revision===last.n);
    if(ans&&approvalVoided(ans.at))return err('That approval was stamped while a run was working, so it is void. Approve the plan again.');
-   const {state,rate}=gauges(),chk=startCheck({plan,picked:model,secondYes:false,state,rate,activeRun:!!holding(null)||busy()});
+   const {state,rate}=gauges(),chk=startCheck({plan,picked:model,pickedSize:size,secondYes:false,state,rate,activeRun:!!holding(null)||busy()});
    if(chk.code==='refused')return err(chk.reasons.join(' '),409,{reasons:chk.reasons});
    const parsed=parseRunBlock(last.text),t=now();
-   const run={id:newRunId(t),planId:plan.id,planTitle:plan.title,revision:last.n,planHash:last.hash,model:chk.model,size:parsed.run.size,capTokens:chk.capTokens,needs:chk.needs,sessionId:randomUUID(),
+   const run={id:newRunId(t),planId:plan.id,planTitle:plan.title,revision:last.n,planHash:last.hash,model:chk.model,size:chk.size||parsed.run.size,capTokens:chk.capTokens,needs:chk.needs,sessionId:randomUUID(),
     status:'confirming',reason:'',turn:0,turns:[],tokens:0,files:[],paths:[],flagged:[],question:null,resultText:'',pending:null,confirmUntil:null,pid:null,exeName:null,hubPid:process.pid,createdAt:t,updatedAt:t};
    if(chk.code==='second-yes'){run.pending={kind:'start'};run.confirmUntil=t+confirmMs;save(run);return {run:view(run),needsConfirm:true}}
    return launch(run,{resume:false,prompt:firstPrompt({id:plan.id,title:plan.title,revision:last.n,text:last.text})})},
@@ -164,7 +167,7 @@ export function createRuns({root,claude=null,now=Date.now,extraEnv={},runTurnFn=
     const g=gate(run,run.pending.extra);if(!g.ok)return err(g.reasons.join(' '),409,{reasons:g.reasons});
     run.capTokens=run.tokens+run.pending.extra;return launch(run,{resume:true,prompt:'You reached your token cap and were given more. Continue and finish the plan.'})}
    const plan=readPlan(plansDir,run.planId);if(!plan)return err('No such plan.',404);
-   const {state,rate}=gauges(),chk=startCheck({plan,picked:run.model,secondYes:true,state,rate,activeRun:false});
+   const {state,rate}=gauges(),chk=startCheck({plan,picked:run.model,pickedSize:run.size,secondYes:true,state,rate,activeRun:false});
    if(chk.code!=='ok')return err(chk.reasons.join(' '),409,{reasons:chk.reasons});
    const last=latestRevision(plan);
    return launch(run,{resume:false,prompt:firstPrompt({id:plan.id,title:plan.title,revision:last.n,text:last.text})})},

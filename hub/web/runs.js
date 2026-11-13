@@ -90,11 +90,17 @@ export function mountRuns(view,{id,onChange,embedded=false,readyFor=null}={}){
  function readyRow(p){
   const note=h('p',{class:'msg err',role:'alert',hidden:true}),m=modelName(p.model);
   // the model picker: the plan's own model, or Fable by the owner's own pick (the server checks the gauges and asks for the second yes)
-  const sel=h('select',{class:'sel','aria-label':'Model for this run'},startModels(p.model).map(x=>h('option',{value:x,selected:x===p.model},x===p.model?`${modelName(x)} (the plan's model)`:`${modelName(x)} (your pick; uses the Opus cap for this size)`)));
+  // you may pick any model and any size that model allows (Fable borrows the Opus sizes); the server checks the gauges again and asks for the second yes
+  const capsOf=x=>(p.caps&&p.caps[x==='fable'?'opus':x])||{};
+  const sel=h('select',{class:'sel','aria-label':'Model for this run'},['haiku','sonnet','opus','fable'].map(x=>h('option',{value:x,selected:x===p.model},x===p.model?`${modelName(x)}${p.asked?'':' (the plan\'s model)'}`:`${modelName(x)} (your pick)`)));
+  const size=h('select',{class:'sel','aria-label':'Size for this run'});
+  const fillSizes=()=>{const c=capsOf(sel.value),keep=size.value||p.size;size.textContent='';for(const s of Object.keys(c))size.append(h('option',{value:s,selected:s===(c[keep]?keep:Object.keys(c).at(-1))},`Size ${s} · up to ${fmt(c[s])} tokens`))};
+  fillSizes();sel.addEventListener('change',fillSizes);
   return h('div',{class:'plan-row ready'},h('span',{class:'plan-main'},h('span',{class:'plan-title'},p.title),
    h('span',{class:'plan-meta'},`Revision ${p.revision} · ${m} · size ${p.size} · up to ${fmt(p.capTokens)} tokens${p.why?' · '+p.why:''}${p.secondYes?' · asks for a second yes':''}`),
-   p.canStart?null:h('span',{class:'plan-meta warn'},'Cannot start now: '+p.reasons.join(' ')),note),
-   h('span',{class:'acts'},p.canStart?sel:null,p.canStart?h('button',{class:'btn pri',type:'button',onclick:()=>press('start',{plan:p.planId,revision:p.revision,model:sel.value},note)},'Start'):null,embedded?null:h('a',{class:'btn',href:'#work/'+p.planId},'Open plan')))}
+   p.asked?h('span',{class:'plan-meta warn'},`The plan's Run block asked for ${p.asked.model?modelName(p.asked.model):'a model the hub does not know'} ${p.asked.size||''}, which the hub does not allow. It starts you on ${m} ${p.size} instead; change the model or size below.`):null,
+   p.canStart?null:h('span',{class:'plan-meta warn'},'Cannot start as set: '+p.reasons.join(' ')+' Pick a smaller model or size below; the hub checks again when you press Start.'),note),
+   h('span',{class:'acts'},sel,size,h('button',{class:'btn pri',type:'button',onclick:()=>press('start',{plan:p.planId,revision:p.revision,model:sel.value,size:size.value},note)},'Start'),embedded?null:h('a',{class:'btn',href:'#work/'+p.planId},'Open plan')))}
 
  // ── draw
  function draw(list){

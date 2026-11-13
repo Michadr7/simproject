@@ -276,7 +276,8 @@ export function createHubServer({root,port=0,runs=null,chat=null,jobs=null,commi
       if(typeof b.plan!=='string'||!ID_PATTERN.test(b.plan))return json(400,{error:'plan must be a plan id'});
       if(!int(b.revision,1,100000))return json(400,{error:'revision must be a whole number'});
       if(typeof b.model!=='string'||!RUN_MODELS.includes(b.model))return json(400,{error:'model must be haiku, sonnet, opus or fable'});
-      res=runs.start({planId:b.plan,revision:b.revision,model:b.model})}
+      if(b.size!=null&&!['S','M','L'].includes(b.size))return json(400,{error:'size must be S, M or L'});
+      res=runs.start({planId:b.plan,revision:b.revision,model:b.model,size:b.size??null})}
      else if(r.api==='run-answer'){
       if(!int(b.question,1,100000))return json(400,{error:'question must be a whole number'});
       if(typeof b.text!=='string'||!b.text.trim()||b.text.length>MAX_RUN_ANSWER||b.text.includes('\0'))return json(400,{error:`text must be 1 to ${MAX_RUN_ANSWER} characters`});

@@ -86,7 +86,7 @@ import {createApartment,EXIT,BED,ENTRY} from './apartment.js';
 import {createIndoorCamera} from './indoor-camera.js';
 import {polishWorld} from './visuals.js';
 import {createMovementInput} from './input.js';
-import {createCharacter,loadCharacterAssets} from './character.js';
+import {createCharacter,loadCharacterAssets,characterAssetsReady} from './character.js';import {createMenuScene} from './menu-scene.js';import {createMenuLive,MENU_FPS,MENU_FPS_LOW} from './menu-scene-rules.js';
 import {palettes,defaults,loadAppearance,saveAppearance,normalizeAppearance,BODIES,OUTFITS,PART_KEYS,CLOTHES_KEYS,partChoices,quickOutfits,switchBody,randomLook} from './appearance.js';
 // Decode the embedded character models once, before any character (player, clerks, pedestrians) is built.
 await loadCharacterAssets();
@@ -887,7 +887,7 @@ $('rotateLeft').onclick=()=>previewTurn-=Math.PI/4;$('rotateRight').onclick=()=>
 function closeCreator(){creatorOpen=false;modal=false;$('creator').hidden=true;document.body.classList.remove('creating');keys.clear()}
 $('cancelCreator').onclick=()=>{closeCreator();if(!active)$('welcome').hidden=false};
 $('creatorForm').onsubmit=e=>{e.preventDefault();if(!$('characterName').value.trim()){$('characterName').setCustomValidity('Enter a name to begin.');$('characterName').reportValidity();return}
- $('characterName').setCustomValidity('');updateDraft();currentAppearance={...draft};avatar.apply(draft);me.name=draft.name;persist();
+ $('characterName').setCustomValidity('');updateDraft();currentAppearance={...draft};avatar.apply(draft);menuLive.setAppearance(draft);me.name=draft.name;persist();
  const saved=saveAppearance({setItem:(key,value)=>localStorage.setItem(key,value)},draft);
  closeCreator();active=true;$('customizeSaved').hidden=false;
  if(!saved){$('objective').querySelector('p').textContent='Browser saving is unavailable. Your character will last for this session.'}
@@ -1384,6 +1384,8 @@ function updateMultiplayer(now,moving,dt){
 }
 
 let prev=performance.now(),frames=0,elapsed=0,menuDrawn=false,stuckTime=0;
+// The live scene behind the main menu (menu-scene.js, rules in menu-scene-rules.js): drawn at a capped frame rate while #welcome is showing, freed when the game starts. If it cannot be built, or the player asks for reduced motion, the menu keeps its picture.
+const menuLive=createMenuLive({build:()=>{const s=createMenuScene({createCharacter,appearance:currentAppearance});return {update:s.update,setAppearance:s.setAppearance,dispose:s.dispose,render(){s.frame(innerWidth,innerHeight);renderer.render(s.scene,s.camera)}}},ready:characterAssetsReady,menuVisible:()=>!$('welcome').hidden,pageHidden:()=>typeof document!=='undefined'&&!!document.hidden,reducedMotion:()=>typeof matchMedia==='function'&&matchMedia('(prefers-reduced-motion: reduce)').matches,setLive:on=>$('welcome').classList.toggle('live',on),fps:()=>mainMenu.settings.quality==='low'?MENU_FPS_LOW:MENU_FPS});
 // One slice of simulated time (see timestep.js). Everything that has to advance with real time runs here, once per slice.
 // Returns whether a movement key was pressed during the slice.
 // Carrying and the needs (DESIGN 4.18) together decide how fast you walk and whether Shift runs.
@@ -1413,7 +1415,7 @@ function frame(now){
  if(creatorOpen){previewAvatar.update(view);drawCreator();return}
  if(editorHook){editorHook.frame(view);renderer.render(scene,camera);return} // the scene editor (scene-editor.js) is open: the world is paused, only its camera and helpers move
  // Before the game starts only the main menu is visible: draw the world once (this warms the shaders and textures), then stop until Play.
- if(!active){if(menuDrawn)return;menuDrawn=true}else menuDrawn=false;
+ if(!active){if(menuDrawn){menuLive.tick(now);return}menuDrawn=true}else{menuDrawn=false;menuLive.dispose()}
  frames++;elapsed+=real;if(elapsed> .75){$('fps').textContent=Math.round(frames/elapsed)+' FPS';frames=0;elapsed=0}
  const frameX=me.position.x,frameZ=me.position.z;
  let pressed=false;{const {count,step}=substeps(real);for(let i=0;i<count;i++)if(stepWorld(step))pressed=true}

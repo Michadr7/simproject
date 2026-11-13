@@ -134,6 +134,32 @@ a.btn{text-decoration:none;display:inline-block}
 .chat-composer{max-width:900px;margin-top:10px}
 .chat-composer textarea{width:100%;background:var(--panel2);color:var(--ink);border:1px solid var(--line);border-radius:10px;padding:9px 11px;font:14px var(--sans);resize:vertical;margin-bottom:8px}
 .small.warn{color:var(--watch)}
+/* ---- Chat reading layout (chat-format.js): blocks with air between them, green for good news and plans, orange for catches and failures ---- */
+.mbody{--good:#6fcf97;--warn:#f2a65a;display:grid;gap:10px;margin-top:8px;line-height:1.55;font-size:14px}
+.mbody p,.mbody ul,.mbody ol{margin:0}
+.mbody .mp{white-space:pre-line;max-width:78ch}
+.mbody .mh{font-weight:600;font-size:14.5px;margin-top:6px;padding-left:10px;border-left:3px solid var(--line)}
+.mbody .ml{padding-left:22px;display:grid;gap:5px;max-width:78ch}
+.mbody .mcode{margin:0;padding:8px 10px;border-radius:8px;background:rgba(0,0,0,.35);border:1px solid var(--line);font:12.5px var(--mono,monospace);overflow:auto;white-space:pre}
+.mbody code{font-family:var(--mono,monospace);font-size:12.5px;background:rgba(255,255,255,.08);padding:1px 5px;border-radius:5px}
+.mbody .t-good{color:var(--good)}.mbody .t-warn{color:var(--warn)}
+.mbody .mh.t-good{border-left-color:var(--good)}.mbody .mh.t-warn{border-left-color:var(--warn)}
+.mbody p.t-good,.mbody p.t-warn{padding:6px 10px;border-radius:8px;border:1px solid currentColor;background:color-mix(in srgb,currentColor 9%,transparent)}
+.mbody p.t-good strong,.mbody p.t-warn strong{color:inherit}
+.mbody .clink{color:var(--acc);text-decoration:underline;text-underline-offset:2px;word-break:break-word}
+.mtwrap{overflow:auto;border:1px solid var(--line);border-radius:10px}
+.mt{border-collapse:collapse;width:100%;font-size:13.5px}
+.mt th,.mt td{text-align:left;vertical-align:top;padding:8px 10px;border-bottom:1px solid var(--line)}
+.mt th{font-size:12px;letter-spacing:.04em;text-transform:uppercase;color:var(--dim);background:rgba(255,255,255,.04)}
+.mt tr:last-child td{border-bottom:0}
+.mt td+td,.mt th+th{border-left:1px solid var(--line)}
+.mt td.t-good,.mt th.t-good{color:var(--good)}.mt td.t-warn,.mt th.t-warn{color:var(--warn)}
+.mt td.t-good{background:rgba(111,207,151,.06)}.mt td.t-warn{background:rgba(242,166,90,.07)}
+.mlinks{display:flex;gap:8px;flex-wrap:wrap;align-items:center;padding-top:10px;border-top:1px dashed var(--line)}
+.mlinks .label{margin:0}
+.mlink{display:inline-flex;flex-direction:column;gap:1px;border:1px solid var(--line);border-radius:10px;padding:5px 11px;text-decoration:none;color:var(--ink);background:rgba(255,255,255,.04);max-width:100%}
+.mlink:hover{border-color:var(--acc);background:rgba(var(--acc-glow),.14)}
+.mlink b{font-weight:600;font-size:13px;overflow:hidden;text-overflow:ellipsis}
 
 /* ---- P5 R7b: the corner bot. The face sits at the foot of the rail; the speech line and the live list grow out of the rail in a strip the page makes room for (--bot-h), so nothing is ever covered. ---- */
 html{--bot-h:0px}html[data-bot=line]{--bot-h:54px}html[data-bot=open]{--bot-h:176px}

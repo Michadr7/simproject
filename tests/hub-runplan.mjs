@@ -44,6 +44,14 @@ const approve=(text,{answerAt=T0+1000}={})=>{let r=submitPlan(null,{source:'p.md
 const gauges=(weekly=10,five=20)=>evaluate([{at:T0,weekly:{pct:weekly,resetsAt:Math.floor(T0/1000)+86400},fiveHour:{pct:five,resetsAt:Math.floor(T0/1000)+3600}}],{now:T0+60000});
 const ok=(o)=>startCheck({plan:approve(block()),picked:'sonnet',state:gauges(),...o});
 
+// the owner's own model and size on the Start card replace a bad Run block (Opus L), but every cap and the second yes still apply
+{const bad=approve('# x\n\n## Run\nmodel: opus\nwhy: big\nsize: L\nneeds: npm test\n');
+ let b=startCheck({plan:bad,picked:'opus',state:gauges()});assert.equal(b.ok,false,'Opus L is refused as the plan wrote it');
+ b=startCheck({plan:bad,picked:'sonnet',pickedSize:'L',state:gauges()});assert.equal(b.ok,true);assert.equal(b.model,'sonnet');assert.equal(b.size,'L');assert.equal(b.capTokens,3000000);
+ b=startCheck({plan:bad,picked:'opus',pickedSize:'M',state:gauges()});assert.equal(b.code,'second-yes');assert.equal(b.capTokens,1000000);
+ b=startCheck({plan:bad,picked:'opus',pickedSize:'L',secondYes:true,state:gauges()});assert.equal(b.ok,false,'Opus never gets L, even when you pick it');
+ b=startCheck({plan:bad,picked:'sonnet',pickedSize:'XL',state:gauges()});assert.equal(b.ok,false);
+ b=startCheck({plan:bad,picked:'haiku',pickedSize:'M',state:gauges()});assert.equal(b.ok,false,'Haiku has only S')}
 let c=ok();assert.equal(c.ok,true);assert.equal(c.code,'ok');assert.equal(c.model,'sonnet');assert.equal(c.capTokens,1500000);
 assert.equal(c.estimatePct,Math.round(1.5*PLACEHOLDER_RATE*10)/10);assert.deepEqual(c.needs,['test','release']);
 

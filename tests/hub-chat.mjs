@@ -128,6 +128,49 @@ try{
  const off=await new Promise(ok=>{const d=JSON.stringify({text:'x'});const q=http.request({host:'127.0.0.1',port:p2,method:'POST',path:'/api/chat/send',headers:{Host:`127.0.0.1:${p2}`,Origin:`http://127.0.0.1:${p2}`,'Content-Type':'application/json','Content-Length':d.length,'X-Hub-Token':runs.token}},res=>{res.resume();res.on('end',()=>ok(res.statusCode))});q.end(d)});
  assert.equal(off,503);await noChat.close();
 }finally{await chat.shutdown();await runs.shutdown();await srv.close()}
-for(const f of ['chat.js']){const code=fs.readFileSync(path.join(path.dirname(FAKE),'..','..','hub','web',f),'utf8');assert.ok(!/innerHTML|outerHTML|insertAdjacentHTML|eval\(/.test(code),f+' sets text only')}
+for(const f of ['chat.js','chat-format.js']){const code=fs.readFileSync(path.join(path.dirname(FAKE),'..','..','hub','web',f),'utf8');assert.ok(!/innerHTML|outerHTML|insertAdjacentHTML|eval\(/.test(code),f+' sets text only')}
 {const cj=fs.readFileSync(path.join(path.resolve(path.dirname(fileURLToPath(import.meta.url)),'..'),'hub','web','chat.js'),'utf8'),css=fs.readFileSync(path.join(path.resolve(path.dirname(fileURLToPath(import.meta.url)),'..'),'hub','web','hub.css'),'utf8');assert.ok(cj.includes("e.key==='Enter'&&!e.shiftKey&&!e.isComposing"),'Enter sends, Shift+Enter makes a new line, and a key from an input method is left alone');assert.ok(cj.includes("chat-page")&&/\.view>\.chat-page\{position:absolute;inset:0;display:flex;flex-direction:column/.test(css)&&/\.chat-page \.chat-list\{flex:1 1 auto;min-height:0;max-height:none/.test(css),'the chat fills the page and only the messages scroll')}
+const {parse,inline,linksOf,toneOf}=await import('../hub/web/chat-format.js');
+{
+
+const sample=`**Candidates**
+
+| Option | Why it might fit | Catch |
+|---|---|---|
+| [Quaternius](https://quaternius.com/packs/ubc.html) | Six game-ready models. | I haven't checked its rig. |
+| [Kenney](https://app.cinevva.com/guides/x) (Retro) | CC0, glTF. | Blocky and stylised. |
+
+All of these come from one site, so confirm each licence.
+
+**My recommendation**
+
+Use Quaternius first. See https://example.com/page.
+
+**Warning**
+- The rig is unverified.
+- Second item`;
+const b=parse(sample);
+assert.deepEqual(b.map(x=>x.type),['heading','table','para','heading','para','heading','list']);
+assert.equal(b[0].tone,null);
+assert.deepEqual(b[1].head,['Option','Why it might fit','Catch']);
+assert.deepEqual(b[1].colTone,[null,'good','warn']);
+assert.equal(b[1].rows.length,2);
+assert.equal(b[3].tone,'good');assert.equal(b[4].tone,'good');
+assert.equal(b[5].tone,'warn');assert.equal(b[6].tone,'warn');assert.equal(b[6].items.length,2);
+assert.equal(toneOf('Why it might fit'),'good');assert.equal(toneOf('Catch'),'warn');assert.equal(toneOf('Candidates'),null);
+
+const parts=inline('see [a](https://x.org/a) and **bold** `c` then https://y.org/z. Done');
+assert.deepEqual(parts.map(p=>p.t),['text','link','text','bold','text','code','text','link','text']);
+assert.equal(parts[7].href,'https://y.org/z');assert.equal(parts[8].text,'. Done');
+// only http(s) links are ever made
+assert.equal(inline('[x](javascript:alert(1))').some(p=>p.t==='link'),false);
+assert.equal(inline('<script>alert(1)</script>').every(p=>p.t==='text'),true);
+
+const links=linksOf(sample);
+assert.deepEqual(links.map(l=>l.host),['quaternius.com','app.cinevva.com','example.com']);
+assert.equal(links[0].label,'Quaternius');
+assert.equal(linksOf('https://a.org https://a.org').length,1);
+assert.equal(parse('```\nx | y\n```')[0].type,'code');
+assert.deepEqual(parse(''),[]);
+}
 console.log('hub-chat: ok');

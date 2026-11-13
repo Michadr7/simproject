@@ -1,11 +1,12 @@
 // Mikkadr Hub P5, R5: the Chat page (Menu row 01). You talk to the master agent; each message is one read-only model turn. A reply with a PLAN: section is filed on Plans by the hub (a chip links to it).
 // R7c: "ACTION:" lines in a reply are drawn as buttons under it (Approve, Start, Resume, Close). A click sends the same request as the button on Plans or Runs, through the same gates; the master itself can do nothing.
-// The master's words are text only (textContent in a pre-wrap box, never markup). Polls GET /api/chat every 2 s while the master works and every 15 s otherwise. The writes carry the hub token (runs-api.js).
+// The master's words are drawn by chat-format.js (headings, lists, tables, links as their own row, green and orange tones) with createElement and textContent only, never markup. Polls GET /api/chat every 2 s while the master works and every 15 s otherwise. The writes carry the hub token (runs-api.js).
 import {runCall,errorText} from './runs-api.js';
 import {modelName,fmt,chatActionState,chatActionCall,withoutActions,withoutRecords,draftStore} from './run-actions.js';
 import {recordsCall} from './records-api.js';
 import {agoText} from './plans.js';
 import {mountCacheStrip,mountCacheChip} from './cache-strip.js';
+import {render as renderBody} from './chat-format.js';
 import {contextOf,stateOf,coldSendWarning,modelSwitchWarning,newChatHint} from './cache.js';
 
 export const MODEL_CHOICES=['haiku','sonnet','opus','fable'];
@@ -69,7 +70,7 @@ export function mountChat(view,{onChange}={}){
   for(const m of d.messages){
    const meta=metaOf(m);
    list.append(h('div',{class:'cmsg c-'+m.role+(m.error?' bad':'')},h('div',{class:'chead'},h('b',{},MESSAGE_LABEL[m.role]||m.role),h('span',{class:'small dim'},[agoText(m.at),meta].filter(Boolean).join(' · '))),
-    h('pre',{class:'mtext'},m.role==='master'?withoutRecords(withoutActions(m.text))||m.text:m.text),
+    m.role==='user'?h('pre',{class:'mtext'},m.text):renderBody(m.role==='master'?withoutRecords(withoutActions(m.text))||m.text:m.text),
     m.records&&m.records.length?h('div',{class:'cacts','aria-label':'Recorded by the hub from the master\'s reply'},m.records.map(r=>{const gone=undone.has(r.id);return h('div',{class:'cact'},h('span',{class:'small'},gone?r.text+' · undone':r.text),h('button',{class:'btn',type:'button',disabled:gone,onclick:()=>undoRecord(r.id)},'Undo'))})):null,
     m.recordErrors&&m.recordErrors.length?h('div',{},m.recordErrors.map(t=>h('p',{class:'small warn'},'Not recorded: '+t))):null,
     m.notUnderstood&&m.notUnderstood.length?h('div',{},m.notUnderstood.map(t=>h('p',{class:'small warn'},'Not understood: '+t))):null,

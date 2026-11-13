@@ -159,6 +159,9 @@ body.creating #clockChip{display:none}
 
 /* Main menu (0.32.0). Opaque image, no backdrop blur: the world behind it is not drawn while the menu is open. */
 .main-menu{background-color:#161410;background-size:cover;background-position:center right;backdrop-filter:none;align-items:center;padding:0 clamp(20px,8vw,120px);overflow:auto}
+/* The live menu scene (menu-scene.js) is drawing on the canvas behind: drop the picture, keep the dark side the buttons sit on. Without .live the picture is the fallback. */
+.main-menu.live{background-color:transparent!important;background-image:linear-gradient(90deg,#0c0b08f2 0%,#0c0b08cc 32%,#0c0b0855 62%,#0c0b0810 100%)!important}
+@media(max-width:700px){.main-menu.live{background-image:linear-gradient(90deg,#0c0b08e6 0%,#0c0b08b3 100%)!important}}
 .menu-column{width:min(420px,100%);padding:32px 0}
 .menu-kicker{font-size:11px;letter-spacing:3px;color:#facd38;font-weight:bold}
 .menu-title h1{font-size:clamp(48px,8vw,88px);margin:6px 0 4px;line-height:1;letter-spacing:1px;text-shadow:0 3px 0 #0006}

@@ -16,7 +16,7 @@ for(const saved of [false,true]){
  const release=html.match(/import\('\.\/(releases\/[^/]+)\/game\.js'/)[1];
  await cp('dist/'+release,dir,{recursive:true});
  const threeURL=pathToFileURL(resolve('dist/vendor/three.module.js')).href;
- await writeFile(join(dir,'vendor/three.module.js'),`export * from '${threeURL}';export class WebGLRenderer{constructor(){this.shadowMap={}}setPixelRatio(){}setSize(){}setViewport(){}clear(){}render(scene,camera){globalThis.__renders=(globalThis.__renders||0)+1;globalThis.__renderScene=scene;globalThis.__renderCamera=camera}}`);
+ await writeFile(join(dir,'vendor/three.module.js'),`export * from '${threeURL}';export class WebGLRenderer{constructor(){this.shadowMap={}}setPixelRatio(){}setSize(){}setViewport(){}clear(){}render(scene,camera){if(scene.name!=='menu-scene')globalThis.__renders=(globalThis.__renders||0)+1;globalThis.__renderScene=scene;globalThis.__renderCamera=camera}}`);
  const ids=new Map([...html.matchAll(/id="([^"]+)"/g)].map(m=>[m[1],new El(m[1]==='characterName'?'input':'div')]));
  const doc=new EventTarget();doc.getElementById=id=>ids.get(id)||null;doc.createElement=tag=>new El(tag);doc.body=new El();doc.querySelectorAll=()=>[];doc.hidden=false;
  const win=new EventTarget();win.matches=()=>false;const store=new Map();if(saved){store.set('citylife.character.v1',JSON.stringify({version:1,appearance:{name:'Michadr'}}));store.set('citylife.progress.v1',JSON.stringify({version:1,progress:{cash:11200,completed:5,phase:'available',position:{x:1,z:-6.3}}}))}

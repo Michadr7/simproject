@@ -15,6 +15,7 @@ export const JOBS={
  release:{key:'release',label:'Make a release',kind:'job',script:'scripts/package-release.mjs',args:['--force'],about:'Packs dist/ into the release folder the game loads. Needed after a change in dist/, before the tests.'},
  check:{key:'check',label:'Check (release, then tests)',kind:'job',steps:['release','test'],about:'Makes the release, then runs the tests. Stops at the first failure.'},
  index:{key:'index',label:'Rebuild the index',kind:'job',script:'scripts/build-index.mjs',args:[],about:'Rewrites PROJECT-BRIEF.md and PROJECT-INDEX.md. The hub also does this by itself after a run finishes.'},
+ gate:{key:'gate',label:'Test gate (after a run)',kind:'job',steps:['release','test','index'],about:'Started by the hub when a run finishes: makes the release, runs the tests, then rebuilds the index. Stops at the first failure. No model call.'},
  'deploy-check':{key:'deploy-check',label:'Check before going online',kind:'job',script:'scripts/deploy-check.mjs',args:[],about:'Reads what is live, the version, the tests, the git status and the Cloudflare login. Sends and publishes nothing.'},
  'bump-step':{key:'bump-step',label:'Raise the version number',kind:'job',script:'scripts/bump-version.mjs',args:[],about:'Changes the version in package.json after the hub confirmed it. Only as the first step of Bump version.'},
  bump:{key:'bump',label:'Bump version',kind:'job',steps:['bump-step','release','test'],about:'Raises the version number, makes the release for it, and runs the tests. Started from the Deploy page. Nothing goes online.'},
@@ -57,7 +58,7 @@ export function summarise(key,output,exitCode,{step=key,stopped=false}={}){
   const all=/^All (\d+) test files passed\.$/m.exec(text);
   if(step==='test'&&ok&&all)return {ok:true,version:d.to,from:d.from,text:base+`. Release made, ${all[1]} of ${all[1]} tests passed.`};
   return {ok:false,version:d.to,text:base+'. The release was made, but the tests did not all pass.'}}
- if(key==='test'||(key==='check'&&step==='test')){
+ if(key==='test'||((key==='check'||key==='gate')&&step==='test')||(key==='gate'&&step==='index'&&ok)){
   const all=/^All (\d+) test files passed\.$/m.exec(text),some=/^(\d+) of (\d+) test files failed\.$/m.exec(text);
   const failing=[...text.matchAll(/^FAIL (\S+)$/gm)].map(m=>m[1].slice(0,80)).slice(0,40);
   if(some){const failed=Number(some[1]),total=Number(some[2]);return {ok:false,passed:total-failed,total,failing,text:`${total-failed} of ${total} passed, ${failed} failed`}}
@@ -69,5 +70,5 @@ export function summarise(key,output,exitCode,{step=key,stopped=false}={}){
   if(ref)return {ok:false,refused:true,text:'Nothing was published: '+ref[1].slice(0,200)};
   if(d&&typeof d==='object')return {ok:!!d.ok&&ok,deployed:!!d.ok,version:String(d.version||'').slice(0,20),live:d.live?String(d.live).slice(0,20):null,text:d.ok&&ok?`Published ${String(d.version).slice(0,20)}. The live site now says ${String(d.live).slice(0,20)}.`:String(d.note||'The deploy did not finish.').slice(0,200)};
   return {ok:false,text:stopped?'Stopped by you':'The deploy ended without a result. Press Check to see what is live.'}}
- if(key==='check')return {ok:false,text:'The release failed, so the tests did not run'};
+ if(key==='check'||key==='gate')return {ok:false,text:key==='gate'&&step==='index'?'The tests passed, but the index did not rebuild':'The release failed, so the tests did not run'};
  return {ok,text:ok?'Done':`Failed (exit code ${exitCode})`}}

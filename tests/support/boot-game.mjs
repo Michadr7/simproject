@@ -17,7 +17,7 @@ export async function bootGame({position=null,play=true,editRelease=async()=>{},
  const release=html.match(/import\('\.\/(releases\/[^/]+)\/game\.js'/)[1];
  await cp('dist/'+release,dir,{recursive:true});
  const threeURL=pathToFileURL(resolve('dist/vendor/three.module.js')).href;
- await writeFile(join(dir,'vendor/three.module.js'),`export * from '${threeURL}';export class WebGLRenderer{constructor(){this.shadowMap={}}setPixelRatio(){}setSize(){}setViewport(){}clear(){}render(scene){globalThis.__renderScene=scene}}`);
+ await writeFile(join(dir,'vendor/three.module.js'),`export * from '${threeURL}';export class WebGLRenderer{constructor(){this.shadowMap={}}setPixelRatio(){}setSize(){}setViewport(){}clear(){}render(scene){if(scene.name==='menu-scene')globalThis.__menuScene=scene;else globalThis.__renderScene=scene}}`);
  await editRelease(dir);
  const ids=new Map([...html.matchAll(/id="([^"]+)"/g)].map(m=>[m[1],new El(m[1]==='characterName'?'input':'div')]));
  const created=[],doc=new EventTarget();
@@ -33,6 +33,6 @@ export async function bootGame({position=null,play=true,editRelease=async()=>{},
  const pump=seconds=>{for(let i=0;i<seconds*25;i++){simTime+=40;nextFrame(simTime)}};
  const send=(type,code)=>{const e=new Event(type,{cancelable:true});e.code=code;win.dispatchEvent(e);return e};
  const find=id=>ids.get(id)||created.find(e=>e.id===id)||null; // an element from the page, or one the game created
- const scene=()=>globalThis.__renderScene;
- return {GameState,pump,send,ids,find,created,win,store,dir,scene,done:()=>rm(dir,{recursive:true,force:true})};
+ const scene=()=>globalThis.__renderScene,menuScene=()=>globalThis.__menuScene; // the live menu scene (menu-scene.js) is kept apart: scene() stays the world
+ return {GameState,pump,send,ids,find,created,win,store,dir,scene,menuScene,done:()=>rm(dir,{recursive:true,force:true})};
 }

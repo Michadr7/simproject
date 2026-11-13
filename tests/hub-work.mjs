@@ -44,7 +44,8 @@ const waiting=[{id:'plan:e4',group:'plan',title:'Plan: x',detail:'',at:1,actions
 const found=[{hash:'0123456789abcdef',path:'docs/scene-plan.md',title:'Scene editor E7: Polish',bytes:10,modifiedAt:7},{hash:'fedcba9876543210',path:'x-plan.md',title:'Loose idea',bytes:10,modifiedAt:8}];
 const tree=buildWork({plans,runs,ready,waiting,found,enabled:true});
 const P=name=>tree.projects.find(p=>p.name===name),S=id=>findStep(tree,{plan:id}).step;
-assert.deepEqual(tree.projects.map(p=>p.name).sort(),['Hub v2',OTHER,'People','Scene editor'].sort());
+assert.deepEqual(splitTitle('UI: New menu'),{project:'UI',code:'',name:'New menu'});assert.deepEqual(splitTitle('scene editor: Props'),{project:'Scene editor',code:'',name:'Props'});assert.equal(splitTitle('Random: thing').project,null);
+assert.deepEqual(tree.projects.map(p=>p.name).sort(),['Assets','Hub v2',OTHER,'People','Scene editor'].sort());
 assert.deepEqual(P('Scene editor').steps.map(s=>s.code),['E1','E2','E3','E4','E10'],'steps are in the order of their codes (E10 after E4)');
 assert.equal(S('a2').status,'question');assert.equal(P('People').steps.length,1,'the "Project:" line wins over the title');
 assert.equal(S('e1').status,'done');assert.equal(S('e2').status,'finished');assert.equal(S('e3').status,'working');assert.equal(S('e4').status,'waiting');assert.equal(S('e10').status,'blocked');assert.equal(S('v1').status,'approved');assert.equal(S('mm').status,'stopped');
@@ -61,8 +62,9 @@ assert.equal(buildWork({plans:[plan('p','X','approved')],runs:[run('p','confirmi
 
 // ── items: the other things that wait for you
 assert.deepEqual(P('Scene editor').items.map(i=>i.id),['found:0123456789abcdef'],'a found plan file lands in the project its title names');
-assert.deepEqual(P(OTHER).items.map(i=>i.id),['asset:abc','tokens:stale','found:fedcba9876543210'],'asset attention, token notes and other found files go under Other; plan and run items are steps already');
-assert.equal(P(OTHER).items[0].kind,'asset');assert.equal(P(OTHER).items[1].kind,'tokens');assert.deepEqual(P(OTHER).items[0].actions[0],{type:'hide',label:'Hide until it changes',hash:'abc'});
+assert.deepEqual(P('Assets').items.map(i=>i.id),['asset:abc'],'asset attention and file checks go under Assets, not Other');
+assert.deepEqual(P(OTHER).items.map(i=>i.id).sort(),['found:fedcba9876543210','tokens:stale'].sort(),'token notes and other found files go under Other; plan and run items are steps already');
+assert.equal(P('Assets').items[0].kind,'asset');assert.equal(P(OTHER).items.find(i=>i.id==='tokens:stale').kind,'tokens');assert.deepEqual(P('Assets').items[0].actions[0],{type:'hide',label:'Hide until it changes',hash:'abc'});
 assert.ok(!JSON.stringify(tree).includes('SECRET'),'names and counts only: a question stays on the step page');
 
 // ── the count

@@ -28,13 +28,15 @@ const CODE=/^(.+?)\s+([A-Za-z]\d{1,3}[a-z]?)\s*:\s*(\S.*)$/;
 const cut=(s,n)=>{s=String(s??'');return s.length>n?s.slice(0,n-1)+'…':s};
 const plural=(n,w)=>`${n} ${w}${n===1?'':'s'}`;
 // "Scene editor E4: Library" -> {project:'Scene editor', code:'E4', name:'Library'}; anything else -> {project:null, code:'', name:title}
-export function splitTitle(title){const t=String(title??'').trim(),m=CODE.exec(t);return m?{project:m[1].trim().slice(0,60),code:m[2],name:m[3].trim()}:{project:null,code:'',name:t||'Plan'}}
+const AREA=/^(UI|Assets|Scene editor|People|Characters|Warehouse|Multiplayer|Game systems|Hub)\s*:\s*(\S.*)$/i; // "UI: New menu": the master asks the area and starts the title with it
+export function splitTitle(title){const t=String(title??'').trim(),m=CODE.exec(t);if(m)return {project:m[1].trim().slice(0,60),code:m[2],name:m[3].trim()};
+ const a=AREA.exec(t);return a?{project:a[1].length<=3?a[1].toUpperCase():a[1][0].toUpperCase()+a[1].slice(1).toLowerCase(),code:'',name:a[2].trim()}:{project:null,code:'',name:t||'Plan'}}
 // The optional line "Project: <name>" in a plan's text (a line of its own), or null.
 export function projectLine(text){const m=/^[ \t]*Project:[ \t]*(\S[^\r\n]*?)[ \t]*$/mi.exec(String(text??''));return m?m[1].slice(0,60):null}
 // The token allowance of a model and size (Fable borrows the Opus table), or null.
 export const allowanceOf=(model,size)=>CAPS[model==='fable'?'opus':model]?.[size]??null;
 const codeKey=c=>{const m=/^([A-Za-z])(\d+)([a-z]?)$/.exec(c||'');return m?[m[1].toUpperCase(),Number(m[2]),m[3]]:null};
-const byCode=(a,b)=>{const x=codeKey(a.code),y=codeKey(b.code);if(x&&y)return x[0].localeCompare(y[0])||x[1]-y[1]||x[2].localeCompare(y[2])||a.at-b.at;if(x||y)return x?-1:1;return a.at-b.at};
+const byCode=(a,b)=>{const x=codeKey(a.code),y=codeKey(b.code);if(x&&y)return x[0].localeCompare(y[0])||x[1]-y[1]||x[2].localeCompare(y[2])||a.at-b.at;if(x||y)return x?-1:1;return b.at-a.at}; // a plan with no code: the newest first
 
 // One plain sentence: what to press and what it costs. node is a step, an item, a project or the whole tree.
 export function nextStep(node){
@@ -82,7 +84,7 @@ function stepOf(p,run,rd,enabled){
   if(status==='stopped')base.reason=STOP_REASON[run.status]||'it ended early';
   if(run.status==='confirming'){base.reason='press again to confirm (expensive model)';base.pendingKind=run.pending&&run.pending.kind==='more'?'more':'start'}
   if(run.status==='done')base.flagged=Array.isArray(run.flagged)?run.flagged.length:0}
- else if(p.runProblem||!p.run){status='blocked';base.reason=cut(p.runProblem||'The plan has no "## Run" section.',160)}
+ else if(!rd&&(p.runProblem||!p.run)){status='blocked';base.reason=cut(p.runProblem||'The plan has no "## Run" section.',160)}
  else{status='approved';if(rd){base.canStart=!!rd.canStart;base.reasons=rd.reasons||[];base.secondYes=!!rd.secondYes}else if(!enabled)base.runsOff=true;else{base.canStart=false;base.reasons=['The hub has not listed it as ready yet.']}}
  const s=STATUS[status],step={...base,status,label:base.denied?(p.note?`Closed by you: ${cut(p.note,100)}`:'Closed by you'):status==='stopped'?`Stopped: ${base.reason}`:s.label,meaning:base.denied?'You closed this plan. A new revision of it would put it back on your list.':s.meaning,glyph:base.denied?'ok':s.glyph,needsYou:YOU.includes(status)&&!base.denied};
  step.next=nextStep(step);return step}
@@ -103,7 +105,7 @@ export function buildWork({plans=[],runs=[],ready=[],waiting=[],found=[],enabled
   i.next=nextStep(i);proj(t.project&&map.has(t.project)?t.project:OTHER).items.push(i)}
  // the other things that wait for you: asset attention and token warnings (plans, runs and found files are already above)
  for(const w of waiting){if(w.group==='plan'||w.group==='run'||w.id==='found')continue;
-  const i={id:w.id,kind:KIND[w.group]||(String(w.id).startsWith('tokens:')?'tokens':'note'),title:w.title,detail:w.detail,at:w.at||0,severity:w.severity||'info',actions:w.actions||[],needsYou:true};i.next=nextStep(i);proj(OTHER).items.push(i)}
+  const i={id:w.id,kind:KIND[w.group]||(String(w.id).startsWith('tokens:')?'tokens':'note'),title:w.title,detail:w.detail,at:w.at||0,severity:w.severity||'info',actions:w.actions||[],needsYou:true};i.next=nextStep(i);proj(i.kind==='asset'||i.kind==='filecheck'?'Assets':OTHER).items.push(i)}
  const projects=[...map.values()].map(p=>{
   p.steps.sort(byCode);p.items.sort((a,b)=>a.at-b.at);
   const you=needsYou(p),done=p.steps.filter(s=>s.status==='done').length,total=p.steps.length,working=p.steps.some(s=>s.status==='working'),allDone=total>0&&done===total&&!p.items.length;

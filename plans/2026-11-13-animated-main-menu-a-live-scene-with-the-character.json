@@ -1,0 +1,29 @@
+{
+ "id": "2026-11-13-animated-main-menu-a-live-scene-with-the-character",
+ "title": "Animated main menu: a live scene with the character leaning on a vehicle, reading logging plans",
+ "from": "master",
+ "source": "master/ea5d9eb9/animated-main-menu-a-live-scene-with-the-character",
+ "status": "denied",
+ "revisions": [
+  {
+   "n": 1,
+   "at": 1794550031697,
+   "hash": "e004f89f66029b2d",
+   "text": "# Animated main menu: a live scene with the character leaning on a vehicle, reading logging plans\n\nReplace the static look of the main menu with a live 3D scene in the game's own style. Keep every existing menu function (Play, Multiplayer, Account, Settings, Credits, Edit character) working and tested.\n\n## Scene\n- A logging-camp or forest-clearing set, built from assets already in the game. Do not download new assets.\n- The player's saved character, or a default one, leans against a vehicle and studies a set of logging plans held in both hands. The vehicle is a stand-in for now. The scene has one clearly named swap point (a function or data entry) where the ATV (side by side) drops in during a later update.\n- Motion that makes it feel alive: breathing and weight shifts, the plans rustling, a head turn between the plans and the horizon, a slow camera drift, wind in the trees and grass, a little dust or light haze, a time of day with soft light shifting slowly.\n- The animation rules are pure functions of time, so they can be tested without a renderer.\n\n## Rules\n- Reuse the existing renderer, `createCharacter`, and the lean and hold code. Do not duplicate the character loader.\n- Edit character, or any change of appearance, updates the character in the scene without a reload.\n- Performance: a low frame-rate cap, paused when the menu is hidden or the tab is in the background, disposed when the game starts. A static fallback when assets have not loaded or WebGL is unavailable, and with reduced-motion settings.\n- Menu buttons stay readable over the scene. Keep the existing layout and keyboard use.\n- Multiplayer and save behaviour do not change.\n- Add tests for the animation rules, the swap point and the fallback. The existing menu tests must still pass.\n\n## Deliverables\n- Design note in `notes/` with the scene, the camera, the swap point for the ATV and the performance budget.\n- The first build of the scene, behind the existing menu.\n- A list of follow-up steps, each with a model and size.\n\n## Run\nmodel: opus\nwhy: design and a first build touching the renderer, the character system and the menu together\nsize: L\nneeds: npm test, release, check"
+  }
+ ],
+ "answers": [
+  {
+   "revision": 1,
+   "at": 1794550185650,
+   "verdict": "approved",
+   "note": "Approved from the chat."
+  },
+  {
+   "revision": 1,
+   "at": 1794551765781,
+   "verdict": "denied",
+   "note": "Closed from the terminal: built by Fable subagent"
+  }
+ ]
+}

@@ -60,25 +60,29 @@ export const capTokens=(model,size)=>CAPS[model]?.[size]??null;
 //   plan: the stored plan; picked: the model on the Start card (may be 'fable', only ever the user's own pick); secondYes: true once the second button was pressed;
 //   state: the gauges (watcher `evaluate`); rate: percent per million tokens from `learnRate`, or null; activeRun: true while a run or turn is going.
 // Returns {ok, code, reasons, model, capTokens, estimatePct, needs, needsSecondYes, needsProbe}. code: 'ok' | 'refused' | 'second-yes'.
-export function startCheck({plan,picked,secondYes=false,state,rate=null,activeRun=false}){
+export function startCheck({plan,picked,pickedSize=null,secondYes=false,state,rate=null,activeRun=false}){
  const reasons=[],fail=(r)=>reasons.push(r);
  const s=statusOf(plan),last=latestRevision(plan),answer=[...plan.answers].reverse().find(a=>a.revision===last.n)||null;
  if(!s.buildable)fail(s.status==='approved'?'The newest revision has no approval.':`The plan is ${s.status}, not approved.`);
  else if(answer&&answer.at<last.at)fail('The approval is older than the revision it names.');
  if(activeRun)fail('A run or a chat turn is already active.');
  const parsed=parseRunBlock(last.text);
+ // pickedSize: the owner chose the model and size on the Start card, so the plan's own model and size lines (and their errors) no longer decide. Every cap and gauge check still applies.
+ const own=pickedSize!=null;
+ if(own&&!SIZES.includes(pickedSize))fail('The Start card named a size the hub does not know.');
+ const errs=own?parsed.errors.filter(e=>!/^Run block: (model|size)/.test(e)):parsed.errors;
  if(!parsed.run)fail(parsed.errors[0]);
- else for(const e of parsed.errors)fail(e);
+ else for(const e of errs)fail(e);
  let model=null;
  if(picked==='fable')model='fable'; // Fable only on the user's own pick, whatever the plan says
- else if(parsed.fableAsked)fail('The plan asks for Fable. Fable runs only when you pick it on the Start card.');
+ else if(parsed.fableAsked&&!own)fail('The plan asks for Fable. Fable runs only when you pick it on the Start card.');
  else if(!RUN_MODELS.includes(picked))fail('The Start card named a model the hub does not know.');
- else if(parsed.run&&parsed.run.model&&picked!==parsed.run.model)fail(`The Start card says ${picked} but the approved plan says ${parsed.run.model}.`);
+ else if(!own&&parsed.run&&parsed.run.model&&picked!==parsed.run.model)fail(`The Start card says ${picked} but the approved plan says ${parsed.run.model}.`);
  else model=picked;
- const size=parsed.run?.size||null;
+ const size=own?pickedSize:parsed.run?.size||null;
  // Fable has no cap table: it borrows the Opus caps.
  const cap=model&&size?capTokens(model==='fable'?'opus':model,size):null;
- if(model&&size&&cap==null&&!parsed.errors.length)fail(`Size ${size} is not allowed for ${model}.`);
+ if(model&&size&&cap==null&&!errs.length)fail(`Size ${size} is not allowed for ${model}.`);
  let estimatePct=null,gauge={ok:true,secondYes:false,needsProbe:false,reasons:[]};
  if(cap!=null&&state){estimatePct=Math.round(cap/1e6*(rate??PLACEHOLDER_RATE)*10)/10;
   gauge=canStart(state,{estimatePct,model});if(!gauge.ok)for(const r of gauge.reasons)fail(r);
@@ -86,7 +90,7 @@ export function startCheck({plan,picked,secondYes=false,state,rate=null,activeRu
  else if(cap!=null)fail('There is no gauge reading to check the cap against.');
  const needsSecondYes=model==='opus'||(model==='fable'&&gauge.secondYes);
  if(!reasons.length&&needsSecondYes&&!secondYes)return {ok:false,code:'second-yes',reasons:[`${model==='opus'?'Opus':'Fable'} needs a second yes.`],model,capTokens:cap,estimatePct,needs:parsed.run?.needs||[],needsSecondYes:true,needsProbe:gauge.needsProbe};
- return {ok:!reasons.length,code:reasons.length?'refused':'ok',reasons,model,capTokens:cap,estimatePct,needs:parsed.run?.needs||[],needsSecondYes,needsProbe:gauge.needsProbe}}
+ return {ok:!reasons.length,code:reasons.length?'refused':'ok',reasons,model,size,capTokens:cap,estimatePct,needs:parsed.run?.needs||[],needsSecondYes,needsProbe:gauge.needsProbe}}
 
 // Hub v2 V2, Quick fix: may this plan get the one "Approve and start" button? Only a plan the master filed, still waiting for its answer (so never a revision you denied),
 // whose newest revision has a clean Run block saying haiku and S. Returns {model, size, capTokens, revision} or null. The press itself still goes through startCheck.

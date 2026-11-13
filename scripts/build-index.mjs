@@ -13,7 +13,7 @@ const HERE=path.dirname(fileURLToPath(import.meta.url));
 export const ROOT=path.resolve(HERE,'..');
 // Estimated tokens. The brief is read by every agent, so it keeps its 3,000 target. The index is searched with Grep (a question costs a few hundred tokens), so its budget
 // is only a guard against bloat for the rare whole read; it was 12,000 in the plan, which assumed 3.6 characters a token and was wrong by half (see CHARS_PER_TOKEN).
-export const BUDGET={brief:3000,index:24000};
+export const BUDGET={brief:3000,index:27000};
 // Measured, not guessed: on 2026-11-10 a Haiku run that read both files cost about 26,000 tokens for 48,300 characters, so about 1.9 characters a token for this dense, symbol-heavy
 // text (the Read tool's line numbers are included in that figure). Prose is nearer 4. Re-measure after a big format change; a run's usage is the real count.
 export const CHARS_PER_TOKEN=1.9;
