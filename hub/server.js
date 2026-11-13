@@ -224,7 +224,7 @@ export function createHubServer({root,port=0,runs=null,chat=null,jobs=null,commi
        if(!plan.ok)return json(409,{error:plan.why});
        if(b.confirm!==plan.to)return json(409,{error:'You confirmed '+String(b.confirm).slice(0,20)+', but the next '+b.level+' version is '+plan.to+'. Press Bump again.'});
        writeAtomic(path.join(root,'.hub','bump-request.json'),JSON.stringify({level:b.level,from:plan.from,to:plan.to,at:Date.now()}))}      if(b.job==='deploy'){ // going online: only on a passing check of the last 10 minutes, with the version it named typed back; the script checks all of it again
-       const chk=jobs.last('deploy-check'),can=canPublish(chk,Date.now());
+       const chk=jobs.last('deploy-check'),can=canPublish(chk,Date.now(),jobs.last('deploy'));
        if(!can.ok)return json(409,{error:can.why});
        if(b.confirm!==chk.summary.version)return json(409,{error:`You confirmed ${String(b.confirm).slice(0,20)}, but the check names ${chk.summary.version}. Press Check again.`});
        writeAtomic(path.join(root,'.hub','deploy-confirm.json'),JSON.stringify({version:chk.summary.version,at:Date.now()}))}

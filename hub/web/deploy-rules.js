@@ -40,11 +40,12 @@ export const verdictText=(r,version)=>r.ready?`Ready to go online (${version||'?
 // ── Step 2: the Publish button. The press needs a check that passed in the last 10 minutes, and the version typed back by the page must be the one that check named.
 export const CHECK_FRESH_MS=10*60000,CONFIRM_FRESH_MS=5*60000;
 // May the owner press Publish now? check: the last deploy-check record ({summary:{ok,version,live,checks}, endedAt}) or null. Returns {ok, why}.
-export function canPublish(check,now=Date.now()){
+export function canPublish(check,now=Date.now(),published=null){
  const s=check&&check.summary;
  if(!s||!Array.isArray(s.checks))return {ok:false,why:'Press Check first.'};
  if(!s.ok)return {ok:false,why:'The check found something that blocks going online. Fix it, then press Check again.'};
  if(!s.version)return {ok:false,why:'The check did not name a version. Press Check again.'};
+ if(published&&Number.isFinite(published.endedAt)&&Number.isFinite(check.endedAt)&&published.endedAt>check.endedAt)return {ok:false,why:'The game was published after this check, so it is out of date. Press Check again.'};
  if(!Number.isFinite(check.endedAt)||now-check.endedAt>CHECK_FRESH_MS)return {ok:false,why:'The check is more than 10 minutes old. Press Check again.'};
  return {ok:true,why:''}}
 // The question the browser asks before the press, naming both versions; Dev Mode on is said out loud.

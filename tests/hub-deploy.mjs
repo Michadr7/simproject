@@ -46,6 +46,7 @@ assert.ok(!/innerHTML|outerHTML|insertAdjacentHTML|https?:\/\//.test(page),'the 
 const okCheck={summary:{ok:true,version:'0.36.0',live:'0.35.3',checks:deployChecks(good).checks},endedAt:1e6};
 assert.equal(canPublish(okCheck,1e6+60000).ok,true);assert.equal(canPublish(null).ok,false);assert.equal(canPublish({summary:{ok:false,checks:[]},endedAt:1e6},1e6).ok,false,'a blocked check cannot publish');assert.match(canPublish({summary:{ok:true,checks:[]},endedAt:1e6},1e6).why,/did not name a version/);
 assert.equal(canPublish(okCheck,1e6+CHECK_FRESH_MS+1).ok,false,'a check older than 10 minutes is not enough');assert.match(canPublish(okCheck,1e6+CHECK_FRESH_MS+1).why,/10 minutes/);
+assert.equal(canPublish(okCheck,1e6+60000,{endedAt:1e6+30000}).ok,false,'a publish after the check makes the check out of date');assert.match(canPublish(okCheck,1e6+60000,{endedAt:1e6+30000}).why,/Press Check again/);assert.equal(canPublish(okCheck,1e6+60000,{endedAt:1e6-30000}).ok,true,'a publish before the check does not');
 assert.match(confirmText(okCheck.summary),/^Publish 0\.36\.0\?/);assert.match(confirmText(okCheck.summary),/0\.35\.3 is live now/);assert.ok(!/Dev Mode/.test(confirmText(okCheck.summary)));
 assert.match(confirmText({version:'0.36.0',live:null,checks:deployChecks({...good,devMode:true}).checks}),/Dev Mode is on/);
 assert.ok(JOBS.deploy&&JOBS.deploy.script==='scripts/deploy.mjs'&&JOBS.deploy.args.length===0&&tableProblems(JOBS).length===0);
