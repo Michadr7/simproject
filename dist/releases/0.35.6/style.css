@@ -1,0 +1,382 @@
+*{box-sizing:border-box}body{margin:0;overflow:hidden;background:#cbc8bd;color:#fff;font-family:Arial,Helvetica,sans-serif}canvas{display:block;width:100vw;height:100vh;touch-action:none}button{font:inherit;cursor:pointer}header{position:absolute;top:28px;left:34px;right:34px;display:flex;justify-content:space-between;align-items:center;pointer-events:none}.brand{font-size:22px;font-weight:850;letter-spacing:4px;text-shadow:0 2px 20px #1b191455}.brand span{display:block;font-size:9px;letter-spacing:2px;margin-top:7px;color:#eae8e4}header button{pointer-events:auto;border:1px solid #ffffff35;background:#15131088;color:white;padding:12px 16px;border-radius:8px;font-size:12px}header button span{margin-left:16px;color:#facd38}.location{position:absolute;top:113px;left:35px;font-size:11px;letter-spacing:2px}.location small{display:block;margin:8px 0 0 17px;letter-spacing:0;color:#eeedea;font-size:12px}.dot{display:inline-block;background:#facd38;width:6px;height:6px;border-radius:50%;margin-right:10px}aside{position:absolute;left:34px;bottom:95px;width:285px;background:#181612d9;backdrop-filter:blur(12px);padding:24px;border:1px solid #ffffff20;border-radius:12px}.eyebrow{font-size:10px;letter-spacing:2px;color:#facd38;font-weight:bold}h2{font-size:23px;letter-spacing:-.7px;margin:14px 0 10px}p{font-size:14px;line-height:1.7;color:#d7d5cd}.objective-foot{display:flex;gap:12px;border-top:1px solid #ffffff20;padding-top:17px;margin-top:19px;font-size:11px;color:#e6e5e0}.objective-foot>span:first-child{color:#facd38}footer{position:absolute;left:34px;right:34px;bottom:26px;display:flex;justify-content:space-between;font-size:11px;color:#f3f2f0;text-shadow:0 1px 6px #12110e}kbd{font:10px Arial;border:1px solid #ffffff50;padding:5px 7px;border-radius:4px;display:inline-block;margin-right:6px}i{margin:0 12px}#prompt{position:absolute;left:50%;top:62%;transform:translateX(-50%);background:#181612ec;padding:10px 16px;border-radius:8px;font-size:13px;white-space:nowrap}.veil{position:absolute;inset:0;background:linear-gradient(90deg,#14120ff2 0%,#14120fd9 35%,#14120f15 100%);display:flex;align-items:center;padding:8vw;backdrop-filter:blur(3px)}[hidden]{display:none!important}.intro{max-width:580px}h1{font-size:clamp(38px,5vw,68px);line-height:1.08;letter-spacing:-3px;font-weight:500;margin:25px 0}.intro p{max-width:400px;font-size:16px}.primary{border:0;background:#facd38;color:#191813;padding:17px 22px;border-radius:6px;font-size:13px;font-weight:bold;display:flex;justify-content:space-between;gap:40px;margin-top:28px}.primary:hover{background:#facd38}.intro-controls{font-size:11px;line-height:1.9;color:#bdb9ab;margin-top:24px}.note{position:absolute;bottom:28px;left:8vw;font-size:9px;line-height:1.8;letter-spacing:1px;color:#9fb3ac}.dialog{max-width:420px;padding:32px;background:#191713;border:1px solid #ffffff20;border-radius:12px}.dialog h2{font-size:32px}.dialog p{line-height:2}.tag{font-size:9px;color:#facd38;letter-spacing:1.5px;padding-top:16px}#mobile{display:none}#error{position:absolute;inset:30%;background:#191713;padding:30px}@media(max-width:700px){header{top:18px;left:18px;right:18px}.location{top:85px;left:18px}aside{left:18px;bottom:150px;width:230px;padding:16px}aside h2{font-size:19px}aside p{font-size:12px}footer{left:18px;right:18px;bottom:12px}footer>div{display:none}.veil{padding:24px}h1{letter-spacing:-2px}.note{left:24px}#mobile{display:flex;position:absolute;bottom:40px;left:20px;right:20px;justify-content:space-between;align-items:end;pointer-events:none}#mobile button{pointer-events:auto;background:#181612aa;border:1px solid #ffffff44;color:white;border-radius:10px;width:44px;height:44px;margin:2px;touch-action:none}#mobile>div{text-align:center}#mobile>button{width:58px;height:58px}}
+
+.secondary{background:transparent;color:#e1dfd9;border:1px solid #ffffff35;border-radius:6px;padding:12px 18px;margin-top:12px;font-size:12px}
+#creator{position:absolute;inset:0;display:grid;grid-template-columns:410px 1fr;background:transparent}
+.creator-panel{background:#181612f5;padding:32px 36px;overflow-y:auto;box-shadow:10px 0 70px #110f0d22}
+.creator-panel h1{font-size:40px;letter-spacing:-1.8px;margin:15px 0 8px}.creator-panel>p{margin:8px 0 20px;font-size:12px}
+.name-label,fieldset legend{display:block;color:#e0ded8;font-size:11px;font-weight:bold;letter-spacing:.5px;margin-bottom:10px}
+#characterName{width:100%;padding:12px;background:#12100d;border:1px solid #698377;border-radius:6px;color:white;font:14px Arial;outline-offset:3px}
+fieldset{border:0;padding:0;margin:21px 0 0}.options{display:flex;flex-wrap:wrap;gap:8px}.swatch{height:30px;width:30px;border-radius:50%;background:var(--color);border:2px solid transparent;position:relative}
+.swatch[aria-pressed=true]{outline:2px solid #facd38;outline-offset:3px}.style-option{background:#1f1d18;color:#d9d6ce;border:1px solid #ffffff28;padding:8px 10px;border-radius:5px;font-size:11px}.style-option[aria-pressed=true]{background:#facd38;color:#181712}
+.creator-panel .primary{width:100%;margin-top:15px}.creator-panel .save-note{font-size:10px;color:#c3bfb2;margin:24px 0 0;line-height:1.5}
+.preview-label{align-self:end;text-align:center;margin:0 0 55px;pointer-events:none}.preview-label strong{display:block;margin:12px;font-size:25px;font-weight:500}.rotate-buttons{display:flex;align-items:center;justify-content:center;gap:15px;font-size:11px;color:#dddbd4}.rotate-buttons button{pointer-events:auto;width:38px;height:36px;border:1px solid #ffffff55;border-radius:50%;background:#24211b;color:white;font-size:22px}
+body.creating header,body.creating .location,body.creating #objective,body.creating footer,body.creating #mobile{display:none}
+@media(max-width:700px){#creator{grid-template-columns:1fr;grid-template-rows:38vh 1fr}.creator-panel{grid-row:2;padding:22px 24px}.creator-panel h1{font-size:30px}.creator-panel h1 br{display:none}.preview-label{grid-row:1;position:absolute;right:12px;top:12px;margin:0;text-align:right}.preview-label strong{font-size:16px}.preview-label .eyebrow{display:none}.rotate-buttons span{display:none}fieldset{margin-top:18px}}
+
+/* Dedicated footer beneath the model viewport, clear of the plinth and feet. */
+.preview-label{position:absolute;left:410px;right:0;bottom:0;height:140px;margin:0;padding:15px;background:#23201a;border-top:1px solid #ffffff15}
+.preview-label strong{margin:8px 0;font-size:22px}.preview-label .eyebrow{font-size:9px}
+@media(max-width:700px){.preview-label{left:auto;right:12px;top:10px;bottom:auto;width:auto;height:auto;padding:8px;background:#23201acc;border:0;border-radius:8px}.preview-label strong{font-size:14px;margin:0 0 6px}.rotate-buttons{gap:8px}.rotate-buttons button{width:30px;height:30px}}
+
+#quality{display:block;width:100%;margin:10px 0 20px;padding:12px;background:#22201a;color:#e8e6e1;border:1px solid #796f58;border-radius:6px}
+
+#wallet{position:absolute;right:34px;top:104px;text-align:right;background:#181612df;border:1px solid #ffffff20;border-radius:10px;padding:16px 20px;min-width:175px}#wallet>span{display:block;font-size:9px;letter-spacing:2px;color:#facd38}#cash{display:block;font-size:26px;font-weight:500;margin:7px 0}#wallet small{display:block;color:#d2cfc6;font-size:10px;line-height:1.8}#progressStatus{opacity:.7}#jobToast{position:absolute;top:100px;left:50%;transform:translateX(-50%);background:#facd38;color:#181712;padding:15px 24px;border-radius:8px;font-size:13px;max-width:80vw;text-align:center}#direction{display:inline-block;font-size:18px;line-height:1;transition:transform .1s}#dialogTag{line-height:1.7}#jobAction{width:100%}body.creating #wallet,body.creating #jobToast{display:none}.dialog{max-height:90vh;overflow-y:auto}
+@media(max-width:700px){#wallet{right:18px;top:82px;min-width:135px;padding:10px 12px}#cash{font-size:22px}#wallet small{font-size:9px}#jobToast{top:180px}}
+
+#billsButton{background:#24211b;color:#e6e4df;border:1px solid #ffffff30;border-radius:5px;padding:7px 10px;font-size:10px;margin:8px 0}#housingStatus{max-width:235px}#wallet{max-width:290px}
+#error{position:fixed;z-index:1000;inset:auto 20px 20px;max-width:700px;margin:auto;background:#4b3029;color:#fff0e5;border:1px solid #e7baa0;border-radius:8px;font-size:14px;line-height:1.6}
+
+#bagButton{background:#24211b;color:#e6e4df;border:1px solid #ffffff30;border-radius:5px;padding:7px 10px;font-size:10px;margin:6px 0}#extraAction{width:100%;margin:8px 0}#needsStatus{color:#facd38!important}
+
+/* World interactions are anchored to people and objects, without a scene veil. */
+#dialog.in-world{inset:auto;display:block;width:min(320px,calc(100vw - 24px));padding:0;background:none;backdrop-filter:none;z-index:30;pointer-events:none}
+#dialog.in-world .dialog{position:relative;width:100%;padding:16px 18px;background:#f1efdf;color:#1e1c17;border:1px solid #ffffffb0;border-radius:18px;box-shadow:0 7px 22px #16141133;max-height:65vh;overflow-y:auto;pointer-events:auto}
+#dialog.in-world .dialog:before{content:'';position:absolute;left:0;top:45%;width:14px;height:14px;background:#f1efdf;transform:translateX(-6px) rotate(45deg)}
+#dialog.in-world h2:empty,#dialog.in-world .tag:empty{display:none}#dialog.in-world .eyebrow{color:#675f4b;font-size:10px;letter-spacing:1px}#dialog.in-world p{color:#1e1c17;font-size:14px;line-height:1.5;margin:10px 0 12px}#dialog.in-world button{width:100%;display:block;text-align:left;padding:9px 12px;margin:6px 0 0;font-size:12px;border-radius:9px;background:#dedbd4;color:#22201a;border:1px solid #bab6a8}#dialog.in-world button:hover{background:#d0cdc4}#dialog.in-world #closeDialog{background:transparent;border:0;color:#6b7e6c;padding:8px 3px 0}
+#dialog.bubble-enter .dialog{animation:bubble-in .18s ease-out}@keyframes bubble-in{from{opacity:0;transform:translateY(8px) scale(.96)}to{opacity:1;transform:none}}
+#prompt{transform:translate(-50%,-50%);font-size:12px;border:1px solid #facd3888;background:#1a1813e8;box-shadow:0 3px 12px #18161233;pointer-events:none;z-index:15;max-width:280px;white-space:normal}#workProgress{position:absolute;transform:translate(-50%,-50%);background:#e6e6cd;color:#22201a;padding:10px 16px;border-radius:10px;font-size:12px;pointer-events:none;z-index:16}.free-look{cursor:none}#mouseMode{font-size:12px;line-height:1.4}
+@media(prefers-reduced-motion:reduce){#dialog.bubble-enter .dialog{animation:none}}
+
+/* Smartphone: scoped styles leave the existing HUD and dialog layouts intact. */
+.hud-actions{display:flex;gap:8px}#phoneOverlay{position:fixed;inset:0;z-index:80;display:grid;place-items:center;padding:16px;background:#0a090880;backdrop-filter:blur(5px);cursor:default}
+.phone-device{width:min(370px,100%);height:min(690px,calc(100dvh - 32px));min-height:0;display:flex;flex-direction:column;overflow:hidden;border:5px solid #14130f;border-radius:42px;background:radial-gradient(ellipse at 95% 10%,#5b53424d,transparent 65%),linear-gradient(155deg,#191813f5,#0f0e0bf5);box-shadow:0 0 0 1px #78918555,0 30px 100px #0008,inset 0 0 0 1px #ffffff12;color:#f0efec;animation:phone-in .18s ease-out}
+.phone-status{display:flex;align-items:center;justify-content:space-between;padding:17px 25px 8px;font-size:11px;font-weight:bold;position:relative}.phone-camera{width:66px;height:19px;border-radius:20px;background:#090907;position:absolute;left:50%;transform:translateX(-50%)}
+.phone-toolbar{display:flex;align-items:center;justify-content:space-between;padding:12px 22px 8px}.phone-toolbar h2{font-size:20px;letter-spacing:-.4px;margin:0}.phone-toolbar button{width:34px;height:34px;border-radius:50%;border:1px solid #ffffff20;background:#ffffff08;color:#e9e8e3;font-size:24px}
+.phone-content{flex:1;min-height:0;overflow-y:auto;overscroll-behavior:contain;padding:10px 22px 20px;scrollbar-width:thin;scrollbar-color:#706651 transparent}.phone-device p{font-size:13px;line-height:1.55;color:#c2beb1}.phone-date{font-size:11px!important;margin-top:24px}.phone-device h3.phone-greeting{font-size:29px;font-weight:500;letter-spacing:-1px;line-height:1.15;margin:12px 0;overflow-wrap:anywhere}.phone-subtitle{margin:6px 0 20px}
+.phone-app-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:16px;margin-top:32px}.phone-app{border:0;background:transparent;color:#ebeae6;font-size:12px;padding:0;display:flex;flex-direction:column;align-items:center;gap:10px}.phone-app-icon{display:grid;place-items:center;width:68px;height:68px;border-radius:20px;border:1px solid #ffffff25;box-shadow:0 6px 12px #0002}.phone-app-icon svg{width:29px;height:29px}.gigs-icon{background:linear-gradient(145deg,#dbd29b,#a8a291);color:#1f1d17}.bank-icon{background:linear-gradient(145deg,#5c5543,#24211b);color:#facd38}.player-icon{background:linear-gradient(145deg,#675e4a,#2a2720);color:#e7e5e0}.phone-app:hover .phone-app-icon{filter:brightness(1.12)}
+.phone-home-note{margin-top:58px;padding:18px 0;border-top:1px solid #ffffff14}.phone-home-note .eyebrow{font-size:8px;letter-spacing:1.7px}.phone-home-note p{font-size:12px;margin-bottom:0}
+.phone-contract{border:1px solid #ffffff18;border-radius:16px;padding:15px;background:#ffffff05;margin-bottom:12px}.phone-contract h3{font-size:15px;font-weight:500;margin:0;line-height:1.35}.phone-contract p{font-size:12px;margin:8px 0 12px}.phone-contract-terms{font-size:12px;font-weight:bold;color:#dbdfae;margin-bottom:12px}.phone-accept{width:100%;padding:10px;border:0;border-radius:9px;background:#facd38;color:#191813;font-size:12px;font-weight:bold}.phone-device button:disabled{opacity:.48;cursor:default}.phone-device button:focus-visible{outline:2px solid #facd38;outline-offset:4px}.phone-active-job{padding:12px;border-left:2px solid #d8c28c;background:#d8c28c0a;font-size:12px!important}
+.phone-balance-card{border:1px solid #c8c4b833;border-radius:20px;background:linear-gradient(135deg,#2f2c24,#1d1b16);padding:26px 21px;margin-top:25px}.phone-balance-card span{font-size:9px;letter-spacing:1.6px;color:#ccc9bf}.phone-balance-card strong{display:block;font-size:36px;font-weight:500;letter-spacing:-1px;margin:24px 0;overflow-wrap:anywhere}.phone-balance-card small{font-size:11px;color:#cac6bb}
+.phone-profile{text-align:center;padding:20px 0}.phone-avatar{display:inline-grid;place-items:center;width:64px;height:64px;border-radius:50%;background:#5c5443;color:#facd38;font-size:36px}.phone-profile h3{font-size:22px;font-weight:500;margin:14px 0 0;overflow-wrap:anywhere}.phone-profile p{margin-top:7px}.phone-need{display:grid;grid-template-columns:1fr auto;gap:12px;margin:16px 0;padding:16px;background:#ffffff05;border:1px solid #ffffff15;border-radius:14px;font-size:13px}.phone-need strong{font-size:12px;color:#facd38}.phone-need meter{grid-column:1/-1;width:100%;height:12px;accent-color:#facd38}.phone-need meter::-webkit-meter-bar{background:#13120e;border:0}.phone-need meter::-webkit-meter-optimum-value{background:#facd38}.phone-bottom{padding:12px 22px 16px;border-top:1px solid #ffffff10;display:flex;flex-direction:column;align-items:center;gap:9px}.phone-bottom button{border:1px solid #ffffff25;border-radius:20px;background:#ffffff08;color:#e9e7e2;padding:9px 30px;font-size:12px}.phone-bottom span{font-size:9px;color:#aaa492}#phoneMessage{color:#f1cb9f;font-size:12px;margin:8px 0 0}#phoneMessage:empty{display:none}
+@keyframes phone-in{from{opacity:0;transform:translateY(16px) scale(.98)}to{opacity:1;transform:none}}@media(prefers-reduced-motion:reduce){.phone-device{animation:none}}@media(max-width:400px){#phoneOverlay{padding:8px}.phone-device{height:calc(100dvh - 16px);border-radius:30px}.phone-content{padding-left:16px;padding-right:16px}.phone-app-grid{gap:12px}.phone-app-icon{width:62px;height:62px}.hud-actions button{padding:10px}.hud-actions button span{margin-left:5px}}
+
+.objective-top{display:flex;align-items:center;justify-content:space-between;gap:14px}.objective-top .eyebrow{line-height:1.5}#objectiveToggle{flex-shrink:0;width:30px;height:30px;border:1px solid #ffffff25;border-radius:50%;background:#ffffff08;color:#facd38;font-size:21px;line-height:1;display:grid;place-items:center}#objectiveToggle:focus-visible{outline:2px solid #facd38;outline-offset:3px}#objective.collapsed{width:auto;max-width:285px;padding:10px 14px;border-radius:28px}#objective.collapsed #objectiveToggle{transform:rotate(180deg)}#gigChecklist{list-style:none;padding:0;margin:16px 0 0;display:grid;gap:9px;font-size:12px;color:#e6e5e0}#gigChecklist li{display:flex;gap:9px;line-height:1.45}#gigChecklist li>span:first-child{color:#facd38}#sleepFade{position:fixed;inset:0;z-index:200;background:#000;pointer-events:auto;cursor:default}
+
+.settings-icon{background:linear-gradient(145deg,#536463,#23211b);font-size:30px;color:#e7e6e1}#phoneScreen-settings label{display:block;font-size:12px;margin:18px 0 8px;color:#dcd9d2}#phoneScreen-settings select,.inventory-shop select{width:100%;padding:12px;color:#eceae6;background:#1e1c17;border:1px solid #607566;border-radius:9px;font-size:13px;margin-bottom:12px}#phoneScreen-settings hr{border:0;border-top:1px solid #ffffff20;margin:25px 0}#phoneScreen-settings h3{font-size:23px;font-weight:500}.phone-app-grid{grid-template-columns:repeat(2,1fr);gap:24px}.phone-home-note{margin-top:32px}#needsStatus[data-depleted=true]{color:#ffd0a4!important}
+#inventoryOverlay{position:fixed;inset:0;z-index:90;display:grid;place-items:center;padding:16px;background:#0a090899;backdrop-filter:blur(5px);cursor:default}.inventory-shell{width:min(560px,100%);max-height:calc(100dvh - 32px);overflow:auto;background:linear-gradient(145deg,#1f1c17f5,#13110efa);border:1px solid #78918570;border-radius:24px;padding:24px;color:#e9e7e2;box-shadow:0 20px 70px #0008}.inventory-heading{display:flex;align-items:center;justify-content:space-between;gap:20px}.inventory-heading h2{margin:0;font-size:24px}.inventory-shell button{border:1px solid #ffffff28;border-radius:10px;background:#ffffff09;color:#e9e8e4;padding:10px;font-size:12px}.inventory-shell button:hover:not(:disabled){background:#595140}.inventory-shell button:focus-visible{outline:2px solid #facd38;outline-offset:2px}.inventory-shell button:disabled{opacity:.4;cursor:default}#inventoryClose{font-size:23px;line-height:1;border-radius:50%}#inventoryCapacity{color:#facd38;margin-bottom:4px}.inventory-shell p{font-size:12px}#inventoryGroceries{margin-top:0}.equipment-row{display:flex;gap:8px;flex-wrap:wrap;margin:16px 0}#inventoryGrid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:8px}.inventory-slot{display:flex;flex-direction:column;justify-content:center;align-items:center;gap:7px;min-height:110px;overflow-wrap:anywhere}.item-icon{display:block;font-size:29px;line-height:1.3}.inventory-slot small,.radial-item small{font-size:10px;color:#c6c2b7}.inventory-shop{margin-top:24px;border-top:1px solid #ffffff20;padding-top:18px}.inventory-shop label{display:block;font-size:12px;margin-bottom:8px}#inventoryBuy{background:#facd38;color:#1b1915;font-weight:bold}#inventoryMessage{color:#efd8a5;min-height:16px}.radial-disc{position:relative;width:min(340px,100%);height:340px;margin:8px auto;background:radial-gradient(circle,#95896c10 35%,transparent 36%,#b6b1a110 66%,transparent 67%);border-radius:50%}.radial-center{position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);text-align:center;font-size:11px;letter-spacing:1px;color:#facd38}.radial-center small{display:block;font-size:9px;margin-top:7px;letter-spacing:0;color:#ccc8bd}.radial-item{position:absolute;left:50%;top:50%;transform:translate(-50%,-50%) rotate(var(--angle)) translateY(-123px) rotate(var(--reverse-angle));width:86px;min-height:78px;display:flex;flex-direction:column;align-items:center;gap:3px;background:#23211a!important}.radial-item>span:not(.item-icon){font-size:10px}.radial-pagination{display:flex;justify-content:center;align-items:center;gap:18px;font-size:12px}#radialEmpty{text-align:center}@media(max-width:400px){.inventory-shell{padding:16px}#inventoryGrid{grid-template-columns:repeat(3,minmax(0,1fr))}.radial-disc{height:300px}.radial-item{width:73px;transform:translate(-50%,-50%) rotate(var(--angle)) translateY(-106px) rotate(var(--reverse-angle))}}
+
+/* Controls grouped by purpose. */
+#controls .dialog{width:min(660px,100%);max-width:660px;padding:28px}#controls h2{font-size:28px;margin-top:8px}.control-groups{display:grid;grid-template-columns:1fr 1fr;gap:18px 24px;margin:24px 0}.control-groups section:last-child{grid-column:1/-1}.control-groups h3{font-size:10px;text-transform:uppercase;letter-spacing:2px;color:#facd38;margin:0 0 10px}.control-groups dl{margin:0}.control-groups dl>div{display:flex;justify-content:space-between;gap:12px;border-bottom:1px solid #ffffff10;padding:8px 0;font-size:11px}.control-groups dt{color:#efeeea;white-space:nowrap}.control-groups dd{margin:0;color:#c8c5ba;text-align:right}#controls #retryCapture{margin:0 0 16px}#controls #resume{margin-top:20px;width:100%}
+/* Storage is a physical grid; worn gear sits alongside it. */
+#inventoryOverlay[data-mode=grid] .inventory-shell{width:min(840px,100%);background:linear-gradient(135deg,#1d1b16,#100f0c);border-radius:14px}.inventory-meta{display:flex;justify-content:space-between;gap:16px;align-items:center;margin:18px 0}.inventory-meta .eyebrow{font-size:9px}.inventory-meta p{margin:0}.bag-layout{display:grid;grid-template-columns:170px minmax(0,1fr);gap:24px}.equipment-panel{border-right:1px solid #8c9b802e;padding-right:20px}.bag-layout h3{font-size:10px;text-transform:uppercase;letter-spacing:1.8px;color:#b6b1a1;margin:0 0 14px}.gear-slot{padding:14px 10px;margin-bottom:16px;border:1px solid #b9b4a535;border-radius:6px;background:repeating-linear-gradient(135deg,#ffffff02 0 1px,transparent 1px 9px),#0d0c0a}.gear-slot>span{display:block;font-size:9px;letter-spacing:2px;color:#ada796}.gear-outline{font-size:46px;text-align:center;opacity:.5;padding:16px 0}.gear-slot button{width:100%;font-size:10px;line-height:1.5}.bag-storage{min-width:0}#inventoryGrid{gap:3px;grid-template-columns:repeat(4,minmax(0,1fr));padding:3px;background:#090807;border:1px solid #8b7f6555;border-radius:3px}.inventory-slot{position:relative;min-height:112px;border-radius:0!important;background:linear-gradient(135deg,#1f1d17,#151410)!important;border-color:#6d644f44!important;font-size:11px!important;padding:17px 6px 8px!important}.inventory-slot:before{content:attr(data-slot);position:absolute;top:5px;left:6px;color:#8c8166;font-size:8px;letter-spacing:1px}.inventory-slot:disabled{opacity:1!important;color:#55634f!important;background:linear-gradient(135deg,#11100d,#0e0d0a)!important}.inventory-slot:not(:disabled):hover{border-color:#facd38!important;box-shadow:inset 0 0 15px #c1bcaf15}.inventory-slot .item-icon{font-size:34px;text-shadow:0 4px 5px #0006}.inventory-hint{color:#9ead98!important;font-size:11px!important}#inventoryGroceries{border-top:1px solid #ffffff15;margin-top:14px;padding-top:12px}
+/* Dedicated market screen. */
+#storeOverlay{position:fixed;inset:0;z-index:95;display:grid;place-items:center;background:#0a0908a3;backdrop-filter:blur(6px);padding:20px;cursor:default}.store-panel{width:min(850px,100%);max-height:calc(100dvh - 40px);overflow:auto;padding:30px;background:linear-gradient(140deg,#211f19,#14130f);border:1px solid #bcb7a955;border-radius:20px;box-shadow:0 22px 80px #0008}.store-heading{display:flex;justify-content:space-between;align-items:flex-start;gap:20px}.store-heading h2{font-size:32px;font-weight:500;margin:9px 0 5px}.store-heading p{margin:0;color:#c5c1b6;font-size:12px}.store-panel button{border:1px solid #ffffff28;background:#ffffff08;color:#e7e5e0;border-radius:8px;padding:10px 14px;font-size:12px}.store-panel button:disabled{opacity:.4;cursor:default}.store-panel button:focus-visible{outline:2px solid #e5dfad;outline-offset:3px}#storeClose{border-radius:50%;font-size:23px;line-height:1;padding:8px 12px}.store-account{display:flex;justify-content:space-between;align-items:center;gap:14px;margin:24px 0 18px;padding:15px 0;border-top:1px solid #ffffff1a;border-bottom:1px solid #ffffff1a;font-size:10px;color:#c8c5ba}.store-account strong{font-size:22px;font-weight:500;color:#e5e8ba;margin-left:14px}.store-filters{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:20px}.store-filters [aria-pressed=true]{color:#1e1c16;background:#facd38;border-color:#facd38}#storeItems{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px}.store-item{display:flex;flex-direction:column;padding:18px;border:1px solid #ffffff1a;border-radius:12px;background:#ffffff04}.store-item-icon{font-size:38px;line-height:1.3;margin:4px 0 14px;text-shadow:0 5px 8px #0003}.store-item h3{font-weight:500;font-size:15px;margin:0}.store-item p{font-size:10px;line-height:1.6;color:#c5c1b6;min-height:32px;margin:8px 0 14px}.store-item .store-buy{background:#facd38;color:#1c1a15;border:0;font-weight:bold;width:100%;margin-top:auto}.store-item .store-buy:hover:not(:disabled){background:#facd38}#storeMessage{min-height:18px;color:#f2d8a7;font-size:12px}.store-services{display:flex;justify-content:space-between;gap:10px;border-top:1px solid #ffffff20;padding-top:18px;flex-wrap:wrap}#consumeStatus{position:fixed;bottom:90px;left:50%;transform:translateX(-50%);padding:12px 20px;border-radius:20px;border:1px solid #facd3855;background:#1a1813e8;color:#facd38;font-size:12px;z-index:40;pointer-events:none}
+@media(max-width:600px){.bag-layout{grid-template-columns:1fr;gap:16px}.equipment-panel{border-right:0;padding:0;display:grid;grid-template-columns:1fr 1fr;gap:10px}.equipment-panel h3{grid-column:1/-1;margin:0}.gear-slot{margin:0;padding:8px}.gear-outline{font-size:28px;padding:5px}.inventory-meta{align-items:flex-start}.inventory-meta .eyebrow{display:none}.store-panel{padding:18px}#storeItems{grid-template-columns:repeat(2,minmax(0,1fr))}.store-item{padding:12px}.store-heading h2{font-size:27px}.control-groups{grid-template-columns:1fr}.control-groups section:last-child{grid-column:auto}}@media(max-width:370px){#inventoryGrid{grid-template-columns:repeat(3,minmax(0,1fr))}.store-account{align-items:flex-start;flex-direction:column}}
+
+/* 0.16 world map: zone-coloured strip map, bottom right; M enlarges it. */
+#minimap{position:fixed;right:34px;bottom:52px;z-index:5;border-radius:10px;border:1px solid #ffffff30;box-shadow:0 8px 24px #0006;background:#171511;pointer-events:none;transition:opacity .2s}
+#minimap.large{right:50%;bottom:50%;transform:translate(50%,50%);z-index:60;border-radius:14px;box-shadow:0 20px 70px #000a}
+body.creating #minimap{display:none}
+@media(max-width:600px){#minimap{right:12px;bottom:96px;transform:scale(.8);transform-origin:bottom right}#minimap.large{transform:translate(50%,50%) scale(.5)}}
+
+/* 0.18 hotbar, skill line and tree target */
+#hotbar{position:fixed;left:50%;bottom:44px;transform:translateX(-50%);display:flex;gap:8px;z-index:6}
+#hotbar[hidden]{display:none}
+body.creating #hotbar{display:none}
+.hotbar-slot{position:relative;width:56px;height:56px;padding:0;border-radius:10px;border:1px solid #ffffff30;background:#181612e6;color:#fff;font-size:26px;line-height:1;cursor:pointer;box-shadow:0 6px 18px #0004}
+.hotbar-slot:hover{background:#221f1a}
+.hotbar-slot[aria-pressed=true]{border-color:#facd38;box-shadow:0 0 0 2px #facd38,0 6px 18px #0004;background:#2a2720}
+.hotbar-slot .hotbar-key{position:absolute;left:5px;top:3px;font-size:10px;letter-spacing:.5px;color:#facd38}
+.hotbar-slot .hotbar-count{position:absolute;right:5px;bottom:3px;font-size:10px;color:#eceae6}
+#skillStatus{display:block;color:#facd38;font-size:10px;line-height:1.8}
+#skillStatus:empty{display:none}
+@media(max-width:600px){#hotbar{bottom:96px;transform:translateX(-50%) scale(.85)}}
+
+/* 0.18.1 polish */
+.style-option,.swatch,.hotbar-slot,.store-services button{user-select:none;-webkit-user-select:none}
+.objective-top{display:flex;align-items:center;gap:8px}
+.objective-key{margin-left:auto;font:600 10px/1 Arial,sans-serif;letter-spacing:.5px;padding:4px 6px;border-radius:4px;border:1px solid #ffffff40;background:#ffffff14;color:#facd38}
+.objective-key+#objectiveToggle{margin-left:0}
+.store-services{position:sticky;bottom:-30px;margin:0 -30px -30px;padding:16px 30px 24px;background:#14130ff5;z-index:2}
+
+/* 0.18.2 radial progress, task key button, skills */
+#workProgress{display:flex;flex-direction:column;align-items:center;gap:6px;background:none;padding:0;color:#fff;font-size:12px;text-shadow:0 1px 6px #000a;pointer-events:none}
+#workProgress[hidden]{display:none}
+#workProgress .ring-wrap{position:relative;width:76px;height:76px;display:grid;place-items:center}
+#workProgress .ring{--p:0;position:absolute;inset:0;border-radius:50%;background:conic-gradient(#facd38 calc(var(--p)*1%),#181612cc 0);-webkit-mask:radial-gradient(farthest-side,#0000 calc(100% - 9px),#000 calc(100% - 8px));mask:radial-gradient(farthest-side,#0000 calc(100% - 9px),#000 calc(100% - 8px));filter:drop-shadow(0 2px 6px #0007)}
+#workProgress .ring-wrap::before{content:"";position:absolute;inset:0;border-radius:50%;background:#181612b3;z-index:-1}
+#workRingTime{font:700 16px/1 Arial,sans-serif}
+#workRingLabel{background:#181612d9;padding:4px 10px;border-radius:999px;font-size:11px}
+#objectiveToggle.objective-key{width:auto;height:auto;min-width:0;padding:5px 8px;border-radius:5px;font:700 11px/1 Arial,sans-serif;letter-spacing:.5px;transform:none!important;margin-left:auto;display:block;cursor:pointer}
+.phone-heading{margin:22px 0 4px;font-size:11px;letter-spacing:1.5px;text-transform:uppercase;color:#facd38}
+.phone-skill small{grid-column:1/-1;color:#d2cfc6;font-size:11px;line-height:1.5}
+.phone-stats{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-top:8px}
+.phone-stats div{padding:12px 8px;border:1px solid #ffffff15;border-radius:12px;background:#ffffff05;text-align:center}
+.phone-stats strong{display:block;font-size:18px;color:#facd38}
+.phone-stats span{font-size:10px;color:#d2cfc6}
+/* Player screen: tighter, so Skills show without scrolling on a normal window */
+#phoneScreen-player .phone-profile{margin-bottom:0}
+#phoneScreen-player .phone-avatar{width:54px;height:54px;font-size:26px}
+#phoneScreen-player .phone-need{margin:8px 0;padding:11px 14px;gap:8px}
+#phoneScreen-player .phone-need meter{height:9px}
+#phoneScreen-player .phone-heading{margin:14px 0 2px}
+#phoneScreen-player .phone-stats div{padding:9px 6px}
+
+/* 0.19.1 door transition */
+#doorFade{position:fixed;inset:0;background:#0d0c0a;opacity:0;pointer-events:none;z-index:70}
+
+/* 0.19.5 HUD: the info box lives in the phone's Bank screen; needs are bars at the bottom right; the map moves up */
+#phoneScreen-bank #wallet{position:static;display:block;width:100%;box-sizing:border-box;margin-top:14px;padding:14px 16px;text-align:left;background:#ffffff08;border:1px solid #ffffff15;border-radius:14px;min-width:0}
+#phoneScreen-bank #wallet>span,#phoneScreen-bank #cash,#phoneScreen-bank #needsStatus,#phoneScreen-bank #skillStatus,#phoneScreen-bank #progressStatus{display:none}
+#phoneScreen-bank #wallet small{font-size:11px;line-height:1.9}
+#phoneScreen-bank #billsButton{margin:8px 0}
+#statusDock{position:fixed;right:34px;bottom:52px;width:232px;display:grid;gap:10px;z-index:5}#vitals{position:static;width:auto;display:grid;gap:8px;padding:12px 14px;border-radius:12px;background:#181612cc;border:1px solid #ffffff22;box-shadow:0 8px 24px #0004;z-index:5;pointer-events:none}
+body.creating #vitals,body.creating #statusDock{display:none}
+.vital{display:grid;grid-template-columns:20px 52px 1fr 28px;align-items:center;gap:8px;--bar:#e8a55a}
+.vital[data-need=thirst]{--bar:#6fb7e8}.vital[data-need=energy]{--bar:#d8e06a}
+.vital-icon{font-size:14px;line-height:1;text-align:center}
+.vital-bar{display:block;height:8px;border-radius:99px;background:#ffffff1f;overflow:hidden}
+.vital-fill{display:block;height:100%;width:100%;margin:0;border-radius:99px;background:var(--bar);transition:width .35s ease,background .2s}
+.vital b{font:600 11px/1 Arial,sans-serif;color:#eceae6;text-align:right}
+.vital[data-level=low]{--bar:#e0883c}
+.vital[data-level=critical]{--bar:#e05a4a}.vital[data-level=critical] .vital-icon{animation:vital-pulse 1s ease-in-out infinite}
+@keyframes vital-pulse{50%{transform:scale(1.25)}}
+@media(prefers-reduced-motion:reduce){.vital[data-level=critical] .vital-icon{animation:none}.vital-fill{transition:none}}
+#minimap{top:96px;bottom:auto}
+#minimap.large{top:auto}
+@media(max-width:600px){#statusDock{right:12px;bottom:96px;width:200px}#minimap{top:76px;bottom:auto;transform-origin:top right}#minimap.large{top:auto}}
+
+/* 0.19.6 time chip under the minimap; the store's cash, bag space and purchase confirmation stay pinned while the list scrolls */
+#clockChip{position:fixed;right:34px;top:200px;padding:6px 13px;border-radius:99px;background:#181612cc;border:1px solid #ffffff22;color:#eceae6;font:600 11px/1 Arial,sans-serif;letter-spacing:.4px;z-index:5;pointer-events:none}
+body.creating #clockChip{display:none}
+@media(max-width:600px){#clockChip{right:12px;top:176px}}
+.store-account{position:sticky;top:0;z-index:4;margin:0 -30px 18px;padding:14px 30px;background:#161511f5;flex-direction:row;flex-wrap:wrap;gap:6px 22px;align-items:center}
+@media(max-width:600px){.store-account{margin:0 -18px 14px;padding:12px 18px}}
+#storeMessage{flex-basis:100%;margin:6px 0 0;padding:9px 13px;border-radius:9px;font:600 13px/1.4 Arial,sans-serif;letter-spacing:0;color:#f1ebd9;animation:store-pop .25s ease-out}
+#storeMessage:empty{display:none}
+#storeMessage[data-kind=ok]{background:#504a3a;color:#facd38}
+#storeMessage[data-kind=error]{background:#7d3b34;color:#fdeceb}
+@keyframes store-pop{from{transform:translateY(-4px);opacity:.3}}
+@media(prefers-reduced-motion:reduce){#storeMessage{animation:none}}
+
+/* 0.22.0 the map is taller now */
+#clockChip{top:268px}
+@media(max-width:600px){#clockChip{top:222px}}
+
+#credits .dialog{max-height:86vh;overflow:auto}#credits h2{font-size:28px;margin-top:8px}.credits-note{color:#d2cfc6;margin:6px 0 14px}#creditsList .credit{border-bottom:1px solid #ffffff14;padding:10px 0}#creditsList b{display:block;font-size:15px}#creditsList span{display:block;color:#d8d5cd;font-size:13px;margin-top:3px}#creditsList small{display:block;color:#b2ad9d;font-size:11px;letter-spacing:.4px;margin-top:3px}#creditsList a{color:#facd38}
+
+.homes-icon{background:#d2cfc6;color:#25221c}.phone-home .phone-home-actions{display:flex;gap:8px;flex-wrap:wrap;margin-top:10px}.phone-home .phone-home-status{color:#facd38;font-size:12px;margin:6px 0 0}.phone-home button[hidden]{display:none}
+
+/* Main menu (0.32.0). Opaque image, no backdrop blur: the world behind it is not drawn while the menu is open. */
+.main-menu{background-color:#161410;background-size:cover;background-position:center right;backdrop-filter:none;align-items:center;padding:0 clamp(20px,8vw,120px);overflow:auto}
+/* The live menu scene (menu-scene.js) is drawing on the canvas behind: drop the picture, keep the dark side the buttons sit on. Without .live the picture is the fallback. */
+.main-menu.live{background-color:transparent!important;background-image:linear-gradient(90deg,#0c0b08f2 0%,#0c0b08cc 32%,#0c0b0855 62%,#0c0b0810 100%)!important}
+@media(max-width:700px){.main-menu.live{background-image:linear-gradient(90deg,#0c0b08e6 0%,#0c0b08b3 100%)!important}}
+.menu-column{width:min(420px,100%);padding:32px 0}
+.menu-kicker{font-size:11px;letter-spacing:3px;color:#facd38;font-weight:bold}
+.menu-title h1{font-size:clamp(48px,8vw,88px);margin:6px 0 4px;line-height:1;letter-spacing:1px;text-shadow:0 3px 0 #0006}
+.menu-title p{margin:0 0 26px;color:#e1dfd9;font-size:16px}
+.menu-panel{display:flex;flex-direction:column;gap:10px}
+.menu-panel[hidden],.menu-button[hidden]{display:none}
+.menu-panel h2{margin:0 0 2px;font-size:26px}
+.menu-panel label{font-size:11px;letter-spacing:2px;color:#facd38;font-weight:bold;text-transform:uppercase;margin-top:8px}
+.menu-button{display:block;width:100%;text-align:left;padding:15px 20px;border-radius:8px;border:1px solid #ffffff3a;background:#100f0cd9;color:#facd38;font:inherit;font-size:15px;font-weight:600;cursor:pointer;transition:background .12s}
+.menu-button:hover,.menu-button:focus-visible{background:#1c1a15f0;border-color:#facd38;outline:none}
+.menu-button:disabled{opacity:.5;cursor:default}
+.menu-play{background:#facd38;color:#191813;border-color:#facd38;font-size:18px;padding:18px 22px}
+.menu-play:hover,.menu-play:focus-visible{background:#facd38;color:#191813}
+.menu-back{background:transparent;margin-top:6px}
+.menu-panel input,.menu-panel select{width:100%;box-sizing:border-box;padding:12px 14px;border-radius:8px;border:1px solid #ffffff3a;background:#0c0b09f2;color:#facd38;font:inherit;font-size:14px}
+.menu-panel input[type=range]{padding:0}
+.menu-panel .menu-check{display:flex;align-items:center;gap:8px;font-size:14px;letter-spacing:0;text-transform:none;font-weight:normal;color:#facd38}.menu-panel .menu-check input{width:auto;padding:0}
+.menu-row{display:flex;gap:8px}.menu-row input{flex:1;min-width:0}.menu-row .menu-button{width:auto;padding:12px 20px}
+.menu-help{margin:4px 0;font-size:12px;line-height:1.6;color:#d3d0c7}.menu-help code{background:#ffffff1c;padding:1px 5px;border-radius:4px}
+.menu-status{min-height:1.5em;margin:4px 0;font-size:12px;line-height:1.5;color:#d3d0c7}
+.menu-status[data-kind=error]{color:#ffb4a8}.menu-status[data-kind=ok]{color:#facd38}/* The HUD sits above the veils; on the main menu and credits screens it only covers the picture. */
+body:has(#welcome:not([hidden])) :is(#minimap,#vitals,#statusDock,#clockChip),body:has(#credits:not([hidden])) :is(#minimap,#vitals,#statusDock,#clockChip){display:none}
+
+/* Vehicle panel (0.33): above the needs; greyed out on foot, lit while you are in a vehicle */
+.vehicle-panel{display:grid;gap:9px;padding:12px 14px;border-radius:12px;background:#181612cc;border:1px solid #ffffff22;box-shadow:0 8px 24px #0004;color:#eceae6;transition:opacity .25s ease,filter .25s ease}
+.vehicle-panel[data-state=off]{opacity:.42;filter:grayscale(1)}
+.vp-head{display:flex;justify-content:space-between;align-items:baseline;gap:10px}
+.vp-eyebrow{font:600 9px/1 Arial,sans-serif;letter-spacing:2px;color:#facd38}
+#vpName{font:600 12px/1.2 Arial,sans-serif;text-align:right;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.vp-stats{display:grid;grid-template-columns:62px 1fr;gap:8px}
+.vp-stats div{display:grid;gap:3px}
+.vp-stats span{font-size:9px;letter-spacing:1.5px;text-transform:uppercase;color:#b4afa0}
+.vp-stats b{font:600 13px/1 Arial,sans-serif;font-variant-numeric:tabular-nums}
+.vp-keys{display:grid;gap:5px;font-size:11px;color:#e3e1dc}
+.vp-key{display:flex;align-items:center;gap:2px}
+.vp-key[data-muted=true]{opacity:.5}
+.vehicle-panel kbd{display:inline-block;min-width:20px;text-align:center;padding:2px 6px;margin-right:6px;border:1px solid #ffffff3a;border-radius:4px;font:600 11px/1.3 Arial,sans-serif;background:#14120f}
+.vp-note{margin:0;font-size:10px;line-height:1.5;color:#b4afa0}
+.vital-name{font:600 10px/1 Arial,sans-serif;letter-spacing:.5px;color:#d9d6ce}
+/* 0.34 the phone's Store app */
+.store-icon{background:#e3d2a8;color:#4d3d1c}
+.phone-store-home{display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin:6px 0}.phone-store-home label{font-size:11px;letter-spacing:1px;text-transform:uppercase;color:#facd38}.phone-store-home select{flex:1;min-width:120px}
+.phone-store-row{display:flex;align-items:center;gap:8px;padding:7px 4px;border-bottom:1px solid #ffffff12}.phone-store-label{flex:1;display:flex;flex-direction:column;gap:2px}.phone-store-label small{color:#c9c6bb;font-size:10px}
+.phone-store-step{width:26px;height:26px;border-radius:13px;border:1px solid #ffffff30;background:#ffffff10;color:#f1f0ee;cursor:pointer}.phone-store-step:disabled{opacity:.35;cursor:default}.phone-store-qty{min-width:18px;text-align:center}
+.phone-store-cart p{margin:6px 0;font-size:12px}.phone-store-actions{display:flex;gap:8px;margin-top:8px}#phoneScreen-store #phoneStoreItems{margin:6px 0 10px}
+
+.phone-swatches{display:flex;gap:6px;margin:6px 0}
+.phone-swatch{width:26px;height:26px;border-radius:50%;border:2px solid rgba(255,255,255,.35);padding:0;cursor:pointer}
+.phone-swatch.selected{border-color:#fff;box-shadow:0 0 0 2px rgba(255,255,255,.35)}
+.phone-swatch.soldout{opacity:.3;cursor:not-allowed}
+
+/* ── Honeycomb scheme (0.34): black and honey yellow. The teal and green UI colours above were remapped to black and honey; this block adds the tokens, the hexagon motif (a faint honeycomb on the panels, hexagonal app icons, chamfered buttons) and the gold accents. ── */
+:root{--honey:#f5c518;--honey-pale:#ffe48a;--honey-deep:#b8860b;--ink:#0c0b08;--ink-2:#17150f;--ink-3:#221f16;--comb:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='56' height='100'%3E%3Cpath d='M28 66L0 50L0 16L28 0L56 16L56 50L28 66L28 100M28 0L28 34L0 50L0 84L28 100L56 84L56 50L28 34' fill='none' stroke='%23f5c518' stroke-opacity='.07' stroke-width='1.4'/%3E%3C/svg%3E");--hex:polygon(50% 0,100% 25%,100% 75%,50% 100%,0 75%,0 25%);--chamfer:polygon(9px 0,calc(100% - 9px) 0,100% 9px,100% calc(100% - 9px),calc(100% - 9px) 100%,9px 100%,0 calc(100% - 9px),0 9px)}
+aside,#vitals,.dialog,#prompt,.vehicle-panel,#wallet,#jobToast,#inventoryOverlay .inventory-panel,.menu-panel,.creator-panel{background-image:var(--comb);background-size:56px 100px}
+.phone-device::before{content:"";position:absolute;inset:0;background:var(--comb);background-size:56px 100px;opacity:.9;pointer-events:none}
+.phone-device{position:relative;border-color:#0a0906;box-shadow:0 0 0 1px #f5c51855,0 24px 60px #000b}
+.phone-device>*{position:relative}
+.phone-app-grid .phone-app-icon{width:70px;height:78px;border:0;border-radius:0;clip-path:var(--hex);background:var(--honey);color:var(--ink);box-shadow:none}
+.phone-app-grid .phone-app:hover .phone-app-icon,.phone-app-grid .phone-app:focus-visible .phone-app-icon{background:var(--honey-pale);filter:none}
+.phone-app-grid .phone-app-icon svg{stroke:currentColor}
+.phone-app{font-weight:600;letter-spacing:.3px}
+.phone-accept,.primary,header button,#mobile button,#billsButton,#inventoryBuy,.store-buy{clip-path:var(--chamfer);border-radius:0}
+.phone-accept,.primary{background:var(--honey);color:var(--ink);border-color:transparent;font-weight:700}
+.phone-accept:hover,.primary:hover,.phone-accept:focus-visible,.primary:focus-visible{background:var(--honey-pale)}
+.phone-accept:disabled,.primary:disabled{background:#4a4636;color:#9a9480}
+.phone-heading,.eyebrow,#objective .kicker{color:var(--honey)}
+.phone-toolbar button{border-color:#f5c51866}
+.phone-toolbar button:hover{background:#f5c51822}
+.phone-balance-card{border-color:#f5c51855;background:linear-gradient(135deg,#2a2412,#15130b)}
+.phone-stats div,.phone-contract{border-color:#f5c51822}
+.phone-swatch.selected{border-color:var(--honey);box-shadow:0 0 0 2px #f5c51855}
+.phone-app-grid{margin-top:22px;gap:10px}
+.phone-app-grid .phone-app-icon{width:62px;height:70px}
+.phone-home-note{margin-top:30px}
+.inventory-shell,.store-panel{background-image:var(--comb);background-size:56px 100px}
+
+/* ── Store categories, vehicle pictures, phone Back and Home, honey dropdowns (0.34) ── */
+select{appearance:none;-webkit-appearance:none;background:var(--ink-2) url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8'%3E%3Cpath d='M1 1l5 5 5-5' fill='none' stroke='%23f5c518' stroke-width='2'/%3E%3C/svg%3E") no-repeat right 12px center;color:#f1eee2;border:1px solid #f5c51866;border-radius:0;clip-path:var(--chamfer);padding:9px 34px 9px 12px;font:inherit;font-size:13px;cursor:pointer}
+select:hover,select:focus-visible{border-color:var(--honey);outline:none;background-color:var(--ink-3)}
+select option{background:var(--ink-2);color:#f1eee2}
+select:disabled{opacity:.45;cursor:default}
+.phone-bottom{display:flex;flex-direction:column;align-items:center;gap:8px}
+.phone-nav{display:flex;gap:14px;justify-content:center}
+.phone-nav button{min-width:96px;padding:9px 18px;border:1px solid #f5c51866;background:var(--ink-2);color:#f1eee2;font:inherit;font-size:13px;font-weight:600;clip-path:var(--chamfer);border-radius:0;cursor:pointer}
+.phone-nav button:hover:not(:disabled),.phone-nav button:focus-visible{background:var(--honey);color:var(--ink);outline:none}
+.phone-nav button:disabled{opacity:.35;cursor:default}
+.phone-store-vehicle{align-items:flex-start;gap:10px}
+.phone-store-picture{width:104px;height:65px;object-fit:contain;flex:none;background:#0000;filter:drop-shadow(0 4px 6px #0008)}
+.phone-store-buttons{display:flex;gap:8px;margin-top:6px}
+.phone-store-buttons .phone-accept{padding:6px 14px;font-size:12px;min-width:0}
+.phone-info{background:transparent;color:var(--honey);box-shadow:inset 0 0 0 1px var(--honey)}
+.phone-info:hover{background:#f5c51822}
+.phone-store-bigpicture{display:block;width:100%;max-width:300px;margin:6px auto 0;filter:drop-shadow(0 8px 10px #000a)}
+#phoneStoreInfoView h3{font-size:20px;font-weight:600;margin:6px 0 4px}
+#phoneStoreInfoView .phone-swatches{margin:10px 0}
+
+select,.phone-nav button{border:0;box-shadow:inset 0 0 0 1px #f5c51888}
+select:hover,select:focus-visible,.phone-nav button:hover:not(:disabled){box-shadow:inset 0 0 0 1px var(--honey)}
+
+/* ── Main menu in the honeycomb look (0.34): chamfered buttons, a honey Play button, the version beside the kicker ── */
+.menu-button{border:0;border-radius:0;clip-path:polygon(14px 0,calc(100% - 14px) 0,100% 50%,calc(100% - 14px) 100%,14px 100%,0 50%);box-shadow:inset 0 0 0 1px #f5c51877;background:#100f0cd9;padding:15px 30px;transition:background .12s,color .12s}
+.menu-button:hover,.menu-button:focus-visible{background:#f5c51822;box-shadow:inset 0 0 0 1px var(--honey)}
+.menu-play{background:var(--honey);color:var(--ink);box-shadow:none}
+.menu-play:hover,.menu-play:focus-visible{background:var(--honey-pale);box-shadow:none}
+.menu-row .menu-button{clip-path:var(--chamfer)}
+.menu-panel{background-image:var(--comb);background-size:56px 100px}
+
+/* Update notice (0.34): 480 x 64 px, top centre, over the menu and the game. Tokens only (honey, ink, chamfer, hex). */
+#updateBanner{position:fixed;z-index:200;top:14px;left:50%;transform:translateX(-50%);width:min(480px,calc(100vw - 24px));height:64px;display:flex;align-items:center;gap:12px;padding:8px 12px 8px 10px;background:var(--ink,#0c0b08);color:#f1ebd9;clip-path:var(--chamfer);box-shadow:inset 0 0 0 1px #f5c51888}
+#updateBanner[hidden]{display:none}
+#updateBanner .update-icon{flex:none;width:48px;height:48px;display:grid;place-items:center;background:var(--honey,#f5c518);color:var(--ink,#0c0b08);font-size:26px;font-weight:800;line-height:1;clip-path:var(--hex)}
+#updateBanner .update-copy{flex:1;min-width:0;display:flex;flex-direction:column;gap:2px}
+#updateBanner .update-copy b{color:var(--honey,#f5c518);font-size:14px;letter-spacing:.04em}
+#updateBanner .update-copy span{font-size:12px;line-height:1.25;opacity:.85}
+#updateBanner button{flex:none;border:0;cursor:pointer;font:inherit;font-weight:700}
+#updateReload{width:96px;height:36px;background:var(--honey,#f5c518);color:var(--ink,#0c0b08);clip-path:var(--chamfer);font-size:14px}
+#updateReload:hover,#updateReload:focus-visible{background:var(--honey-pale,#ffe48a);outline:none}
+#updateLater{width:28px;height:28px;background:none;color:#f1ebd9;font-size:15px;opacity:.7}
+#updateLater:hover,#updateLater:focus-visible{opacity:1;outline:none}
+/* Multiplayer panel (0.34.2): the local-server controls fold away under the online lobby ones; the pause menu shows the lobby code. */
+.menu-local{border-top:1px solid #ffffff1f;padding-top:8px}
+.menu-local summary{cursor:pointer;font-size:12px;color:#d3d0c7;list-style-position:inside}
+.menu-local summary:hover,.menu-local summary:focus-visible{color:var(--honey);outline:none}
+.menu-local[open]>*:not(summary){margin-top:10px}.menu-local>label{display:block}.menu-local>.menu-button{width:100%}.menu-local[open]>.menu-help{margin-bottom:0}
+#menuLobbyCode{text-transform:uppercase;letter-spacing:4px;font-weight:700}
+.lobby-info{margin:4px 0;font-size:13px;color:var(--honey)}.lobby-info b{letter-spacing:3px;font-size:15px}
+/* Your save (0.34.3): export, import, backups in the main menu's Settings. */
+#menuExport,#menuImport,#menuSaveConfirmYes,#menuSaveConfirmNo{flex:1}
+.save-confirm{border:1px solid var(--honey);padding:10px 12px;background:#f5c51814}.save-confirm p{margin:0 0 8px;font-size:13px;line-height:1.5;color:#f1ebd9}.save-confirm .menu-play{font-size:14px;padding:12px 20px}
+.backup-list{display:flex;flex-direction:column;gap:6px;max-height:190px;overflow:auto}
+.backup-row{display:flex;align-items:center;gap:10px;padding:6px 8px;border:1px solid #ffffff1f;font-size:12px;color:#f1ebd9}.backup-row span{flex:1;min-width:0}.backup-row small{display:block;color:#d3d0c7;font-size:11px;margin-top:2px}
+.backup-row .backup-restore{width:auto;padding:8px 14px;font-size:12px}
+/* Account panel (0.34.4) */
+#accountSignedOut,#accountSignedIn{display:flex;flex-direction:column;gap:10px}#accountSignedOut[hidden],#accountSignedIn[hidden],#accountDevLogin[hidden]{display:none}#accountSyncNow,#accountSignOut,#accountKeepLocal,#accountUseCloud{flex:1}#accountGoogle:disabled{opacity:.55;cursor:default}
+
+/* Character creator tabs (0.34.6) */
+.creator-tabs{display:flex;align-items:center;gap:6px;margin:22px 0 4px;border-bottom:1px solid #ffffff1c}.creator-tab{background:none;border:0;border-bottom:2px solid transparent;color:#c9c5ba;padding:9px 10px 8px;font-size:12px;font-weight:bold;letter-spacing:.3px;cursor:pointer;margin-bottom:-1px}.creator-tab[aria-selected=true]{color:var(--honey);border-bottom-color:var(--honey)}.creator-random{margin-left:auto;background:var(--ink-3);color:#e0ded8;border:1px solid #ffffff28;border-radius:5px;padding:6px 10px;font-size:11px;cursor:pointer}.creator-random:hover{border-color:var(--honey);color:var(--honey)}.option-hint{font-size:10px;color:#b9b5aa;margin:-4px 0 10px;line-height:1.4}
+
+/* Jobs app (0.35) */
+.jobs-icon{background:var(--honey);color:var(--ink)}.phone-tabs{display:flex;gap:4px;margin:6px 0 12px;border-bottom:1px solid #ffffff1c}.phone-tab{background:none;border:0;border-bottom:2px solid transparent;color:#c9c5ba;padding:7px 8px;font-size:12px;font-weight:bold;cursor:pointer;margin-bottom:-1px}.phone-tab[aria-selected=true]{color:var(--honey);border-bottom-color:var(--honey)}.phone-ranks{margin:8px 0 0;padding-left:18px;font-size:11px;color:#c9c5ba;line-height:1.6}.phone-ranks .phone-rank-now{color:var(--honey);font-weight:bold}
+.phone-accept.phone-quit{background:transparent;color:#dcd8cd;border:1px solid #ffffff30;margin-top:10px}.phone-accept.phone-quit-sure{border-color:#d9776a;color:#f0b8ae}
+/* Cargo panel (0.35) */
+#cargoOverlay{position:fixed;inset:0;z-index:90;display:grid;place-items:center;padding:16px;background:#0a090880;cursor:default}#cargoOverlay[hidden]{display:none}.cargo-shell{width:min(420px,100%);background:var(--ink-2);background-image:var(--comb);background-size:56px 100px;border:1px solid #ffffff22;border-radius:14px;padding:20px;color:#e9e7e2;box-shadow:0 20px 70px #0008}.cargo-note{font-size:11px;color:#b9b5aa;margin:6px 0 12px}#cargoRows{display:grid;gap:8px}.cargo-row{text-align:left;background:var(--ink-3);color:#e9e7e2;border:1px solid #ffffff26;border-radius:8px;padding:11px 12px;font-size:13px;cursor:pointer}.cargo-row:hover:not(:disabled){border-color:var(--honey)}.cargo-row:disabled{opacity:.45;cursor:default}.cargo-row.cargo-bulk{background:var(--honey);color:var(--ink);border-color:var(--honey);font-weight:bold}
+
+/* Phone button: lower left (the top-right corner is kept for the task tracker). A notification shakes it and counts the unread ones. */
+#phoneButton{position:fixed;left:34px;bottom:62px;z-index:6;display:flex;align-items:center;gap:8px;padding:11px 16px;pointer-events:auto;transform-origin:50% 100%}
+#phoneButton.has-unread{border-color:var(--honey,#f5c518);box-shadow:0 0 14px #f5c51855}
+#phoneButton.has-unread::after{content:attr(data-unread);position:absolute;top:-9px;right:-9px;min-width:20px;height:20px;padding:0 5px;box-sizing:border-box;border-radius:10px;background:var(--honey,#f5c518);color:#181712;font-size:11px;font-weight:bold;line-height:20px;text-align:center}
+#phoneButton.ring{animation:phone-shake .9s ease-in-out}
+@keyframes phone-shake{0%,100%{transform:rotate(0)}10%{transform:rotate(-14deg)}20%{transform:rotate(12deg)}30%{transform:rotate(-10deg)}40%{transform:rotate(9deg)}50%{transform:rotate(-6deg)}60%{transform:rotate(5deg)}75%{transform:rotate(-2deg)}}
+@media (pointer:coarse){#phoneButton{bottom:180px}}
+@media (prefers-reduced-motion:reduce){#phoneButton.ring{animation:none;outline:2px solid var(--honey,#f5c518)}}
+
+/* The phone button is a small drawn phone (inline SVG), not a labelled button. */
+#phoneButton{padding:0;border:0;background:none;box-shadow:none;border-radius:0;gap:0;flex-direction:column;align-items:center;filter:drop-shadow(0 4px 8px #0008);transition:transform .15s}
+#phoneButton:hover{transform:translateY(-3px)}
+#phoneButton .phone-icon{display:block;width:34px;height:56px}
+#phoneButton .pi-body{fill:#15130f;stroke:#f5c518;stroke-width:2.4}
+#phoneButton .pi-screen{fill:#2a2418}
+#phoneButton .pi-notch,#phoneButton .pi-bar{fill:#f5c518;opacity:.8}
+#phoneButton .pi-comb{fill:none;stroke:#f5c518;stroke-width:1.6;opacity:.75}
+#phoneButton .phone-key{margin-top:3px;font-size:10px;font-weight:bold;color:#f3f2f0;text-shadow:0 1px 4px #000}
+#phoneButton.has-unread{box-shadow:none}
+#phoneButton.has-unread .pi-screen{fill:#5a4710}
+#phoneButton.has-unread::after{top:-6px;right:-8px}
+#phoneButton.ring{transform-origin:50% 80%}
+#objective{bottom:150px}
+
+/* Task tracker: the card above is the focused task (its arrow points at it); below, every task in sections (Gigs, Jobs, Orders, Getting started). Click a row, or press Y, to focus it. */
+.tracker-list{margin:14px 0 0;padding:6px 0 0;border-top:1px solid #ffffff20;display:grid;gap:3px;max-height:230px;overflow-y:auto;scrollbar-width:thin;scrollbar-color:#706651 transparent}
+.tracker-group{margin:8px 0 2px;font-size:9px;letter-spacing:1.6px;text-transform:uppercase;color:var(--honey,#f5c518);font-weight:bold}
+.tracker-row{display:flex;align-items:center;gap:9px;width:100%;padding:6px 8px;border:1px solid transparent;border-radius:7px;background:#ffffff08;color:#e6e5e0;font:inherit;font-size:11px;line-height:1.3;text-align:left;cursor:pointer;pointer-events:auto}
+.tracker-row:hover,.tracker-row:focus-visible{border-color:#f5c51866;outline:none}
+.tracker-row.focus{border-color:var(--honey,#f5c518);background:#f5c51818}
+.tracker-row.done{opacity:.45;text-decoration:line-through;cursor:default}
+.tracker-dot{flex-shrink:0;width:16px;text-align:center;color:var(--honey,#f5c518);font-size:14px}
+.tracker-title{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.tracker-dist{flex-shrink:0;color:var(--honey,#f5c518);font-variant-numeric:tabular-nums}
+#objective.collapsed .tracker-list{display:none}
+
+/* Layout: the tracker card takes the lower-left corner; the phone icon sits under the location label (top left). Neither shows on the main menu or the credits. */
+#objective{bottom:62px}
+#phoneButton{left:34px;top:170px;bottom:auto}
+@media (pointer:coarse){#phoneButton{top:170px;bottom:auto}}
+body:has(#welcome:not([hidden])) #phoneButton,body:has(#credits:not([hidden])) #phoneButton{display:none}
+/* The phone icon sits right above the tracker card (it is inside the card's container, so it follows the card's height). */
+#objective #phoneButton{position:absolute;left:0;top:auto;bottom:calc(100% + 10px)}
+
+#vpNote{white-space:pre-line}
+
+/* item pictures (item-icon.js): a rendered picture of the real tool or material instead of an emoji */
+.has-picture{display:inline-block;width:1.45em;height:1.45em;vertical-align:middle;background:var(--icon) center/contain no-repeat}
+.item-icon.has-picture{width:2.1em;height:2.1em}
+.hotbar-slot .has-picture{width:1.35em;height:1.35em}
+.store-item-icon.has-picture{width:2.4em;height:2.4em}
+.has-icon::before{content:"";display:inline-block;width:1.5em;height:1.5em;margin-right:.35em;vertical-align:-.4em;background:var(--icon) center/contain no-repeat}
+/* order table cards: the lines of a card stay on separate lines */
+#dialog.in-world p{white-space:pre-line}
+
+/* the phone's Messages and the unread count on each app icon (DESIGN 4.19) */
+.phone-app{position:relative}
+.phone-badge{position:absolute;top:-6px;left:calc(50% + 14px);min-width:20px;height:20px;padding:0 5px;border-radius:10px;background:#e0442f;color:#fff;font-size:11px;font-weight:700;line-height:20px;text-align:center;box-shadow:0 0 0 2px #181612;z-index:2}
+.phone-badge[hidden]{display:none}
+#phoneMessages{display:flex;flex-direction:column;gap:8px;margin-top:12px}
+.phone-message{display:block;width:100%;text-align:left;border:1px solid #ffffff22;border-left:3px solid #ffffff44;border-radius:10px;background:#ffffff0c;color:#ebeae6;padding:9px 11px;font-size:12px;line-height:1.4}
+.phone-message[data-unread=true]{border-left-color:var(--honey,#f5c518);background:#f5c51816}
+.phone-message small{display:flex;justify-content:space-between;gap:8px;color:#a9a79f;font-size:10px;letter-spacing:.4px;text-transform:uppercase;margin-bottom:3px}
+.phone-message[data-unread=true] small b{color:var(--honey,#f5c518)}
+.phone-empty{color:#a9a79f;font-size:12px;margin:14px 2px}
+/* seven apps now (Messages is the first): three to a row so every icon fits without scrolling */
+.phone-app-grid{grid-template-columns:repeat(3,1fr);gap:14px 6px;margin-top:20px}
+.phone-app-grid .phone-app-icon{width:62px;height:70px}
+/* Needs (DESIGN 4.18): at 0 thirst the edges of the screen dim. */
+body::after{content:'';position:fixed;inset:0;pointer-events:none;z-index:5;opacity:0;transition:opacity 1.2s;box-shadow:inset 0 0 160px 60px #000c}
+body.thirst-dry::after{opacity:1}
+#sleepFade{display:grid;place-items:center;color:#e6e5e0;font:600 20px/1.4 Arial,sans-serif;letter-spacing:.5px;text-align:center}#sleepFade[hidden]{display:none}
+/* Main menu: the game's own HUD (title, place, task card, key hints, FPS) must not show through the live scene. */
+body:has(#welcome:not([hidden])) :is(header .brand,.location,#objective,#hotbar,#prompt,#workProgress,#jobToast,#fps,body>footer){visibility:hidden!important}

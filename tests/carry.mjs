@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import {carryEffects,restHeight,bendLean,bendDrop,BEND_DROP,poseBlend,plankBox,quarterOf,BEND_LEAN,BEND_TIME,BEND_RELEASE,LOG_REST,PLANK_REST,BELT_SLOTS,PLANKS_PER_STACK,MAX_PLANK_DROPS,normalizeCarry,normalizeBelt,normalizePlankDrops,beltFull,shoulderLog,putDownLog,feedLog,takePlanks,putDownPlanks,pickUpPlanks} from '../dist/carry.js';
+import {carryEffects,restHeight,bendLean,bendDrop,BEND_DROP,poseBlend,plankBox,quarterOf,BEND_LEAN,BEND_TIME,BEND_RELEASE,LOG_REST,PLANK_REST,BELT_SLOTS,PLANKS_PER_STACK,MAX_PLANK_DROPS,normalizeCarry,normalizeBelt,normalizePlankDrops,beltFull,shoulderLog,putDownLog,feedLog,takePlanks,putDownPlanks,pickUpPlanks,rescueCarry} from '../dist/carry.js';
 import {freshProgress,normalizeProgress,saveProgress,loadProgress} from '../dist/jobs.js';
 import {countItem} from '../dist/inventory.js';
 
@@ -25,7 +25,11 @@ assert.match(takePlanks(t.state).error,/hands are full/,'cannot take a second st
 let p=putDownPlanks(t.state,{x:104,z:-260});assert.equal(p.state.carry,null);assert.deepEqual(p.state.plankDrops,[{id:1,x:104,z:-260,count:4,q:0}]);assert.match(putDownPlanks(p.state,{x:0,z:0}).error,/not carrying/);
 let back=pickUpPlanks(p.state,1);assert.deepEqual(back.state.carry,{kind:'planks',count:4});assert.deepEqual(back.state.plankDrops,[]);assert.match(pickUpPlanks(p.state,5).error,/gone/);assert.match(pickUpPlanks(t.state,1).error,/hands are full/);
 let many=freshProgress();for(let i=0;i<MAX_PLANK_DROPS;i++)many=putDownPlanks({...many,carry:{kind:'planks',count:4}},{x:100+i,z:-260}).state;assert.equal(MAX_PLANK_DROPS,12);assert.equal(many.plankDrops.length,MAX_PLANK_DROPS);assert.deepEqual(many.plankDrops.map(d=>d.id),[1,2,3,4,5,6,7,8,9,10,11,12]);
-assert.match(putDownPlanks({...many,carry:{kind:'planks',count:4}},{x:0,z:0}).error,/no room/);
+// Serious bug 0.35.6: hands full + 12 stacks on the ground was a dead end (cannot put down, cannot pick up). Putting down must always work: the oldest stack is cleared.
+{const full12={...many,carry:{kind:'planks',count:3}},r=putDownPlanks(full12,{x:0,z:0,q:1});assert(!r.error,'always possible');assert.equal(r.state.carry,null);assert.equal(r.state.plankDrops.length,MAX_PLANK_DROPS);assert(!r.state.plankDrops.some(d=>d.id===1),'oldest cleared');assert.deepEqual(r.state.plankDrops.at(-1),{id:13,x:0,z:0,count:3,q:1});assert.match(r.message,/oldest stack/);
+ // Rescue for a save already stuck: loading it frees one stack so X works.
+ let raw;const st={getItem:()=>raw,setItem:(k,v)=>raw=v};saveProgress(st,{...freshProgress(),carry:{kind:'planks',count:4},plankDrops:many.plankDrops});const l=loadProgress(st);assert.equal(l.carry.count,4);assert.equal(l.plankDrops.length,MAX_PLANK_DROPS-1,'rescued');assert(!putDownPlanks(l,{x:1,z:1}).error);
+ assert.equal(rescueCarry({...many,carry:null}).plankDrops.length,MAX_PLANK_DROPS,'only a stuck save is touched');assert.equal(rescueCarry({...many,carry:{kind:'log'}}).plankDrops.length,MAX_PLANK_DROPS)}
 // 6. The belt loop: four logs fill it, the fifth is refused, one stack out makes room.
 {const log1=x=>({...x,carry:{kind:'log'}});let g=freshProgress();for(let i=0;i<BELT_SLOTS;i++)g=feedLog(log1(g),true).state;assert.equal(g.belt,BELT_SLOTS,'four logs fill the belt');assert.match(feedLog(log1(g),true).error,/belt is full/,'the fifth is refused');
  g=takePlanks(g).state;assert.equal(g.belt,BELT_SLOTS-1);const again=feedLog(log1(g),true);assert.equal(again.state.belt,BELT_SLOTS,'one stack taken: there is room for one more log')}

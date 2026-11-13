@@ -71,9 +71,15 @@ export function takePlanks(progress){
 }
 export function putDownPlanks(progress,at){
  if(progress.carry?.kind!=='planks')return {error:'You are not carrying planks.'};
- const drops=progress.plankDrops||[];if(drops.length>=MAX_PLANK_DROPS)return {error:'There is no room for more plank stacks. Pick one up first.'};
+ // Putting down must ALWAYS work (hands full + ground full used to be a dead end: you cannot pick up with full hands). At the limit the oldest stack on the ground is cleared away to make room.
+ let drops=progress.plankDrops||[],cleared=false;while(drops.length>=MAX_PLANK_DROPS){const oldest=drops.reduce((a,d)=>d.id<a.id?d:a,drops[0]);drops=drops.filter(d=>d!==oldest);cleared=true}
  const id=1+Math.max(0,...drops.map(d=>d.id));
- return {state:{...progress,carry:null,plankDrops:[...drops,{id,x:at.x,z:at.z,count:progress.carry.count,q:Number.isSafeInteger(at.q)?((at.q%4)+4)%4:0}]},message:'You put the planks down.'};
+ return {state:{...progress,carry:null,plankDrops:[...drops,{id,x:at.x,z:at.z,count:progress.carry.count,q:Number.isSafeInteger(at.q)?((at.q%4)+4)%4:0}]},message:cleared?'You put the planks down. The oldest stack on the ground was cleared away to make room.':'You put the planks down.'};
+}
+// Rescue for a save that is already stuck: planks in the hands and the ground full of stacks. On load the oldest stack is cleared so the hands can be emptied with X.
+export function rescueCarry(progress){
+ const drops=progress.plankDrops||[];if(progress.carry?.kind!=='planks'||drops.length<MAX_PLANK_DROPS)return progress;
+ const oldest=drops.reduce((a,d)=>d.id<a.id?d:a,drops[0]);return {...progress,plankDrops:drops.filter(d=>d!==oldest)};
 }
 export function pickUpPlanks(progress,id){
  if(progress.carry)return {error:HANDS};

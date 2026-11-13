@@ -13,7 +13,7 @@ import {freshOrders,normalizeOrders} from './orders.js';
 import {normalizeMessages} from './messages.js';
 import {normalizePlots,normalizeLogs,nextLogIdFor} from './grid.js';
 import {isWalkable} from './world.js';
-import {normalizeCarry,normalizeBelt,normalizePlankDrops} from './carry.js';
+import {normalizeCarry,normalizeBelt,normalizePlankDrops,rescueCarry} from './carry.js';
 import {normalizeVehicles} from './vehicle.js';
 import {normalizeCareers,normalizeCompanies} from './careers.js';
 import {normalizeShift,normalizePayStubs} from './shift.js';
@@ -36,7 +36,7 @@ export function normalizeProgress(value){
  s.activeJob=normalizeActiveJob(a.activeJob);s.cooldowns=normalizeCooldowns(a.cooldowns);s.gigBoard=normalizeGigBoard(a.gigBoard);
  // Saves from before the schema number (0.29 and earlier) are schema 1: they have no properties, which is exactly what a fresh save has, so the step to schema 2 only adds the fields.
  s.schema=SCHEMA;s.properties=normalizeProperties(a.properties);s.homeNotices=normalizeNotices(a.homeNotices);
- s.housing=normalizeHousing(a.housing);s.life=normalizeLife(a.life);s.routine=normalizeRoutine(a.routine);s.cafe=normalizeCafe(a.cafe);s.plots=normalizePlots(a.plots);s.skills=normalizeSkills(a.skills);s.stats=normalizeStats(a.stats);s.logs=normalizeLogs(a.logs);s.nextLogId=nextLogIdFor(a.nextLogId,s.logs);s.carry=normalizeCarry(a.carry);s.belt=normalizeBelt(a.belt);s.plankDrops=normalizePlankDrops(a.plankDrops);
+ s.housing=normalizeHousing(a.housing);s.life=normalizeLife(a.life);s.routine=normalizeRoutine(a.routine);s.cafe=normalizeCafe(a.cafe);s.plots=normalizePlots(a.plots);s.skills=normalizeSkills(a.skills);s.stats=normalizeStats(a.stats);s.logs=normalizeLogs(a.logs);s.nextLogId=nextLogIdFor(a.nextLogId,s.logs);s.carry=normalizeCarry(a.carry);s.belt=normalizeBelt(a.belt);s.plankDrops=normalizePlankDrops(a.plankDrops);s.plankDrops=rescueCarry(s).plankDrops; // 0.35.6: a save stuck with full hands and a full ground is freed
  s.vehicles=normalizeVehicles(a.vehicles,MAP.vehicles,MAP.playable); // 0.33: where the drivable vehicles were left (a new optional field: no schema bump)
  s.focus=typeof a.focus==='string'&&/^[a-z0-9:_-]{1,40}$/i.test(a.focus)?a.focus:null;s.messages=normalizeMessages(a.messages);s.coolers=normalizeCoolers(a.coolers);s.orders=normalizeOrders(a.orders); // messages: the phone's notifications (DESIGN 4.19); 0.34: Store orders and the main home (an optional field: no schema bump)
  s.careers=normalizeCareers(a.careers);s.companies=normalizeCompanies(a.companies);s.shift=normalizeShift(a.shift,s.careers);s.payStubs=normalizePayStubs(a.payStubs); // 0.35: careers (DESIGN 4.15), optional fields: no schema bump
