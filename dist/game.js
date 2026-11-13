@@ -54,7 +54,7 @@ import {GameState,initializeState,setMePosition,tickLife,setStatDrainMultiplier}
 import {needsEffects} from './life.js';
 import {loadProfile,saveProfile} from './profile.js';
 import {MultiplayerClient} from './multiplayer.js';
-import {createMainMenu,relayBase,refusalText} from './main-menu.js';import {createSaveMenu} from './save-menu.js';import {createCloud,PUSH_EVERY_MS} from './cloud-save.js';import {createAccountMenu} from './account-menu.js';import {normalizeLobbyCode,REFUSED} from './relay-protocol.js';
+import {createMainMenu,relayBase,refusalText,loadSettings} from './main-menu.js';import {createSaveMenu} from './save-menu.js';import {createCloud,PUSH_EVERY_MS} from './cloud-save.js';import {createAccountMenu} from './account-menu.js';import {normalizeLobbyCode,REFUSED} from './relay-protocol.js';
 import {findNearestClearSpot,MAX_SEARCH,OPEN_AREA} from './safe-spot.js';
 import {createHouseSigns} from './house-signs.js';
 import {terrain,SURFACE} from './terrain.js';
@@ -86,15 +86,16 @@ import {createApartment,EXIT,BED,ENTRY} from './apartment.js';
 import {createIndoorCamera} from './indoor-camera.js';
 import {polishWorld} from './visuals.js';
 import {createMovementInput} from './input.js';
-import {createCharacter,loadCharacterAssets,characterAssetsReady} from './character.js';import {createMenuScene} from './menu-scene.js';import {createMenuLive,MENU_FPS,MENU_FPS_LOW} from './menu-scene-rules.js';
+import {createCharacter,loadCharacterAssets,characterAssetsReady} from './character.js';import {createMenuScene} from './menu-scene.js';import {createSky,INDOOR_EXPOSURE} from './sky.js';import {createMenuLive,MENU_FPS,MENU_FPS_LOW,creatorReturn,menuVehicleFor} from './menu-scene-rules.js';
 import {palettes,defaults,loadAppearance,saveAppearance,normalizeAppearance,BODIES,OUTFITS,PART_KEYS,CLOTHES_KEYS,partChoices,quickOutfits,switchBody,randomLook} from './appearance.js';
 // Decode the embedded character models once, before any character (player, clerks, pedestrians) is built.
 await loadCharacterAssets();
 const $=id=>document.getElementById(id);
 const scene=new THREE.Scene();scene.background=new THREE.Color('#b9cbd0');scene.fog=new THREE.Fog('#b9cbd0',65,155);
-let renderer;try{renderer=new THREE.WebGLRenderer({canvas:$('world'),antialias:true,powerPreference:'low-power'});}catch(e){$('error').hidden=false;$('error').textContent='This prototype needs WebGL. Please try a browser with hardware acceleration enabled.';throw e;}
+let renderer;try{renderer=new THREE.WebGLRenderer({canvas:$('world'),antialias:true,powerPreference:loadSettings({getItem:k=>localStorage.getItem(k)}).quality==='high'?'high-performance':'low-power'});}catch(e){$('error').hidden=false;$('error').textContent='This prototype needs WebGL. Please try a browser with hardware acceleration enabled.';throw e;}
 renderer.setPixelRatio(Math.min(devicePixelRatio,1.6));renderer.setSize(innerWidth,innerHeight);renderer.shadowMap.enabled=true;renderer.shadowMap.type=THREE.PCFSoftShadowMap;renderer.outputColorSpace=THREE.SRGBColorSpace;renderer.toneMapping=THREE.ACESFilmicToneMapping;renderer.toneMappingExposure=1.12;
-const camera=new THREE.PerspectiveCamera(52,innerWidth/innerHeight,.1,700);scene.add(new THREE.HemisphereLight('#d8e8f0','#777655',1.7));const sun=new THREE.DirectionalLight('#ffe3b9',3.1);sun.position.set(-24,30,22);sun.castShadow=true;sun.shadow.mapSize.set(2048,2048);Object.assign(sun.shadow.camera,{left:-65,right:65,top:65,bottom:-65,far:130});sun.shadow.bias=-.0005;scene.add(sun);
+const camera=new THREE.PerspectiveCamera(52,innerWidth/innerHeight,.1,700);const hemi=new THREE.HemisphereLight('#d8e8f0','#777655',1.7);scene.add(hemi);const sun=new THREE.DirectionalLight('#ffe3b9',3.1);sun.position.set(-24,30,22);sun.castShadow=true;sun.shadow.mapSize.set(2048,2048);Object.assign(sun.shadow.camera,{left:-65,right:65,top:65,bottom:-65,far:130});sun.shadow.bias=-.0005;scene.add(sun);
+const sky=createSky({scene,renderer,sun,hemi});let frameProbe=null; // day and night (sky.js, daynight.js): this one light is the sun and the moon; the grade replaces ACES through CustomToneMapping. frameProbe: the dev panel's frame timer
 const mats=new Map(),colliders=[],cameraSolids=[],shopShells={market:[],cafe:[]};function mat(c){if(!mats.has(c))mats.set(c,new THREE.MeshStandardMaterial({color:c,roughness:.92}));return mats.get(c)}
 function box(w,h,d,x,y,z,c,solid=false){let m=new THREE.Mesh(new THREE.BoxGeometry(w,h,d),mat(c));m.position.set(x,y,z);m.castShadow=h>.3;m.receiveShadow=true;scene.add(m);if(solid){colliders.push({x,z,hx:w/2,hz:d/2});cameraSolids.push(m);}return m}
 function label(text,x,y,z,width=5,rot=0,bg='#243e3b',fg='#f1ebd9',height=width/4){
@@ -881,15 +882,16 @@ renderOptions();
 function openCreator(){if(consuming)return;phone?.close();inventoryUI?.close();storeUI?.close();clearWorldPanel();$('dialog').hidden=true;draft={...currentAppearance};$('characterName').value=draft.name;creatorOpen=true;modal=true;look.release();keys.clear();$('welcome').hidden=true;$('controls').hidden=true;$('creator').hidden=false;document.body.classList.add('creating');creatorTab='look';renderOptions();updateDraft();focusPreview(false);Object.assign(previewFrame,previewFocus);$('characterName').focus()}
 let currentAppearance={...(savedCharacter||defaults)};
 if(savedCharacter)$('customizeSaved').hidden=false;
-$('customizeSaved').onclick=openCreator;$('editCharacter').onclick=openCreator;
+let creatorFromMenu=false;$('customizeSaved').onclick=()=>{openCreator();creatorFromMenu=creatorOpen}; // Edit character on the main menu: saving goes back to the menu (menu-scene-rules.js creatorReturn)
+$('editCharacter').onclick=openCreator;
 $('characterName').oninput=updateDraft;
 $('rotateLeft').onclick=()=>previewTurn-=Math.PI/4;$('rotateRight').onclick=()=>previewTurn+=Math.PI/4;
-function closeCreator(){creatorOpen=false;modal=false;$('creator').hidden=true;document.body.classList.remove('creating');keys.clear()}
+function closeCreator(){creatorOpen=false;creatorFromMenu=false;modal=false;$('creator').hidden=true;document.body.classList.remove('creating');keys.clear()}
 $('cancelCreator').onclick=()=>{closeCreator();if(!active)$('welcome').hidden=false};
 $('creatorForm').onsubmit=e=>{e.preventDefault();if(!$('characterName').value.trim()){$('characterName').setCustomValidity('Enter a name to begin.');$('characterName').reportValidity();return}
  $('characterName').setCustomValidity('');updateDraft();currentAppearance={...draft};avatar.apply(draft);menuLive.setAppearance(draft);me.name=draft.name;persist();
  const saved=saveAppearance({setItem:(key,value)=>localStorage.setItem(key,value)},draft);
- closeCreator();active=true;$('customizeSaved').hidden=false;
+ const back=creatorReturn({active,fromMenu:creatorFromMenu})==='menu';closeCreator();if(back)$('welcome').hidden=false;else active=true;$('customizeSaved').hidden=false;
  if(!saved){$('objective').querySelector('p').textContent='Browser saving is unavailable. Your character will last for this session.'}
 };
 $('characterName').addEventListener('input',()=>$('characterName').setCustomValidity(''));
@@ -899,7 +901,7 @@ function drawCreator(){
  const reserved=narrow?0:150,h=Math.max(1,top-reserved),w=narrow?innerWidth:Math.max(1,innerWidth-410);
  const y=innerHeight-top+reserved;renderer.setViewport(0,0,innerWidth,innerHeight);renderer.setScissorTest(false);renderer.clear();renderer.setScissorTest(true);renderer.setScissor(left,y,w,h);renderer.setViewport(left,y,w,h);
  previewCamera.aspect=w/h;framePreview(w/h);previewCamera.updateProjectionMatrix();previewAvatar.group.rotation.y=previewTurn;
- renderer.render(previewScene,previewCamera);renderer.setScissorTest(false);renderer.setViewport(0,0,innerWidth,innerHeight);
+ renderer.toneMappingExposure=INDOOR_EXPOSURE;renderer.render(previewScene,previewCamera);renderer.setScissorTest(false);renderer.setViewport(0,0,innerWidth,innerHeight);
 }
 
 
@@ -1089,7 +1091,6 @@ function updateZones(dt){
  world.fade.uniforms.uFadeEnabled.value=outdoors?1:0;
  fadeTarget.set(me.position.x,me.position.y+1.5,me.position.z);
  world.update(dt,camera,fadeTarget);sawmillCtl?.update(dt);syncSawmill();if(sawmillCtl?.ready)audio.update({listener:{x:me.position.x,z:me.position.z},blade:{at:sawmillCtl.bladePoint,level:sawmillCtl.speed,sawing:sawmillCtl.sawing},belt:{at:sawmillCtl.beltPoint,level:sawmillCtl.beltLevel}});
- if(outdoors){sun.position.set(me.position.x-24,30,me.position.z+22);sun.target.position.set(me.position.x,0,me.position.z);sun.target.updateMatrixWorld()}
  const markers=[];
  if(outdoors){const job=GameState.progress.activeJob;if(job&&gigMarker.visible)markers.push({x:gigMarker.position.x,z:gigMarker.position.z,color:'#f2ca79'});if(marker.visible)markers.push({x:marker.position.x,z:marker.position.z,color:'#d4e7b3'});for(const v of driving.fleet)if(v.present&&!v.display&&!v.dev&&v!==driving.active)markers.push({x:v.state.x,z:v.state.z,color:'#6fb7ff'})} // your own vehicles show on the minimap in blue
  const p=outdoors?me.position:shop?SHOPS[shop]:STUDIO;
@@ -1385,7 +1386,7 @@ function updateMultiplayer(now,moving,dt){
 
 let prev=performance.now(),frames=0,elapsed=0,menuDrawn=false,stuckTime=0;
 // The live scene behind the main menu (menu-scene.js, rules in menu-scene-rules.js): drawn at a capped frame rate while #welcome is showing, freed when the game starts. If it cannot be built, or the player asks for reduced motion, the menu keeps its picture.
-const menuLive=createMenuLive({build:()=>{const s=createMenuScene({createCharacter,appearance:currentAppearance});return {update:s.update,setAppearance:s.setAppearance,dispose:s.dispose,render(){s.frame(innerWidth,innerHeight);renderer.render(s.scene,s.camera)}}},ready:characterAssetsReady,menuVisible:()=>!$('welcome').hidden,pageHidden:()=>typeof document!=='undefined'&&!!document.hidden,reducedMotion:()=>typeof matchMedia==='function'&&matchMedia('(prefers-reduced-motion: reduce)').matches,setLive:on=>$('welcome').classList.toggle('live',on),fps:()=>mainMenu.settings.quality==='low'?MENU_FPS_LOW:MENU_FPS});
+const menuLive=createMenuLive({build:()=>{const s=createMenuScene({createCharacter,appearance:currentAppearance,vehicle:menuVehicleFor(GameState.progress.vehicles),cover:mainMenu.settings.quality==='low'?.4:1});return {update:s.update,setAppearance:s.setAppearance,dispose:s.dispose,render(){s.frame(innerWidth,innerHeight);renderer.toneMappingExposure=INDOOR_EXPOSURE;renderer.render(s.scene,s.camera)}}},ready:characterAssetsReady,menuVisible:()=>!$('welcome').hidden,pageHidden:()=>typeof document!=='undefined'&&!!document.hidden,reducedMotion:()=>typeof matchMedia==='function'&&matchMedia('(prefers-reduced-motion: reduce)').matches,setLive:on=>$('welcome').classList.toggle('live',on),fps:()=>mainMenu.settings.quality==='low'?MENU_FPS_LOW:MENU_FPS});
 // One slice of simulated time (see timestep.js). Everything that has to advance with real time runs here, once per slice.
 // Returns whether a movement key was pressed during the slice.
 // Carrying and the needs (DESIGN 4.18) together decide how fast you walk and whether Shift runs.
@@ -1408,7 +1409,7 @@ if(oldStage!==GameState.progress.activeJob?.stage)persist();if(!inside&&!shop)pe
  return pressed;
 }
 function frame(now){
- requestAnimationFrame(frame);
+ requestAnimationFrame(frame);if(frameProbe)frameProbe(now);
  const real=Math.max(0,Math.min((now-prev)/1000,MAX_FRAME)),view=Math.min(real,.1); // real time drives the simulation; visuals smooth over at most 0.1 s
  prev=now;
  if(GameState.progress.properties!==signsFor){signsFor=GameState.progress.properties;houseSigns.sync(heldIds(GameState.progress))} // rent, buy, move out, eviction: the sign follows
@@ -1434,7 +1435,7 @@ zoom=THREE.MathUtils.lerp(zoom,zoomTarget,1-Math.exp(-view*10));
 
 look.tick(view);
 if(worldPanel?.actor&&!$('dialog').hidden){const actor=worldPanel.actor,pa=getMeWorldPosition(new THREE.Vector3()),pb=actor.getWorldPosition(new THREE.Vector3()),mid=pa.clone().add(pb).multiplyScalar(.5);const angle=Math.atan2(pa.x-pb.x,pa.z-pb.z);actor.rotation.y=angle;me.rotation.y=angle+Math.PI;worldPlayer.position.copy(mid);if(shop)shops[shop].camera(worldPlayer,angle+.45,.32,5.8,view);else updateCamera(worldPlayer,angle+.45,.32,5.8,view)}else if(shop){getMeWorldPosition(worldPlayer.position);shops[shop].camera(worldPlayer,yaw,pitch,zoom,view);}else if(inside)(home.camera||indoorCamera)(me,yaw,pitch,zoom,view);else updateCamera(me,yaw,pitch,zoom,view);
-const daylight=Math.max(.12,Math.sin((GameState.progress.routine.minutes-360)/1440*Math.PI*2));sun.intensity=.2+daylight*2.9;scene.background.setRGB(.08+daylight*.65,.12+daylight*.67,.2+daylight*.62);scene.fog.color.copy(scene.background);
+sky.update(GameState.progress.routine.minutes,{target:inside||shop?null:me.position,indoors:!!shop});if(inside)renderer.toneMappingExposure=INDOOR_EXPOSURE; // the sun or moon follows the player outdoors; rooms stay day-bright for now
 
 updateEquipped(modal?0:view);updateCarryPose(view);updateNozzlePose(view);updateForkPose();updateDock(modal?0:view);if(forkGuide)forkGuideTick(fork.on?forkCtx():null,view);avatar.update(modal?0:view);if(shop)shops[shop].clerk.update(modal?0:view);updatePalletTags();updateZones(view);updatePassOut(real);updateSleep(real);updateWork(view);updateGig(view);updateObjective(view);updateWorldUI();updateTracker(real);updateHomeNotices();tickOrders(real);tickShifts(real);updateRing();updateMultiplayer(now,moving,view);syncPlayerMesh();fuelHose();{const dv=driving.active,on=!!dv&&(dv.fuelMgal>0||!dv.spec.fuel)&&!modal;{const tip=dv&&on?driving.exhaust(dv):null;if(tip)smoke.emit(dv.spec.id,view,tip,exhaustRate({running:true,throttle:driving.driving&&(keys.has('KeyW')||keys.has('ArrowUp'))?1:0,speed:dv.state.speed,top:dv.cls.top,tier:dv.cls.tier}));smoke.update(view,!inside)}audio.engine(engineVoice({speed:dv?dv.state.speed:0,top:dv?dv.cls.top:10,throttle:dv&&driving.driving&&(keys.has('KeyW')||keys.has('ArrowUp'))?1:0,tier:dv?dv.cls.tier:'low',running:on}))}audio.fuel({listener:listenerAt(),at:fuel.held?fuel.held.use:canAt,level:fuelFlow,fullness:fuelFull});fuelFlow=0;canAt=null;renderer.render(inside?home.room.scene:scene,camera)}requestAnimationFrame(frame);
 
@@ -1461,6 +1462,7 @@ if(DEV_MODE){try{
   snapshot:()=>({minutes:GameState.progress.routine.minutes,cash:GameState.progress.cash}),
   setShadows(on){renderer.shadowMap.enabled=!!on;scene.traverse(m=>{if(m.material)m.material.needsUpdate=true})}, // for finding what causes a glitch on your GPU
   setTreeFade(on){world.fade.uniforms.uFadeEnabled.value=on?1:0},
+  sky:{tune:v=>sky.tune(v),tuning:()=>sky.tuning(),state:()=>sky.state(),cost:()=>({calls:renderer.info?.render.calls??0,triangles:renderer.info?.render.triangles??0,programs:renderer.info?.programs?.length??0}),probe:fn=>{frameProbe=fn}}, // the look sliders and the cost line (sky.js)
   vehicles:{ // the drivable vehicles: spawn one in front of the player (or the nearest free spot), or take it out of the world; never the one the player is in
    list:()=>MAP.vehicles.filter(v=>v.sale!=='online').map(v=>({id:v.id,name:v.name,present:driving.present(v.id)})),
    spawn(id){const spec=MAP.vehicles.find(v=>v.id===id);if(!spec)return {error:'Unknown vehicle.'};if(inside||shop)return {error:'Go outdoors first.'}; // a free dev copy: no ownership, room, stock, price or lock, and never saved

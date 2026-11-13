@@ -2,7 +2,7 @@
 import assert from 'node:assert/strict';
 import {readFile,rm,writeFile} from 'node:fs/promises';import {join} from 'node:path';
 import {bootGame} from './support/boot-game.mjs';
-import {clockLabel,QUICK_TIMES,MONEY_STEPS} from '../dist/dev.js';
+import {clockLabel,QUICK_TIMES,MONEY_STEPS,SKY_KEY,frameCostText} from '../dist/dev.js';
 const CAR={x:6,z:13.9},away=(p,o)=>Math.hypot(p.x-o.x,p.z-o.z);
 
 assert.equal(clockLabel(0),'12:00 AM');assert.equal(clockLabel(720),'12:00 PM');assert.equal(clockLabel(1080),'6:00 PM');assert.equal(clockLabel(545),'9:05 AM');
@@ -52,6 +52,21 @@ assert.match(await readFile('dist/dev-flag.js','utf8'),/export const DEV_MODE=tr
   g.find('devTime').value='0';g.find('devSetTime').click();assert.equal(S.progress.routine.minutes,0);
   assert.equal(JSON.stringify(S.progress.housing),housing,'no bills or days were advanced');assert.equal(JSON.stringify(S.progress.properties),day);
   g.pump(.5);assert(S.progress.routine.minutes>0&&S.progress.routine.minutes<30,'the clock carries on from there')}
+
+ // Sky and light: "Look at" changes the picture only; night floor and exposure are sliders kept in this browser, never in the save
+ {const scene=g.scene(),light=()=>{let l;scene.traverse(o=>{if(o.isDirectionalLight)l=o});return l},slide=(id,v)=>{const el=g.find(id);el.value=String(v);el.oninput()},btn2=name=>g.created.find(e=>e.textContent===name&&e.dataset.minutes!==undefined);
+  for(const id of ['devSkyTime','devSkyFollow','devNightFloor','devExposure','devSkyReset','devCost'])assert(g.find(id),`${id} is in the panel`);
+  assert.deepEqual([g.find('devNightFloor').min,g.find('devNightFloor').max,g.find('devNightFloor').value],['0.04','0.3','0.12'],'the night floor slider runs 0.04 to 0.30 and starts at 0.12');
+  const clock=S.progress.routine.minutes;assert(clock<60,'it is just after midnight on the clock');g.pump(.1);const moon=light().intensity;assert(Math.abs(moon-3.1*.12)<.01,`the moon at the starting floor: ${moon}`);
+  slide('devSkyTime',720);g.pump(.1);assert(Math.abs(light().intensity-3.1)<.01,'Look at noon: the picture is noon');assert(S.progress.routine.minutes<60,'while the clock stays where it was');assert.equal(g.find('devSkyTimeLabel').textContent,'12:00 PM');
+  g.find('devSkyFollow').click();g.pump(.1);assert(Math.abs(light().intensity-moon)<.01,'Follow clock: night again');assert.equal(g.find('devSkyTimeLabel').textContent,'clock');
+  slide('devNightFloor',.3);g.pump(.1);assert(Math.abs(light().intensity-3.1*.3)<.01,'a higher night floor is a brighter moon');assert.equal(g.find('devNightFloorLabel').textContent,'0.30');
+  slide('devExposure',1.5);assert.equal(g.find('devExposureLabel').textContent,'× 1.50');
+  assert.deepEqual(JSON.parse(g.store.get(SKY_KEY)),{nightFloor:.3,exposureScale:1.5},'the two sliders are remembered in this browser');assert(!JSON.stringify(S.progress).includes('nightFloor'),'and never in the save');
+  slide('devSkyTime',720);btn2('Night').click();g.pump(.1);assert.equal(g.find('devSkyTimeLabel').textContent,'clock','setting the real clock drops the Look at override');S.progress.routine.minutes=5;
+  g.find('devSkyReset').click();g.pump(.1);assert(Math.abs(light().intensity-moon)<.01,'Reset look puts 0.12 back');assert.equal(g.find('devNightFloor').value,'0.12');
+  assert.match(g.find('devCost').textContent,/draw calls · .* triangles · .* shaders · frame/,'the cost line is drawn');
+  assert.equal(frameCostText({calls:140,triangles:176400,programs:41},[5,6,7,8,30]),'140 draw calls · 176k triangles · 41 shaders · frame 7.0 ms median, 30.0 ms 95th (5 frames)');assert.match(frameCostText({calls:1,triangles:12,programs:1}),/12 triangles .* frame – median/);}
 
  // Money: whole cents, capped
  {const cash=S.progress.cash,buttons=g.created.filter(e=>e.dataset.cents!==undefined);

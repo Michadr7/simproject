@@ -32,7 +32,7 @@ Motion (all in `menu-scene-rules.js`, pure functions of seconds):
 | `lightAt` | sun colour, strength, angle, sky colour | 240 s |
 | `hazeAt` | each dust mote | drift |
 
-Not in this build: grass blades moving (the game has no grass model; see follow-ups), drawn lines on the plans.
+Not in the first build, added since (see "Built after the first build"): grass and ferns moving in the wind, the drawing on the plans.
 
 ## Camera
 Perspective, 36 degrees. Home 4.6 m to the side and 4.4 m in front of the character at 1.55 m, looking at chest height (tune).
@@ -61,7 +61,7 @@ Risk, said first: the world is still built before the menu shows (as before), so
 The old picture (`assets/menu-background.jpg`) stays as `#welcome`'s inline background. The canvas only shows when `#welcome` has the class `live`, which is set after the first frame has drawn. The picture stays when: character assets are not loaded, the build or a frame throws (not retried), or `prefers-reduced-motion: reduce`. No WebGL at all: the game already stops with its own message before the menu.
 
 ## Appearance
-`menuLive.setAppearance(draft)` is called where the creator saves, and calls the character's own `apply`. Today saving in the creator also starts the game, so the menu scene is freed a frame later: the hook is there for when Edit character returns to the menu.
+`menuLive.setAppearance(draft)` is called where the creator saves, and calls the character's own `apply`. Edit character on the main menu now returns to the menu after saving (see "Built after the first build"), so the change is seen in the scene.
 
 ## Decisions taken without asking (simplest option each time)
 1. A separate small scene, not a corner of the real map: no change to `world.js` or `map-definition.js`, and the town is not drawn.
@@ -69,7 +69,23 @@ The old picture (`assets/menu-background.jpg`) stays as `#welcome`'s inline back
 3. The plans are a child of the character between the hands, not an item in `hold()`: `hold()` is one-handed and aligns to the forearm. Lean, reach and hand curl are the character's own.
 4. `tests/startup.mjs` had "nothing is rendered while the menu is open"; it now means "the world is not redrawn".
 
+## Built after the first build (2026-11-13): follow-ups 5, 3 and 4
+Visuals still NOT verified by eye, and the wind shader has never been compiled by a real GPU (the tests use a renderer stub). Check these first in step 1.
+
+**5. Edit character returns to the menu.** `creatorReturn({active,fromMenu})` in `menu-scene-rules.js`. `game.js`: Edit character on the main menu (`#customizeSaved`) sets `creatorFromMenu`; saving then shows `#welcome` again instead of starting the game, and the scene's character already has the new look (`menuLive.setAppearance`). Unchanged: Play with no character still starts the game on save; Edit character inside the game stays in the game; Back returns to the menu.
+
+**3. Plans texture.** `MENU_PLANS` (data, millimetres on the 460 x 320 sheet) and `plansOps()` (a flat list of fill / line / circle / text steps) in `menu-scene-rules.js`; `menu-scene.js` `plansTexture()` only replays the steps on a 920 x 640 canvas. Drawn: forest ground, a creek, the haul road from the south edge to the landing (grey, with a log deck), skid tracks to four cut blocks (A1 felled with stumps, A2 today's in red, B1 and B2 planned and dashed), labels, title, north arrow, scale bar. Colours are `terrain.js` `MINIMAP_COLOUR` values (a test keeps them equal). The texture is turned 180 degrees so it reads the right way up for the character (tune: flip `texture.rotation` if it should face the camera). No canvas: the old blue panel stays.
+
+**4. Ground cover.** `MENU_COVER` = 1,500 grass tufts + 70 ferns (low quality: 40%), placed by `groundCover()` in a ring 6.3 to 24 m from the vehicle, thickest near the clearing, none within 2.5 m of the camera's home. Shapes from `coverShape()`: a tuft is 7 blades (21 triangles), a fern 7 fronds (35 triangles); every triangle is drawn with both windings and an up normal, so about 68,000 triangles in all. Wind: `coverBend(t,x,z,bend)` = bend squared x (a lean downwind + a wave that runs downwind, both swelling with `gust`), at most 9 cm at a tip; `menu-scene.js` `windMaterial()` writes the same formula into a Lambert material's vertex shader (`onBeforeCompile`, numbers from `COVER_WIND`).
+- Cost: +2 draw calls (about 16 in all), 1 shared material and program, 2 uniforms a frame, no per-frame CPU work on instances. No new assets. No real fern or grass model yet: these are plain coloured cards (a real model through `build-props.mjs` is still open).
+- Cheaper option if the frame time shows it: lower `MENU_COVER.grass` (one number) or pass a smaller `cover` to `createMenuScene`.
+- Risk: if the injected shader fails to compile on some driver, three.js logs an error and the cover does not draw; the rest of the scene is not affected.
+
+Tests: `tests/menu-scene.mjs` (plans data and steps, placement, shapes, wind bounds, `creatorReturn`, and in the packaged game: Edit character comes back to the menu, the cover meshes and the plans texture are in the scene).
+
 ## Follow-up steps
+Done: 3, 4 (cards, not a real model), 5.
+
 | # | Step | Model | Size |
 |---|---|---|---|
 | 1 | Look at it on the real GPU: tune camera, lean gap, hand and plan positions, head turn axes and signs, light. Screenshots with `browser-lab`. | Sonnet | S |

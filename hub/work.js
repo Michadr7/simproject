@@ -75,7 +75,7 @@ export function nextStep(node){
 export const needsYou=tree=>!tree?0:Array.isArray(tree.projects)?tree.projects.reduce((n,p)=>n+needsYou(p),0):(tree.steps||[]).filter(s=>s.needsYou).length+(tree.items||[]).filter(i=>i.needsYou).length;
 
 function stepOf(p,run,rd,enabled){
- const t=splitTitle(p.title),base={key:p.id,planId:p.id,runId:run?run.id:null,code:t.code,name:t.name,title:p.title,revision:p.revision,at:p.sentAt||0,reason:'',
+ const t=splitTitle(p.title),base={key:p.id,planId:p.id,runId:run?run.id:null,code:t.code,name:t.name,title:p.title,revision:p.revision,at:p.sentAt||0,reason:'',size:run?run.size||null:rd?rd.size||null:p.run?p.run.size||null:null,
   model:run?run.model:rd?rd.model:p.run?p.run.model:null,capTokens:run?run.capTokens:rd?rd.capTokens:p.run?allowanceOf(p.run.model,p.run.size):null,tokens:run?run.tokens||0:0};
  let status;
  if(p.status==='waiting')status='waiting';
@@ -101,11 +101,12 @@ export function buildWork({plans=[],runs=[],ready=[],waiting=[],found=[],enabled
  // a run whose plan is gone still needs its buttons
  for(const r of runs)if(!ids.has(r.planId)&&r.status!=='closed'){const p={id:r.planId,title:r.planTitle,status:'approved',revision:r.revision,sentAt:r.createdAt||0};ids.add(r.planId);
   const s=stepOf(p,r,null,enabled);s.key=r.id;proj(splitTitle(p.title).project||OTHER).steps.push(s)}
- for(const f of found){const t=splitTitle(f.title),i={id:'found:'+f.hash,kind:'found',hash:f.hash,title:`Plan file never sent: ${cut(f.title,80)}`,detail:f.path,at:f.modifiedAt||0,severity:'info',actions:[],needsYou:true};
+ for(const f of found){const t=splitTitle(f.title),i={id:'found:'+f.hash,kind:'found',hash:f.hash,title:`Plan file never sent: ${cut(f.title,80)}`,detail:f.path,at:f.modifiedAt||0,severity:'info',actions:[],needsYou:false}; // 2.11: a quiet note, not a step: it does not count as something that needs you
   i.next=nextStep(i);proj(t.project&&map.has(t.project)?t.project:OTHER).items.push(i)}
  // the other things that wait for you: asset attention and token warnings (plans, runs and found files are already above)
  for(const w of waiting){if(w.group==='plan'||w.group==='run'||w.id==='found')continue;
-  const i={id:w.id,kind:KIND[w.group]||(String(w.id).startsWith('tokens:')?'tokens':'note'),title:w.title,detail:w.detail,at:w.at||0,severity:w.severity||'info',actions:w.actions||[],needsYou:true};i.next=nextStep(i);proj(i.kind==='asset'||i.kind==='filecheck'?'Assets':OTHER).items.push(i)}
+  const i={id:w.id,kind:KIND[w.group]||(String(w.id).startsWith('tokens:')?'tokens':'note'),title:w.title,detail:w.detail,at:w.at||0,severity:w.severity||'info',actions:w.actions||[],needsYou:false}; // 2.11: file problems and token notes are quiet notes, not counted as needing you
+i.next=nextStep(i);proj(i.kind==='asset'||i.kind==='filecheck'?'Assets':OTHER).items.push(i)}
  const projects=[...map.values()].map(p=>{
   p.steps.sort(byCode);p.items.sort((a,b)=>a.at-b.at);
   const you=needsYou(p),done=p.steps.filter(s=>s.status==='done').length,total=p.steps.length,working=p.steps.some(s=>s.status==='working'),allDone=total>0&&done===total&&!p.items.length;

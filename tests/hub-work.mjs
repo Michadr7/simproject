@@ -68,9 +68,9 @@ assert.equal(P('Assets').items[0].kind,'asset');assert.equal(P(OTHER).items.find
 assert.ok(!JSON.stringify(tree).includes('SECRET'),'names and counts only: a question stays on the step page');
 
 // ── the count
-assert.equal(needsYou(P('Scene editor')),3,'E2 finished, E4 waiting, one found file');assert.equal(P('Scene editor').needsYou,3);
-assert.equal(tree.needsYou,3+1+1+3);assert.equal(needsYou(tree),tree.needsYou);assert.equal(needsYou(null),0);assert.equal(needsYou(buildWork()),0);
-assert.equal(P('Scene editor').summary,'3 need you');assert.equal(P('Hub v2').summary,'1 needs you');
+assert.equal(needsYou(P('Scene editor')),2,'E2 finished, E4 waiting; a found plan file is a quiet note and does not count');assert.equal(P('Scene editor').needsYou,2);assert.equal(needsYou(P('Assets')),0,'file problems do not count as needing you');assert.equal(P('Assets').items.length,1,'but they are still listed');
+assert.equal(tree.needsYou,2+1+1,'steps only: no file problems, token notes or found files');assert.equal(needsYou(tree),tree.needsYou);assert.equal(needsYou(null),0);assert.equal(needsYou(buildWork()),0);
+assert.equal(P('Scene editor').summary,'2 need you');assert.equal(P('Hub v2').summary,'1 needs you');
 const allDone=buildWork({plans:[plan('p','Old P1: done thing','approved')],runs:[run('p','closed')]}).projects[0];assert.equal(allDone.allDone,true);assert.equal(allDone.glyph,'ok');assert.equal(allDone.summary,'done');
 assert.equal(tree.projects.at(-1).needsYou>0||tree.projects.at(-1).name===OTHER,true);assert.ok(tree.projects[0].needsYou>0,'what needs you comes first');
 
@@ -121,9 +121,9 @@ const css=fs.readFileSync(path.join(REPO,'hub','web','hub.css'),'utf8');
 assert.match(css,/\.wrap\{max-width:1280px/,'content is centred, at most 1280 px wide');assert.match(css,/@container page \(min-width:900px\)/,'two panes from 900 px of page width');assert.match(css,/@media\(min-width:1100px\)\{\.menutab\{visibility:hidden\}\}/,'the menu does not fold on a wide window');assert.ok(!/\.view\{max-width:560px\}/.test(css),'the old narrow column is gone');
 assert.match(css,/--panelw:236px/);
 for(const f of ['work.js','app.js']){const code=fs.readFileSync(path.join(REPO,'hub','web',f),'utf8');assert.ok(!/innerHTML|outerHTML|insertAdjacentHTML|document\.write|eval\(/.test(code),f+' sets text only');assert.ok(!/https?:\/\//.test(code),f+' loads nothing from outside')}
-{const {statusLine,groupOf}=await import('../hub/web/work.js');assert.equal(groupOf({denied:true,needsYou:false,status:'stopped'}),'done','a plan you closed is done');assert.equal(statusLine({projects:[{items:[{}],steps:[{needsYou:true,status:'waiting'},{status:'working'},{status:'blocked'},{status:'done'},{status:'done'}]}]}),'2 need you · 1 working · 1 waiting · 2 done','the status line counts every group');assert.equal(groupOf({status:'blocked'}),'wait');assert.equal(groupOf({needsYou:true,status:'approved'}),'you')}
+{const w=await import('../hub/web/work.js');assert.ok(!('statusLine' in w)&&!('groupOf' in w),'the status line and the groups are gone (2.11)');assert.equal(typeof w.mountWork,'function')}
 {const dep=fs.readFileSync(path.join(REPO,'hub','web','deploy.js'),'utf8'),as=fs.readFileSync(path.join(REPO,'hub','web','assets-area.js'),'utf8');assert.ok(!/:null\)/.test(dep),'deploy.js: node.append(null) would print the word null on the page');assert.ok(!/links\.append\([^\n]*:null\)/.test(as),'assets-area.js: the links line must not append null (it printed the word null)')}
-{const wj=fs.readFileSync(path.join(REPO,'hub','web','work.js'),'utf8'),cs=fs.readFileSync(path.join(REPO,'hub','web','cache-strip.js'),'utf8'),rj=fs.readFileSync(path.join(REPO,'hub','web','runs.js'),'utf8');assert.ok(wj.includes("by('you')")&&wj.includes("by('done')"),'inside a project the rows needing you come first and the done ones are folded');assert.ok(cs.includes('placeholder')&&rj.includes('placeholder:false'),'a run card shows no cache words it has not measured');assert.ok(rj.includes('What it did'),'an ended run keeps its feed folded')}
+{const wj=fs.readFileSync(path.join(REPO,'hub','web','work.js'),'utf8'),cs=fs.readFileSync(path.join(REPO,'hub','web','cache-strip.js'),'utf8'),rj=fs.readFileSync(path.join(REPO,'hub','web','runs.js'),'utf8');assert.ok(wj.includes('queueOf(')&&wj.includes('Everything else')&&wj.includes('Up next')&&wj.includes('Running'),'the list is one queue: Running, Up next, Everything else folded (rules in lanes.js)');assert.ok(cs.includes('placeholder')&&rj.includes('placeholder:false'),'a run card shows no cache words it has not measured');assert.ok(rj.includes('What it did'),'an ended run keeps its feed folded')}
 const workJs=fs.readFileSync(path.join(REPO,'hub','web','work.js'),'utf8');
 assert.equal((workJs.match(/method:'POST'/g)||[]).length,1,'the Work page has one write of its own (Add or Hide a found plan file); every run and plan button goes through runs.js and plans.js');
 assert.ok(workJs.includes("mountRuns(")&&workJs.includes("mountPlans(")&&workJs.includes("mountHome("),'the old buttons are reused, not rebuilt');
@@ -147,6 +147,6 @@ assert.ok(!JSON.stringify(w).includes('No run block.'),'the plan text never leav
 assert.deepEqual(resolveRoute(root,'/api/work','127.0.0.1:1',1),{api:'work'});
 const srv=createHubServer({root}),port=await srv.listen();
 const got=await new Promise((ok,fail)=>http.get(`http://127.0.0.1:${port}/api/work`,res=>{let t='';res.on('data',c=>t+=c);res.on('end',()=>ok({status:res.statusCode,body:JSON.parse(t)}))}).on('error',fail));
-assert.equal(got.status,200);assert.equal(got.body.needsYou,4,'three steps and the token note');assert.equal(got.body.projects.length,4);
+assert.equal(got.status,200);assert.equal(got.body.needsYou,3,'three steps; the token note does not count');assert.equal(got.body.projects.length,4);
 await srv.close();fs.rmSync(root,{recursive:true,force:true});
 console.log('hub-work: grouping, the eight statuses, next-step sentences, the count, items, old hashes, plain feed words, the layout rule and GET /api/work passed.');

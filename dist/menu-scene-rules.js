@@ -10,6 +10,14 @@ const TAU=Math.PI*2,smooth=x=>{const c=Math.max(0,Math.min(1,x));return c*c*(3-2
 // lean.side: which side of the hull the character's back rests on (+1 = the +x side); lean.along: metres along the hull from its centre;
 // lean.gap: metres between the hull and the character's centre; lean.angle: how far the spine tips back (radians).
 export const MENU_VEHICLE={prop:'offroad',yaw:0,lean:{side:1,along:.7,gap:.24,angle:.13}};
+// Which vehicle the menu shows: the newest one you own (highest "v<number>" uid) that has a stance below, with its paint; with none, MENU_VEHICLE. Unknown models and bad uids are skipped.
+// along is about a quarter of the hull length from its centre, so the character stands by the door end of the side.
+export const MENU_VEHICLES={offroad:MENU_VEHICLE,worktruck:{prop:'worktruck',yaw:0,lean:{side:1,along:.75,gap:.24,angle:.13}},flatbed:{prop:'flatbed',yaw:0,lean:{side:1,along:1.1,gap:.24,angle:.13}}};
+export function menuVehicleFor(owned){
+ let best=null,top=-1;
+ for(const v of Array.isArray(owned)?owned:[]){const m=v&&typeof v.uid==='string'?/^v(\d{1,6})$/.exec(v.uid):null;if(!m||!Object.hasOwn(MENU_VEHICLES,v.model))continue;if(+m[1]>top){top=+m[1];best=v}}
+ return best?{...MENU_VEHICLES[best.model],colour:typeof best.colour==='string'?best.colour:undefined}:MENU_VEHICLE;
+}
 // Where the character stands for a vehicle `width` metres wide: {x, z, yaw} with the back to the hull.
 export function leanSpot(vehicle,width){
  const {side,along,gap}=vehicle.lean,lx=side*(width/2+gap),lz=along,c=Math.cos(vehicle.yaw),s=Math.sin(vehicle.yaw);
@@ -46,7 +54,68 @@ export function hazeAt(t,i){
  return {x:wrap(r1*8+t*(.12+.1*r2),8),y:.3+2.4*(.5+.5*Math.sin(t*.21+i*1.7))*r2,z:wrap(r2*8+t*.05*(r1-.5),8)};
 }
 // Everything the scene needs for one frame.
-export const menuPose=t=>({breath:breath(t),shift:weightShift(t),head:headTurn(t),plans:planRustle(t),camera:cameraDrift(t),light:lightAt(t)});
+export const menuPose=t=>({breath:breath(t),shift:weightShift(t),head:headTurn(t),plans:planRustle(t),camera:cameraDrift(t),light:lightAt(t),gust:gust(t)});
+
+// ── The plans sheet: the day's cut plan, drawn in the colours of the game's map (terrain.js MINIMAP_COLOUR; a test keeps them equal) ──────────
+// Units are millimetres on the 460 x 320 sheet. plansOps() turns the data into a flat list of drawing steps; menu-scene.js only replays them on a canvas.
+export const PLANS_INK={paper:'#efe7cf',forest:'#82a653',cut:'#d4b45a',road:'#45494b',track:'#9c8462',water:'#3f7ea3',landing:'#8f9396',ink:'#2f3a33',today:'#b8442f'};
+export const MENU_PLANS={width:460,height:320,margin:14,title:'CUT PLAN  RIDGELINE TIMBER',
+ creek:[[14,70],[70,96],[104,150],[92,214],[128,270],[120,306]],
+ road:[[300,306],[292,250],[262,206]], // the haul road: from the south edge up to the landing
+ landing:{x:262,y:196,r:20},
+ // state: 'cut' (felled, filled), 'today' (red outline), 'planned' (dashed)
+ blocks:[{id:'A1',state:'cut',points:[[150,62],[228,52],[244,114],[170,130]]},{id:'A2',state:'today',points:[[262,52],[348,60],[340,136],[268,126]]},
+  {id:'B1',state:'planned',points:[[330,170],[420,160],[432,240],[346,250]]},{id:'B2',state:'planned',points:[[150,180],[222,170],[226,250],[160,262]]}]};
+export const blockCentre=points=>[points.reduce((s,p)=>s+p[0],0)/points.length,points.reduce((s,p)=>s+p[1],0)/points.length];
+// Drawing steps, back to front: {op:'fill',colour,points} | {op:'line',colour,width,points,dash} | {op:'circle',colour,x,y,r} | {op:'text',colour,size,x,y,text,align}.
+export function plansOps(plan=MENU_PLANS){
+ const {width:w,height:h,margin:m,landing:L}=plan,K=PLANS_INK,ops=[],box=(a,b,c,d)=>[[a,b],[c,b],[c,d],[a,d]];
+ ops.push({op:'fill',colour:K.paper,points:box(0,0,w,h)},{op:'fill',colour:K.forest,points:box(m,m,w-m,h-m)},{op:'line',colour:K.water,width:7,points:plan.creek});
+ for(const b of plan.blocks)if(b.state==='cut'){ops.push({op:'fill',colour:K.cut,points:b.points});
+  const [p0,p1,p2,p3]=b.points;for(let i=0;i<8;i++){const u=.2+.6*((i*5)%8)/7,v=.2+.6*((i*3)%8)/7;ops.push({op:'circle',colour:K.track,r:2,x:(p0[0]*(1-u)+p1[0]*u)*(1-v)+(p3[0]*(1-u)+p2[0]*u)*v,y:(p0[1]*(1-u)+p1[1]*u)*(1-v)+(p3[1]*(1-u)+p2[1]*u)*v})}} // stumps
+ for(const b of plan.blocks)ops.push({op:'line',colour:K.track,width:4,points:[[L.x,L.y],blockCentre(b.points)]}); // skid tracks: landing to each block
+ ops.push({op:'line',colour:K.road,width:8,points:plan.road});
+ for(const b of plan.blocks){const c=blockCentre(b.points),today=b.state==='today';
+  ops.push({op:'line',colour:today?K.today:K.ink,width:today?4:2,points:[...b.points,b.points[0]],dash:b.state==='planned'?[8,6]:null},{op:'text',colour:K.ink,size:16,x:c[0],y:c[1]-8,text:b.id,align:'center'})}
+ ops.push({op:'circle',colour:K.landing,x:L.x,y:L.y,r:L.r});
+ for(let i=-1;i<=1;i++)ops.push({op:'line',colour:K.ink,width:2.5,points:[[L.x-11,L.y+i*6],[L.x+11,L.y+i*6]]}); // the log deck
+ ops.push({op:'text',colour:K.ink,size:10,x:L.x,y:L.y-L.r-4,text:'LANDING',align:'center'},{op:'text',colour:K.ink,size:13,x:m+8,y:m+18,text:plan.title,align:'left'});
+ ops.push({op:'line',colour:K.ink,width:2,points:[[w-36,62],[w-36,34]]},{op:'fill',colour:K.ink,points:[[w-42,40],[w-36,26],[w-30,40]]},{op:'text',colour:K.ink,size:11,x:w-36,y:76,text:'N',align:'center'});
+ ops.push({op:'line',colour:K.ink,width:2,points:[[160,292],[240,292]]},{op:'text',colour:K.ink,size:10,x:200,y:288,text:'100 m',align:'center'},{op:'line',colour:K.ink,width:2,points:[...box(m,m,w-m,h-m),[m,m]]});
+ return ops;
+}
+
+// ── Ground cover: grass tufts and ferns around the clearing, bent by the wind in the vertex shader ────────────────────────────────────
+// How many, and where: a ring from just inside the dirt's edge out into the trees, thickest near the clearing. Low quality draws 40%.
+export const MENU_COVER={grass:1500,ferns:70,inner:6.3,outer:24,dirt:7.5};
+const rnd=(i,k)=>{const v=Math.sin(i*12.9898+k*78.233)*43758.5453;return v-Math.floor(v)};
+// keepOut: circles {x,z,r} nothing may stand in (the camera). amount: 0..1 of the counts. Deterministic: [{kind,x,z,yaw,scale}].
+export function groundCover({grass,ferns,inner,outer,dirt}=MENU_COVER,keepOut=[],amount=1){
+ const out=[],free=(x,z)=>keepOut.every(k=>Math.hypot(x-k.x,z-k.z)>=k.r);
+ const add=(kind,want,k,r0,r1,pow)=>{for(let i=0,n=0;n<want&&i<want*3;i++){const a=rnd(i,k)*TAU,r=r0+(r1-r0)*rnd(i,k+1)**pow,x=Math.cos(a)*r,z=Math.sin(a)*r;if(!free(x,z))continue;n++;out.push({kind,x,z,yaw:rnd(i,k+2)*TAU,scale:(r<dirt?.6:.8)+.5*rnd(i,k+3)})}};
+ add('grass',Math.round(grass*amount),1,inner,outer,1.8);add('fern',Math.round(ferns*amount),5,dirt+.4,outer*.7,1.2);
+ return out;
+}
+// One tuft or fern as plain triangles: position [x,y,z,...] in metres, bend [0..1 per vertex] (0 = the root, which the wind never moves).
+export function coverShape(kind){
+ const position=[],bend=[],tri=(...v)=>{for(const [x,y,z,b] of v){position.push(x,y,z);bend.push(b)}};
+ for(let f=0;f<7;f++){
+  if(kind==='fern'){const a=f*TAU/7+.3*Math.sin(f*2.4),c=Math.cos(a),s=Math.sin(a),len=.55*(.8+.2*Math.sin(f*1.7)),W=[.03,.16,.12,0],
+    at=(k,side)=>{const u=k/3,d=len*u,half=W[k]/2*side;return [c*d-s*half,.4*(2.2*u-1.6*u*u),s*d+c*half,u]}; // a frond: out from the centre, up, and drooping at the tip
+   for(let k=0;k<2;k++)tri(at(k,-1),at(k,1),at(k+1,1),at(k,-1),at(k+1,1),at(k+1,-1));tri(at(2,-1),at(2,1),at(3,1))}
+  else{const a=f*TAU/7+.5*Math.sin(f*3.1),c=Math.cos(a),s=Math.sin(a),r=.03+.05*((f*3)%7)/7,h=.26+.14*((f*5)%7)/7,lean=.1+.08*((f*2)%7)/7,
+    at=(u,side)=>{const d=r+lean*u*u,half=.0225*side*(1-.45*u);return [c*d-s*half,h*u,s*d+c*half,u]}; // a blade: leaning out, narrowing to a point
+   tri(at(0,-1),at(0,1),at(.55,1),at(0,-1),at(.55,1),at(.55,-1),at(.55,-1),at(.55,1),at(1,0))}
+ }
+ return {position,bend};
+}
+// The wind on the cover: how far (metres, along COVER_WIND x/z) a vertex with `bend` at ground spot x,z is pushed at time t. Waves run downwind.
+// menu-scene.js writes the same formula into the vertex shader from these numbers (uTime = t, uGust = gust(t)).
+export const COVER_WIND={x:.97,z:.243,lean:.03,sway:.02,gust:.04,speed:1.7,kx:.45,kz:.3};
+export const coverBend=(t,x,z,bend)=>{const W=COVER_WIND,g=gust(t);return bend*bend*(W.lean*g+(W.sway+W.gust*g)*Math.sin(t*W.speed-x*W.kx-z*W.kz))};
+
+// After saving in the character creator: Edit character on the main menu goes back to the menu (the scene shows the new look); a first character starts the game.
+export const creatorReturn=({active,fromMenu})=>!active&&fromMenu?'menu':'game';
 
 // ── When to draw ─────────────────────────────────────────────────────────────────────────────────────────────────────
 // 'live' = draw the scene; 'paused' = keep what is on screen (menu covered, tab in the background); 'static' = the picture (assets/menu-background.jpg).

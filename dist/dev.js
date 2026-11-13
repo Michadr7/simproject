@@ -2,10 +2,17 @@
 // Loaded only when DEV_MODE (dev-flag.js) is true. It touches the game only through the `api` object game.js passes in, and adds its own markup and CSS at runtime,
 // so deleting this file (and the block at the end of game.js) leaves no trace in index.html or style.css.
 // Changes go to your normal save: this is not a separate profile.
+import {NIGHT_FLOOR,NIGHT_FLOOR_MIN,NIGHT_FLOOR_MAX,EXPOSURE_MIN,EXPOSURE_MAX} from './daynight.js';
 export const QUICK_TIMES=[['Dawn',360],['Noon',720],['Dusk',1080],['Night',1380]];
 export const MONEY_STEPS=[10000,100000,1000000]; // cents
 export const UNLOCK_KEY='citylife.devUnlocked'; // set once D is pressed four times on the main menu: the Dev Mode button then shows in this browser
 export const clockLabel=minutes=>{const total=Math.floor(minutes)%1440,hour=Math.floor(total/60);return `${hour%12||12}:${String(total%60).padStart(2,'0')} ${hour<12?'AM':'PM'}`};
+export const SKY_KEY='citylife.dev.sky.v1',COST_WINDOW_MS=5000; // the night floor and exposure sliders are remembered in this browser only; the cost line looks at the last 5 seconds
+// The cost line: the renderer's counters for the last world draw (on High the draw calls include the shadow pass) and whole-frame times in milliseconds.
+export function frameCostText(cost,times=[]){
+ const sorted=[...times].sort((a,b)=>a-b),pick=q=>sorted.length?sorted[Math.min(sorted.length-1,Math.floor(sorted.length*q))].toFixed(1)+' ms':'–';
+ return `${cost.calls} draw calls · ${cost.triangles>=1000?Math.round(cost.triangles/1000)+'k':cost.triangles} triangles · ${cost.programs} shaders · frame ${pick(.5)} median, ${pick(.95)} 95th (${sorted.length} frames)`;
+}
 const dollars=cents=>'$'+(cents/100).toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2});
 
 const STYLE=`#menuDevRow[hidden]{display:none}
@@ -42,7 +49,8 @@ export function installDevMode(api){
  const message=make('p',{id:'devMessage',role:'status'}),readout=make('p',{id:'devReadout'});
  const say=(text,kind='')=>{message.textContent=text;message.dataset.kind=kind};
  let syncInterior=null;
- const refresh=()=>{syncInterior?.();const p=api.position(),s=api.snapshot();readout.textContent=`${p.where}  ·  x ${p.x.toFixed(1)}  z ${p.z.toFixed(1)}  ·  ${clockLabel(s.minutes)}  ·  ${dollars(s.cash)}`};
+ let showCostLine=null;
+ const refresh=()=>{syncInterior?.();showCostLine?.();const p=api.position(),s=api.snapshot();readout.textContent=`${p.where}  ·  x ${p.x.toFixed(1)}  z ${p.z.toFixed(1)}  ·  ${clockLabel(s.minutes)}  ·  ${dollars(s.cash)}`};
 
  // Teleport
  const place=make('select',{id:'devPlace'}),x=make('input',{id:'devX',type:'number',step:'any',placeholder:'x'}),z=make('input',{id:'devZ',type:'number',step:'any',placeholder:'z'});
@@ -54,7 +62,7 @@ export function installDevMode(api){
  // Time
  const slider=make('input',{id:'devTime',type:'range',min:'0',max:'1439',step:'15',value:'540'}),timeLabel=make('b',{id:'devTimeLabel',textContent:clockLabel(540)});
  slider.oninput=()=>{timeLabel.textContent=clockLabel(Number(slider.value))};
- const setTime=minutes=>{const m=api.setTime(minutes);slider.value=String(m);timeLabel.textContent=clockLabel(m);say(`It is ${clockLabel(m)}.`);refresh()};
+ const setTime=minutes=>{const m=api.setTime(minutes);followClock();/* setting the real clock also drops the "Look at" override, so the picture shows the new time */slider.value=String(m);timeLabel.textContent=clockLabel(m);say(`It is ${clockLabel(m)}.`);refresh()};
  const quick=QUICK_TIMES.map(([name,m])=>make('button',{textContent:name,dataset:{minutes:m},onclick:()=>setTime(m)}));
 
  // Money
@@ -74,6 +82,18 @@ export function installDevMode(api){
  // Rendering: switches for finding what causes a visual glitch on your GPU (shadows, the dissolve of trees between the camera and you)
  const renderSwitch=(id,label,apply)=>{let on=true;const b=make('button',{id,textContent:label+': on',onclick:()=>{on=!on;apply(on);b.textContent=label+(on?': on':': off');say(label+(on?' on.':' off.'))}});return b};
  const shadows=renderSwitch('devShadows','Shadows',on=>api.setShadows(on)),fade=renderSwitch('devFade','Tree dissolve',on=>api.setTreeFade(on));
+ // Sky and light (api.sky, sky.js): tune the look by eye. "Look at" shows another time of day without moving the clock or the save; night floor and exposure are kept in this
+ // browser (SKY_KEY). The cost line reads the renderer's own counters and times whole frames over the last 5 seconds (it only runs while the panel is open).
+ const skyApi=api.sky,range=(id,min,max,step,value)=>make('input',{id,type:'range',min:String(min),max:String(max),step:String(step),value:String(value)});
+ const lookTime=range('devSkyTime',0,1439,5,720),lookLabel=make('b',{id:'devSkyTimeLabel',textContent:'clock'}),floor=range('devNightFloor',NIGHT_FLOOR_MIN,NIGHT_FLOOR_MAX,.01,NIGHT_FLOOR),floorLabel=make('b',{id:'devNightFloorLabel'}),exposure=range('devExposure',EXPOSURE_MIN,EXPOSURE_MAX,.05,1),exposureLabel=make('b',{id:'devExposureLabel'}),cost=make('p',{id:'devCost',className:'dev-note'});
+ const keepSky=()=>{try{const t=skyApi.tuning();localStorage.setItem(SKY_KEY,JSON.stringify({nightFloor:t.nightFloor,exposureScale:t.exposureScale}))}catch{}};
+ const showSky=()=>{if(!skyApi)return;const t=skyApi.tuning();lookLabel.textContent=t.minutes===null?'clock':clockLabel(t.minutes);if(t.minutes!==null)lookTime.value=String(t.minutes);floor.value=String(t.nightFloor);floorLabel.textContent=t.nightFloor.toFixed(2);exposure.value=String(t.exposureScale);exposureLabel.textContent='× '+t.exposureScale.toFixed(2)};
+ const followClock=()=>{skyApi?.tune({minutes:null});showSky()};
+ lookTime.oninput=()=>{skyApi.tune({minutes:Number(lookTime.value)});showSky()};floor.oninput=()=>{skyApi.tune({nightFloor:Number(floor.value)});keepSky();showSky()};exposure.oninput=()=>{skyApi.tune({exposureScale:Number(exposure.value)});keepSky();showSky()};
+ const skyFollow=make('button',{id:'devSkyFollow',textContent:'Follow clock',onclick:()=>{followClock();say('The picture follows the game clock again.')}}),skyReset=make('button',{id:'devSkyReset',textContent:'Reset look',onclick:()=>{skyApi.tune({minutes:null,nightFloor:null,exposureScale:null});try{localStorage.removeItem(SKY_KEY)}catch{}showSky();say(`Night floor ${NIGHT_FLOOR} and exposure × 1 are back.`)}});
+ if(skyApi){try{const saved=JSON.parse(localStorage.getItem(SKY_KEY)||'null');if(saved)skyApi.tune({nightFloor:Number(saved.nightFloor),exposureScale:Number(saved.exposureScale)})}catch{}showSky()}
+ let frameTimes=[],lastFrame=0;const probe=now=>{if(lastFrame)frameTimes.push([now,now-lastFrame]);lastFrame=now};
+ const showCost=()=>{if(!skyApi)return;frameTimes=frameTimes.filter(f=>f[0]>=lastFrame-COST_WINDOW_MS);cost.textContent=frameCostText(skyApi.cost(),frameTimes.map(f=>f[1]))};showCostLine=showCost;
 
  // Interior editor (api.interior): pick any house (you do not have to rent it) and go inside, choose a piece, move it by compass direction (N is the kitchen wall, S is the door), turn it, copy or
  // delete it, add new pieces, and Save to code (needs `npm run dev`). A yellow box shows the chosen piece; what is wrong with the layout is listed as you go.
@@ -124,6 +144,8 @@ export function installDevMode(api){
   make('h3',{},'Stat drain'),make('div',{className:'dev-row'},drain),make('h3',{},'Spawn items'),make('div',{className:'dev-row'},item,qty,spawn),
   make('h3',{},'Careers'),make('div',{className:'dev-row'},csel,cRun('hire'),cRun('promote'),cRun('quit')),make('p',{className:'dev-note'},'Hire skips the interview at the office (which is not built yet). Promote needs the rank\'s level, shifts and reputation.'),make('h3',{},'Drivable vehicles'),make('div',{className:'dev-row'},vsel,vSpawn,vRemove),make('p',{className:'dev-note'},'Spawn puts the vehicle a few metres in front of you (or the nearest free spot). Remove takes it out of the world; neither works while you are in it.'),
   make('h3',{},'Rendering'),make('div',{className:'dev-row'},shadows,fade),
+  make('h3',{},'Sky and light'),make('div',{className:'dev-row'},'Look at',lookTime,lookLabel,skyFollow),make('div',{className:'dev-row'},'Night floor',floor,floorLabel),make('div',{className:'dev-row'},'Exposure',exposure,exposureLabel,skyReset),cost,
+  make('p',{className:'dev-note'},'"Look at" changes the picture only: the clock and your save stay as they are. Night floor is how much light an unlit night keeps (0.04 near black, 0.30 light). Both sliders are remembered in this browser, not in the save.'),
   make('h3',{},'Furniture'),interiorToggle,make('h3',{},'Scene'),make('div',{className:'dev-row'},editorButton),make('p',{className:'dev-note'},'Open Editor pauses the game and lets you fly over the map to pick, move, turn and remove props. Close puts you back.'),
   make('h3',{},'Safety'),make('div',{className:'dev-row'},unstick,home),
   message,
@@ -132,8 +154,8 @@ export function installDevMode(api){
  for(const window of [panel,interiorBody])for(const type of ['keydown','keyup'])window.addEventListener(type,e=>{if(e.code==='F2')return;e.stopPropagation();if(type==='keydown'&&e.code==='Escape')close()});
  document.body.append(panel,interiorBody);
 
- function open(){panel.hidden=false;api.releaseCursor();refresh();clearInterval(timer);timer=setInterval(refresh,250)} // the readout only runs while the panel is open, four times a second
- function close(){panel.hidden=true;interiorBody.hidden=true;interiorToggle.textContent='Interior editor ▸';clearInterval(timer);timer=null}
+ function open(){panel.hidden=false;api.releaseCursor();lastFrame=0;frameTimes=[];skyApi?.probe(probe);refresh();clearInterval(timer);timer=setInterval(refresh,250)} // the readout and the frame timer only run while the panel is open, four times a second
+ function close(){panel.hidden=true;interiorBody.hidden=true;interiorToggle.textContent='Interior editor ▸';clearInterval(timer);timer=null;skyApi?.probe(null)}
  function toggle(){if(panel.hidden)open();else close()}
 
  // ── The way in: a Dev Mode button on the main menu (hidden until unlocked), then F2 ──────────────────────────────────────

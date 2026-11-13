@@ -479,3 +479,60 @@ html[data-bot=open] .bot-face{display:none}
 .chat-page .chat-composer textarea{margin-bottom:6px;resize:none;height:76px}
 /* ---- Hub 2.8.1: the measured file checks ---- */
 .fcheck{margin:4px 0 2px;display:grid;gap:2px}.small.ok{color:var(--ok)}
+/* 2.10 Work lanes: Do next strip, area chips, compact one-line cards */
+.donext{display:flex;gap:10px;flex-wrap:wrap;align-items:stretch;margin:0 0 14px}.donext[hidden]{display:none}
+.dn-h{flex:0 0 100%;font:600 11px/1.2 var(--mono);letter-spacing:.14em;text-transform:uppercase;color:var(--dim)}
+.donext .big{flex:1 1 220px;min-width:0;display:block;text-decoration:none;background:var(--acc);color:#fff;border:1px solid var(--acc);border-radius:12px;padding:12px 16px}
+.donext .big.alt{background:rgba(15,17,21,.74);color:var(--acc-ink)}
+.donext .big b{display:block;font-size:15px;overflow-wrap:anywhere}.donext .big small{display:block;font-size:12px;opacity:.85;margin-top:2px;overflow-wrap:anywhere}
+.donext .big:hover{filter:brightness(1.12)}
+.chips{display:flex;gap:6px;flex-wrap:wrap;margin:6px 0 4px}
+.chip{--c:var(--faint);border:1px solid var(--line);background:none;color:var(--dim);border-radius:99px;padding:3px 10px;font-size:12px;cursor:pointer}
+.chip[aria-pressed=true]{background:rgba(var(--acc-glow),.22);color:var(--ink);border-color:var(--dim)}
+.chip i{display:inline-block;width:8px;height:8px;border-radius:50%;margin-right:6px;background:var(--c)}
+[data-area=ui]{--c:#7aa7ff}[data-area=assets]{--c:#5fbf85}[data-area=scene]{--c:#e0b060}[data-area=people]{--c:#e58fc0}[data-area=characters]{--c:#b79cf5}[data-area=warehouse]{--c:#e8905f}[data-area=multiplayer]{--c:#5fc7d4}[data-area=game]{--c:#c4d46a}[data-area=hub]{--c:#9aa0aa}[data-area=other]{--c:#6e6f6c}
+.cards{display:grid;gap:3px}
+.card{--c:var(--faint);display:flex;align-items:center;gap:8px;padding:6px 8px;border-radius:8px;min-width:0;color:var(--ink);text-decoration:none;border:1px solid transparent}
+.card:hover{background:rgba(255,255,255,.05)}.card[aria-current=true]{background:rgba(var(--acc-glow),.2);border-color:var(--acc)}
+.card .tag{flex:none;font-size:11px;font-weight:600;border-radius:5px;padding:1px 7px;color:#0b0c0e;background:var(--c)}
+.card .ttl{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:14px}
+.card .ttl.new::before{content:"";display:inline-block;width:7px;height:7px;border-radius:50%;background:var(--acc);margin-right:6px}
+.card .age{flex:none;color:var(--faint);font-size:12px}
+.card .cbtn{flex:none;border:1px solid var(--line);border-radius:6px;padding:2px 10px;font-size:12px;color:var(--ink);background:var(--panel2)}.card .cbtn.pri{background:var(--acc);border-color:var(--acc);color:#fff}
+.filecard>summary{text-transform:none;letter-spacing:0;font:600 13px var(--sans);color:var(--watch)}.filebar{margin:8px 0}
+.hubnotes{margin-top:22px;opacity:.8}
+@media(max-width:560px){.card .tag{display:none}}
+
+/* ---- Hub 2.11: Work as one path. Slim queue left, the current step as the hero right, one quiet line at the bottom. ---- */
+.wf-queue .qh{font:600 11px/1.2 var(--mono);letter-spacing:.14em;text-transform:uppercase;color:var(--dim);margin:16px 0 6px;display:flex;gap:8px;align-items:baseline}.wf-queue .qh:first-child{margin-top:2px}
+.qlist{display:grid;gap:2px}
+.qi{display:flex;gap:8px;align-items:center;padding:8px 10px;border-radius:8px;color:var(--ink);text-decoration:none;min-width:0}
+.qi:hover{background:rgba(255,255,255,.05)}
+.qi .n{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:14px}.qi small{color:var(--faint);flex:none;font-size:12px}
+.qi.on{background:rgba(var(--acc-glow),.2);box-shadow:inset 3px 0 0 var(--acc)}
+.qi i{width:8px;height:8px;border-radius:50%;background:var(--acc);flex:none}.qi i.run{background:var(--ok)}
+.qi.blocked{color:var(--faint)}.qi.blocked small{max-width:45%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.qrest{margin:16px 0 4px;color:var(--dim);font-size:13px}.qrest>summary{cursor:pointer;padding:6px 10px;font-size:13px}.qrest>summary:hover{color:var(--ink)}
+.wf-hero{display:flex;flex-direction:column;gap:12px;border:1px solid var(--line);background:rgba(20,22,26,.9);border-radius:14px;padding:20px 22px}
+.wf-hero>*{order:9}.wf-mount{display:contents}
+.wf-hero>.crumb{order:1}
+.wf-hero>.plan-name{order:2;font-size:24px;line-height:1.25;text-wrap:balance}
+.wf-hero>.lede{order:3;color:var(--dim);margin:0;max-width:62ch}
+.wf-hero .answer,.wf-hero .plan-list.ready,.wf-hero .rcard{order:4}
+.wf-hero>.wf-then{order:5}.wf-hero>.wf-pick{order:6}.wf-hero>.wf-why{order:4}
+.wf-hero>.wf-then,.wf-hero>.wf-pick{margin:0;color:var(--faint);font-size:13px}.wf-then b{color:var(--dim)}
+.wf-hero .msg.approved{display:none}
+.wf-hero .reader{border-top:1px solid var(--line);padding-top:12px}
+.wf-hero .answer .acts{display:flex;flex-wrap:wrap;gap:10px;align-items:center}
+.wf-hero .answer .btn.pri,.wf-hero .ready .acts>.btn.pri{font:700 18px var(--sans);padding:14px 28px;border-radius:12px}
+.wf-hero .answer .btn.danger{font-size:13px;padding:6px 12px;background:none}
+.wf-hero .ready .plan-row{display:flex;flex-direction:column;align-items:stretch;gap:12px}
+.wf-hero .ready .acts{display:flex;flex-wrap:wrap;gap:10px;align-items:center}.wf-hero .ready .acts>.btn.pri{order:-1;flex:0 0 auto}
+.wf-hero .rcard .btns .btn.pri{font-size:16px;padding:10px 22px}
+.wf-quiet{display:flex;gap:6px 22px;flex-wrap:wrap;align-items:flex-start;border-top:1px solid var(--line);margin-top:12px;padding:10px 0 6px;color:var(--faint);font-size:12.5px}
+.wf-quiet .fold{margin:0}.wf-quiet .fold>summary{font:12.5px var(--sans);letter-spacing:0;text-transform:none;color:var(--faint);padding:2px 0}.wf-quiet .filecard>summary{color:var(--faint)}
+.wf-quiet details[open]{flex:1 1 100%;max-height:40vh;overflow:auto}
+.wf-quiet .hubnotes{opacity:1;margin:0}
+.qarea{display:inline-flex;gap:8px;align-items:center}.qarea select{background:rgba(27,30,35,.95);color:var(--ink);border:1px solid var(--line);border-radius:8px;padding:3px 8px;font:12.5px var(--sans)}
+@container page (min-width:900px){.page.two.wf>.cols{grid-template-columns:minmax(240px,300px) minmax(0,1fr)}.wf>.cols>.wf-hero{align-self:start;max-height:100%}}
+@container page (max-width:899px){.wf-hero{padding:16px}}
