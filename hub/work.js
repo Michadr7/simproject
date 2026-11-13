@@ -46,6 +46,7 @@ export function nextStep(node){
   return node.steps.some(x=>x.status==='working')?'Nothing to press. A run is working.':node.allDone?'Nothing to do. Every step is done.':'Nothing needs you here.'}
  if(node.kind==='found')return 'Press Add to put this file on your list as a plan, or Hide. Neither costs tokens.';
  if(node.kind==='asset')return 'Open it in 3D, or hide it until it changes. Neither costs tokens.';
+ if(node.kind==='filecheck')return 'Open Assets to read what the hub measured in the file. Nothing is wrong with the game; the file needs fixing or replacing first. Reading costs no tokens.';
  if(node.kind==='tokens')return 'Open Tokens to see the reading. A fresh reading is one small Haiku call that you type yourself.';
  if(node.kind)return 'Look at it when you have time. It costs no tokens.';
  const m=modelName(node.model),cap=node.capTokens,used=node.tokens||0,left=Number.isFinite(cap)?Math.max(0,cap-used):null;
@@ -86,7 +87,7 @@ function stepOf(p,run,rd,enabled){
  const s=STATUS[status],step={...base,status,label:base.denied?(p.note?`Closed by you: ${cut(p.note,100)}`:'Closed by you'):status==='stopped'?`Stopped: ${base.reason}`:s.label,meaning:base.denied?'You closed this plan. A new revision of it would put it back on your list.':s.meaning,glyph:base.denied?'ok':s.glyph,needsYou:YOU.includes(status)&&!base.denied};
  step.next=nextStep(step);return step}
 
-const KIND={asset:'asset','tokens-critical':'tokens','tokens-high':'tokens'};
+const KIND={asset:'asset',filecheck:'filecheck','tokens-critical':'tokens','tokens-high':'tokens'};
 export function buildWork({plans=[],runs=[],ready=[],waiting=[],found=[],enabled=true}={}){
  const map=new Map(),proj=name=>{if(!map.has(name))map.set(name,{name,steps:[],items:[]});return map.get(name)};
  const ids=new Set(plans.map(p=>p.id));

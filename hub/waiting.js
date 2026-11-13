@@ -9,8 +9,8 @@
 import {actionsFor,modelName} from './web/run-actions.js';
 export const PROBE_COMMAND='npm run watcher -- --probe';
 export const STALE_MINUTES=120;
-export const RANK={'tokens-critical':0,plan:1,run:1,'tokens-high':2,asset:3,note:4};
-const SEVERITY={'tokens-critical':'crit','tokens-high':'tok',plan:'plan',run:'run',asset:'att',note:'info'};
+export const RANK={'tokens-critical':0,plan:1,run:1,'tokens-high':2,filecheck:3,asset:3,note:4};
+const SEVERITY={'tokens-critical':'crit','tokens-high':'tok',plan:'plan',run:'run',filecheck:'att',asset:'att',note:'info'};
 const cut=(s,n)=>{s=String(s??'');return s.length>n?s.slice(0,n-1)+'…':s};
 const plural=(n,w)=>`${n} ${w}${n===1?'':'s'}`;
 const ASSET_TITLE={unused:n=>`${n} is not used anywhere in the game`,outdated:n=>`${n}: the register row is outdated`,picture:n=>`${n}: the picture could not be drawn`};
@@ -44,8 +44,10 @@ function runItems(runs,ready){
 
 // plans: [{id,title,from,status,revision,sentAt}] (summaries); found: [{path,modifiedAt}]; attention: {generatedAt,items:[{id,name,kind,text,viewable,hash}]} or null;
 // hidden: [hash]; gauges: the /api/gauges answer or null; runs: the run views from hub/runs.js; ready: its ready() list; now: ms.
-export function buildWaiting({plans=[],found=[],attention=null,hidden=[],gauges=null,runs=[],ready=[],now=0}={}){
+export function buildWaiting({plans=[],found=[],attention=null,hidden=[],gauges=null,runs=[],ready=[],fileChecks=[],now=0}={}){
  const items=[];
+ // a model file the hub measured and found a problem in (no skeleton, far too heavy ...): it needs you before anyone has to ask
+ for(const c of fileChecks){const pr=c&&c.check&&c.check.problems;if(!pr||!pr.length)continue;items.push({id:'filecheck:'+c.path,group:'filecheck',title:`${cut(String(c.path).split('/').pop(),70)}: ${pr.length} problem${pr.length===1?'':'s'} found in the file`,detail:'Assets · '+cut(pr[0],150)+(pr.length>1?` (and ${pr.length-1} more)`:''),at:0,actions:[{type:'link',label:'Open Assets',href:'#assets',primary:true}]})}
  items.push(...runItems(runs,ready));
  for(const p of plans)if(p.status==='waiting')items.push({id:'plan:'+p.id,group:'plan',title:`Plan: ${cut(p.title,90)} (revision ${p.revision})`,detail:`From ${cut(p.from,40)}`,at:p.sentAt,actions:[{type:'link',label:'Read and answer',href:'#plans/'+p.id,primary:true}]});
  if(found.length){const names=found.slice(0,3).map(f=>f.path).join(', ');

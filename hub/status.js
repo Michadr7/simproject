@@ -66,6 +66,8 @@ export function assetLines(brief){
  if(!brief)return [];
  const c=brief.counts||{},L=[];
  L.push(`Assets: wanted ${c.wanted||0}, received ${c.received||0}, staged ${c.staged||0}${brief.known?`, converted ${c.converted||0}, in game ${c['in-game']||0}, credited ${c.credited||0}`:' (the shipped counts are not read yet)'}, retired ${c.retired||0}. The owner moves wanted, received and staged by hand; the game's modules decide converted and in game.`);
+ // measured facts of model files (the hub read the file's own header; nothing is guessed): say any problem FIRST, in plain words
+ for(const c of (brief.checks||[]))if(c.check){L.push(`File check, measured by the hub: ${cut(c.path,80)}${c.row?` (row ${cut(c.row,40)})`:''}: ${c.check.error?cut(c.check.error,100):c.check.line}.${c.check.problems&&c.check.problems.length?' PROBLEMS: '+c.check.problems.map(p=>cut(p,170)).join(' | '):' No problems found.'}`)}
  if(brief.newFiles>0)L.push(`New files in assets-src/ that no asset row accounts for: ${brief.newFiles}${brief.newNames&&brief.newNames.length?' ('+brief.newNames.map(n=>cut(n,80)).join(', ')+')':''}. Once the owner says which row a file belongs to: RECORD: asset file <id> "<path>".`);
  const rows=brief.rows||[];
  if(rows.length)L.push('Asset rows (id stage; copy an id exactly for RECORD: asset stage <id> <stage>): '+rows.slice(0,MAX_ASSET_ROWS).map(r=>`${cut(r.id,40)} ${r.stage}`).join(', ')+(rows.length>MAX_ASSET_ROWS?`, +${rows.length-MAX_ASSET_ROWS} more`:''));

@@ -79,7 +79,7 @@ export function buildIndex({root=ROOT,head=undefined}={}){
   code.push(`- ${name} · ${lines} lines${size>60*1024?' · read by range':''} · ${purpose||'(no header comment)'}${shown?` · exports: ${shown}`:''} · tests: ${testText}`)}
  // In the hub/ and test lines the words "Mikkadr Hub" repeat on most lines under a section already about the hub: leave them out and clip shorter by the same amount, so the same description shows.
  const hubDescribed=(text,max)=>{const full=leadingComment(text,1e6),s=full.replace(/\bMikkadr Hub,? ?/g,'');return clip(s,max-(full.length-s.length))};
- const testLines=tests.map(t=>{const c=hubDescribed(read(path.join(root,'tests',t)),78);return `- ${t.replace(/\.mjs$/,'')}${c?' · '+c:''}`});
+ const testLines=tests.map(t=>{const c=hubDescribed(read(path.join(root,'tests',t)),75);return `- ${t.replace(/\.mjs$/,'')}${c?' · '+c:''}`});
  const scriptLines=scripts.map(s=>{const c=leadingComment(read(path.join(root,'scripts',s)),90);return `- ${s}${c?' · '+c:''}`});
  const workerLines=workers.map(s=>{const c=leadingComment(read(path.join(root,'worker',s)),90);return `- worker/${s}${c?' · '+c:''}`});
  const hubFiles=listFiles(path.join(root,'hub'),n=>/\.(mjs|js)$/.test(n)); // Mikkadr Hub (Node only): the token watcher, the usage probe, the page

@@ -26,7 +26,7 @@ assert(r.groups.some(g=>g.items.length>3),'there are folded packs');
 for(const s of ['wanted','received','converted','in-game'])assert(html.includes(`id="f-${s}"`),`a filter for ${s}`);
 assert(html.includes('body:has(#f-wanted:checked)'),'the stage filter is CSS only');
 assert(html.includes(png),'a picture is built in as a data URI');
-assert(html.includes('127.0.0.1:8765/viewer.html#prop%3Ahouse-a'),'a model links to its place in the viewer');assert(!html.includes('viewer.html#grab3d-man-base'),'a wanted asset has no 3D link');
+assert(html.includes('127.0.0.1:8765/viewer.html#prop%3Ahouse-a'),'a model links to its place in the viewer');{const wanted=r.assets.find(a=>a.origin!=='module'&&a.stage==='wanted'&&!(a.files&&a.files.length));if(wanted)assert(!html.includes('viewer.html#'+encodeURIComponent(wanted.id)),'a wanted asset has no 3D link ('+wanted.id+')')} // any wanted row without files: the register changes as the owner attaches files
 assert(html.includes('no picture'),'an asset without a picture says so');
 
 // escaping: names and notes from the register are text, never markup

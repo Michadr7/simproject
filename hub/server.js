@@ -30,6 +30,7 @@ import {buildActivity,feedRunOf,gaugeOf} from './activity.js';
 import {lifeOf} from './cache-store.mjs';
 import {buildTokensPage,logTotal} from './tokens-page.mjs';
 import {canPublish,bumpPlan,LEVELS} from './web/deploy-rules.js';
+import {checkFetchUrl,cleanFolder} from './web/fetch-rules.js';
 import {appendReading} from './watcher.js';
 import {buildWork,projectLine} from './work.js';
 import {parseRunBlock,quickFix} from './runplan.js';
@@ -123,15 +124,15 @@ const readJson=(file,fallback)=>{try{return JSON.parse(fs.readFileSync(file,'utf
 const hiddenFile=root=>path.join(root,'.hub','hidden-assets.json');
 export const readHidden=root=>{const a=readJson(hiddenFile(root),[]);return Array.isArray(a)?a.filter(h=>HASH_PATTERN.test(String(h))):[]};
 export const attentionOf=root=>{const a=readJson(path.join(root,'.hub','attention.json'),null);return a&&Array.isArray(a.items)?{generatedAt:Number(a.generatedAt)||0,items:a.items.filter(i=>i&&typeof i.id==='string'&&HASH_PATTERN.test(String(i.hash)))}:null};
-export function waitingOf(root,now=Date.now(),runs=null){
+export function waitingOf(root,now=Date.now(),runs=null,records=null){
  const dir=path.join(root,'plans'),l=runs?runs.list():null; // run items only when runs are switched on
- return buildWaiting({plans:listPlans(dir).map(planSummary),found:foundPlans(root,dir),attention:attentionOf(root),hidden:readHidden(root),gauges:gaugesOf(root,now),runs:l?l.runs:[],ready:l?l.ready:[],now})}
+ return buildWaiting({plans:listPlans(dir).map(planSummary),found:foundPlans(root,dir),attention:attentionOf(root),hidden:readHidden(root),gauges:gaugesOf(root,now),runs:l?l.runs:[],ready:l?l.ready:[],fileChecks:(()=>{try{const b=records&&records.brief&&records.brief();return b&&b.checks||[]}catch{return []}})(),now})}
 // Hub v2 V1: the Work tree (hub/work.js). The plan summaries get four small facts from the plan text (the project line, the Run block's model and size, why it cannot start, the deny note); the text itself never leaves.
-export function workOf(root,now=Date.now(),runs=null){
+export function workOf(root,now=Date.now(),runs=null,records=null){
  const dir=path.join(root,'plans'),l=runs?runs.list():null;
  const plans=listPlans(dir).map(p=>{const last=latestRevision(p),pr=parseRunBlock(last.text),ans=[...p.answers].reverse().find(a=>a.revision===last.n);
   return {...planSummary(p),project:projectLine(last.text),run:pr.run&&pr.run.model&&pr.run.size?{model:pr.run.model,size:pr.run.size}:null,runProblem:pr.ok?null:pr.errors[0]||'The plan asks for Fable. A plan may not choose Fable.',note:ans&&ans.verdict==='denied'?ans.note:''}});
- return {...buildWork({plans,runs:l?l.runs:[],ready:l?l.ready:[],waiting:waitingOf(root,now,runs).items,found:foundOf(root).files,enabled:!!(l&&l.enabled)}),locked:!!(l&&l.locked)}}
+ return {...buildWork({plans,runs:l?l.runs:[],ready:l?l.ready:[],waiting:waitingOf(root,now,runs,records).items,found:foundOf(root).files,enabled:!!(l&&l.enabled)}),locked:!!(l&&l.locked)}}
 export function hideAsset(root,hash){
  const a=attentionOf(root);if(!a||!a.items.some(i=>i.hash===hash))return false;
  const list=readHidden(root);if(!list.includes(hash)){list.push(hash);fs.mkdirSync(path.join(root,'.hub'),{recursive:true});writeAtomic(hiddenFile(root),JSON.stringify(list.slice(-1000)))}
@@ -218,7 +219,10 @@ export function createHubServer({root,port=0,runs=null,chat=null,jobs=null,commi
      let out;
      if(r.api==='job-start'){
       if(typeof b.job!=='string'||!jobs.has(b.job))return json(400,{error:'job must be one of the jobs the hub knows'});
-      if(b.job==='bump'){ // raising the version: only on a passing-or-not check that names the current and the live version, with the level and the new number typed back; the script checks it all again
+      if(b.job==='fetch-asset'){ // a download the owner asked for: only a good https link and a plain folder; the script checks them again, and every redirect
+       const c=checkFetchUrl(b.url);if(c.error)return json(400,{error:c.error});
+       const folder=cleanFolder(b.folder);if(!folder)return json(400,{error:'That folder name is not allowed. Use up to 3 plain names, like Characters/man.'});
+       writeAtomic(path.join(root,'.hub','fetch-request.json'),JSON.stringify({url:c.url,folder,at:Date.now()}))}      if(b.job==='bump'){ // raising the version: only on a passing-or-not check that names the current and the live version, with the level and the new number typed back; the script checks it all again
        if(!LEVELS.includes(b.level))return json(400,{error:'level must be patch, minor or major'});
        const chk=jobs.last('deploy-check'),last=jobs.last('bump'),plan=bumpPlan(chk,b.level,last);
        if(!plan.ok)return json(409,{error:plan.why});
@@ -228,7 +232,7 @@ export function createHubServer({root,port=0,runs=null,chat=null,jobs=null,commi
        if(!can.ok)return json(409,{error:can.why});
        if(b.confirm!==chk.summary.version)return json(409,{error:`You confirmed ${String(b.confirm).slice(0,20)}, but the check names ${chk.summary.version}. Press Check again.`});
        writeAtomic(path.join(root,'.hub','deploy-confirm.json'),JSON.stringify({version:chk.summary.version,at:Date.now()}))}
-      out=jobs.start(b.job);if(out.error){for(const f of ['deploy-confirm.json','bump-request.json']){try{fs.unlinkSync(path.join(root,'.hub',f))}catch{}}}}
+      out=jobs.start(b.job);if(out.error){for(const f of ['deploy-confirm.json','bump-request.json','fetch-request.json']){try{fs.unlinkSync(path.join(root,'.hub',f))}catch{}}}}
      else{
       if(typeof b.id!=='string'||!JOB_ID.test(b.id))return json(400,{error:'id must be a job id'});
       out=await jobs.stop(b.id)}
@@ -295,7 +299,7 @@ export function createHubServer({root,port=0,runs=null,chat=null,jobs=null,commi
      if(a.error)return json(a.code,{error:a.error});
      savePlan(plansDir,a.plan);return json(200,planOf(root,r.id))}
     if(typeof b.hash!=='string'||!HASH_PATTERN.test(b.hash))return json(400,{error:'hash must be 16 hex characters'});
-    if(r.api==='waiting-hide'){if(!hideAsset(root,b.hash))return json(404,{error:'that item is no longer on the list'});return json(200,waitingOf(root,Date.now(),runs))}
+    if(r.api==='waiting-hide'){if(!hideAsset(root,b.hash))return json(404,{error:'that item is no longer on the list'});return json(200,waitingOf(root,Date.now(),runs,records))}
     if(r.api==='found-hide'){addIgnored(plansDir,b.hash);return json(200,foundOf(root))}
     const f=foundPlans(root,plansDir).find(x=>x.hash===b.hash); // the server's own scan decides the path
     if(!f)return json(404,{error:'that file is no longer waiting to be added'});
@@ -306,8 +310,8 @@ export function createHubServer({root,port=0,runs=null,chat=null,jobs=null,commi
     if(r.api==='tokens')return send(200,buildTokensPage({root,logs:logsDir}),'text/html; charset=utf-8');
     if(r.api==='gauges')return json(200,gaugesOf(root));
     if(r.api==='plans')return json(200,plansOf(root));
-    if(r.api==='waiting')return json(200,waitingOf(root,Date.now(),runs));
-    if(r.api==='work')return json(200,workOf(root,Date.now(),runs));
+    if(r.api==='waiting')return json(200,waitingOf(root,Date.now(),runs,records));
+    if(r.api==='work')return json(200,workOf(root,Date.now(),runs,records));
     if(r.api==='found')return json(200,foundOf(root));
     if(r.api==='hub-token')return json(200,{token:runs?runs.token:null,runs:!!runs,chat:!!chat,records:!!records,recordsToken:records?records.token:null});
     if(r.api==='assets-summary'){if(!records)return json(200,{enabled:false});const s=await records.summary();return s.error?json(s.code||500,{error:s.error}):json(200,{enabled:true,...s})}

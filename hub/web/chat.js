@@ -25,14 +25,16 @@ export function mountChat(view,{onChange}={}){
  const ta=h('textarea',{rows:'3','aria-label':'Message to the master',placeholder:'Describe the task. The master reads the project and writes a plan for you to approve.'});
  const kept=draftStore('hub.chat.draft');draft=kept.get();ta.value=draft; // what you typed survives leaving the page (this browser only), until it is sent
  ta.addEventListener('input',()=>{draft=ta.value;kept.set(draft)});
- ta.addEventListener('keydown',e=>{if(e.key==='Enter'&&(e.ctrlKey||e.metaKey)){e.preventDefault();send()}});
+ // Enter sends; Shift+Enter (or Ctrl+Enter) is the same as in most chats: Shift+Enter makes a new line. A key pressed while an input method is composing text is left alone.
+ ta.addEventListener('keydown',e=>{if(e.key==='Enter'&&!e.shiftKey&&!e.isComposing&&e.keyCode!==229){e.preventDefault();send()}});
  const sendBtn=h('button',{class:'btn pri',type:'button',onclick:()=>send()},'Send');
  const stopBtn=h('button',{class:'btn danger',type:'button',onclick:()=>act('chat-stop',{})},'Stop');
  const chipBox=h('span',{class:'cchipbox'}),paintChip=mountCacheChip(chipBox); // the ring and the clock beside Send, as in the VS Code chat
- const composer=h('div',{class:'chat-composer'},ta,h('div',{class:'btns'},sendBtn,stopBtn,chipBox,h('span',{class:'small dim'},'Ctrl+Enter sends. Every message is a model call and counts on the gauges.')));
+ const composer=h('div',{class:'chat-composer'},ta,h('div',{class:'btns'},sendBtn,stopBtn,chipBox,h('span',{class:'small dim'},'Enter sends, Shift+Enter makes a new line. Every message is a model call and counts on the gauges.')));
  const cbox=h('div',{}),hint=h('p',{class:'small dim'}),warn=h('div',{class:'cwarn',role:'status',hidden:true}),paintCache=mountCacheStrip(cbox);hint.hidden=true;
  const head=h('div',{class:'chat-head'},top,cbox,hint); // one bordered header: the model picker on top, the conversation and cache meter under it
- view.append(head,warn,note,list,composer);
+ // the page never scrolls: the header stays on top, the messages take the room that is left and scroll inside, and the box and Send stay in view at the bottom
+ view.append(h('div',{class:'chat-page'},head,warn,note,list,composer));
  const clearWarn=()=>{warn.hidden=true;warn.textContent=''};
  const showWarn=(text,...buttons)=>{warn.textContent='';warn.append(h('p',{},text),h('div',{class:'btns'},buttons));warn.hidden=false};
  const wbtn=(label,fn,pri)=>h('button',{class:'btn'+(pri?' pri':''),type:'button',onclick:fn},label);

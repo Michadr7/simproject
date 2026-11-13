@@ -8,6 +8,7 @@
 //   steps           a job made of other jobs, run in order, stopping at the first failure (check = release, then test)
 //   ownLock         the script takes .hub/run.lock itself (npm run assets does), so the runner must not hold it
 import {deployChecks,verdictText} from './web/deploy-rules.js';
+import {sizeText} from './web/fetch-rules.js';
 export const JOB_ID=/^job-[0-9]{8}-[0-9]{6}-[0-9a-f]{4}$/;
 export const JOBS={
  test:{key:'test',label:'Run the tests',kind:'job',script:'scripts/run-tests.mjs',args:[],about:'Every test file, each in its own process. This takes a few minutes.'},
@@ -17,6 +18,7 @@ export const JOBS={
  'deploy-check':{key:'deploy-check',label:'Check before going online',kind:'job',script:'scripts/deploy-check.mjs',args:[],about:'Reads what is live, the version, the tests, the git status and the Cloudflare login. Sends and publishes nothing.'},
  'bump-step':{key:'bump-step',label:'Raise the version number',kind:'job',script:'scripts/bump-version.mjs',args:[],about:'Changes the version in package.json after the hub confirmed it. Only as the first step of Bump version.'},
  bump:{key:'bump',label:'Bump version',kind:'job',steps:['bump-step','release','test'],about:'Raises the version number, makes the release for it, and runs the tests. Started from the Deploy page. Nothing goes online.'},
+ 'fetch-asset':{key:'fetch-asset',label:'Download a file from a link',kind:'job',script:'scripts/fetch-asset.mjs',args:[],about:'Saves one file from an https link into assets-src/. Started only from the Assets page, with the link you pasted.'},
  deploy:{key:'deploy',label:'Publish the game',kind:'job',script:'scripts/deploy.mjs',args:[],about:'Runs wrangler deploy after the same checks pass again. Started only from the Deploy page, with the version you confirmed.'},
  assets:{key:'assets',label:'Draw the asset pictures',kind:'job',script:'hub/assets-cli.mjs',args:[],ownLock:true,about:'Draws missing or changed asset pictures and rebuilds the Assets page.'},
  dev:{key:'dev',label:'Game dev server',kind:'service',script:'scripts/dev-server.mjs',args:[],url:'http://localhost:8000',about:'Serves the game on this PC so you can play it in the browser.'},
@@ -43,6 +45,10 @@ export const stepsOf=(table,key)=>{const j=table[key];if(!j)return [];return j.s
 export function summarise(key,output,exitCode,{step=key,stopped=false}={}){
  const text=String(output||'').replace(/\r\n/g,'\n'),ok=exitCode===0&&!stopped;
  if(stopped)return {ok:false,text:'Stopped by you'};
+ if(key==='fetch-asset'){const ref=/^REFUSED (.+)$/m.exec(text),got=/^FETCHED (\{.*\})\s*$/m.exec(text);let d=null;try{d=got&&JSON.parse(got[1])}catch{}
+  if(ref)return {ok:false,refused:true,text:'Nothing was saved: '+ref[1].slice(0,240)};
+  if(d&&typeof d.path==='string'&&ok)return {ok:true,path:d.path.slice(0,200),bytes:Number(d.bytes)||0,host:String(d.host||'').slice(0,80),text:`Saved ${d.path.slice(0,200)} (${sizeText(Number(d.bytes)||0)}) from ${String(d.host||'').slice(0,80)}. It now appears under New files.`};
+  return {ok:false,text:stopped?'Stopped by you':'The download did not finish.'}}
  if(key==='bump'){const ref=/^REFUSED (.+)$/m.exec(text),b=/^BUMPED (\{.*\})$/m.exec(text);let d=null;try{d=b&&JSON.parse(b[1])}catch{}
   if(ref)return {ok:false,refused:true,text:'Nothing changed: '+ref[1].slice(0,200)};
   if(!d)return {ok:false,text:'The version change did not finish'};

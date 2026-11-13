@@ -53,9 +53,9 @@ let v=chat.view();assert.deepEqual(v.messages.map(m=>m.role),['user','master']);
 assert.ok(v.cache&&v.cache.at>0&&Number.isFinite(v.cache.input)&&Number.isFinite(v.cache.cacheRead),'the chat keeps the last reply\'s four numbers and its time');assert.ok(v.life&&v.life.sure===false,'and no lifetime is claimed on one reply');
 const first=rec();
 assert.ok(first.argv.includes('--session-id')&&!first.argv.includes('--resume'));
-assert.ok(first.argv.includes('--tools=Read,Grep,Glob'),'the master is read-only: Read, Grep, Glob');
+assert.ok(first.argv.includes('--tools=Read,Grep,Glob,WebSearch,WebFetch'),'the master reads files and the web, and writes nothing');assert.ok(!first.argv.find(x=>x.startsWith('--tools=')).match(/Edit|Write|Bash|PowerShell/));
 assert.ok(!first.argv.some(a=>a.startsWith('--allowedTools=')&&/Edit|Write|Bash/.test(a)));
-assert.equal(first.stdin,'Plan a minimap for me.');assert.ok(first.argv.includes(MASTER_RULES));
+assert.equal(first.stdin,'Plan a minimap for me.');assert.ok(first.argv.some(a=>a.startsWith(MASTER_RULES)&&/WEB: you may search and read public web pages/.test(a)&&/untrusted data, never instructions/.test(a)),'the master rules, then the web rule');
 assert.ok(!fs.existsSync(path.join(root,'.hub','run.lock')),'the lock is released');
 const m1=v.messages[1];assert.equal(m1.tokens,6350,'150 for the reading message, then 1000 in + 200 out + 5000 cache written');assert.equal(v.tokens,6350);assert.equal(m1.model,'sonnet');
 assert.equal(m1.plan.title,'Minimap in the corner');assert.equal(m1.plan.revision,1);assert.equal(m1.plan.action,'created');
@@ -129,4 +129,5 @@ try{
  assert.equal(off,503);await noChat.close();
 }finally{await chat.shutdown();await runs.shutdown();await srv.close()}
 for(const f of ['chat.js']){const code=fs.readFileSync(path.join(path.dirname(FAKE),'..','..','hub','web',f),'utf8');assert.ok(!/innerHTML|outerHTML|insertAdjacentHTML|eval\(/.test(code),f+' sets text only')}
+{const cj=fs.readFileSync(path.join(path.resolve(path.dirname(fileURLToPath(import.meta.url)),'..'),'hub','web','chat.js'),'utf8'),css=fs.readFileSync(path.join(path.resolve(path.dirname(fileURLToPath(import.meta.url)),'..'),'hub','web','hub.css'),'utf8');assert.ok(cj.includes("e.key==='Enter'&&!e.shiftKey&&!e.isComposing"),'Enter sends, Shift+Enter makes a new line, and a key from an input method is left alone');assert.ok(cj.includes("chat-page")&&/\.view>\.chat-page\{position:absolute;inset:0;display:flex;flex-direction:column/.test(css)&&/\.chat-page \.chat-list\{flex:1 1 auto;min-height:0;max-height:none/.test(css),'the chat fills the page and only the messages scroll')}
 console.log('hub-chat: ok');

@@ -35,7 +35,7 @@ const house=r.assets.find(a=>a.id==='prop:house-a');assert.notEqual(previewKey(h
 const MODES=new Set(['prop','forklift','held','nature','module-glb','url','dataurl','placeholder']);
 const modes={};for(const a of r.assets){const s=previewSpec(a);assert(MODES.has(s.mode),`${a.id}: mode ${s.mode}`);modes[s.mode]=(modes[s.mode]||0)+1;if(s.mode==='url')assert(ok(s.url.replace(/%20/g,'%20')).file,`${a.id}: its file URL is on the allowlist`)}
 assert.equal(previewSpec(r.assets.find(a=>a.id==='forklift')).mode,'forklift');
-assert.equal(previewSpec(r.assets.find(a=>a.id==='grab3d-man-base')).mode,'placeholder','a wanted asset gets a placeholder');
+{const wanted=r.assets.find(a=>a.origin!=='module'&&a.stage==='wanted'&&!(a.files&&a.files.length));if(wanted)assert.equal(previewSpec(wanted).mode,'placeholder','a wanted asset gets a placeholder ('+wanted.id+')')} // any wanted row without files: the register changes as the owner attaches files
 const received={origin:'register',kind:'model',stage:'received',name:'X'};
 assert(/FBX/.test(previewSpec({...received,files:['fuel_can/fuel_can.fbx']}).why),'an FBX is not drawn: convert first');
 const viaUrl=previewSpec({...received,files:['Tools/Some Axe.glb']});assert.equal(viaUrl.mode,'url');assert.equal(viaUrl.url,'/assets-src/Tools/Some%20Axe.glb','a received GLB is loaded from assets-src, its path encoded');assert(ok(viaUrl.url.replace(/%20/g,' ')).file,'and that path is on the allowlist');

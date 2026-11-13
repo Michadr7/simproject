@@ -8,6 +8,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import {randomBytes,timingSafeEqual} from 'node:crypto';
 import {writeAtomic} from './plans-store.mjs';
+import {readFacts} from './asset-facts.mjs';
 import {unregisteredOriginals,isCredited,HAND_STAGES} from './assets.js';
 import {makeChange,applyRecord,undoRecord,checkChange,formatRegister,recordLabel,handRows,closestRows,sameRow,RECORD_ID} from './records.js';
 
@@ -92,9 +93,13 @@ export function createRecords({root,now=Date.now,load=null,originals=null}){
   for(const r of handRows(register))c[r.stage]++;
   for(const s of shipped){if(s.stage==='converted'||s.stage==='in-game')c[s.stage]++;if(s.credited)c.credited++}
   return c};
+ // measured facts of a model file under assets-src/ (the JSON header only), in plain words; null for any other kind of file
+ const checkOf=p=>{if(!/\.(glb|gltf)$/i.test(String(p)))return null;const r=readFacts(path.join(root,'assets-src',p),p);return r.error?{error:r.error,problems:[]}:{line:r.line,problems:r.problems}};
  const newFilesOf=(register,files)=>{
   const un=unregisteredOriginals(files,register),pool=handRows(register).filter(r=>HAND_STAGES.includes(r.stage));
-  return {total:un.length,items:un.slice(0,MAX_NEW_FILES).map(p=>({path:p,name:p.slice(p.lastIndexOf('/')+1),candidates:closestRows(p,pool,3).map(r=>({id:r.id,name:r.name,stage:r.stage}))}))}};
+  return {total:un.length,items:un.slice(0,MAX_NEW_FILES).map(p=>({path:p,name:p.slice(p.lastIndexOf('/')+1),check:checkOf(p),candidates:closestRows(p,pool,3).map(r=>({id:r.id,name:r.name,stage:r.stage}))}))}};
+ // the model files of the rows that wait for conversion (wanted, received, staged): the same facts, so a problem is not forgotten once a file is attached to a row
+ const rowChecks=register=>handRows(register).filter(r=>HAND_STAGES.includes(r.stage)&&Array.isArray(r.files)).flatMap(r=>r.files.filter(f=>typeof f==='string').slice(0,3).map(f=>({row:r.name,path:f,check:checkOf(f)})).filter(x=>x.check));
 
  // GET /api/assets/summary: counts per stage, rows, the new files in assets-src/ no row accounts for, and the last 10 records (with whether each can still be undone)
  async function summary(){
@@ -109,13 +114,13 @@ export function createRecords({root,now=Date.now,load=null,originals=null}){
    if(canUndo&&!byRow.has(rec.after.id))byRow.set(rec.after.id,rec.id);
    if(shown.length<SHOW_RECORDS)shown.push({id:rec.id,at:rec.at,by:rec.by,op:rec.op,label:recordLabel(rec),undone:undone.has(rec.id),canUndo})}
   const rows=handRows(r.register).slice(0,MAX_ROWS_SHOWN).map(x=>({id:x.id,name:x.name,kind:x.kind,stage:x.stage,source:typeof x.source==='string'?x.source.slice(0,300):'',licence:x.licence||'',note:typeof x.notes==='string'?x.notes.slice(0,200):'',files:Array.isArray(x.files)?x.files.filter(f=>typeof f==='string').slice(0,5).map(f=>f.slice(0,300)):[],undo:byRow.get(x.id)||null}));
-  return {stages:counts(r.register,h.shipped),rows,shipped:h.shipped.slice(0,MAX_SHIPPED),shippedTotal:h.shipped.length,newFiles:newFilesOf(r.register,h.originals),records:shown,loadError:h.loadError}}
+  return {stages:counts(r.register,h.shipped),rows,shipped:h.shipped.slice(0,MAX_SHIPPED),shippedTotal:h.shipped.length,newFiles:newFilesOf(r.register,h.originals),fileChecks:rowChecks(r.register).slice(0,20),records:shown,loadError:h.loadError}}
 
  // a quick look for the master's status block: never waits. The slow part is the last one read (or started now); the hand-set counts are always fresh.
  function brief(){
   const r=readRegister();if(r.error)return null;
   heavyPart().catch(()=>{});
   const shipped=heavy?heavy.shipped:[],nf=newFilesOf(r.register,heavy?heavy.originals:[]);
-  return {counts:counts(r.register,shipped),known:!!heavy&&heavy.at>0,newFiles:nf.total,newNames:nf.items.slice(0,5).map(i=>i.path.slice(0,80)),rows:handRows(r.register).map(x=>({id:x.id,name:x.name,stage:x.stage}))}}
+  return {counts:counts(r.register,shipped),known:!!heavy&&heavy.at>0,newFiles:nf.total,newNames:nf.items.slice(0,5).map(i=>i.path.slice(0,80)),checks:[...nf.items.filter(i=>i.check).map(i=>({path:i.path.slice(0,100),new:true,check:i.check})),...rowChecks(r.register).map(x=>({path:x.path.slice(0,100),row:x.row.slice(0,60),check:x.check}))].slice(0,8),rows:handRows(r.register).map(x=>({id:x.id,name:x.name,stage:x.stage}))}}
 
  return {token,checkToken,add,stage,attach,undo,applyMaster,summary,brief}}

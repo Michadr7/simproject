@@ -35,6 +35,7 @@ if(scenario==='split'){
  process.stdout.write(line.slice(0,25));await sleep(80);process.stdout.write(line.slice(25));await sleep(80);result();process.exit(0)}
 if(scenario==='flagged'){init();rate();msg([tool('Edit',{file_path:'hub/x.js'})]);msg([tool('Write',{file_path:'package.json'})]);msg([tool('Edit',{file_path:'dist/ok.js'})]);result();process.exit(0)}
 if(scenario==='masterhang'){init(['Read','Grep','Glob']);rate();await sleep(60000)}
+if(scenario==='masterweb'){init(['Read','Grep','Glob','WebSearch','WebFetch']);rate();msg([tool('WebSearch',{query:'SECRET QUERY'}),tool('WebFetch',{url:'https://grab3d.example/models/man?key=SECRET'})]);const t=process.env.HUB_FAKE_REPLY||'Found it.';msg([text(t)],{input_tokens:1000,output_tokens:200,cache_creation_input_tokens:5000,cache_read_input_tokens:0});result({result:t});process.exit(0)}
 if(scenario==='master'){init(['Read','Grep','Glob']);rate();msg([tool('Read',{file_path:'PROJECT-BRIEF.md'}),tool('Grep',{pattern:'minimap'})]);const t=process.env.HUB_FAKE_REPLY||'Sounds good.\nPLAN:\n# Minimap in the corner\n\nBuild a round minimap.\n\n## Run\nmodel: sonnet\nwhy: builds against tests\nsize: M\nneeds: npm test\n';msg([text(t)],{input_tokens:1000,output_tokens:200,cache_creation_input_tokens:5000,cache_read_input_tokens:0});result({result:t});process.exit(0)}
 if(scenario==='question'){init();rate();msg([text('I read the plan.\nQUESTION: Should the minimap be round or square?')]);process.exit(0)}
 // normal

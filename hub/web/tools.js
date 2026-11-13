@@ -70,7 +70,7 @@ export function mountTools(view,{onChange}={}){
   top.textContent='';top.append(h('b',{},'NEXT STEP'),nextLine(d));body.textContent='';
   if(!d){body.append(h('p',{class:'soon'},'Could not read the tools. Is the hub still running?'));return}
   if(!d.enabled){body.append(h('div',{class:'box'},h('div',{class:'label'},'Tools are off'),h('p',{},'Tools are switched on together with runs when the hub starts. Stop the hub and start it again with:'),h('code',{class:'cmd'},'npm run hub -- --runs')));return}
-  const jobs=d.jobs.filter(j=>j.kind==='job'&&!/^(deploy|bump)/.test(j.key)),services=d.jobs.filter(j=>j.kind==='service');
+  const jobs=d.jobs.filter(j=>j.kind==='job'&&!/^(deploy|bump|fetch)/.test(j.key)),services=d.jobs.filter(j=>j.kind==='service');
   body.append(h('h2',{class:'sect'},'Checks and builds'),h('div',{class:'tool-list'},jobs.map(row)));
   body.append(h('h2',{class:'sect'},'Servers'),h('div',{class:'tool-list'},services.map(row)));
   body.append(h('h2',{class:'sect'},'The hub'),h('div',{class:'box tool'},h('div',{class:'tool-head'},

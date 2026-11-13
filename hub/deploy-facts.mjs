@@ -1,4 +1,4 @@
-// Mikkadr Hub 2.7: gathers the facts about the next publish (reads files, one public URL, git status, and `wrangler whoami`). Used by scripts/deploy-check.mjs and scripts/deploy.mjs only; the hub's server never imports it.
+// Mikkadr Hub 2.7: gathers the facts for the next publish (files, the live version, git, wrangler login). Used by the deploy scripts only.
 // The judging of the facts is in hub/deploy.js.
 import fs from 'node:fs';
 import path from 'node:path';

@@ -1,4 +1,4 @@
-// Mikkadr Hub v2.5b: the cache observations. One line per reply measured against the one before it, in .hub/cache.jsonl: {at, gapMs, hit, modelSwitch, model, context}. Numbers only; no text is ever written here.
+// Mikkadr Hub 2.5b: the cache observations in .hub/cache.jsonl (numbers only) and replyCache(), called when a chat or run turn ends.
 // replyCache() is what a chat turn or a run turn calls when it ends: it appends the observation (if there is a previous reply) and returns the record to keep on the chat or the run.
 import fs from 'node:fs';
 import path from 'node:path';

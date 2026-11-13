@@ -1,5 +1,6 @@
 // Mikkadr Hub P5, R4 (plain words: Hub v2 V1): the pure rules the Work page, the chat and the Waiting list share (no DOM, no fetch, so the server and the tests can import it too).
 // What a run's status is called, which buttons it gets, which request a button sends, one feed line as names and counts, and the cap bar colour.
+import {checkFetchUrl,cleanFolder,nameFrom} from './fetch-rules.js';
 export const MODEL_NAME={haiku:'Haiku 5.5',sonnet:'Sonnet 5.5',opus:'Opus 5.5',fable:'Fable 5.2'};
 export const STATUS_LABEL={running:'Working',confirming:'Press again to confirm (expensive model)','waiting-answer':'Has a question for you',capped:'Stopped: it used its whole allowance',paused:'Paused: the 5-hour limit was reached',interrupted:'Stopped: the hub closed','guard-stopped':'Stopped to protect your weekly limit',stopped:'Stopped by you',failed:'Ended without a result',done:'Finished (read the result)',closed:'Done'};
 export const ACTIVE=['running','waiting-answer','confirming']; // the states that hold the one run slot
@@ -31,7 +32,7 @@ export function callFor(op,a={}){
  if(op==='chat-model')return {url:'/api/chat/model',body:{model:a.model,confirm:a.confirm===true}};
  if(op==='chat-new'||op==='chat-stop')return {url:'/api/chat/'+op.slice(5),body:{}};
  // Hub v2 V2: the tools (a job is named by its key, a running one by the id the hub gave it), the restart, and the one-press start of a Haiku S plan
- if(op==='job-start')return a.job?{url:'/api/jobs/start',body:{job:a.job,...(typeof a.confirm==='string'?{confirm:a.confirm}:{}),...(typeof a.level==='string'?{level:a.level}:{})}}:null;
+ if(op==='job-start')return a.job?{url:'/api/jobs/start',body:{job:a.job,...(typeof a.confirm==='string'?{confirm:a.confirm}:{}),...(typeof a.level==='string'?{level:a.level}:{}),...(typeof a.url==='string'?{url:a.url}:{}),...(typeof a.folder==='string'?{folder:a.folder}:{})}}:null;
  if(op==='job-stop')return a.id?{url:'/api/jobs/stop',body:{id:a.id}}:null;
  if(op==='hub-restart')return {url:'/api/hub/restart',body:{}};
  if(op==='probe')return {url:'/api/probe',body:{}};
@@ -53,16 +54,20 @@ export function callFor(op,a={}){
 export const TOOL_OPS=['test','release','check','index','dev-start','dev-stop','restart'];
 // Hub v2 V3: two more, without arguments: "ACTION: commit" and "ACTION: push". They only OPEN the Commit page (where the owner presses Commit and, separately, Push); a click here never commits or pushes.
 export const NAV_OPS=['commit','push'];
-export const CHAT_OPS=['approve','start','resume','close',...TOOL_OPS,...NAV_OPS],MAX_CHAT_ACTIONS=4;
+// Hub 2.8.2: "ACTION: fetch <https link> [Folder]" proposes one download into assets-src/. The click is the owner's go-ahead; the hub's own download script checks the link again (https only, allowed kinds of file, no login).
+export const FETCH_OPS=['fetch'];
+export const CHAT_OPS=['approve','start','resume','close',...TOOL_OPS,...NAV_OPS,...FETCH_OPS],MAX_CHAT_ACTIONS=4;
 // 'quick' (approve and start a Haiku S plan with one press) is added by the hub to a plan the master just filed; the master cannot write it.
 export const HUB_OPS=['quick'],QUICK_CAP=150000,QUICK_LABEL=`Approve and start (Haiku, up to ${QUICK_CAP.toLocaleString('en-US')} tokens)`;
 const TOOL_JOB={test:'test',release:'release',check:'check',index:'index','dev-start':'dev','dev-stop':'dev'};
 const TOOL_LABEL={test:'Run the tests',release:'Make a release',check:'Check (release, then tests)',index:'Rebuild the index','dev-start':'Start the game dev server','dev-stop':'Stop the game dev server',restart:'Restart the hub'};
 const ACTION_LINE=/^\s*\**ACTION:\**\s*(approve|start|resume|close)\s+(\S+)(?:\s+(\d{1,6}))?\s*\**\s*$/i,PLAN_ID=/^[a-z0-9][a-z0-9-]{0,79}$/,RUN_ID_RE=/^run-[0-9]{8}-[0-9]{6}-[0-9a-f]{4}$/;
 const TOOL_LINE=/^\s*\**ACTION:\**\s*`?(test|release|check|index|dev-start|dev-stop|restart|commit|push)`?\s*\**\s*$/i;
-const isActionLine=l=>ACTION_LINE.test(l)||TOOL_LINE.test(l);
+const FETCH_LINE=/^\s*\**ACTION:\**\s*fetch\s+`?(https:\/\/[^\s`*]+)`?(?:\s+`?([^\s`*]+)`?)?\s*\**\s*$/i;
+const isActionLine=l=>ACTION_LINE.test(l)||TOOL_LINE.test(l)||FETCH_LINE.test(l);
 export function parseActionLine(line){
  const t=TOOL_LINE.exec(String(line||''));if(t)return {op:t[1].toLowerCase()};
+ const f=FETCH_LINE.exec(String(line||''));if(f){const c=checkFetchUrl(f[1]),folder=cleanFolder(f[2]);return c.ok&&folder?{op:'fetch',url:c.url,folder}:null}
  const m=ACTION_LINE.exec(String(line||''));if(!m)return null;
  const op=m[1].toLowerCase(),id=m[2].replace(/[`*]/g,''),n=m[3]?Number(m[3]):null;
  if(op==='approve'||op==='start')return PLAN_ID.test(id)&&!RUN_ID_RE.test(id)&&Number.isInteger(n)&&n>=1?{op,plan:id,revision:n}:null;
@@ -74,6 +79,11 @@ export const withoutActions=text=>String(text||'').split('\n').filter(l=>!isActi
 // What one proposed action is right now: {label, enabled, why, primary}. plans: /api/plans summaries; runs and ready: /api/runs; jobs: /api/jobs. A stale proposal (answered plan, closed run) is shown switched off, with the reason.
 export function chatActionState(a,{plans=[],runs=[],ready=[],jobs=null,git=null}={}){
  const off=(label,why)=>({label,enabled:false,why,primary:false});
+ if(a&&a.op==='fetch'){const nm=nameFrom('',new URL(a.url).pathname)||'a file',label=`Download ${nm} from ${new URL(a.url).hostname}`;
+  if(!jobs||!jobs.enabled)return off(label,'Tools are off. Start the hub with: npm run hub -- --runs');
+  const j=(jobs.jobs||[]).find(x=>x.key==='fetch-asset');if(!j)return off(label,'The hub does not know this job.');
+  if(j.running)return off(label,'A download is running now.');
+  return jobs.busy?off(label,'Something is working. Wait for it, or stop it first.'):{label,enabled:true,why:`Saves it in assets-src/${a.folder}. A script, no tokens; it then appears under New files.`,primary:true}}
  if(!a||!(CHAT_OPS.includes(a.op)||HUB_OPS.includes(a.op)))return off('Unknown action','The hub does not know this action.');
  if(a.op==='commit'||a.op==='push'){
   // git: {files, unpushed, enabled} from GET /api/commit/summary. Both buttons only open the Commit page.
@@ -121,6 +131,7 @@ export function chatActionCall(a,{ready=[],jobs=null}={}){
  if(a.op==='restart')return {op:'hub-restart',args:{}};
  if(a.op==='dev-stop'){const j=jobs&&(jobs.jobs||[]).find(x=>x.key==='dev');return j&&j.running?{op:'job-stop',args:{id:j.running.id}}:null}
  if(TOOL_OPS.includes(a.op))return {op:'job-start',args:{job:TOOL_JOB[a.op]}};
+ if(a.op==='fetch')return {op:'job-start',args:{job:'fetch-asset',url:a.url,folder:a.folder}};
  if(a.op==='quick')return {op:'quick',args:{plan:a.plan,revision:a.revision}};
  if(a.op==='approve')return {op:'approve',args:{plan:a.plan,revision:a.revision}};
  if(a.op==='start'){const r=ready.find(x=>x.planId===a.plan&&x.revision===a.revision);return r?{op:'start',args:{plan:a.plan,revision:a.revision,model:r.model}}:null}
@@ -137,10 +148,11 @@ const clock=at=>{if(!at)return '';const d=new Date(at),p=x=>String(x).padStart(2
 const END_LABEL={result:'Answered',question:'Answered',capped:'Stopped: it used its whole allowance','gauge-stop':'Stopped to protect your weekly limit',pause:'Stopped: the 5-hour limit was reached',stopped:'Stopped by you',interrupted:'Stopped: the hub closed',violation:'Stopped: it tried a tool it may not use'}; // how a chat turn ended (R7b)
 // Plain words (Hub v2 V1). `text` is one readable sentence; `k` stays as a short kind word for colour and tests, the pages no longer print it. ctx.cap = the token allowance, when the page knows it.
 const FAMILY=m=>{const f=/haiku|sonnet|opus|fable/i.exec(String(m||''));return f?f[0][0].toUpperCase()+f[0].slice(1).toLowerCase():'the model'};
-const TOOL_VERB={Read:'Reading',Edit:'Editing',Write:'Writing',Grep:'Searching the files',Glob:'Looking for files',Shell:'Running'};
+const TOOL_VERB={Read:'Reading',Edit:'Editing',Write:'Writing',Grep:'Searching the files',Glob:'Looking for files',Shell:'Running',WebSearch:'Searching the web',WebFetch:'Reading a web page'};
 export function toolText(ev){
  const v=TOOL_VERB[ev.tool];if(!v)return 'Using '+String(ev.tool||'a tool').slice(0,30);
- if(ev.tool==='Grep'||ev.tool==='Glob')return v;
+ if(ev.tool==='Grep'||ev.tool==='Glob'||ev.tool==='WebSearch')return v;
+ if(ev.tool==='WebFetch')return ev.target?`Reading a page on ${ev.target}`:v;
  if(ev.tool==='Shell')return ev.target&&ev.target!=='command'?`${v} ${ev.target}`:'Running a command';
  return ev.target?`${v} ${ev.target}`:`${v} a file`}
 export function feedRow(ev,ctx={}){

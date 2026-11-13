@@ -39,7 +39,7 @@ fx('green.mjs',"console.log('PASS a.mjs: ok');console.log('All 5 test files pass
 
 // ── the real table: every script is a plain path inside the repo that exists, every argument a plain flag, nothing a shell would read
 assert.deepEqual(tableProblems(JOBS),[]);
-assert.deepEqual(Object.keys(JOBS),['test','release','check','index','deploy-check','bump-step','bump','deploy','assets','dev','relay']);
+assert.deepEqual(Object.keys(JOBS),['test','release','check','index','deploy-check','bump-step','bump','fetch-asset','deploy','assets','dev','relay']);
 for(const j of Object.values(JOBS)){if(j.steps)continue;assert.ok(fs.existsSync(path.join(REPO,j.script)),j.script+' exists');assert.ok(!/npm|cmd|powershell|[ &|;<>"'`$%^]/.test([j.script,...j.args].join('')),j.key+' has no shell words')}
 assert.deepEqual(JOBS.release.args,['--force']);assert.deepEqual(JOBS.check.steps,['release','test']);assert.equal(JOBS.dev.kind,'service');assert.equal(JOBS.relay.kind,'service');assert.equal(JOBS.assets.ownLock,true);
 assert.deepEqual(stepsOf(JOBS,'check'),[{key:'release',script:'scripts/package-release.mjs',args:['--force']},{key:'test',script:'scripts/run-tests.mjs',args:[]}]);

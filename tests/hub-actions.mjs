@@ -21,7 +21,7 @@ const waitFor=async(fn,ms=8000)=>{const t=Date.now();while(Date.now()-t<ms){cons
 const RUN='run-20261111-160310-66c6';
 
 // ── the line
-assert.deepEqual(CHAT_OPS,['approve','start','resume','close','test','release','check','index','dev-start','dev-stop','restart','commit','push']);
+assert.deepEqual(CHAT_OPS,['approve','start','resume','close','test','release','check','index','dev-start','dev-stop','restart','commit','push','fetch']);
 assert.deepEqual(parseActionLine('ACTION: approve minimap-plan 2'),{op:'approve',plan:'minimap-plan',revision:2});
 assert.deepEqual(parseActionLine('  **ACTION:** Start `minimap-plan` 1  '),{op:'start',plan:'minimap-plan',revision:1});
 assert.deepEqual(parseActionLine(`ACTION: resume ${RUN}`),{op:'resume',run:RUN});assert.deepEqual(parseActionLine(`ACTION: close ${RUN}`),{op:'close',run:RUN});
@@ -110,4 +110,15 @@ try{
 }finally{await chat.shutdown();await runsC.shutdown();await srv.close()}
 const page=fs.readFileSync(path.join(path.dirname(FAKE),'..','..','hub','web','chat.js'),'utf8');
 assert.ok(!/innerHTML|outerHTML|insertAdjacentHTML|eval\(/.test(page)&&page.includes('chatActionState')&&page.includes('withoutActions'),'the chat page draws the buttons with text only');
+// Hub 2.8.2: the master may propose ONE download; the click is the owner's go-ahead
+{const A=l=>parseActionLine(l),good='ACTION: fetch https://grab3d.com/dl/man-base-character-rigged/man-base-character-rigged.glb Character/rigged';
+ assert.deepEqual(A(good),{op:'fetch',url:'https://grab3d.com/dl/man-base-character-rigged/man-base-character-rigged.glb',folder:'Character/rigged'});
+ assert.deepEqual(A('**ACTION:** fetch `https://x.example/a.glb`'),{op:'fetch',url:'https://x.example/a.glb',folder:'Downloads'},'a link alone goes to Downloads');
+ for(const bad of ['ACTION: fetch http://x.example/a.glb','ACTION: fetch https://localhost/a.glb','ACTION: fetch https://x.example/a.glb ../outside','ACTION: fetch','ACTION: fetch ftp://x.example/a.glb','ACTION: fetch https://u:p@x.example/a.glb'])assert.equal(A(bad),null,bad);
+ assert.equal(withoutActions('Here it is.\n'+good+'\nThanks.'),'Here it is.\nThanks.','the action line is drawn as a button, not as text');
+ const a=A(good),jobs=(over={})=>({enabled:true,busy:false,jobs:[{key:'fetch-asset',running:null,...over}]});
+ let s=chatActionState(a,{jobs:jobs()});assert.equal(s.enabled,true);assert.match(s.label,/^Download man-base-character-rigged\.glb from grab3d\.com$/);assert.match(s.why,/assets-src\/Character\/rigged/);assert.match(s.why,/no tokens/);
+ assert.equal(chatActionState(a,{jobs:jobs({running:{id:'x'}})}).enabled,false);assert.equal(chatActionState(a,{jobs:{...jobs(),busy:true}}).enabled,false);assert.equal(chatActionState(a,{jobs:null}).enabled,false);
+ assert.deepEqual(chatActionCall(a,{jobs:jobs()}),{op:'job-start',args:{job:'fetch-asset',url:a.url,folder:'Character/rigged'}});
+ assert.equal(callFor('job-start',{job:'fetch-asset',url:a.url,folder:'Character/rigged'}).body.url,a.url,'the browser sends the link and the folder')}
 console.log('hub-actions: ACTION lines parsed strictly, the possible actions sent to the master with their ids, the hub-made Approve for a filed plan, stale buttons switched off, and Approve, Start and Close clicked through the real routes and gates passed.');

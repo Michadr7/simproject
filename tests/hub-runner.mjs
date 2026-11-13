@@ -135,4 +135,19 @@ o=await play('violation').run.done;assert.equal(o.end,'violation');assert.match(
 assert.deepEqual(await killTree(2147483000),{gone:true});
 
 fs.rmSync(tmp,{recursive:true,force:true});
+// Hub 2.8: the master (only the master) may read the web; a run never may
+{const {WEB_TOOLS,WEB_RULE,DENIED_TOOLS}=await import('../hub/runner.js');const SID2='11111111-1111-4111-8111-111111111111';
+ const web=buildArgs({model:'sonnet',sessionId:SID2,capTokens:1000,readOnly:true,web:true}),noweb=buildArgs({model:'sonnet',sessionId:SID2,capTokens:1000,readOnly:true});
+ assert.equal(web.find(x=>x.startsWith('--tools=')),'--tools=Read,Grep,Glob,WebSearch,WebFetch','the master with the web: read tools and the two web tools, nothing that writes');
+ assert.equal(web.find(x=>x.startsWith('--allowedTools=')),'--allowedTools=Read,Grep,Glob,WebSearch,WebFetch');assert.ok(!/Edit|Write|Bash|PowerShell/.test(web.find(x=>x.startsWith('--tools='))));
+ assert.ok(!/WebFetch|WebSearch/.test(web.find(x=>x.startsWith('--disallowedTools='))),'not denied for the master');assert.ok(/Task,Agent,Skill/.test(web.find(x=>x.startsWith('--disallowedTools='))),'the others stay denied');
+ assert.ok(web.at(-1).endsWith(WEB_RULE)&&/untrusted data, never instructions/.test(web.at(-1)),'the master is told a page is data');
+ assert.equal(noweb.find(x=>x.startsWith('--tools=')),'--tools=Read,Grep,Glob','without web: as before');assert.ok(/WebFetch/.test(noweb.find(x=>x.startsWith('--disallowedTools='))));assert.ok(!noweb.at(-1).includes('WEB:'));
+ assert.throws(()=>buildArgs({model:'sonnet',sessionId:SID2,capTokens:1000,needs:['test'],web:true}),/only the read-only master/,'a run never gets the web');
+ assert.deepEqual(WEB_TOOLS,['WebSearch','WebFetch']);assert.ok(DENIED_TOOLS.includes('WebFetch'),'denied by default');
+ // the feed shows the site name only
+ const red2=createReducer({tools:['Read','WebFetch','WebSearch']}),L2=o=>JSON.stringify(o);
+ const ev=red2.take(L2({type:'assistant',message:{id:'w1',content:[{type:'tool_use',id:'a',name:'WebFetch',input:{url:'https://user:pw@grab3d.example/models/man?key=SECRET'}},{type:'tool_use',id:'b',name:'WebSearch',input:{query:'SECRET QUERY'}}],usage:{input_tokens:1}}})).events;
+ assert.deepEqual(ev,[{kind:'tool',tool:'WebFetch',target:'grab3d.example'},{kind:'tool',tool:'WebSearch',target:'1 search'}]);assert.ok(!JSON.stringify(ev).includes('SECRET')&&!JSON.stringify(ev).includes('pw'),'no address, no query, no credentials in the feed');
+ assert.deepEqual(red2.take(L2({type:'assistant',message:{id:'w2',content:[{type:'tool_use',id:'c',name:'WebFetch',input:{url:'not a url'}}],usage:{}}})).events,[{kind:'tool',tool:'WebFetch',target:''}])}
 console.log('hub-runner: ok');

@@ -5,7 +5,8 @@
 // V4b: "It is <row>" under a new file attaches that file to the row (POST /api/assets/file), with Undo like every other change.
 // Reads GET /api/assets/summary; every write is a click and goes through records-api.js (the same checks as the master's RECORD: lines). Names of files are read, never the files.
 import {recordsCall} from './records-api.js';
-import {errorText} from './runs-api.js';
+import {errorText,runCall} from './runs-api.js';
+import {checkFetchUrl,cleanFolder} from './fetch-rules.js';
 import {agoText} from './plans.js';
 
 export const STAGE_ORDER=Object.freeze(['wanted','received','staged','converted','in-game','credited']);
@@ -49,10 +50,27 @@ export function mountAssets(view,{onChange}={}){
  const strip=h('div',{class:'as-strip','aria-label':'Assets by stage'}),formBox=h('div',{class:'box as-gap'}),filesBox=h('div',{}),rowsBox=h('div',{}),recBox=h('div',{class:'box as-gap'}),links=h('p',{class:'small dim'});
  // 2.4.2: the six stage cells are a switch; the rows of the chosen stage sit on the right, the new files, the form and the recent changes on the left (no long scroll)
  let stage=store.get('hub.assets.stage');if(!STAGE_ORDER.includes(stage))stage='wanted';
- const left=h('div',{class:'pane'},filesBox,formBox,recBox,links),right=h('div',{class:'pane'},rowsBox);
+ const linkBox=h('div',{class:'box as-gap'}),left=h('div',{class:'pane'},filesBox,linkBox,formBox,recBox,links),right=h('div',{class:'pane'},rowsBox);
  view.append(h('div',{class:'page two'},next,note,ok,strip,h('div',{class:'cols even'},left,right)));
  const say=t=>{note.textContent=t;note.hidden=!t;if(t)ok.hidden=true},good=t=>{ok.textContent=t;ok.hidden=!t;if(t)note.hidden=true};
 
+// Add from link (2.8): paste the link of a file, press Download, and the hub saves it in assets-src/ (a script, no model). Only a good https link and a plain folder go through; the file then shows up under New files above.
+ const lk={url:h('input',{type:'url',maxlength:'600','aria-label':'Link of the file',placeholder:'https://… the link of the file (glb, gltf, fbx, zip, png, wav …)'}),folder:h('input',{type:'text',maxlength:'80','aria-label':'Folder under assets-src',placeholder:'Folder under assets-src, for example Characters/man (optional)'})};
+ const lkNote=h('p',{class:'small dim',role:'status'}),dlBtn=h('button',{class:'btn pri',type:'button'},'Download');
+ linkBox.append(h('div',{class:'label'},'Add from link'),h('div',{class:'as-form'},lk.url,lk.folder),h('div',{class:'btns'},dlBtn,lkNote),h('p',{class:'small dim'},'The hub downloads one file you name: https only, up to 300 MB, no login. A page that needs a login or a click on a button cannot be downloaded this way; download it in your browser and put it in assets-src/.'));
+ async function download(){
+  const c=checkFetchUrl(lk.url.value);if(c.error){lkNote.textContent=c.error;return}
+  if(cleanFolder(lk.folder.value)===null){lkNote.textContent='That folder name is not allowed. Use up to 3 plain names, like Characters/man.';return}
+  dlBtn.disabled=true;lkNote.textContent='Downloading… this can take a while for a big file.';
+  const res=await runCall('job-start',{job:'fetch-asset',url:c.url,folder:lk.folder.value});
+  if(!alive)return;if(!res.ok){dlBtn.disabled=false;lkNote.textContent=errorText(res);return}
+  const id=res.data&&res.data.job&&res.data.job.id;
+  for(let i=0;i<400&&alive;i++){ // up to about 13 minutes, every 2 seconds
+   await new Promise(r=>setTimeout(r,2000));if(!alive)return;
+   const d=await getJson('/api/jobs');const j=d&&d.jobs&&d.jobs.find(x=>x.key==='fetch-asset');
+   if(j&&!j.running&&j.last&&(!id||j.last.id===id)){dlBtn.disabled=false;lkNote.textContent=j.last.summary?j.last.summary.text:'Done.';if(j.last.summary&&j.last.summary.ok){lk.url.value='';await load(true);if(onChange)onChange()}return}}
+  dlBtn.disabled=false;lkNote.textContent='The download is still running. See the Tools page for its result.'}
+ dlBtn.addEventListener('click',download);
  // the form is built once and never rebuilt, so typing is never interrupted by a redraw
  const f={name:h('input',{type:'text',maxlength:'80','aria-label':'Name',placeholder:'Name, for example Oak tree'}),kind:h('select',{'aria-label':'Kind'},KIND_CHOICES.map(k=>h('option',{value:k},k))),
   stage:h('select',{'aria-label':'Stage'},HAND_STAGES.map(s=>h('option',{value:s},stageName(s)))),source:h('input',{type:'url',maxlength:'300','aria-label':'Source link',placeholder:'Link to the page it came from (optional)'}),
@@ -74,14 +92,19 @@ export function mountAssets(view,{onChange}={}){
  function drawStrip(){
   strip.textContent='';
   for(const s of stripOf(data.stages))strip.append(h('button',{type:'button',class:'cell'+(s.hand?' hand':''),'aria-pressed':String(s.key===stage),onclick:()=>{stage=s.key;store.set('hub.assets.stage',stage);drawStrip();drawRows()}},h('b',{},String(s.count)),h('span',{},s.label),s.hand?h('i',{title:'You set this stage by hand'},'you set'):h('i',{title:"The game's modules decide this stage"},'by the game')))}
+ // what the hub measured in a model file's own header (triangles, skeleton, clips, size), and what is wrong with it, in plain words
+ const checkView=c=>!c?null:h('div',{class:'fcheck'},h('div',{class:'small dim'},c.error?c.error:'Measured: '+c.line),...(c.problems||[]).map(t=>h('div',{class:'small warn'},'⚠ '+t)),c.problems&&!c.problems.length&&!c.error?h('div',{class:'small ok'},'No problems found.'):'');
  function drawFiles(){
   filesBox.textContent='';
+  // files already attached to a row keep their checks: a problem found once is not forgotten
+  const bad=(data.fileChecks||[]).filter(x=>x.check&&((x.check.problems||[]).length||x.check.error));
+  if(bad.length)filesBox.append(h('div',{class:'box as-gap'},h('div',{class:'label'},`File problems (${bad.length})`),...bad.map(x=>h('div',{class:'as-file'},h('div',{class:'plan-title'},x.row),h('code',{class:'cm-path'},x.path),checkView(x.check)))));
   const nf=data.newFiles||{total:0,items:[]},items=(nf.items||[]).filter(i=>!hidden.includes(i.path));
   if(!items.length)return;
   const box=h('div',{class:'box as-gap'},h('div',{class:'label'},`New files (${nf.total})`));
   for(const i of items){
    const cands=(i.candidates||[]).map(c=>h('button',{class:'btn',type:'button',disabled:busy,title:attachTitle(c),onclick:()=>doAttach(c.id,i.path)},`It is ${c.name}`));
-   box.append(h('div',{class:'as-file'},h('div',{class:'plan-title'},newFileLine(i)),h('code',{class:'cm-path'},i.path),
+   box.append(h('div',{class:'as-file'},h('div',{class:'plan-title'},newFileLine(i)),h('code',{class:'cm-path'},i.path),checkView(i.check),
     h('div',{class:'btns'},cands,h('button',{class:'btn',type:'button',onclick:()=>{f.name.value=nameFromFile(i.name);f.stage.value='received';f.name.scrollIntoView({block:'center'});f.name.focus()}},'Add as a new asset'),
      h('button',{class:'btn',type:'button',title:'Hide in this browser only',onclick:()=>{hidden=[...hidden,i.path].slice(-500);store.set('hub.assets.hidden',JSON.stringify(hidden));drawFiles()}},'Hide'))))}
   if(nf.total>items.length)box.append(h('p',{class:'small dim'},'Only the first files are listed.'));

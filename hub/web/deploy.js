@@ -1,4 +1,4 @@
-// Mikkadr Hub 2.7: the Deploy page (foot row "Deploy"): bringing the game online. Step 1 is the check: one press reads what is live, the version, the tests, the git status, Dev Mode and the Cloudflare login,
+// Mikkadr Hub 2.7: the Deploy page: Check, Publish and Bump version. Text only; polls GET /api/jobs. The rules are in deploy-rules.js.
 // and shows each in plain words (ok, warning, or blocking). It publishes nothing. The judging is in hub/deploy.js; the work is done by scripts/deploy-check.mjs, started as a job (a script, no model, no tokens).
 // Text only (textContent). Polls GET /api/jobs every 2 s while the check runs and every 8 s otherwise.
 import {runCall,errorText} from './runs-api.js';

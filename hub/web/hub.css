@@ -445,3 +445,11 @@ html[data-bot=open] .bot-face{display:none}
 .cring::after{content:"";position:absolute;inset:3px;border-radius:50%;background:#14161a}
 .cring[data-high=yes]{background:conic-gradient(var(--watch) calc(var(--p) * 1%),rgba(255,255,255,.14) 0)}
 .cring[data-known=no]{background:rgba(255,255,255,.14)}
+/* ---- Hub 2.7.12: the chat fills the page; only the messages scroll ---- */
+.view>.chat-page{position:absolute;inset:0;display:flex;flex-direction:column;min-height:0;padding-bottom:6px}
+.chat-page .chat-head,.chat-page .cwarn,.chat-page .msg,.chat-page .chat-composer{flex:none}
+.chat-page .chat-list{flex:1 1 auto;min-height:0;max-height:none;max-width:900px;align-content:start}
+.chat-page .chat-composer{margin-top:10px}
+.chat-page .chat-composer textarea{margin-bottom:6px;resize:none;height:76px}
+/* ---- Hub 2.8.1: the measured file checks ---- */
+.fcheck{margin:4px 0 2px;display:grid;gap:2px}.small.ok{color:var(--ok)}

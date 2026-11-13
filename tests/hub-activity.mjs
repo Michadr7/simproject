@@ -22,7 +22,7 @@ let a=buildActivity();assert.equal(a.mood,'idle');assert.equal(a.line,'Nothing i
 const tool=(t,target)=>({at:0,kind:'tool',tool:t,target});
 assert.equal(doing([]),'thinking');assert.equal(doing([tool('Read','game.js')]),'reading game.js');assert.equal(doing([tool('Grep','1 pattern')]),'searching');
 assert.equal(doing([tool('Edit','a.js'),{kind:'tokens',total:5}]),'editing a.js','token lines are skipped');assert.equal(doing([tool('Read','a.js'),{kind:'turn',n:2}]),'thinking','a new turn starts over');
-assert.equal(doing([tool('Shell','npm test')]),'running npm test');assert.equal(doing([tool('WebFetch','')]),'using WebFetch');
+assert.equal(doing([tool('Shell','npm test')]),'running npm test');assert.equal(doing([tool('WebFetch','')]),'reading a web page');assert.equal(doing([tool('WebFetch','grab3d.example')]),'reading a web page grab3d.example');assert.equal(doing([tool('WebSearch','1 search')]),'searching the web');assert.equal(doing([tool('NotebookEdit','')]),'using NotebookEdit');
 const run=(status,extra={})=>({id:'run-20261111-000000-aaaa',status,model:'sonnet',tokens:120000,capTokens:600000,...extra});
 a=buildActivity({chat:{working:true,model:'sonnet',cap:200000},chatFeed:{events:[{kind:'turn',n:1},tool('Read','PROJECT-BRIEF.md'),{kind:'tokens',total:6350}]},runs:[run('capped')]});
 assert.equal(a.mood,'working');assert.equal(a.source,'chat');assert.equal(a.line,'The master (Sonnet 5.5) is reading PROJECT-BRIEF.md.');assert.equal(a.tokens,6350);assert.equal(a.cap,200000);
@@ -94,7 +94,7 @@ try{
 {const {sceneOfEvents,gaugeOf,STOP_SIGN,SCENES}=await import('../hub/activity.js');const {createReducer}=await import('../hub/runner.js');
  const tool=(t,target)=>({kind:'tool',tool:t,target}),T={kind:'tokens',total:5};
  assert.equal(sceneOfEvents([{kind:'turn'}]),'think');assert.equal(sceneOfEvents([{kind:'turn'},tool('Read','a.js'),T]),'read');assert.equal(sceneOfEvents([tool('Grep','1 pattern')]),'read');
- assert.equal(sceneOfEvents([tool('Read','a.js'),tool('Edit','b.js')]),'write');assert.equal(sceneOfEvents([tool('Shell','npm test')]),'test');assert.equal(sceneOfEvents([tool('Shell','command')]),'write');assert.equal(sceneOfEvents([tool('WebFetch','')]),'think');
+ assert.equal(sceneOfEvents([tool('Read','a.js'),tool('Edit','b.js')]),'write');assert.equal(sceneOfEvents([tool('Shell','npm test')]),'test');assert.equal(sceneOfEvents([tool('Shell','command')]),'write');assert.equal(sceneOfEvents([tool('WebFetch','a.example')]),'read','reading a web page is reading');assert.equal(sceneOfEvents([tool('NotebookEdit','')]),'think');
  assert.equal(sceneOfEvents([tool('Shell','npm test'),{kind:'shell',target:'npm test',ok:true}]),'pass');assert.equal(sceneOfEvents([tool('Shell','npm test'),{kind:'shell',target:'npm test',ok:false},T]),'fail','tokens do not end the result');
  assert.equal(sceneOfEvents([{kind:'shell',target:'npm test',ok:false},tool('Edit','a.js')]),'write','the next event ends it');
  const run={id:'run-1',model:'sonnet',status:'running',tokens:300000,capTokens:1500000};

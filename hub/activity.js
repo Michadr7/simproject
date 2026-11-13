@@ -13,10 +13,10 @@ const STOPPED=['capped','paused','interrupted','guard-stopped','failed','stopped
 const STOP_LINE={capped:'A run stopped: it used its whole allowance.',paused:'A run is paused: the 5-hour limit was reached.',interrupted:'A run stopped: the hub closed.','guard-stopped':'A run stopped to protect your weekly limit.',failed:'A run ended without a result.',stopped:'A run was stopped by you.'};
 
 // The last thing the feed shows being done, as a short phrase ("reading game.js"), or the fallback.
-const VERB={Read:'reading',Edit:'editing',Write:'writing',Grep:'searching',Glob:'looking for files',Shell:'running'};
+const VERB={Read:'reading',Edit:'editing',Write:'writing',Grep:'searching',Glob:'looking for files',Shell:'running',WebSearch:'searching the web',WebFetch:'reading a web page'};
 export function doing(events,fallback='thinking'){
  for(let i=events.length-1;i>=0;i--){const e=events[i];
-  if(e.kind==='tool'){const v=VERB[e.tool];if(!v)return 'using '+String(e.tool||'a tool').slice(0,30);return e.target&&e.tool!=='Grep'&&e.tool!=='Glob'?`${v} ${e.target}`:v}
+  if(e.kind==='tool'){const v=VERB[e.tool];if(!v)return 'using '+String(e.tool||'a tool').slice(0,30);return e.target&&e.tool!=='Grep'&&e.tool!=='Glob'&&e.tool!=='WebSearch'?`${v} ${e.target}`:v}
   if(e.kind==='started'||e.kind==='turn')break}
  return fallback}
 const items=(events,cap)=>events.filter(e=>e.kind!=='tokens').slice(-MAX_ITEMS).map(e=>{const r=feedRow(e,{cap});return {t:r.t,k:r.k,text:r.text,n:r.n,cls:r.cls}});
@@ -53,7 +53,7 @@ export function sceneOfEvents(events){
  const ev=(Array.isArray(events)?events:[]).filter(quiet);
  const last=ev[ev.length-1];if(last&&last.kind==='shell')return last.ok?'pass':'fail';
  for(let i=ev.length-1;i>=0;i--){const e=ev[i];
-  if(e.kind==='tool'){if(e.tool==='Read'||e.tool==='Grep'||e.tool==='Glob')return 'read';if(e.tool==='Edit'||e.tool==='Write')return 'write';
+  if(e.kind==='tool'){if(e.tool==='Read'||e.tool==='Grep'||e.tool==='Glob'||e.tool==='WebSearch'||e.tool==='WebFetch')return 'read';if(e.tool==='Edit'||e.tool==='Write')return 'write';
    if(e.tool==='Shell')return e.target&&e.target!=='command'?'test':'write';return 'think'}
   if(e.kind==='started'||e.kind==='turn')break}
  return 'think'}

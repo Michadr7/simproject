@@ -1,4 +1,4 @@
-// Mikkadr Hub 2.4.2: the panda. Drawn on a canvas (the shelf along the bottom of the page). Adapted from hub/design/hub-v2-panda.js: no page lookups, no speech line (bot.js writes that), a size setting (scale K, 0.9 by default; 0.7 was the mock's), and a stop().
+// Mikkadr Hub 2.4.2: the panda drawn on a canvas (the shelf). From hub/design/hub-v2-panda.js, with a size setting and a stop().
 // Poses are targets; the drawn pose glides toward them, so every change is smooth. F holds the facts from GET /api/activity (names and counts only); S is what is drawn, gliding toward F.
 // States: idle, think, read, write, test, pass, fail, stopped, wait, done. bot.js picks one from the hub's mood. Nothing here reads or sends anything.
 export function mountPanda(cv,{scale=0.9,win=window}={}){

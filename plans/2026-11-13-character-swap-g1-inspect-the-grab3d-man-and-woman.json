@@ -1,0 +1,23 @@
+{
+ "id": "2026-11-13-character-swap-g1-inspect-the-grab3d-man-and-woman",
+ "title": "Character swap G1: inspect the Grab3D man and woman and design the swap",
+ "from": "master",
+ "source": "master/ea5d9eb9/character-swap-g1-inspect-the-grab3d-man-and-woman",
+ "status": "approved",
+ "revisions": [
+  {
+   "n": 1,
+   "at": 1794545500485,
+   "hash": "9114cf62a5dd0ff8",
+   "text": "# Character swap G1: inspect the Grab3D man and woman and design the swap\n\nRead `assets-src/Character/man-base-character.glb` and `woman-base-character.glb`. Write the findings and a recommended design to `notes/character-swap-design.md`. Change no game code and do not touch `assets-src/`.\n\n## Questions to answer from the files\n- Is each model one mesh or split into parts such as head, top, legs and feet? Are the materials separate, so skin and hair tint is possible?\n- Is there a skeleton? List the bone names, the bone count, the rest pose, the scale and the facing direction. Compare them with the Quaternius rig that `character.js` uses (Head, Body, Legs and Feet parts; the arm, hand and finger bones used by the IK, hold and curl code).\n- Which animation clips exist, if any? Is there at least Idle, Walk and Run?\n- Triangle count, texture count and sizes, and the file size once embedded the way `character-male.js` is (the current ones are 1.4 to 1.8 MB).\n- Any problems: missing fingers or hands, T-pose or A-pose, flipped normals, textures that are not embedded.\n\n## Design to recommend\n- Choose one of these and say why:\n  1. Fixed-look bodies `male2` and `female2` beside the Quaternius ones, with no part choices.\n  2. Modular mapping, if the models turn out to be modular.\n  3. Retargeting the existing clips and IK onto the new skeleton, or a bone-name map.\n- Say what each of `appearance.js` (body types without parts, `normalizeAppearance`), `character.js`, the creator UI, `scripts/build-characters.mjs` and the save version (`citylife.character.v1`) would need. Old saves must keep loading.\n- List every piece of code that depends on Quaternius bone names (IK, chop, consumption, seated, crouch, lean) and how each would work on the new rig.\n- Propose the build steps as separate small plans, each with a model and size, and say which can run on Sonnet.\n\n## Run\nmodel: opus\nwhy: design work across the skeleton, the save format and the creator, from files that must be inspected first\nsize: M\nneeds: npm test"
+  }
+ ],
+ "answers": [
+  {
+   "revision": 1,
+   "at": 1794545539780,
+   "verdict": "approved",
+   "note": "Approved from the chat."
+  }
+ ]
+}
