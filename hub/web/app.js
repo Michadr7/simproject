@@ -6,8 +6,10 @@ import {mountCommit} from './commit.js';
 import {mountWork} from './work.js';
 import {mountChat} from './chat.js';
 import {mountTools} from './tools.js';
+import {mountDeploy} from './deploy.js';
 import {mountAssets} from './assets-area.js';
 import {mountBot} from './bot.js';
+import {mountSound} from './sound.js';
 import {runCall,errorText} from './runs-api.js';
 
 const $=id=>document.getElementById(id);
@@ -66,6 +68,7 @@ function drawRoute(){
  else if(route==='chat')unmount=mountChat(view,{onChange:refresh});
  else if(route==='tools')unmount=mountTools(view,{onChange:refresh});
  else if(route==='commit')unmount=mountCommit(view,{onChange:refresh});
+ else if(route==='deploy')unmount=mountDeploy(view,{onChange:refresh});
  else if(route==='assets')unmount=mountAssets(view,{onChange:refresh});
  else if(route==='work'){work=mountWork(view,{plan:planIdOf(location.hash),run:runIdOf(location.hash),onChange:refresh});unmount=work.stop;if(tree!==undefined)work.update(tree)}
  else{const p=document.createElement('p');p.className='soon';p.textContent=row.soon||'';view.append(p)}
@@ -108,7 +111,8 @@ addEventListener('keydown',e=>{if(e.key==='Escape'&&menuOpen&&innerWidth<700)set
 addEventListener('hashchange',drawRoute);
 addEventListener('focus',refresh);
 document.addEventListener('visibilitychange',()=>{if(!document.hidden)refresh()});
-const bot=mountBot({query:new URLSearchParams(location.search).get('bot'),store}); // R7b: the corner bot, on every page
+const sound=mountSound($('soundslot'),{store}); // 2.6: off by default; each sound has its own switch
+const bot=mountBot({query:new URLSearchParams(location.search).get('bot'),store,onActivity:a=>sound.observe(a)}); // R7b: the corner bot, on every page
 addEventListener('hashchange',()=>bot.refresh());
 {const l=document.querySelector('#panel .label');if(l){l.textContent='Mikkadr Hub ';const v=document.createElement('span');v.className='ver';v.textContent='v'+HUB_VERSION;l.append(v)}} // the version, at the top of the menu
 setMenu(menuOpen);drawRoute();refresh();setInterval(()=>{if(!document.hidden)refresh()},20000);

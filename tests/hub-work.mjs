@@ -90,9 +90,9 @@ assert.equal(buildWork().next,'Nothing needs you.');assert.equal(nextStep(null),
 assert.match(nextStep({kind:'found'}),/Press Add/);assert.match(nextStep({kind:'asset'}),/3D/);assert.match(nextStep({kind:'tokens'}),/Haiku/);
 
 // ── the tree shell: areas, foot rows, no numbers, old hashes
-assert.deepEqual(TREE.areas.map(r=>r.label),['Chat','Work','Assets']);assert.deepEqual(TREE.foot.map(r=>r.label),['Commit','Tools','Tokens']);
-assert.ok([...TREE.areas,...TREE.foot].every(r=>!('num' in r)),'no numbers');assert.ok(!('soon' in TREE.foot[0])&&!('soon' in TREE.foot[1]),'Commit (V3) and Tools (V2) are built pages now');
-assert.deepEqual(ROUTES,['chat','work','assets','commit','tools','tokens']);assert.equal(HOME,'work');assert.equal(WIDE,1100);
+assert.deepEqual(TREE.areas.map(r=>r.label),['Chat','Work','Assets']);assert.deepEqual(TREE.foot.map(r=>r.label),['Commit','Deploy','Tools','Tokens']);
+assert.ok([...TREE.areas,...TREE.foot].every(r=>!('num' in r)),'no numbers');assert.ok(!('soon' in TREE.foot[0])&&!('soon' in TREE.foot[2]),'Commit (V3) and Tools (V2) are built pages now');
+assert.deepEqual(ROUTES,['chat','work','assets','commit','deploy','tools','tokens']);assert.equal(HOME,'work');assert.equal(WIDE,1100);
 for(const [hash,r] of [['#waiting','work'],['#plans','work'],['#runs','work'],['#plans/2026-11-10-x','work'],['#runs/run-20261111-140211-ab12','work'],['#work','work'],['#work/abc','work'],['#chat','chat'],['#assets','assets'],['#tokens','tokens'],['#commit','commit'],['#tools','tools'],['','work'],['#nope','work'],['#__proto__','work'],['#constructor','work']])assert.equal(routeOf(hash),r,'route of '+hash);
 assert.equal(planIdOf('#plans/2026-11-10-hub-p4'),'2026-11-10-hub-p4','the old plan hash opens that step');assert.equal(planIdOf('#work/2026-11-10-hub-p4'),'2026-11-10-hub-p4');assert.equal(planIdOf('#work'),null);assert.equal(planIdOf('#chat/abc'),null);
 assert.equal(runIdOf('#runs/run-20261111-140211-ab12'),'run-20261111-140211-ab12','the old run hash opens that step');

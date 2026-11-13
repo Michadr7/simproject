@@ -1,16 +1,17 @@
 // Mikkadr Hub v2, V1: the shell's pure rules (no DOM, so tests can import it): the tree, the hash routes, the accent from the weekly gauge, the tab title.
-// The hub's own version, shown at the top of the menu, in GET /api/hub-id and in the start-up line. Hub 2.<step>: 2.1 shell and Work, 2.2 Tools, 2.3 Commit and Push, 2.4 Assets and records (2.4.1 attach a file, 2.4.2 new layout), 2.5 cache strip and Tokens.
-export const HUB_VERSION='2.5.0';
+// The hub's own version, shown at the top of the menu, in GET /api/hub-id and in the start-up line. Hub 2.<step>: 2.1 shell and Work, 2.2 Tools, 2.3 Commit and Push, 2.4 Assets and records (2.4.1 attach a file, 2.4.2 new layout, 2.5 cache strip and live Tokens, 2.6 panda facts and sound, 2.7 Deploy: the check before going online, 2.7.1 Publish, 2.7.2 chat header fixes, 2.7.3 the bot knows about tool jobs), 2.5 cache strip and Tokens.
+export const HUB_VERSION='2.7.3';
 // The tree: three areas (Chat, Work, Assets) and three small rows at the foot (Commit, Tools, Tokens). No numbers. `soon` marks a placeholder and names the step that builds it.
 export const TREE={
  areas:[{key:'chat',label:'Chat',glyph:'›'},{key:'work',label:'Work',glyph:'›'},{key:'assets',label:'Assets',glyph:'›'}],
  foot:[{key:'commit',label:'Commit',glyph:'⎇'},
+  {key:'deploy',label:'Deploy',glyph:'↑'},
   {key:'tools',label:'Tools',glyph:'▸'},
   {key:'tokens',label:'Tokens',glyph:'◔'}]};
 const ALL=[...TREE.areas,...TREE.foot];
 export const rowOf=key=>ALL.find(r=>r.key===key)||null;
 // The scene of each page: the hue (0 to 360) of the flowing background and of the sliding highlight in the tree. Hovering a row previews its scene. hub.css has one html[data-scene=...] rule per key.
-export const SCENES={chat:220,work:26,assets:135,commit:172,tools:14,tokens:215};
+export const SCENES={chat:220,work:26,assets:135,commit:172,deploy:48,tools:14,tokens:215};
 export const HOME='work'; // where an empty or unknown hash lands
 export const sceneOf=(route,hover)=>Object.hasOwn(SCENES,hover||'')?hover:Object.hasOwn(SCENES,route||'')?route:HOME;
 export const ROUTES=ALL.map(r=>r.key);

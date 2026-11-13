@@ -31,7 +31,7 @@ export function callFor(op,a={}){
  if(op==='chat-model')return {url:'/api/chat/model',body:{model:a.model,confirm:a.confirm===true}};
  if(op==='chat-new'||op==='chat-stop')return {url:'/api/chat/'+op.slice(5),body:{}};
  // Hub v2 V2: the tools (a job is named by its key, a running one by the id the hub gave it), the restart, and the one-press start of a Haiku S plan
- if(op==='job-start')return a.job?{url:'/api/jobs/start',body:{job:a.job}}:null;
+ if(op==='job-start')return a.job?{url:'/api/jobs/start',body:typeof a.confirm==='string'?{job:a.job,confirm:a.confirm}:{job:a.job}}:null;
  if(op==='job-stop')return a.id?{url:'/api/jobs/stop',body:{id:a.id}}:null;
  if(op==='hub-restart')return {url:'/api/hub/restart',body:{}};
  if(op==='probe')return {url:'/api/probe',body:{}};
@@ -152,6 +152,7 @@ export function feedRow(ev,ctx={}){
   case 'tokens':return {t,k:'tokens',text:`Tokens used so far: ${fmt(ev.total)}${Number.isFinite(ctx.cap)&&ctx.cap>0?` of ${fmt(ctx.cap)}`:''}`,n:'',cls:''};
   case 'gauges':return {t,k:'usage',text:`Usage check: ${pct(ev.weekly)} of this week, ${pct(ev.fiveHour)} of these 5 hours`,n:'',cls:''};
   case 'question':return {t,k:'question',text:'Stopped to ask you a question',n:'',cls:'q'};
+  case 'shell':return {t,k:'shell',text:`${String(ev.target||'command').slice(0,30)} ${ev.ok?'passed':'failed'}`,n:'',cls:ev.ok?'':'bad'};
   case 'result':return {t,k:'result',text:ev.isError?'Ended with an error':`Finished${Number.isFinite(ev.turns)?` after ${ev.turns} turn${ev.turns===1?'':'s'}`:''}`,n:'',cls:ev.isError?'bad':''};
   case 'cap-warning':return {t,k:'cap',text:"Used 80% of this run's token allowance",n:'',cls:'q'};
   case 'cap-stop':return {t,k:'cap',text:'Stopped: it used its whole allowance',n:'',cls:'bad'};

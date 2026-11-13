@@ -26,8 +26,10 @@ import {latestRevision,ID_PATTERN,HASH_PATTERN,answerPlan,titleOf} from './plans
 import {renderMarkdown} from './markdown.js';
 import {loadReadings,evaluate} from './watcher.js';
 import {buildWaiting} from './waiting.js';
-import {buildActivity,feedRunOf} from './activity.js';
+import {buildActivity,feedRunOf,gaugeOf} from './activity.js';
+import {lifeOf} from './cache-store.mjs';
 import {buildTokensPage,logTotal} from './tokens-page.mjs';
+import {canPublish} from './web/deploy-rules.js';
 import {appendReading} from './watcher.js';
 import {buildWork,projectLine} from './work.js';
 import {parseRunBlock,quickFix} from './runplan.js';
@@ -136,10 +138,11 @@ export function hideAsset(root,hash){
  return true}
 
 // R7b: what the hub is doing right now, for the corner bot (names and counts only). Reads the run list and at most the tail of one feed file; no model call.
-export function activityOf(runs=null,chat=null){
+export function activityOf(runs=null,chat=null,{root=null,now=Date.now(),jobs=null}={}){
  const list=runs?runs.list().runs:[],id=feedRunOf(list);let runFeed=[];
  if(id){let f=runs.feed(id,0);while(f&&f.events.length===500){const more=runs.feed(id,f.last);if(!more||!more.events.length)break;f=more}runFeed=f?f.events.slice(-40):[]}
- return {enabled:!!(runs&&chat),...buildActivity({chat:chat?chat.view():null,chatFeed:chat?chat.feed(0):null,runs:list,runFeed})}}
+ const jr=jobs&&jobs.list?jobs.list().running:null,jobRunning=!!jr;
+ return {enabled:!!(runs&&chat),jobRunning,...buildActivity({chat:chat?chat.view():null,chatFeed:chat?chat.feed(0):null,runs:list,runFeed,job:jr?{key:jr.key,label:jr.label}:null,now,gauge:root?gaugeOf(gaugesOf(root,now)):null,life:root?lifeOf(root):null})}}
 
 // Reads a request body up to MAX_BODY bytes: resolves to a string, or null when it is too big (the rest is drained and dropped).
 const readBody=req=>new Promise(ok=>{let size=0,chunks=[],big=false;req.on('data',c=>{size+=c.length;if(size>MAX_BODY)big=true;else chunks.push(c)});req.on('end',()=>ok(big?null:Buffer.concat(chunks).toString('utf8')));req.on('error',()=>ok(null))});
@@ -215,7 +218,12 @@ export function createHubServer({root,port=0,runs=null,chat=null,jobs=null,commi
      let out;
      if(r.api==='job-start'){
       if(typeof b.job!=='string'||!jobs.has(b.job))return json(400,{error:'job must be one of the jobs the hub knows'});
-      out=jobs.start(b.job)}
+      if(b.job==='deploy'){ // going online: only on a passing check of the last 10 minutes, with the version it named typed back; the script checks all of it again
+       const chk=jobs.last('deploy-check'),can=canPublish(chk,Date.now());
+       if(!can.ok)return json(409,{error:can.why});
+       if(b.confirm!==chk.summary.version)return json(409,{error:`You confirmed ${String(b.confirm).slice(0,20)}, but the check names ${chk.summary.version}. Press Check again.`});
+       writeAtomic(path.join(root,'.hub','deploy-confirm.json'),JSON.stringify({version:chk.summary.version,at:Date.now()}))}
+      out=jobs.start(b.job);if(b.job==='deploy'&&out.error){try{fs.unlinkSync(path.join(root,'.hub','deploy-confirm.json'))}catch{}}}
      else{
       if(typeof b.id!=='string'||!JOB_ID.test(b.id))return json(400,{error:'id must be a job id'});
       out=await jobs.stop(b.id)}
@@ -299,7 +307,7 @@ export function createHubServer({root,port=0,runs=null,chat=null,jobs=null,commi
     if(r.api==='assets-summary'){if(!records)return json(200,{enabled:false});const s=await records.summary();return s.error?json(s.code||500,{error:s.error}):json(200,{enabled:true,...s})}
     if(r.api==='chat')return json(200,chat?chat.view():{enabled:false,messages:[],working:false,model:'sonnet',tokens:0,pending:null});
     if(r.api==='chatfeed')return json(200,chat?chat.feed(Number.parseInt(url.searchParams.get('after'),10)||0):{turn:0,working:false,events:[],last:0});
-    if(r.api==='activity')return json(200,activityOf(runs,chat));
+    if(r.api==='activity')return json(200,activityOf(runs,chat,{root,jobs}));
     if(r.api==='jobs')return json(200,jobs&&runs?jobs.list():{enabled:false,busy:false,running:null,jobs:[]});
     if(r.api==='hub-id')return json(200,{hub:HUB_NAME,version:HUB_VERSION,pid:process.pid,startedAt,canRestart:!!(restart&&runs)});
     if(r.api==='commit-proposal')return json(200,commits&&runs?commits.proposal():{enabled:false});

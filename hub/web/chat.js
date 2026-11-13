@@ -30,7 +30,8 @@ export function mountChat(view,{onChange}={}){
  const stopBtn=h('button',{class:'btn danger',type:'button',onclick:()=>act('chat-stop',{})},'Stop');
  const composer=h('div',{class:'chat-composer'},ta,h('div',{class:'btns'},sendBtn,stopBtn,h('span',{class:'small dim'},'Ctrl+Enter sends. Every message is a model call and counts on the gauges.')));
  const cbox=h('div',{}),hint=h('p',{class:'small dim'}),warn=h('div',{class:'cwarn',role:'status',hidden:true}),paintCache=mountCacheStrip(cbox);hint.hidden=true;
- view.append(top,cbox,hint,warn,note,list,composer);
+ const head=h('div',{class:'chat-head'},top,cbox,hint); // one bordered header: the model picker on top, the conversation and cache meter under it
+ view.append(head,warn,note,list,composer);
  const clearWarn=()=>{warn.hidden=true;warn.textContent=''};
  const showWarn=(text,...buttons)=>{warn.textContent='';warn.append(h('p',{},text),h('div',{class:'btns'},buttons));warn.hidden=false};
  const wbtn=(label,fn,pri)=>h('button',{class:'btn'+(pri?' pri':''),type:'button',onclick:fn},label);
@@ -56,7 +57,7 @@ export function mountChat(view,{onChange}={}){
   sel.addEventListener('change',()=>{const to=sel.value,w=modelSwitchWarning(contextOf(d.cache));if(!w)return act('chat-model',{model:to});
    showWarn(w,wbtn('New chat on that model',async()=>{clearWarn();await act('chat-new',{});await act('chat-model',{model:to})},true),wbtn('Switch anyway',()=>{clearWarn();act('chat-model',{model:to})}),wbtn('Stay',()=>{clearWarn();sel.value=d.model}))});
   top.append(h('span',{class:'label'},'Master'),sel);
-  if(d.pending)top.append(h('span',{class:'cont'},h('button',{class:'btn pri',type:'button',onclick:()=>act('chat-model',{model:d.pending.model,confirm:true})},`Yes, switch to ${modelName(d.pending.model)}`),h('span',{class:'small dim'},`within ${secondsLeft(d.pending)} s`)));
+  if(d.pending)top.append(h('span',{class:'cont'},h('button',{class:'btn pri',type:'button',onclick:()=>act('chat-model',{model:d.pending.model,confirm:true})},`Yes, switch to ${modelName(d.pending.model)}`),h('button',{class:'btn',type:'button',onclick:()=>act('chat-model',{model:d.model})},'Cancel'),h('span',{class:'small dim'},`within ${secondsLeft(d.pending)} s`)));
   top.append(h('span',{class:'small dim chat-tokens'},`${fmt(d.tokens)} tokens in this chat`),h('button',{class:'btn',type:'button',disabled:d.working,onclick:()=>{if(confirm('Start a new chat? The old one is forgotten.'))act('chat-new',{})}},'New chat'))}
  function drawList(d){
   const stick=list.scrollTop+list.clientHeight>=list.scrollHeight-40;

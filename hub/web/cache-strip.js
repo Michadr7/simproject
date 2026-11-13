@@ -10,7 +10,8 @@ export function mountCacheStrip(box){
  const size=h('div',{class:'small'}),sizeBar=h('div',{class:'capbar'},h('i')),state=h('div',{class:'small'}),parts=h('div',{class:'cparts','aria-hidden':'true'},h('i',{class:'c-re'}),h('i',{class:'c-wr'})),legend=h('div',{class:'small dim'});
  box.append(h('div',{class:'label'},'Conversation and cache'),size,sizeBar,state,parts,legend);
  return function paint(source,now=Date.now()){
-  const c=source&&source.cache;box.hidden=!c;if(!c)return;
+  const c=source&&source.cache;box.hidden=false;
+  if(!c){size.textContent='Conversation size and cache: measured after the next reply.';sizeBar.hidden=true;state.textContent='';parts.hidden=true;legend.textContent='';return}
   const ctx=contextOf(c),win=Number.isFinite(c.window)&&c.window>0?c.window:null,sp=splitOf(c);
   size.textContent=`Conversation size: ${fmt(ctx)}${win?` of ${fmt(win)}`:''} tokens`;
   sizeBar.hidden=!win;if(win){sizeBar.firstChild.style.width=Math.min(100,ctx/win*100)+'%';sizeBar.dataset.state=ctx/win>=0.9?'full':ctx/win>=0.6?'warn':''}

@@ -108,7 +108,7 @@ export function mountCommit(view,{onChange}={}){
   testBox.append(h('div',{class:'tool-head'},h('span',{class:'plan-main'},h('span',{class:'plan-title'},'Tests'),h('span',{class:'plan-meta tool-res '+t.cls},t.text)),
    h('span',{class:'acts'},h('button',{class:'btn',type:'button',disabled:blocked,onclick:runTests},'Run tests'))));
   const ws=(p.warnings||[]).filter(w=>w.kind!=='tests');
-  for(const w of (p.warnings||[]).filter(w=>w.kind==='tests'))testBox.append(h('p',{class:'small warn'},w.text));
+  if(t.cls!=='run')for(const w of (p.warnings||[]).filter(w=>w.kind==='tests'))testBox.append(h('p',{class:'small warn'},w.text));
   for(const w of ws)testBox.append(h('p',{class:'small warn'},w.text))}
 
  function drawBanner(){

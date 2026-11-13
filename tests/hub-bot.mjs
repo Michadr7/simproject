@@ -43,4 +43,29 @@ assert.equal(sceneOf('chat',null),'chat');assert.equal(sceneOf('chat','tools'),'
 assert.ok(css.includes("@property --hue{syntax:'<number>'")&&/html\[data-mood=working\]\{--glow:/.test(css)&&/html\[data-mood=question\]:not\(\[data-hover\]\)\{--hue:/.test(css)&&/html\[data-mood=stopped\]:not\(\[data-hover\]\)\{--hue:/.test(css));
 assert.ok(js.includes('root.dataset.mood=m')&&app.includes("pill.className='nav-pill'")&&css.includes('.nav-pill{')&&/prefers-reduced-motion:reduce\)\{\.scene i\{animation:none/.test(css));
 {const m=await import('../hub/web/bot.js');assert.equal(m.pandaOf({mood:'working',source:'chat'}),'think');assert.equal(m.pandaOf({mood:'working',source:'run'}),'write');assert.equal(m.pandaOf({mood:'question'}),'wait');assert.equal(m.pandaOf({mood:'stopped'}),'stopped');assert.equal(m.pandaOf(null),'idle');assert.equal(m.fileOf({items:[{text:'Read plans/k1.md'},{text:'Edited dist/warehouse.js'}]}),'dist/warehouse.js');assert.equal(m.fileOf({items:[]}),'');assert.ok(fs.existsSync(resolveRoute(root,'/web/panda.js','127.0.0.1:1',1).file));const pj=fs.readFileSync(path.join(root,'hub','web','panda.js'),'utf8');assert.ok(!/fetch\(|innerHTML|document\./.test(pj),'the panda only draws; it reads and sends nothing');assert.ok(js.includes('mountPanda(')&&/html\[data-bot=open\] \.bot-bubble\{[^}]*height:164px/.test(css),'the open bot is the 164 px shelf')}
+// Hub 2.6: the panda draws the hub's real scene and facts, and nothing it was not given (a stub canvas records the text it draws)
+{const m=await import('../hub/web/bot.js'),{mountPanda}=await import('../hub/web/panda.js');
+ assert.equal(m.sceneFor({scene:'read',mood:'working'}),'read');assert.equal(m.sceneFor({scene:'nope',mood:'question'}),'wait','an unknown scene falls back to the mood');assert.equal(m.sceneFor({mood:'idle'}),'idle');
+ assert.deepEqual(m.factsFor({facts:{used:5,cap:0,file:'a.js',asks:2,sign:'Cap reached',cacheMin:12,cache:'unknown',gauge:70}}),{used:5,cap:null,file:'a.js',cmd:'',asks:2,sign:'Cap reached',cacheMin:12,cache:'unknown',gauge:70},'a zero allowance is no allowance');
+ assert.equal(m.factsFor({facts:{}}).cacheMin,null);assert.equal(m.factsFor(null).gauge,null);
+ const texts=[];const cx=new Proxy(function(){},{get:(t,k)=>k==='measureText'?s=>({width:String(s).length*5}):k==='fillText'?s=>{texts.push(String(s))}:k==='createLinearGradient'||k==='createRadialGradient'?()=>({addColorStop(){}}):()=>{},set:()=>true,apply:()=>{}});
+ const cv={getContext:()=>cx,getBoundingClientRect:()=>({width:900,height:164,left:0,top:0}),width:0,height:0};let cb=null;
+ const win={matchMedia:()=>({matches:true}),devicePixelRatio:1,addEventListener(){},removeEventListener(){},requestAnimationFrame:f=>{cb=f;return 1},cancelAnimationFrame(){}};
+ const p=mountPanda(cv,{win}),seen=()=>texts.join(' | '),draw=(s,f)=>{texts.length=0;p.want(s,f);return seen()};
+ let t=draw('stopped',m.factsFor({scene:'stopped',facts:{sign:'Weekly limit',cacheMin:null,cap:null}}));assert.match(t,/Weekly limit/);assert.ok(!/cache|min|%/.test(t),'no cup and no bamboo without readings');
+ t=draw('pass',m.factsFor({facts:{cmd:'npm test'}}));assert.match(t,/passed/);assert.ok(!/\d+ passed/.test(t),'no test count');
+ t=draw('fail',m.factsFor({facts:{}}));assert.match(t,/failed/);assert.ok(!/\d+ failed/.test(t));
+ t=draw('wait',m.factsFor({facts:{asks:2}}));assert.match(t,/2 questions/);assert.match(draw('wait',m.factsFor({facts:{asks:1}})),/1 question\b/);
+ t=draw('write',m.factsFor({facts:{file:'dist/game.js',cacheMin:12,cache:'unknown',cap:1500000,used:1290000}}));assert.match(t,/game\.js/);assert.match(t,/12 min since last reply/);assert.ok(!/cold/.test(t),'never cold without a measured lifetime');assert.match(t,/86\s*%/,'the allowance shows as a percentage');
+ t=draw('write',m.factsFor({facts:{cacheMin:30,cache:'cold'}}));assert.match(t,/cache cold - 30 min/);
+ p.stop()}
+// 2.7.2: the panda is never taller than the shelf, and the chat header has a Cancel and a meter that is always there
+{const {mountPanda}=await import('../hub/web/panda.js');let tr=null;
+ const cx=new Proxy(function(){},{get:(t,k)=>k==='setTransform'?(...a)=>{tr=a}:k==='measureText'?s=>({width:String(s).length*5}):k==='createLinearGradient'||k==='createRadialGradient'?()=>({addColorStop(){}}):()=>{},set:()=>true,apply:()=>{}});
+ const mk=h=>({getContext:()=>cx,getBoundingClientRect:()=>({width:900,height:h,left:0,top:0}),width:0,height:0}),win={matchMedia:()=>({matches:true}),devicePixelRatio:1,addEventListener(){},removeEventListener(){},requestAnimationFrame:()=>1,cancelAnimationFrame(){}};
+ mountPanda(mk(164),{win}).stop();assert.ok(tr[0]<=164/206+1e-9,'on a 164 px shelf the drawing scale leaves room for the tallest sign: '+tr[0]);
+ mountPanda(mk(400),{win}).stop();assert.equal(tr[0],0.9,'a taller shelf keeps the size setting');
+ const chatJs=fs.readFileSync(path.join(root,'hub','web','chat.js'),'utf8'),strip=fs.readFileSync(path.join(root,'hub','web','cache-strip.js'),'utf8');
+ assert.ok(chatJs.includes("'Cancel'")&&chatJs.includes("chat-head"),'the model switch can be cancelled; one bordered header');assert.ok(strip.includes('measured after the next reply')&&!strip.includes('box.hidden=!c'),'the meter shows from the start')}
+{const m=await import('../hub/web/bot.js');assert.deepEqual(m.linkOf({source:'job'}),{href:'#tools',label:'Open Tools'},'a running tool job links to Tools')}
 console.log('hub-bot: fold states, clicks, poll pace, speech line, count, link, room made on the page, text-only DOM with one read, and the runs-off notice passed.');

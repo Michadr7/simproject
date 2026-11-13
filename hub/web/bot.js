@@ -15,15 +15,20 @@ export const afterFace=state=>state==='mini'?'line':'mini';
 export const afterLine=state=>state==='open'?'line':'open';
 // Which panda pose shows the hub's mood (2.4.2). A chat turn is the master thinking; a run is working; a question or a stop is shown as such; the file named in the last live row (if any) goes on the panda's sign.
 export const pandaOf=a=>{const m=moodOf(a);return m==='working'?(a&&a.source==='chat'?'think':'write'):m==='question'?'wait':m==='stopped'?'stopped':'idle'};
+// 2.6: the pose and the numbers come from the activity answer's own scene and facts (hub/activity.js). Older answers without them fall back to the mood.
+export const PANDA_SCENES=['idle','think','read','write','test','pass','fail','wait','stopped','done'];
+export const sceneFor=a=>a&&PANDA_SCENES.includes(a.scene)?a.scene:pandaOf(a);
+const num=v=>Number.isFinite(v)?v:null;
+export const factsFor=a=>{const f=a&&a.facts?a.facts:{};return {used:num(f.used)||0,cap:num(f.cap)>0?f.cap:null,file:String(f.file||(a?fileOf(a):'')||''),cmd:String(f.cmd||''),asks:num(f.asks)||0,sign:f.sign?String(f.sign):null,cacheMin:num(f.cacheMin),cache:f.cache||null,gauge:num(f.gauge)}};
 export const fileOf=a=>{const rows=a&&Array.isArray(a.items)?a.items:[];for(let i=rows.length-1;i>=0;i--){const m=/[A-Za-z0-9_./\\-]+\.(?:js|mjs|css|html|md|json)\b/.exec(String(rows[i]&&(rows[i].text||rows[i].k)||''));if(m)return m[0]}return ''};
 export const pollMs=mood=>mood==='working'?2000:10000;
 export const lineOf=a=>!a?'The hub is not answering.':a.enabled===false?'Runs and the chat are switched off.':String(a.line||'Nothing is running.');
 export const countOf=a=>!a||!(a.tokens>0)?'':a.cap>0?`${fmt(a.tokens)} / ${fmt(a.cap)}`:fmt(a.tokens);
 // Where "open it" leads: the run, the chat, or nowhere.
-export const linkOf=a=>!a?null:a.source==='run'&&/^run-[0-9]{8}-[0-9]{6}-[0-9a-f]{4}$/.test(String(a.runId))?{href:'#runs/'+a.runId,label:'Open the run'}:a.source==='chat'?{href:'#chat',label:'Open the chat'}:null;
+export const linkOf=a=>!a?null:a.source==='job'?{href:'#tools',label:'Open Tools'}:a.source==='run'&&/^run-[0-9]{8}-[0-9]{6}-[0-9a-f]{4}$/.test(String(a.runId))?{href:'#runs/'+a.runId,label:'Open the run'}:a.source==='chat'?{href:'#chat',label:'Open the chat'}:null;
 export const faceLabel=(a,state)=>`Hub assistant: ${MOOD_LABEL[moodOf(a)].toLowerCase()}. ${state==='mini'?'Show':'Hide'} what it is doing.`;
 
-export function mountBot({doc=document,win=window,query=null,store=null}={}){
+export function mountBot({doc=document,win=window,query=null,store=null,onActivity=null}={}){
  const h=(tag,props={},...kids)=>{const e=doc.createElement(tag);for(const [k,v] of Object.entries(props)){if(k==='class')e.className=v;else e.setAttribute(k,v)}e.append(...kids);return e};
  const root=doc.documentElement;
  let state=botStateOf(query,store?store.get('hub.bot.v2'):null),last=null,timer=null,alive=true,sig='';
@@ -43,7 +48,7 @@ export function mountBot({doc=document,win=window,query=null,store=null}={}){
   // the panda lives on the shelf (the open state) and rests, unseen and not drawn, in the other two
   if(state==='open'&&!panda&&typeof stage.getContext==='function'){try{panda=mountPanda(stage,{win});feedPanda(last)}catch{panda=null}}
   else if(state!=='open'&&panda){panda.stop();panda=null}}
- function feedPanda(a){if(!panda)return;const m=moodOf(a);panda.want(pandaOf(a),{used:a&&a.tokens>0?a.tokens:0,cap:a&&a.cap>0?a.cap:1500000,file:fileOf(a),cmd:'',asks:m==='question'?1:0,reason:'error'})}
+ function feedPanda(a){if(panda)panda.want(sceneFor(a),factsFor(a))}
  function draw(a){
   last=a;const m=a?moodOf(a):'stopped';box.dataset.mood=m;
   root.dataset.mood=m;if(a&&(a.source==='chat'||a.source==='run'))root.dataset.doing=a.source;else delete root.dataset.doing; // the background follows what the hub is doing (hub.css, "the scene")
@@ -53,7 +58,7 @@ export function mountBot({doc=document,win=window,query=null,store=null}={}){
    if(!items.length)rows.append(h('div',{class:'bot-none'},'Nothing yet.'));
    for(const r of items)rows.append(h('div',{class:'br '+(r.cls==='q'||r.cls==='bad'?r.cls:'')},h('span',{class:'t'},String(r.t||'')),h('span',{class:'x'},String(r.text||r.k||'')),h('span',{class:'n'},String(r.n||''))));
    foot.textContent='';const l=linkOf(a);if(l)foot.append(h('a',{href:l.href},l.label))}
-  drawState();feedPanda(a)}
+  drawState();feedPanda(a);if(onActivity&&a){try{onActivity(a)}catch{}}}
  async function tick(){
   if(!alive)return;
   if(!doc.hidden){try{const r=await win.fetch('/api/activity',{cache:'no-store'});draw(r.ok?await r.json():null)}catch{draw(null)}}

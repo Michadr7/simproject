@@ -7,8 +7,8 @@ import {HUB_VERSION,TREE,ROUTES,routeOf,runIdOf,accentOf,barOf,titleOf,pageOf} f
 import {resolveRoute} from '../hub/server.js';
 
 const root=path.resolve(path.dirname(fileURLToPath(import.meta.url)),'..');
-assert.deepEqual(TREE.areas.map(r=>r.label),['Chat','Work','Assets']);assert.deepEqual(TREE.foot.map(r=>r.label),['Commit','Tools','Tokens']);
-assert.deepEqual(ROUTES,['chat','work','assets','commit','tools','tokens'],'three areas and three foot rows, each with its own route; Waiting, Plans and Runs live inside Work');
+assert.deepEqual(TREE.areas.map(r=>r.label),['Chat','Work','Assets']);assert.deepEqual(TREE.foot.map(r=>r.label),['Commit','Deploy','Tools','Tokens']);
+assert.deepEqual(ROUTES,['chat','work','assets','commit','deploy','tools','tokens'],'three areas and four foot rows, each with its own route; Waiting, Plans and Runs live inside Work');
 assert.equal(runIdOf('#runs/run-20261111-140211-ab12'),'run-20261111-140211-ab12');assert.equal(runIdOf('#runs/../x'),null);assert.equal(runIdOf('#runs'),null);assert.equal(runIdOf('#plans/run-20261111-140211-ab12'),null);
 for(const [h,r] of [['#waiting','work'],['#plans','work'],['#assets','assets'],['#tokens','tokens'],['#/plans','work'],['#Plans?id=x','work'],['#plans/2026-11-10-x','work'],['','work'],[undefined,'work'],['#sessions','work'],['#chat','chat'],['#runs','work'],['#runs/run-20261111-140211-ab12','work'],['#nope','work'],['#__proto__','work']])assert.equal(routeOf(h),r,`route of ${JSON.stringify(h)}`);
 // the accent follows the weekly gauge: blue under 60, orange from 60, red from 90

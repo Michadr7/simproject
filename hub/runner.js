@@ -65,13 +65,13 @@ export function createCapTracker({cap,warnAt=0.8}){
    return {counted:true,total,capped:total>=cap,warn}}}}
 
 export function createReducer({tools=[],cwd=null,maxText=MAX_TEXT}={}){
- const allowed=new Set(tools);let session=null,question=null,result=null,violation=null,window=null;const files=new Set(),paths=new Set(),readings=[];
+ const allowed=new Set(tools);let session=null,question=null,result=null,violation=null,window=null;const files=new Set(),paths=new Set(),readings=[],shellPending=new Map(); // shellPending: tool_use id -> the hub script a shell call ran (npm test, ...), so its exit result can be named
  function toolEvent(b){
   const n=String(b.name||'?').slice(0,30),i=b.input||{};
   if(n==='Read')return {kind:'tool',tool:n,target:safeName(i.file_path)};
   if(n==='Edit'||n==='Write'){const f=safeName(i.file_path);if(f)files.add(f);const rp=relPath(i.file_path,cwd);if(rp&&paths.size<300)paths.add(rp);return {kind:'tool',tool:n,target:f}}
   if(n==='Grep'||n==='Glob')return {kind:'tool',tool:n,target:'1 pattern'};
-  if(n==='Bash'||n==='PowerShell'){const c=String(i.command||'').trim(),hit=Object.values(NEEDS).find(s=>c===s||c.startsWith(s+' '));return {kind:'tool',tool:'Shell',target:hit||'command'}}
+  if(n==='Bash'||n==='PowerShell'){const c=String(i.command||'').trim(),hit=Object.values(NEEDS).find(s=>c===s||c.startsWith(s+' '));if(hit&&b.id&&shellPending.size<50)shellPending.set(String(b.id),hit);return {kind:'tool',tool:'Shell',target:hit||'command'}}
   return {kind:'tool',tool:n,target:''}}
  return {
   // take: one stdout line. Returns the feed events it produced, and the usage to count (if any).
@@ -85,6 +85,8 @@ export function createReducer({tools=[],cwd=null,maxText=MAX_TEXT}={}){
     for(const b of blocks){if(b.type==='tool_use')out.push(toolEvent(b));
      else if(b.type==='text'&&typeof b.text==='string'){const m=/^QUESTION:[ \t]*([\s\S]*)$/m.exec(b.text);if(m){question=m[0].slice(0,maxText);out.push({kind:'question'})}}}
     return {events:out,usage:e.message.usage?{id:e.message.id??null,usage:e.message.usage}:null}}
+   else if(e.type==='user'&&e.message&&Array.isArray(e.message.content)){ // the result of a shell call that ran one of the hub's scripts: passed or failed, by the tool's own error flag (never by reading its text)
+    for(const b of e.message.content)if(b&&b.type==='tool_result'&&shellPending.has(String(b.tool_use_id))){out.push({kind:'shell',target:shellPending.get(String(b.tool_use_id)),ok:!b.is_error});shellPending.delete(String(b.tool_use_id))}}
    else if(e.type==='result'){const p=parseRunOutput(line).result;window=windowOf(e);result={isError:!!e.is_error,costUsd:e.total_cost_usd??null,text:typeof e.result==='string'?e.result.slice(0,maxText):''};out.push({kind:'result',isError:result.isError,turns:p?.turns??null})}
    return {events:out,usage:null}},
   get session(){return session},get question(){return question},get result(){return result},get window(){return window},get violation(){return violation},

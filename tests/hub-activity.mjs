@@ -82,4 +82,40 @@ try{
  const off=await new Promise(ok=>http.get({host:'127.0.0.1',port:p2,path:'/api/activity',headers:{Host:`127.0.0.1:${p2}`}},res=>{let t='';res.on('data',c=>t+=c);res.on('end',()=>ok(JSON.parse(t)))}));
  assert.equal(off.mood,'idle');await bare.close();
 }finally{await chat.shutdown();await runs.shutdown();await srv.close()}
+// a tool job that runs is work: the bot and the panda must agree with the Commit and Tools pages
+{const {buildActivity}=await import('../hub/activity.js');
+ let a=buildActivity({job:{key:'test',label:'Run the tests'}});assert.equal(a.mood,'working');assert.equal(a.source,'job');assert.equal(a.line,'Run the tests is running.');assert.equal(a.scene,'test');assert.equal(a.facts.cmd,'Run the tests');
+ a=buildActivity({job:{key:'release',label:'Make a release'}});assert.equal(a.scene,'write');assert.equal(a.mood,'working');
+ a=buildActivity({job:{key:'check',label:'Check'}});assert.equal(a.scene,'test');
+ assert.equal(buildActivity({runs:[{id:'r',model:'sonnet',status:'running',tokens:1,capTokens:2}],job:{key:'test',label:'x'}}).source,'run','a run on show wins over a job');
+ assert.equal(buildActivity({}).mood,'idle');
+ const act=activityOf(null,null,{jobs:{list:()=>({running:{key:'test',label:'Run the tests'}})}});assert.equal(act.jobRunning,true)}
+// Hub 2.6: the panda's scene and facts, worked out from the feed (names and counts only)
+{const {sceneOfEvents,gaugeOf,STOP_SIGN,SCENES}=await import('../hub/activity.js');const {createReducer}=await import('../hub/runner.js');
+ const tool=(t,target)=>({kind:'tool',tool:t,target}),T={kind:'tokens',total:5};
+ assert.equal(sceneOfEvents([{kind:'turn'}]),'think');assert.equal(sceneOfEvents([{kind:'turn'},tool('Read','a.js'),T]),'read');assert.equal(sceneOfEvents([tool('Grep','1 pattern')]),'read');
+ assert.equal(sceneOfEvents([tool('Read','a.js'),tool('Edit','b.js')]),'write');assert.equal(sceneOfEvents([tool('Shell','npm test')]),'test');assert.equal(sceneOfEvents([tool('Shell','command')]),'write');assert.equal(sceneOfEvents([tool('WebFetch','')]),'think');
+ assert.equal(sceneOfEvents([tool('Shell','npm test'),{kind:'shell',target:'npm test',ok:true}]),'pass');assert.equal(sceneOfEvents([tool('Shell','npm test'),{kind:'shell',target:'npm test',ok:false},T]),'fail','tokens do not end the result');
+ assert.equal(sceneOfEvents([{kind:'shell',target:'npm test',ok:false},tool('Edit','a.js')]),'write','the next event ends it');
+ const run={id:'run-1',model:'sonnet',status:'running',tokens:300000,capTokens:1500000};
+ let a=buildActivity({runs:[run],runFeed:[{kind:'started'},tool('Read','PROJECT-BRIEF.md'),tool('Edit','game.js'),T],gauge:70});
+ assert.equal(a.scene,'write');assert.equal(a.facts.file,'game.js');assert.equal(a.facts.used,300000);assert.equal(a.facts.cap,1500000);assert.equal(a.facts.gauge,70);assert.equal(a.facts.asks,0);assert.equal(a.facts.reason,null);
+ a=buildActivity({runs:[run],runFeed:[tool('Shell','npm test'),{kind:'shell',target:'npm test',ok:true}]});assert.equal(a.scene,'pass');assert.equal(a.facts.result,'passed');assert.equal(a.facts.resultOf,'npm test');
+ assert.equal(buildActivity({runs:[{...run,status:'waiting-answer'}],runFeed:[]}).scene,'wait');assert.equal(buildActivity({runs:[{...run,status:'waiting-answer'},{...run,id:'r2',status:'confirming'}]}).facts.asks,2);assert.equal(buildActivity({chat:{pending:{model:'opus'}}}).facts.asks,1);
+ for(const st of Object.keys(STOP_SIGN)){a=buildActivity({runs:[{...run,status:st}]});assert.equal(a.scene,'stopped',st);assert.equal(a.facts.reason,st);assert.equal(a.facts.sign,STOP_SIGN[st])}
+ assert.equal(Object.keys(STOP_SIGN).length,6,'all six stop reasons have a sign');
+ assert.equal(buildActivity({runs:[{...run,status:'done'}]}).scene,'done');a=buildActivity({});assert.equal(a.scene,'idle');assert.equal(a.facts.cacheMin,null);assert.equal(a.facts.gauge,null);assert.ok(SCENES.includes(a.scene));
+ assert.equal(buildActivity({chat:{working:true,model:'sonnet'},chatFeed:{events:[{kind:'turn'}]}}).scene,'think');
+ // the cup: minutes since the last reply; "cold" only when the lifetime is sure
+ const now=1e12,min=60000,sure={sure:true,longestHitMs:4*min,shortestMissMs:9*min,hits:3,misses:1};
+ a=buildActivity({runs:[{...run,cache:{at:now-12*min}}],now,life:null,runFeed:[]});assert.equal(a.facts.cacheMin,12);assert.equal(a.facts.cache,'unknown','never cold without a measured lifetime');
+ assert.equal(buildActivity({runs:[{...run,cache:{at:now-12*min}}],now,life:sure}).facts.cache,'cold');assert.equal(buildActivity({runs:[{...run,cache:{at:now-2*min}}],now,life:sure}).facts.cache,'warm');
+ assert.equal(gaugeOf({weekly:{known:true,pct:46},fiveHour:{known:false,pct:99}}),46,'an unknown gauge is ignored');assert.equal(gaugeOf({weekly:{known:true,pct:46},fiveHour:{known:true,pct:92}}),92);assert.equal(gaugeOf({}),null);
+ // the runner: a hub script's exit result becomes a feed event by the tool's own error flag; other commands and unknown ids give nothing
+ const red=createReducer({tools:['Bash']}),L=o=>JSON.stringify(o),use=(id,command)=>L({type:'assistant',message:{id:'m'+id,content:[{type:'tool_use',id,name:'Bash',input:{command}}],usage:{input_tokens:1}}}),res=(id,err)=>L({type:'user',message:{content:[{type:'tool_result',tool_use_id:id,is_error:err,content:'SECRET OUTPUT'}]}});
+ red.take(use('t1','npm test'));red.take(use('t2','node secret.js'));
+ let r=red.take(res('t1',false));assert.deepEqual(r.events,[{kind:'shell',target:'npm test',ok:true}]);assert.ok(!JSON.stringify(r).includes('SECRET OUTPUT'));
+ assert.deepEqual(red.take(res('t2',true)).events,[],'a command that is not a hub script has no result event');assert.deepEqual(red.take(res('nope',true)).events,[]);assert.deepEqual(red.take(res('t1',true)).events,[],'each result once');
+ red.take(use('t3','npm test -- foo'));assert.deepEqual(red.take(res('t3',true)).events,[{kind:'shell',target:'npm test',ok:false}]);
+ assert.equal(feedRow({kind:'shell',target:'npm test',ok:false}).text,'npm test failed');assert.equal(feedRow({kind:'shell',target:'npm test',ok:true}).cls,'')}
 console.log('hub-activity: the chat feed (names and counts, starts over per message, ends with how the turn ended), the activity builder (idle, working, question, stopped) and the two GET routes passed.');

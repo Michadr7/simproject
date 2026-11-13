@@ -12,14 +12,17 @@ let W=0,H=0,now=0;
 const bot={x:40,dir:1,s:.5,state:'idle',want:'idle',t0:0,goal:null,pause:1,idleKind:'idle'};
 const P={Lx:-25,Ly:-28,Rx:25,Ry:-28,lx:0,ly:0,tilt:0,hy:0,open:1,smile:.15,wide:0,sit:0,lean:0,happy:0,worry:0,droop:0};
 // F: facts from the activity feed (names and counts only). S: the drawn values, gliding toward F.
-const F={used:0,cap:1500000,file:'dist/world.js',cmd:'npm test',total:148,fail:3,asks:1,reason:'cap',cacheMin:3,gauge:36,sound:false};
+// Everything starts unknown: no allowance (no bamboo), no cache reading (no cup), no gauge. Nothing is drawn from a number the hub did not give.
+const F={used:0,cap:null,file:'',cmd:'',asks:1,sign:null,cacheMin:null,cache:null,gauge:null};
 const S={fill:0,warm:1,prop:0};
 const FONT='"Segoe UI",system-ui,sans-serif',RUN=['read','write','test','pass','fail','stopped'];
-const REASON={cap:'Cap reached',you:'Stopped by you',error:'Error',weekly:'Weekly limit'};
-const fillOf=()=>F.cap?F.used/F.cap:0,warmOf=()=>Math.max(0,Math.min(1,1-F.cacheMin/60));
+const fillOf=()=>F.cap>0?F.used/F.cap:0,haveCup=()=>Number.isFinite(F.cacheMin);
+// the steam thins over 60 minutes; "cold" (frost) only when the hub has measured the cache lifetime and says so
+const warmOf=()=>haveCup()?(F.cache==='cold'?0:Math.max(0,Math.min(1,1-F.cacheMin/60))):0;
 const pace=()=>F.gauge>=90?.6:F.gauge>=60?1.35:1;
 const homeX=()=>Math.max(W*.5,W-176),ground=()=>H-18,big=()=>W<430?.78:1;
-function size(){const r=cv.getBoundingClientRect(),d=Math.min(2,win.devicePixelRatio||1);W=r.width/K;H=r.height/K;cv.width=Math.round(r.width*d);cv.height=Math.round(r.height*d);cx.setTransform(d*K,0,0,d*K,0,0)}
+// the scale is the size setting, but never so big that the tallest sign (about 206 drawing units) is cut off by the top of the shelf
+function size(){const r=cv.getBoundingClientRect(),d=Math.min(2,win.devicePixelRatio||1),k=Math.min(K,(r.height||206)/206);W=r.width/k;H=r.height/k;cv.width=Math.round(r.width*d);cv.height=Math.round(r.height*d);cx.setTransform(d*k,0,0,d*k,0,0)}
 const rgba=(h,a)=>'rgba('+parseInt(h.slice(1,3),16)+','+parseInt(h.slice(3,5),16)+','+parseInt(h.slice(5,7),16)+','+a+')';
 const rr=(x,y,w,h,r)=>{cx.beginPath();cx.roundRect(x,y,w,h,r)};
 const ell=(x,y,rx,ry,rot=0)=>{cx.beginPath();cx.ellipse(x,y,rx,ry,rot,0,7)};
@@ -27,7 +30,7 @@ const line=(a,b,c,d)=>{cx.beginPath();cx.moveTo(a,b);cx.lineTo(c,d);cx.stroke()}
 const poly=p=>{cx.beginPath();p.forEach(([x,y],i)=>i?cx.lineTo(x,y):cx.moveTo(x,y));cx.closePath()};
 const font=(px,w=600)=>{cx.font=w+' '+px+'px '+FONT};
 // a file or command name, cut to fit a prop (the last part of the path, then an ellipsis)
-function fit(s,max){s=String(s).split(/[\\/]/).pop();if(cx.measureText(s).width<=max)return s;while(s.length>1&&cx.measureText(s+'â€¦').width>max)s=s.slice(0,-1);return s+'â€¦'}
+function fit(s,max){s=String(s).split(/[\\/]/).pop();if(cx.measureText(s).width<=max)return s;while(s.length>1&&cx.measureText(s+'…').width>max)s=s.slice(0,-1);return s+'…'}
 function dark(x,y,rx,ry,rot=0){ell(x,y,rx,ry,rot);const g=cx.createLinearGradient(x-rx,y-ry,x+rx,y+ry);g.addColorStop(0,C.fur);g.addColorStop(1,C.fur2);cx.fillStyle=g;cx.fill();cx.strokeStyle=C.rim;cx.lineWidth=1.2;cx.stroke()}
 function light(x,y,rx,ry){ell(x,y,rx,ry);const g=cx.createRadialGradient(x-rx*.3,y-ry*.4,ry*.2,x,y,Math.max(rx,ry)*1.05);g.addColorStop(0,C.white);g.addColorStop(1,C.white2);cx.fillStyle=g;cx.fill()}
 function pads(x,y,r){cx.fillStyle=C.pink;ell(x,y+r*.18,r*.5,r*.42);cx.fill();for(const d of[-1,0,1]){ell(x+d*r*.5,y-r*.48,r*.17,r*.2);cx.fill()}}
@@ -96,25 +99,25 @@ function bamboo(t){
 
 // the cache: a tea cup that steams while warm and frosts over when cold; the label is minutes since the last reply
 function cup(t){
- const x=-50,w=S.warm,cold=w<.04;
+ const x=-50,w=S.warm,cold=F.cache==='cold';
  cx.fillStyle=C.white2;ell(x,-1.5,12.5,2.6);cx.fill();
  poly([[x-8.5,-16],[x+8.5,-16],[x+6,-2.5],[x-6,-2.5]]);cx.fillStyle=cold?'#b7cfee':C.paper;cx.fill();
  cx.strokeStyle=cold?'#b7cfee':C.paper;cx.lineWidth=2.2;cx.beginPath();cx.arc(x+8.5,-9.5,4,-PI/2,PI/2);cx.stroke();
  cx.fillStyle=cold?'#7fa3d4':'#b9763a';ell(x,-16,8.5,2.3);cx.fill();
  if(cold){cx.strokeStyle='#fff';cx.lineWidth=1;for(const[a,b]of[[-4,-11],[2,-6],[4,-12]]){line(x+a-1.8,b,x+a+1.8,b);line(x+a,b-1.8,x+a,b+1.8)}}
  else{cx.strokeStyle=C.ink;cx.lineWidth=1.7;cx.lineCap='round';for(let i=0;i<3;i++){const ph=still?i:t*1.8+i*2.1;cx.globalAlpha=w*(.6-i*.08);cx.beginPath();for(let k=0;k<=8;k++){const y=-21-k*(1.6+w*1.9),xx=x-5+i*5+sin(ph+k*.8)*(1.2+k*.28);k?cx.lineTo(xx,y):cx.moveTo(xx,y)}cx.stroke()}cx.globalAlpha=1}
- font(10);cx.fillStyle=cold?C.eye:C.dim;cx.fillText('cache '+(cold?'cold':w<.5?'cooling':'warm')+' Â· '+F.cacheMin+' min',x-8,10)}
+ font(10);cx.fillStyle=cold?C.eye:C.dim;cx.fillText(F.cache==='unknown'||!F.cache?F.cacheMin+' min since last reply':'cache '+(cold?'cold':'warm')+' - '+F.cacheMin+' min',x-8,10)}
 
 // the lamp board (running, passed, failed)
 const BAD=[9,14,20,4,17,11];
 function board(st,tt){
  cx.strokeStyle=C.wood;cx.lineWidth=3.5;cx.lineCap='round';line(62,-32,57,0);line(126,-32,131,0);
  cx.save();if(st!=='test'){cx.shadowColor=st==='pass'?C.ok:C.crit;cx.shadowBlur=18}rr(44,-114,100,84,9);cx.fillStyle=C.screen;cx.fill();cx.restore();cx.strokeStyle=st==='pass'?C.ok:st==='fail'?C.crit:C.rim;cx.lineWidth=1.5;cx.stroke();
- const n=st==='test'?Math.floor(tt*3.5)%30:24,bad=st==='fail'?BAD.slice(0,Math.max(1,Math.min(6,F.fail))):[],blink=still||(tt*2.4)%1<.62;
+ const n=st==='test'?Math.floor(tt*3.5)%30:24,bad=st==='fail'?BAD.slice(0,3):[],blink=still||(tt*2.4)%1<.62;
  for(let i=0;i<24;i++){const x=56.5+(i%6)*15,y=-101+Math.floor(i/6)*15,isBad=bad.includes(i),cur=st==='test'&&i===n,on=i<n;
   const col=isBad?(blink?C.crit:'#4a2422'):on?C.ok:cur?C.ink:C.line;cx.save();if((on&&!isBad)||cur||(isBad&&blink)){cx.shadowColor=col;cx.shadowBlur=isBad?12:7}cx.fillStyle=col;ell(x,y,cur||isBad?5:4,cur||isBad?5:4);cx.fill();cx.restore()}
  font(11,st==='test'?600:700);cx.fillStyle=st==='pass'?C.ok:st==='fail'?C.crit:C.dim;
- cx.fillText(st==='pass'?F.total+' passed':st==='fail'?F.fail+' failed':fit(F.cmd,88),94,-41)}
+ cx.fillText(st==='pass'?'passed':st==='fail'?'failed':fit(F.cmd||'tests',88),94,-41)} // no counts: the feed gives passed or failed, never the number of tests
 
 function sign(x,y,w,h,col,glow,text,px,sub){
  cx.strokeStyle=C.wood;cx.lineWidth=3.5;cx.lineCap='round';line(42,P.Ry-P.sit*9,42,y+h);
@@ -127,7 +130,7 @@ function draw(t){
  const fg=cx.createLinearGradient(0,g,0,H);fg.addColorStop(0,'rgba(255,255,255,.08)');fg.addColorStop(1,'rgba(255,255,255,0)');cx.fillStyle=fg;cx.fillRect(0,g,W,H-g);
  cx.textAlign='center';cx.textBaseline='middle';
  // the stage's fixed props: bamboo (allowance) and cup (cache). They fade in while the hub works.
- if(S.prop>.02){cx.save();cx.globalAlpha=S.prop;cx.translate(homeX(),g);cx.scale(big(),big());bamboo(t);cup(t);cx.restore()}
+ if(S.prop>.02){cx.save();cx.globalAlpha=S.prop;cx.translate(homeX(),g);cx.scale(big(),big());if(F.cap>0)bamboo(t);if(haveCup())cup(t);cx.restore()}
  const mood=st==='wait'?C.warn:st==='done'||st==='pass'?C.ok:st==='fail'||st==='stopped'?C.crit:(st==='idle'||st==='nap'||st==='eat'||(walk&&bot.want==='idle'))?C.calm:C.acc;
  const hop=walk?-Math.abs(sin(t*9))*3.5:st==='done'?-Math.abs(sin(tt*5))*18:st==='pass'?-Math.abs(sin(tt*4.5))*9:st==='wait'?-Math.abs(sin(tt*3))*4:0,breath=sin(t*2.2)*.018;
  cx.save();cx.translate(bot.x,g);cx.scale(bot.dir*bot.s,bot.s);
@@ -153,8 +156,8 @@ function draw(t){
  cx.save();cx.shadowColor=mood;cx.shadowBlur=10+sin(t*4)*4;cx.fillStyle=mood;ell(0,-50.5,4,4);cx.fill();cx.restore();
  cx.save();cx.translate(0,-84+P.hy-breath*40);cx.rotate(P.tilt);head();cx.restore();
  if(st==='eat'){const x=P.Rx,y=P.Ry;cx.strokeStyle=C.leaf;cx.lineWidth=4.5;cx.lineCap='round';line(x-12,y+3,x+26,y-22);cx.strokeStyle='#3f9a5c';cx.lineWidth=1.5;line(x+4,y-10,x+7,y-6);line(x+15,y-17,x+18,y-13);cx.fillStyle=C.leaf;ell(x+35,y-25,9,3.2,-.2);cx.fill();ell(x+28,y-31,8,3,-1.1);cx.fill()}
- if(st==='wait')sign(-22,-186,128,48,C.warn,still?20:18+10*sin(tt*5),'I need you',18,F.asks+(F.asks===1?' question':' questions'));
- if(st==='stopped')sign(-22,-152,128,32,'#c9a877',6,REASON[F.reason]||'Stopped',13.5);
+ if(st==='wait')sign(-22,-186,128,48,C.warn,still?20:18+10*sin(tt*5),'I need you',18,Math.max(1,F.asks)+(F.asks<=1?' question':' questions'));
+ if(st==='stopped')sign(-22,-152,128,32,'#c9a877',6,F.sign||'Stopped',13.5);
  const j=st==='write'?sin(tt*22)*2.5:0;arm(-20,-48,P.Lx,P.Ly+j);arm(20,-48,P.Rx,P.Ry-j);
  if(st==='test'){rr(-33,-55,16,21,2);cx.fillStyle=C.paper;cx.fill();cx.fillStyle=C.faint;for(let i=0;i<3;i++)cx.fillRect(-30,-49+i*5,10,1.5);dark(-23,-38,6,5)}
  if(st==='read'){ // the book faces us: the cover carries the file name; a page flips over the top edge
