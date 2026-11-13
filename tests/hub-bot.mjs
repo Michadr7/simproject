@@ -66,6 +66,6 @@ assert.ok(js.includes('root.dataset.mood=m')&&app.includes("pill.className='nav-
  mountPanda(mk(164),{win}).stop();assert.ok(tr[0]<=164/206+1e-9,'on a 164 px shelf the drawing scale leaves room for the tallest sign: '+tr[0]);
  mountPanda(mk(400),{win}).stop();assert.equal(tr[0],0.9,'a taller shelf keeps the size setting');
  const chatJs=fs.readFileSync(path.join(root,'hub','web','chat.js'),'utf8'),strip=fs.readFileSync(path.join(root,'hub','web','cache-strip.js'),'utf8');
- assert.ok(chatJs.includes("'Cancel'")&&chatJs.includes("chat-head"),'the model switch can be cancelled; one bordered header');assert.ok(strip.includes('measured after the next reply')&&!strip.includes('box.hidden=!c'),'the meter shows from the start')}
+ assert.ok(chatJs.includes("'Cancel'")&&chatJs.includes("chat-head"),'the model switch can be cancelled; one bordered header');assert.ok(strip.includes('measured after the next reply')&&strip.includes('placeholder=true'),'the chat meter shows from the start (a run card opts out)')}
 {const m=await import('../hub/web/bot.js');assert.deepEqual(m.linkOf({source:'job'}),{href:'#tools',label:'Open Tools'},'a running tool job links to Tools')}
 console.log('hub-bot: fold states, clicks, poll pace, speech line, count, link, room made on the page, text-only DOM with one read, and the runs-off notice passed.');

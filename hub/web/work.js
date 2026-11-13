@@ -73,11 +73,16 @@ export function mountWork(view,{plan=null,run=null,onChange}={}){
      if(rest.length){const box=h('div',{});listPane.append(box);home=mountHome(box,{onChange:changed});home.update({items:rest});listMounts.push(()=>{home=null})}}
     listPane.append(rows)}}
   else{
+   // inside a project: what needs you first (steps, then its other things), then what works, then what waits, and what is done folded away
    for(const p of tree.projects){
     if(!p.steps.length&&!p.items.length)continue;
-    listPane.append(h('h2',{class:'sect'},p.name,h('span',{class:p.needsYou?'n':'dim'},p.summary)),h('div',{class:'rows'},p.steps.map(s=>row(p,s,current,false))));
+    const by=g=>p.steps.filter(s=>groupOf(s)===g);
+    listPane.append(h('h2',{class:'sect'},p.name,h('span',{class:p.needsYou?'n':'dim'},p.summary)));
+    if(by('you').length)listPane.append(h('div',{class:'rows'},by('you').map(s=>row(p,s,current,false))));
     const pi=p.items.filter(i=>i.kind==='found');if(pi.length)listPane.append(h('div',{class:'plan-list'},pi.map(foundRow)));
-    const pr=p.items.filter(i=>i.kind!=='found');if(pr.length){const box=h('div',{});listPane.append(box);const hm=mountHome(box,{onChange:changed});hm.update({items:pr})}}}
+    const pr=p.items.filter(i=>i.kind!=='found');if(pr.length){const box=h('div',{});listPane.append(box);const hm=mountHome(box,{onChange:changed});hm.update({items:pr})}
+    for(const g of ['run','wait'])if(by(g).length)listPane.append(h('div',{class:'rows'},by(g).map(s=>row(p,s,current,false))));
+    if(by('done').length)listPane.append(h('details',{class:'fold'},h('summary',{},`Done · ${by('done').length}`),h('div',{class:'rows'},by('done').map(s=>row(p,s,current,false)))))}}
   if(!tree.projects.length)listPane.append(h('p',{class:'soon'},'Nothing here yet. Tell the master in Chat what you want; it writes a plan, and the plan appears here for your approval.'));
   listPane.scrollTop=keep}
 

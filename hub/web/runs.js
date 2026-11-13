@@ -31,9 +31,11 @@ export function mountRuns(view,{id,onChange,embedded=false,readyFor=null}={}){
  function card(run,list){
   const pct=run.capPct,note=h('p',{class:'msg err',role:'alert',hidden:true});
   ui={run,empty:h('div',{class:'n'},'Nothing yet.'),feed:h('div',{class:'feed',role:'log','aria-label':'Live feed'}),capFill:h('i'),capText:h('div',{class:'small dim'}),files:h('span'),tokens:h('span'),count:h('span'),countdown:h('p',{class:'small dim'}),cacheBox:h('div',{})};
-  ui.cachePaint=mountCacheStrip(ui.cacheBox);
+  ui.cachePaint=mountCacheStrip(ui.cacheBox,{placeholder:false});
   ui.feed.append(ui.empty);
-  const left=h('div',{class:'feedwrap'},h('div',{class:'label'},'What it is doing · names and counts only'),ui.feed);
+  // a run that has ended keeps its feed folded: what matters is the result, not the 7 lines of how it got there
+  const ended=run.status==='done'||run.status==='closed'||run.status==='failed';
+  const left=ended?h('details',{class:'fold feedwrap'},h('summary',{},'What it did · names and counts only'),ui.feed):h('div',{class:'feedwrap'},h('div',{class:'label'},'What it is doing · names and counts only'),ui.feed);
   const kv=h('div',{class:'kv'},h('span',{},'Model'),h('span',{},modelName(run.model)),h('span',{},'Plan'),h('a',{href:'#plans/'+run.planId},`${run.planTitle} · revision ${run.revision}`),
    h('span',{},'Folder'),h('span',{},'your project folder'),h('span',{},'Turn'),h('span',{},String(run.turn)),h('span',{},'Files changed'),ui.files);
   const actions=actionsFor(run).filter(a=>a.op!=='answer');

@@ -5,12 +5,12 @@ import {contextOf,splitOf,stateOf,stripText} from './cache.js';
 import {fmt} from './run-actions.js';
 
 const h=(tag,props,...kids)=>{const e=document.createElement(tag);for(const [k,v] of Object.entries(props||{})){if(k==='class')e.className=v;else if(v!==false&&v!=null)e.setAttribute(k,v===true?'':v)}for(const c of kids.flat())if(c!=null)e.append(c);return e};
-export function mountCacheStrip(box){
+export function mountCacheStrip(box,{placeholder=true}={}){
  box.classList.add('cstrip');
  const size=h('div',{class:'small'}),sizeBar=h('div',{class:'capbar'},h('i')),state=h('div',{class:'small'}),parts=h('div',{class:'cparts','aria-hidden':'true'},h('i',{class:'c-re'}),h('i',{class:'c-wr'})),legend=h('div',{class:'small dim'});
  box.append(h('div',{class:'label'},'Conversation and cache'),size,sizeBar,state,parts,legend);
  return function paint(source,now=Date.now()){
-  const c=source&&source.cache;box.hidden=false;
+  const c=source&&source.cache;box.hidden=!c&&!placeholder; // the chat shows words until its first measured reply; a run's card shows nothing it has not measured
   if(!c){size.textContent='Conversation size and cache: measured after the next reply.';sizeBar.hidden=true;state.textContent='';parts.hidden=true;legend.textContent='';return}
   const ctx=contextOf(c),win=Number.isFinite(c.window)&&c.window>0?c.window:null,sp=splitOf(c);
   size.textContent=`Conversation size: ${fmt(ctx)}${win?` of ${fmt(win)}`:''} tokens`;
