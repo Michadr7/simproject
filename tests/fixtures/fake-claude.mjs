@@ -27,7 +27,7 @@ if(scenario==='hang'){init();rate();await sleep(60000)}
 if(scenario==='grandchild'){
  const gc=spawn(process.execPath,['-e','require("fs").writeFileSync(process.argv[1],String(process.pid));setInterval(()=>{},1000)',pidFile],{stdio:'ignore'});
  init();await sleep(60000)}
-if(scenario==='overcap'){init();rate();for(let i=0;i<50;i++){msg([text('working '+i)],{input_tokens:200000,output_tokens:0,cache_creation_input_tokens:0,cache_read_input_tokens:0});await sleep(40)}await sleep(60000)}
+if(scenario==='overcap'){init();rate();for(let i=0;i<50;i++){msg([text('working '+i)],{input_tokens:200000,output_tokens:0,cache_creation_input_tokens:0,cache_read_input_tokens:0});await sleep(250)}await sleep(60000)}
 if(scenario==='gauge'){init();rate(0.96,0.2);for(let i=0;i<20;i++){msg([text('working')],{input_tokens:100000,output_tokens:0,cache_creation_input_tokens:0,cache_read_input_tokens:0});await sleep(40)}await sleep(60000)}
 if(scenario==='pause'){init();rate(0.1,1.0);msg([text('x')],{input_tokens:10,output_tokens:0,cache_creation_input_tokens:0,cache_read_input_tokens:0});await sleep(60000)}
 if(scenario==='split'){
