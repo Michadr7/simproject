@@ -5,7 +5,7 @@
 import {normalizeProgress} from './jobs.js';
 import {normalizeAppearance,SAVE_KEY as CHARACTER_KEY} from './appearance.js';
 import {PROFILE_KEY} from './profile.js';
-import {formatClock} from './routine.js';
+import {formatClock} from './routine.js';import {GAME_NAME} from './game-name.js';
 
 export {PROFILE_KEY,CHARACTER_KEY};
 import {SAVE_FORMAT,SAVE_FORMAT_VERSION} from './save-file-format.js';
@@ -51,9 +51,9 @@ export function summarize(save,meta={}){
  return {name:save.profile.name||save.character?.name||'Unnamed',cash:p.cash,vehicles:p.vehicles?.length||0,day:p.housing?.day??1,clock:formatClock(p.routine?.minutes??0),game:meta.game??null,savedAt:meta.savedAt??null};
 }
 export function readSaveFile(text){
- if(typeof text!=='string'||text.length>MAX_FILE_BYTES)return {ok:false,error:'That file is too big to be a City Life save.'};
+ if(typeof text!=='string'||text.length>MAX_FILE_BYTES)return {ok:false,error:`That file is too big to be a ${GAME_NAME} save.`};
  const f=parse(text.replace(/^﻿/,''));
- if(!f||typeof f!=='object'||f.format!==SAVE_FORMAT)return {ok:false,error:'That is not a City Life save file.'};
+ if(!f||typeof f!=='object'||f.format!==SAVE_FORMAT)return {ok:false,error:`That is not a ${GAME_NAME} save file.`};
  if(!Number.isInteger(f.formatVersion)||f.formatVersion<1)return {ok:false,error:'That save file is damaged.'};
  if(f.formatVersion>SAVE_FORMAT_VERSION)return {ok:false,error:`That save was made by a newer version of the game (${typeof f.game==='string'?f.game.slice(0,12):'?'}). Update the game, then import it.`};
  if(!f.profile||typeof f.profile!=='object')return {ok:false,error:'That save file has no player in it.'};

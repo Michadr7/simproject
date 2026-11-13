@@ -1,6 +1,6 @@
 // Main menu: Play, Multiplayer (host / join), Settings, Credits. The DOM lives in index.html (#welcome); game.js passes in what the menu needs.
 // Online: the hosted relay (worker/lobby.js) with lobby codes. Local server: a browser page cannot start a server, so "host" means "use the relay running on this computer" and "join" means "use the relay at this address".
-import {normalizeLobbyCode,REFUSED} from './relay-protocol.js';
+import {normalizeLobbyCode,REFUSED} from './relay-protocol.js';import './game-name.js'; // puts GAME_NAME into the page title, the menu, the logo and the credits when the page loads
 export const DEFAULT_SERVER='ws://localhost:8080';
 export const LIVE_RELAY='wss://simproject.ghostjumper007.workers.dev';
 // Where the online relay is for a page at this address: the site's own (the live site, `npx wrangler dev` on 8787), except a page on this computer

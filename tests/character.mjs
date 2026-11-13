@@ -21,6 +21,12 @@ assert.equal(normalizeAppearance({body:'male',top:'Suit',legs:'Beach'}).legs,'Be
 assert(!characterAssetsReady());const stand=createCharacter(defaults);assert(stand.fallback);stand.update(.1);stand.setMotion(3);stand.reach('R',new T.Vector3(),1);
 
 await loadCharacterAssets();assert(characterAssetsReady());
+// The idle loops without a twitch: every Idle track ends exactly where it starts (the pack's ends a hair away); Walk and the rest are untouched.
+{const {closeLoop}=await import('../dist/character.js');
+ const clip=closeLoop(new T.AnimationClip('Idle_X',1,[new T.QuaternionKeyframeTrack('A.quaternion',[0,.5,1],[0,0,0,1, .1,0,0,.99, .05,0,0,.998])]));assert.deepEqual([...clip.tracks[0].values.slice(8)],[0,0,0,1],'the last key is the first');
+ const walk=closeLoop(new T.AnimationClip('Walk',1,[new T.QuaternionKeyframeTrack('A.quaternion',[0,1],[0,0,0,1,.2,0,0,.98])]));assert.ok(Math.abs(walk.tracks[0].values[4]-.2)<1e-6,'Walk is left alone');
+ for(const body of ['male','female']){const c=createCharacter({...defaults,body}),clips=c.mixer._actions.map(a=>a._clip).filter(k=>/^Idle/.test(k.name));assert(clips.length>=2,'the idle clips are there');
+  for(const k of clips)for(const t of k.tracks){const v=t.values,s=t.getValueSize();for(let i=0;i<s;i++)assert.equal(v[v.length-s+i],v[i],`${body} ${k.name} ${t.name} loops cleanly`)}}}
 // ── Models ────────────────────────────────────────────────────────────────────
 const heightOf=c=>{const box=new T.Box3();c.group.updateMatrixWorld(true);for(const m of c.meshes){m.skeleton.update();m.computeBoundingBox();box.union(m.boundingBox.clone().applyMatrix4(m.matrixWorld))}return box.getSize(new T.Vector3())};
 for(const body of ['male','female'])for(const [id] of OUTFITS[body]){

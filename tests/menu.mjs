@@ -102,7 +102,7 @@ const visible=t=>['menuHome','menuMultiplayerPanel','menuSettingsPanel'].filter(
 const html=await readFile('dist/index.html','utf8');
 for(const id of ['welcome','start','menuMultiplayer','menuSettings','menuCredits','menuHost','menuJoin','menuAddress','menuQuality','menuNetStatus','menuMultiplayerBack','menuSettingsBack','menuCreateLobby','menuLobbyCode','menuJoinLobby','lobbyInfo'])assert(html.includes(`id="${id}"`),`${id} is in the page`);
 assert(!/id="menuDev/i.test(html),'the Dev Mode button is not in the page: dev.js adds it, so deleting the dev files removes it');
-const image=html.match(/url\((assets\/[^)]+)\)/)?.[1];assert(image,'the menu names its background image');
+const image=(await readFile('dist/menu-scene-rules.js','utf8')).match(/url\((assets\/[^)]+)\)/)?.[1];assert(image,'the menu names its fallback background image (menu-scene-rules.js MENU_STILL; the page starts on a dark backdrop)');
 const size=(await stat('dist/'+image)).size;assert(size>10_000&&size<600_000,`the background is a web-sized image (${Math.round(size/1024)} KB), not the 1.6 MB original`);
 const css=await readFile('dist/style.css','utf8');
 assert(/\.main-menu\{[^}]*backdrop-filter:none/.test(css),'no backdrop blur over the canvas');

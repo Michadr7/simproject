@@ -13,7 +13,8 @@ export function forkliftHudModel({speed=0,lift=0,load=0,hint='',goal=''}){
   keys:[{kbd:'W S',text:'Drive and reverse'},{kbd:'A D',text:'Steer (rear wheels: the back swings out)'},{kbd:'R F',text:'Raise and lower the forks'},{kbd:'Shift',text:'Hold to drive faster'},{kbd:'E',text:stopped?'Get off':'Stop to get off',muted:!stopped}],
   note:[goal,hint].filter(Boolean).join('\n')||'Slide the forks into a pallet, raise to lift it, lower to set it down. Indoor only.'};
 }
-export function vehicleHudModel({driving=null,seat=null,name=null,speed=0,fuel=null,ground=null,forklift=null}={}){
+// lights: the headlight row's text while you drive (night-lights-rules.js lightsLabel: "Lights: auto (on)"), or null for no row. Key L cycles auto, on, off.
+export function vehicleHudModel({driving=null,seat=null,name=null,speed=0,fuel=null,ground=null,forklift=null,lights=null}={}){
  if(forklift)return forkliftHudModel(forklift);
  const fuelShown=fuel?`${fuelTitle(fuel.type)} · ${fuelText(fuel.mgal,fuel.capacityMgal)}`:'—',empty=!!fuel&&fuel.mgal<=0;
  if(!driving)return {state:'off',name:'Not in a vehicle',speed:'—',fuel:'—',
@@ -23,7 +24,7 @@ export function vehicleHudModel({driving=null,seat=null,name=null,speed=0,fuel=n
   keys:[{kbd:'E',text:'Get out'}],note:'You are riding as a passenger. Nobody is driving.'};
  const stopped=Math.abs(speed)<STOP_SPEED;
  return {state:'driving',name:name||'Vehicle',speed:speedShown,fuel:fuelShown,
-  keys:[{kbd:'E',text:stopped?'Get out':'Stop to get out',muted:!stopped}],
+  keys:[{kbd:'E',text:stopped?'Get out':'Stop to get out',muted:!stopped},...(lights?[{kbd:'L',text:lights}]:[])],
   note:empty?`Out of fuel. Fill up at the Eastbank gas station: this one takes ${fuel.type}.`:ground&&ground.factor<.95?`Off road · ${ground.label} · top speed ${Math.round(ground.factor*100)}%. Get back on the road to go faster.`:'W S accelerate and brake · A D steer · Space brakes'};
 }
 

@@ -91,7 +91,7 @@ assert.equal(typeof MENU_VEHICLE.prop,'string');const info=propInfo(MENU_VEHICLE
 const on={menuVisible:true,pageHidden:false,reducedMotion:false,ready:true,failed:false};
 assert.equal(menuMode(on),'live');assert.equal(menuMode({...on,menuVisible:false}),'paused','menu covered or closed');assert.equal(menuMode({...on,pageHidden:true}),'paused','tab in the background');
 assert.equal(menuMode({...on,reducedMotion:true}),'static','reduced motion keeps the picture');assert.equal(menuMode({...on,ready:false}),'static','assets not loaded');assert.equal(menuMode({...on,failed:true}),'static','no WebGL / build failed');
-assert(MENU_FPS<=30&&MENU_FPS_LOW<MENU_FPS,'the cap is low');assert(!frameDue(1010,1000,MENU_FPS),'10 ms later is too soon');assert(frameDue(1042,1000,MENU_FPS),'42 ms later a frame is due');
+assert(MENU_FPS>=30&&MENU_FPS<=60&&MENU_FPS_LOW>=20&&MENU_FPS_LOW<MENU_FPS,'the cap is smooth (30 to 60) but still well under the game');assert(!frameDue(1010,1000,MENU_FPS),'10 ms later is too soon');assert(frameDue(1042,1000,MENU_FPS),'42 ms later a frame is due');
 
 function rig(over={}){
  const log=[],state={visible:true,hidden:false,reduced:false,ready:true,fps:MENU_FPS,throwOn:null};
@@ -99,11 +99,11 @@ function rig(over={}){
  const live=createMenuLive({build(){log.push(['build']);if(state.throwOn==='build')throw new Error('no WebGL');return scene},ready:()=>state.ready,menuVisible:()=>state.visible,pageHidden:()=>state.hidden,reducedMotion:()=>state.reduced,setLive:v=>log.push(['live',v]),fps:()=>state.fps,...over});
  return {live,log,state,count:k=>log.filter(e=>e[0]===k).length};
 }
-// A 165 Hz screen for 2 seconds draws about 24 frames a second, not 165.
+// A 165 Hz screen for 2 seconds draws about the cap's frames a second (55 at a cap of 60), not 165.
 {const r=rig();for(let now=0;now<2000;now+=1000/165)r.live.tick(now);
- assert.equal(r.count('build'),1,'built once, on the first frame');assert(r.count('render')>=40&&r.count('render')<=50,`about 48 frames in 2 s at the cap, got ${r.count('render')}`);
+ assert.equal(r.count('build'),1,'built once, on the first frame');assert(r.count('render')>=MENU_FPS*2*.85&&r.count('render')<=MENU_FPS*2*1.05,`about ${MENU_FPS*2} frames in 2 s at the cap, got ${r.count('render')}`);
  assert.deepEqual(r.log.filter(e=>e[0]==='live'),[['live',true]],'the picture is swapped for the canvas once');assert(r.live.live&&r.live.built);
- const before=r.count('render');r.state.fps=MENU_FPS_LOW;for(let now=2000;now<3000;now+=1000/165)r.live.tick(now);assert(r.count('render')-before<=16,'low quality draws fewer');
+ const before=r.count('render');r.state.fps=MENU_FPS_LOW;for(let now=2000;now<3000;now+=1000/165)r.live.tick(now);assert(r.count('render')-before<=MENU_FPS_LOW+1,'low quality draws fewer');
  // hidden menu and background tab: nothing is drawn, the scene is kept
  const n=r.count('render');r.state.visible=false;for(let now=3000;now<4000;now+=16)assert.equal(r.live.tick(now),'paused');r.state.visible=true;r.state.hidden=true;assert.equal(r.live.tick(4100),'paused');assert.equal(r.count('render'),n,'paused: no frames');
  r.state.hidden=false;assert.equal(r.live.tick(4200),'live');const u=r.log.filter(e=>e[0]==='update').at(-1);assert(u[2]<=.1,'after a pause the step is clamped to 0.1 s');
@@ -112,15 +112,29 @@ function rig(over={}){
  // the game starts: disposed once, back to the picture, and it stays off
  r.live.dispose();r.live.dispose();assert.equal(r.count('dispose'),1);assert.deepEqual(r.log.at(-1),['live',false]);assert.equal(r.live.tick(9000),'off');assert.equal(r.count('build'),1,'never rebuilt');assert(!r.live.built&&r.live.disposed)}
 // Fallbacks: each leaves the picture in place and never throws.
+// The old picture only comes back when the scene cannot run (build failed, reduced motion, assets never arrive), never while loading.
+{const still=[],mk=over=>{const r=rig({setStill:v=>still.push(v),...over});return r};
+ {const r=mk();r.state.ready=false;for(let now=0;now<3000;now+=100)r.live.tick(now);assert.deepEqual(still,[],'loading: no picture, the dark backdrop stays');
+  r.live.tick(8000);assert.deepEqual(still,[true],'assets still missing after a long wait: the picture');r.state.ready=true;r.live.tick(8100);assert.deepEqual(still,[true,false],'and it goes when the scene starts')}
+ still.length=0;{const r=mk();r.state.reduced=true;r.live.tick(0);assert.deepEqual(still,[true],'reduced motion: the picture at once')}
+ still.length=0;{const r=mk();r.state.throwOn='build';r.live.tick(0);assert.deepEqual(still,[true],'a failed build: the picture')}
+ still.length=0;{const r=mk();r.live.tick(0);assert.deepEqual(still,[],'a working scene never shows the picture')}}
 {const r=rig();r.state.ready=false;assert.equal(r.live.tick(0),'static');assert.equal(r.count('build'),0,'assets not loaded: nothing is built');r.state.ready=true;assert.equal(r.live.tick(50),'live','and it starts once they are')}
 {const r=rig();r.state.reduced=true;for(let now=0;now<500;now+=16)assert.equal(r.live.tick(now),'static');assert.equal(r.count('build'),0,'reduced motion: nothing is built');assert(!r.live.live)}
 {const r=rig();r.state.throwOn='build';assert.equal(r.live.tick(0),'static');assert.equal(r.live.tick(100),'static');assert.equal(r.count('build'),1,'a failed build is not retried');assert(r.live.failed&&!r.live.live);assert(!r.log.some(e=>e[0]==='live'&&e[1]===true),'the canvas was never shown')}
 {const r=rig();r.live.tick(0);r.state.throwOn='update';assert.equal(r.live.tick(100),'static');assert.equal(r.count('dispose'),1,'a scene that breaks is freed');assert.deepEqual(r.log.at(-1),['dispose']);assert(r.log.some(e=>e[0]==='live'&&e[1]===false),'and the picture comes back')}
 {const r=rig({setLive(){throw new Error('no classList')}});assert.equal(r.live.tick(0),'live','a broken page hook does not stop the scene')}
 
+// --- Trees: no model whose bark has branch stubs sticking out of the trunk near the ground ------------------------------------
+{const {MENU_TREES,MENU_PINES}=await import('../dist/menu-scene.js'),{modelGeometry,PINES}=await import('../dist/nature.js');
+ assert.deepEqual(MENU_PINES,['pine.3'],'only pine.3: pine.1 has bark stubs up to 1.8 m out of the trunk, pine.2 is a bare trunk with leaves from 3.4 m up');
+ for(const id of MENU_PINES){const p=modelGeometry(id,'leaves').attributes.position;let lo=1e9;for(let i=0;i<p.count;i++)lo=Math.min(lo,p.getY(i));assert(lo<1.5,`${id} has foliage from low on the trunk (${lo.toFixed(2)} m)`)}
+ for(const id of MENU_PINES){const p=modelGeometry(id,'bark').attributes.position;let r=0;for(let i=0;i<p.count;i++)if(p.getY(i)>.3&&p.getY(i)<2)r=Math.max(r,Math.hypot(p.getX(i),p.getZ(i)));assert(r<.6,`${id} bark stays near the trunk between 0.3 and 2 m (${r.toFixed(2)})`)}
+ assert(MENU_TREES.length===16&&MENU_TREES.every(t=>t[2]>=0&&t[2]<MENU_PINES.length),'every tree uses a model that is in the list');}
+
 // --- The page: the picture is still there as the fallback, and the live class only removes it ------------------------------
 {const html=await readFile('dist/index.html','utf8'),css=await readFile('dist/style.css','utf8');
- assert(/id="welcome"[^>]*menu-background\.jpg/.test(html),'the menu keeps its picture');assert(/\.main-menu\.live\{[^}]*linear-gradient/.test(css),'live: the dark side behind the buttons stays');
+ assert(!/id="welcome"[^>]*menu-background/.test(html),'the first paint is the dark backdrop, never the old picture');{const rules=await readFile('dist/menu-scene-rules.js','utf8');assert(/MENU_STILL=/.test(rules)&&/menu-background\.jpg/.test(rules),'the picture is kept as the fallback, put on by the controller')}assert(/\.main-menu\.live\{[^}]*linear-gradient/.test(css),'live: the dark side behind the buttons stays');
  for(const id of ['start','menuMultiplayer','menuAccount','menuSettings','menuCredits','customizeSaved'])assert(html.includes(`id="${id}"`),`${id} is still on the menu`)}
 
 // --- The real scene in the packaged game (renderer stub): it draws behind the menu, then goes when Play is pressed --------
@@ -141,6 +155,10 @@ function rig(over={}){
   assert(tufts?.isInstancedMesh&&fern?.isInstancedMesh&&tufts.material===fern.material,'grass and ferns: two instanced meshes on one material');assert.equal(tufts.count,rulesMore.MENU_COVER.grass);assert.equal(fern.count,rulesMore.MENU_COVER.ferns);
   assert(tufts.geometry.getAttribute('aBend')&&tufts.geometry.getAttribute('color')&&typeof tufts.material.onBeforeCompile==='function','the wind attribute and shader hook are there');
   assert(sheet?.material.map?.isCanvasTexture,'the plans carry the drawn sheet');
+  {const n=new menu.constructor().position.set(0,0,1).applyQuaternion(sheet.quaternion);assert(n.z<-.5&&n.y>.5,`the drawn face looks back at the character (up and toward them), got ${n.x.toFixed(2)},${n.y.toFixed(2)},${n.z.toFixed(2)}`);assert.equal(sheet.material.side,0,'only the drawn face is drawn on the sheet itself (FrontSide)');assert(sheet.children.length>=1,'the plain back is a separate mesh')}
+  {const src=await readFile('dist/menu-scene.js','utf8'),m=/HAND=\{x:([\d.]+),y:([\d.]+),z:([\d.]+)\}/.exec(src);assert(m,'the hand targets are one named constant');const [x,y,z]=m.slice(1).map(Number);
+   assert(x>=.15&&x<=.25&&y>=1.25&&y<=1.4&&z>=.2&&z<=.4,'each wrist sits at the sheet side edge, about 20 cm out, chest height (checked by eye: the fist closes over the edge)')}
+  assert.equal(found['props-log'].count,3,'one stack of three logs: no stray log at the edge of the picture');
   g.ids.get('start').click();globalThis.__menuScene=null;g.pump(.2);assert.equal(g.menuScene(),null,'Play: the menu scene is not drawn again');assert(!welcome.classList.contains('live'),'and the menu scene is gone');assert.equal(menu.children.length,0,'disposed');
  }
  await g.done()}

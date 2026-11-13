@@ -2,7 +2,7 @@
 // Loaded only when DEV_MODE (dev-flag.js) is true. It touches the game only through the `api` object game.js passes in, and adds its own markup and CSS at runtime,
 // so deleting this file (and the block at the end of game.js) leaves no trace in index.html or style.css.
 // Changes go to your normal save: this is not a separate profile.
-import {NIGHT_FLOOR,NIGHT_FLOOR_MIN,NIGHT_FLOOR_MAX,EXPOSURE_MIN,EXPOSURE_MAX} from './daynight.js';
+import {NIGHT_FLOOR,NIGHT_FLOOR_MIN,NIGHT_FLOOR_MAX,EXPOSURE_MIN,EXPOSURE_MAX} from './daynight.js';import {GLOW_SCALE_MIN,GLOW_SCALE_MAX} from './night-lights-rules.js';
 export const QUICK_TIMES=[['Dawn',360],['Noon',720],['Dusk',1080],['Night',1380]];
 export const MONEY_STEPS=[10000,100000,1000000]; // cents
 export const UNLOCK_KEY='citylife.devUnlocked'; // set once D is pressed four times on the main menu: the Dev Mode button then shows in this browser
@@ -13,6 +13,8 @@ export function frameCostText(cost,times=[]){
  const sorted=[...times].sort((a,b)=>a-b),pick=q=>sorted.length?sorted[Math.min(sorted.length-1,Math.floor(sorted.length*q))].toFixed(1)+' ms':'–';
  return `${cost.calls} draw calls · ${cost.triangles>=1000?Math.round(cost.triangles/1000)+'k':cost.triangles} triangles · ${cost.programs} shaders · frame ${pick(.5)} median, ${pick(.95)} 95th (${sorted.length} frames)`;
 }
+// The lights line (night-lights.js state): what is lit now and what it adds to the frame.
+export const lightsText=s=>`lamps ${s.level>.02?Math.round(s.level*100)+'%':'off'} (${s.lamps}) · windows lit ${s.windowsLit} of ${s.ready+s.flats} · vehicles lit ${s.beams}${s.spot?' · spotlight in the scene':''} · +${s.drawCalls} draw calls`;
 const dollars=cents=>'$'+(cents/100).toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2});
 
 const STYLE=`#menuDevRow[hidden]{display:none}
@@ -85,15 +87,15 @@ export function installDevMode(api){
  // Sky and light (api.sky, sky.js): tune the look by eye. "Look at" shows another time of day without moving the clock or the save; night floor and exposure are kept in this
  // browser (SKY_KEY). The cost line reads the renderer's own counters and times whole frames over the last 5 seconds (it only runs while the panel is open).
  const skyApi=api.sky,range=(id,min,max,step,value)=>make('input',{id,type:'range',min:String(min),max:String(max),step:String(step),value:String(value)});
- const lookTime=range('devSkyTime',0,1439,5,720),lookLabel=make('b',{id:'devSkyTimeLabel',textContent:'clock'}),floor=range('devNightFloor',NIGHT_FLOOR_MIN,NIGHT_FLOOR_MAX,.01,NIGHT_FLOOR),floorLabel=make('b',{id:'devNightFloorLabel'}),exposure=range('devExposure',EXPOSURE_MIN,EXPOSURE_MAX,.05,1),exposureLabel=make('b',{id:'devExposureLabel'}),cost=make('p',{id:'devCost',className:'dev-note'});
- const keepSky=()=>{try{const t=skyApi.tuning();localStorage.setItem(SKY_KEY,JSON.stringify({nightFloor:t.nightFloor,exposureScale:t.exposureScale}))}catch{}};
- const showSky=()=>{if(!skyApi)return;const t=skyApi.tuning();lookLabel.textContent=t.minutes===null?'clock':clockLabel(t.minutes);if(t.minutes!==null)lookTime.value=String(t.minutes);floor.value=String(t.nightFloor);floorLabel.textContent=t.nightFloor.toFixed(2);exposure.value=String(t.exposureScale);exposureLabel.textContent='× '+t.exposureScale.toFixed(2)};
+ const lookTime=range('devSkyTime',0,1439,5,720),lookLabel=make('b',{id:'devSkyTimeLabel',textContent:'clock'}),floor=range('devNightFloor',NIGHT_FLOOR_MIN,NIGHT_FLOOR_MAX,.01,NIGHT_FLOOR),floorLabel=make('b',{id:'devNightFloorLabel'}),exposure=range('devExposure',EXPOSURE_MIN,EXPOSURE_MAX,.05,1),exposureLabel=make('b',{id:'devExposureLabel'}),cost=make('p',{id:'devCost',className:'dev-note'}),lightsApi=api.lights,glow=range('devGlow',GLOW_SCALE_MIN,GLOW_SCALE_MAX,.05,1),glowLabel=make('b',{id:'devGlowLabel'}),lightsLine=make('p',{id:'devLights',className:'dev-note'});
+ const keepSky=()=>{try{const t=skyApi.tuning();localStorage.setItem(SKY_KEY,JSON.stringify({nightFloor:t.nightFloor,exposureScale:t.exposureScale,glow:lightsApi?lightsApi.tuning().scale:1}))}catch{}};
+ const showSky=()=>{if(!skyApi)return;const t=skyApi.tuning();lookLabel.textContent=t.minutes===null?'clock':clockLabel(t.minutes);if(t.minutes!==null)lookTime.value=String(t.minutes);floor.value=String(t.nightFloor);floorLabel.textContent=t.nightFloor.toFixed(2);exposure.value=String(t.exposureScale);exposureLabel.textContent='× '+t.exposureScale.toFixed(2);if(lightsApi){const g=lightsApi.tuning().scale;glow.value=String(g);glowLabel.textContent='× '+g.toFixed(2)}};
  const followClock=()=>{skyApi?.tune({minutes:null});showSky()};
- lookTime.oninput=()=>{skyApi.tune({minutes:Number(lookTime.value)});showSky()};floor.oninput=()=>{skyApi.tune({nightFloor:Number(floor.value)});keepSky();showSky()};exposure.oninput=()=>{skyApi.tune({exposureScale:Number(exposure.value)});keepSky();showSky()};
- const skyFollow=make('button',{id:'devSkyFollow',textContent:'Follow clock',onclick:()=>{followClock();say('The picture follows the game clock again.')}}),skyReset=make('button',{id:'devSkyReset',textContent:'Reset look',onclick:()=>{skyApi.tune({minutes:null,nightFloor:null,exposureScale:null});try{localStorage.removeItem(SKY_KEY)}catch{}showSky();say(`Night floor ${NIGHT_FLOOR} and exposure × 1 are back.`)}});
- if(skyApi){try{const saved=JSON.parse(localStorage.getItem(SKY_KEY)||'null');if(saved)skyApi.tune({nightFloor:Number(saved.nightFloor),exposureScale:Number(saved.exposureScale)})}catch{}showSky()}
+ lookTime.oninput=()=>{skyApi.tune({minutes:Number(lookTime.value)});showSky()};floor.oninput=()=>{skyApi.tune({nightFloor:Number(floor.value)});keepSky();showSky()};exposure.oninput=()=>{skyApi.tune({exposureScale:Number(exposure.value)});keepSky();showSky()};glow.oninput=()=>{lightsApi?.tune({scale:Number(glow.value)});keepSky();showSky()}; // Lights: every glow (lamps, windows, vehicle lamps, the spotlight) times this
+ const skyFollow=make('button',{id:'devSkyFollow',textContent:'Follow clock',onclick:()=>{followClock();say('The picture follows the game clock again.')}}),skyReset=make('button',{id:'devSkyReset',textContent:'Reset look',onclick:()=>{skyApi.tune({minutes:null,nightFloor:null,exposureScale:null});lightsApi?.tune({scale:null});try{localStorage.removeItem(SKY_KEY)}catch{}showSky();say(`Night floor ${NIGHT_FLOOR} and exposure × 1 are back.`)}});
+ if(skyApi){try{const saved=JSON.parse(localStorage.getItem(SKY_KEY)||'null');if(saved){skyApi.tune({nightFloor:Number(saved.nightFloor),exposureScale:Number(saved.exposureScale)});lightsApi?.tune({scale:Number(saved.glow)})}}catch{}showSky()}
  let frameTimes=[],lastFrame=0;const probe=now=>{if(lastFrame)frameTimes.push([now,now-lastFrame]);lastFrame=now};
- const showCost=()=>{if(!skyApi)return;frameTimes=frameTimes.filter(f=>f[0]>=lastFrame-COST_WINDOW_MS);cost.textContent=frameCostText(skyApi.cost(),frameTimes.map(f=>f[1]))};showCostLine=showCost;
+ const showCost=()=>{if(!skyApi)return;frameTimes=frameTimes.filter(f=>f[0]>=lastFrame-COST_WINDOW_MS);cost.textContent=frameCostText(skyApi.cost(),frameTimes.map(f=>f[1]));if(lightsApi)lightsLine.textContent=lightsText(lightsApi.state())};showCostLine=showCost;
 
  // Interior editor (api.interior): pick any house (you do not have to rent it) and go inside, choose a piece, move it by compass direction (N is the kitchen wall, S is the door), turn it, copy or
  // delete it, add new pieces, and Save to code (needs `npm run dev`). A yellow box shows the chosen piece; what is wrong with the layout is listed as you go.
@@ -144,7 +146,7 @@ export function installDevMode(api){
   make('h3',{},'Stat drain'),make('div',{className:'dev-row'},drain),make('h3',{},'Spawn items'),make('div',{className:'dev-row'},item,qty,spawn),
   make('h3',{},'Careers'),make('div',{className:'dev-row'},csel,cRun('hire'),cRun('promote'),cRun('quit')),make('p',{className:'dev-note'},'Hire skips the interview at the office (which is not built yet). Promote needs the rank\'s level, shifts and reputation.'),make('h3',{},'Drivable vehicles'),make('div',{className:'dev-row'},vsel,vSpawn,vRemove),make('p',{className:'dev-note'},'Spawn puts the vehicle a few metres in front of you (or the nearest free spot). Remove takes it out of the world; neither works while you are in it.'),
   make('h3',{},'Rendering'),make('div',{className:'dev-row'},shadows,fade),
-  make('h3',{},'Sky and light'),make('div',{className:'dev-row'},'Look at',lookTime,lookLabel,skyFollow),make('div',{className:'dev-row'},'Night floor',floor,floorLabel),make('div',{className:'dev-row'},'Exposure',exposure,exposureLabel,skyReset),cost,
+  make('h3',{},'Sky and light'),make('div',{className:'dev-row'},'Look at',lookTime,lookLabel,skyFollow),make('div',{className:'dev-row'},'Night floor',floor,floorLabel),make('div',{className:'dev-row'},'Exposure',exposure,exposureLabel,skyReset),make('div',{className:'dev-row'},'Lights',glow,glowLabel),cost,lightsLine,
   make('p',{className:'dev-note'},'"Look at" changes the picture only: the clock and your save stay as they are. Night floor is how much light an unlit night keeps (0.04 near black, 0.30 light). Both sliders are remembered in this browser, not in the save.'),
   make('h3',{},'Furniture'),interiorToggle,make('h3',{},'Scene'),make('div',{className:'dev-row'},editorButton),make('p',{className:'dev-note'},'Open Editor pauses the game and lets you fly over the map to pick, move, turn and remove props. Close puts you back.'),
   make('h3',{},'Safety'),make('div',{className:'dev-row'},unstick,home),

@@ -1,7 +1,11 @@
 // The live main-menu scene, the pure part (notes/menu-scene-design.md): every animation rule is a function of time in seconds, so it can be tested
 // without a renderer; plus the swap point for the vehicle and the small controller that decides when the scene draws. No three.js, no DOM.
 // menu-scene.js builds the three.js scene from these; game.js draws it behind #welcome.
-export const MENU_FPS=24,MENU_FPS_LOW=15; // the frame-rate cap (Settings > quality low uses the lower one)
+// The frame-rate cap (Settings > quality low uses the lower one). 60 so the character and the wind move smoothly: the scene is about 16 draw calls and one skinned character,
+// roughly a twentieth of the game's own load, so even a GTX 1060 draws it in about 2 ms. frameDue gives 55 on a 165 Hz screen, 60 on a 60 Hz one.
+export const MENU_FPS=60,MENU_FPS_LOW=30;
+// The old still picture: the fallback when the scene cannot run (the page itself starts on a plain dark backdrop, never this picture, so there is no flash of it while loading).
+export const MENU_STILL='linear-gradient(90deg,#0c0b08f2 0%,#0c0b08cc 32%,#0c0b0855 62%,#0c0b0810 100%),url(assets/menu-background.jpg)',STILL_AFTER_MS=6000;
 const TAU=Math.PI*2,smooth=x=>{const c=Math.max(0,Math.min(1,x));return c*c*(3-2*c)};
 
 // ── THE SWAP POINT ───────────────────────────────────────────────────────────────────────────────────────────────────
@@ -128,19 +132,22 @@ export const frameDue=(now,last,fps)=>now-last>=1000/fps-2;
 
 // The controller game.js ticks every animation frame while the menu is up. build() -> {update(t,dt),render(),setAppearance(a),dispose()} or throws;
 // setLive(on) shows the canvas through the menu (on) or the still picture (off). It never throws: any failure falls back to the picture for good.
-export function createMenuLive({build,ready=()=>true,menuVisible=()=>true,pageHidden=()=>false,reducedMotion=()=>false,setLive=()=>{},fps=()=>MENU_FPS}){
- let scene=null,failed=false,disposed=false,last=-Infinity,start=null,live=false,frames=0;
- const show=on=>{if(on!==live){live=on;try{setLive(on)}catch{}}};
+// setStill(on) puts the old picture behind the menu: only when the scene cannot run (failed, reduced motion, or the assets still missing after STILL_AFTER_MS), never while loading.
+export function createMenuLive({build,ready=()=>true,menuVisible=()=>true,pageHidden=()=>false,reducedMotion=()=>false,setLive=()=>{},setStill=()=>{},fps=()=>MENU_FPS}){
+ let scene=null,failed=false,disposed=false,last=-Infinity,start=null,live=false,frames=0,still=false,first=null;
+ const show=on=>{if(on!==live){live=on;try{setLive(on)}catch{}}if(on)showStill(false)};
+ const showStill=on=>{if(on!==still){still=on;try{setStill(on)}catch{}}};
  function tick(now){
   if(disposed)return 'off';
   const mode=menuMode({menuVisible:menuVisible(),pageHidden:pageHidden(),reducedMotion:reducedMotion(),ready:ready(),failed});
-  if(mode==='static'){show(false);return mode}
+  if(first===null)first=now;
+  if(mode==='static'){show(false);showStill(failed||reducedMotion()||now-first>STILL_AFTER_MS);return mode}
   if(mode==='paused'||!frameDue(now,last,fps()))return mode==='paused'?mode:'wait';
   try{
    if(!scene){scene=build();start=now}
    const dt=Math.min(.1,Math.max(0,(now-last)/1000))||0;last=now;
    scene.update((now-start)/1000,dt);scene.render();frames++;show(true);
-  }catch(e){failed=true;show(false);try{scene?.dispose()}catch{}scene=null;return 'static'}
+  }catch(e){failed=true;show(false);showStill(true);try{scene?.dispose()}catch{}scene=null;return 'static'}
   return 'live';
  }
  return {tick,

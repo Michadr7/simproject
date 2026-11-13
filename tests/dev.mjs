@@ -62,10 +62,12 @@ assert.match(await readFile('dist/dev-flag.js','utf8'),/export const DEV_MODE=tr
   g.find('devSkyFollow').click();g.pump(.1);assert(Math.abs(light().intensity-moon)<.01,'Follow clock: night again');assert.equal(g.find('devSkyTimeLabel').textContent,'clock');
   slide('devNightFloor',.3);g.pump(.1);assert(Math.abs(light().intensity-3.1*.3)<.01,'a higher night floor is a brighter moon');assert.equal(g.find('devNightFloorLabel').textContent,'0.30');
   slide('devExposure',1.5);assert.equal(g.find('devExposureLabel').textContent,'× 1.50');
-  assert.deepEqual(JSON.parse(g.store.get(SKY_KEY)),{nightFloor:.3,exposureScale:1.5},'the two sliders are remembered in this browser');assert(!JSON.stringify(S.progress).includes('nightFloor'),'and never in the save');
+  assert.deepEqual(JSON.parse(g.store.get(SKY_KEY)),{nightFloor:.3,exposureScale:1.5,glow:1},'the sliders are remembered in this browser');
+  {const heads=scene.getObjectByName('street-lamp-heads'),before=heads.material.emissiveIntensity;slide('devGlow',2);g.pump(.1);assert.equal(g.find('devGlowLabel').textContent,'× 2.00');assert(Math.abs(heads.material.emissiveIntensity-before*2)<.01,'the Lights slider doubles every glow (stage 3, night-lights.js)');assert.equal(JSON.parse(g.store.get(SKY_KEY)).glow,2)}assert(!JSON.stringify(S.progress).includes('nightFloor'),'and never in the save');
   slide('devSkyTime',720);btn2('Night').click();g.pump(.1);assert.equal(g.find('devSkyTimeLabel').textContent,'clock','setting the real clock drops the Look at override');S.progress.routine.minutes=5;
   g.find('devSkyReset').click();g.pump(.1);assert(Math.abs(light().intensity-moon)<.01,'Reset look puts 0.12 back');assert.equal(g.find('devNightFloor').value,'0.12');
   assert.match(g.find('devCost').textContent,/draw calls · .* triangles · .* shaders · frame/,'the cost line is drawn');
+  assert.equal(g.find('devGlow').value,'1','Reset look puts the Lights slider back too');assert.match(g.find('devLights').textContent,/^lamps 100% \(40\) · windows lit \d+ of \d+ · vehicles lit 0 · \+2 draw calls$/,'the lights line: '+g.find('devLights').textContent);
   assert.equal(frameCostText({calls:140,triangles:176400,programs:41},[5,6,7,8,30]),'140 draw calls · 176k triangles · 41 shaders · frame 7.0 ms median, 30.0 ms 95th (5 frames)');assert.match(frameCostText({calls:1,triangles:12,programs:1}),/12 triangles .* frame – median/);}
 
  // Money: whole cents, capped

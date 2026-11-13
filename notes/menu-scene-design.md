@@ -97,3 +97,7 @@ Done: 3, 4 (cards, not a real model), 5.
 | 7 | Build the menu scene before the world and show it while the world loads (faster first picture). Touches the start-up order. | Opus | M |
 | 8 | Sound: quiet wind and birds on the menu after the first click (`audio.js`). | Sonnet | S |
 | 9 | Replace `menu-background.jpg` with a render of the new scene so the fallback matches. | Haiku | S |
+
+## Fixes on 2026-11-13 (menu review)
+- First paint: `#welcome` no longer carries the old picture inline; the page starts on the dark `.main-menu` backdrop. The picture (`MENU_STILL` in `menu-scene-rules.js`) is put on by the controller's `setStill` only when the scene cannot run (build failed, reduced motion, assets still missing after 6 s).
+- Frame cap: 60 (30 on low quality), was 24 (15). Idle loop seam closed in `character.js` `closeLoop` (shared with the creator). Plans sheet now faces the character (rotation Y = pi, lean 0.8 rad, plain paper back as a second mesh; the texture is no longer turned). Stray fourth log removed. `pine.1` is not used in the menu (bark stubs up to 1.8 m out of the trunk, seen as a hook). Game name: `dist/game-name.js`.

@@ -7,10 +7,13 @@ import {createProp,createPropInstances,propInfo} from './props.js';import {apply
 import {PINES,modelGeometry,createNatureMaterials} from './nature.js';
 import {MENU_VEHICLE,leanSpot,menuPose,windSway,hazeAt,MENU_PLANS,plansOps,MENU_COVER,groundCover,coverShape,COVER_WIND} from './menu-scene-rules.js';
 
-const SOLID={apply:m=>m},DUST=36;
+const SOLID={apply:m=>m},DUST=36,PLANS_LEAN=.8,HAND={x:.2,y:1.33,z:.27}; // HAND: where each wrist goes (character space, metres); the fist hangs about 10 cm below and ahead of the wrist, so this puts it on the sheet's side edge
 // Trees stand in a ring behind and beside the clearing, never between the camera and the character. [x, z, model index, scale, phase]
-export const MENU_TREES=Array.from({length:16},(_,i)=>{const a=2.1+i*.29+(i%3)*.05,r=9+(i*7%5)*1.9;return [Math.cos(a)*r-1,Math.sin(a)*r*.9-2,i%PINES.length,.85+(i*5%4)*.1,i*1.37]});
-const LOGS=[{x:-1.2,z:4.6,yaw:1.45},{x:-1.25,z:5.45,yaw:1.5},{x:-1.15,z:5.02,y:.72,yaw:1.47},{x:3.4,z:-3.2,yaw:.3}];
+// pine.1 is left out: its bark has branch stubs that stick out of the trunk up to 1.8 m at 0.5 to 1.7 m high (the other two stay within 0.4 m there), which showed as a bent hook on a trunk close to the camera.
+// pine.2 is left out too: its leaves start 3.4 m up, so it stood as a bare trunk with a few sparse tiers on top (the glitchy tree on the right). pine.3 is full from 1 m up; variety comes from scale and turn.
+export const MENU_PINES=PINES.filter(id=>id==='pine.3');
+export const MENU_TREES=Array.from({length:16},(_,i)=>{const a=2.1+i*.29+(i%3)*.05,r=9+(i*7%5)*1.9;return [Math.cos(a)*r-1,Math.sin(a)*r*.9-2,i%MENU_PINES.length,.85+(i*5%4)*.1,i*1.37]});
+const LOGS=[{x:-1.2,z:4.6,yaw:1.45},{x:-1.25,z:5.45,yaw:1.5},{x:-1.15,z:5.02,y:.72,yaw:1.47}]; // one stack, left of the camera; a lone fourth log used to sit at the right edge of the picture and read as a stray block
 
 // The plans sheet as a texture: plansOps() replayed on a canvas, 2 px per millimetre. null where there is no canvas (the sheet then keeps its plain panel).
 function plansTexture(){
@@ -21,7 +24,7 @@ function plansTexture(){
   if(o.op==='circle'){ctx.beginPath();ctx.arc(o.x,o.y,o.r,0,Math.PI*2);ctx.fill()}
   else if(o.op==='text'){ctx.font=`bold ${o.size}px sans-serif`;ctx.textAlign=o.align||'center';ctx.fillText(o.text,o.x,o.y)}
   else{ctx.beginPath();o.points.forEach(([x,y],i)=>i?ctx.lineTo(x,y):ctx.moveTo(x,y));if(o.op==='fill')ctx.fill();else{ctx.lineWidth=o.width;ctx.setLineDash(o.dash||[]);ctx.stroke()}}}
- const texture=new THREE.CanvasTexture(canvas);texture.colorSpace=THREE.SRGBColorSpace;texture.anisotropy=4;texture.center.set(.5,.5);texture.rotation=Math.PI; // turned so it reads the right way up for the character
+ const texture=new THREE.CanvasTexture(canvas);texture.colorSpace=THREE.SRGBColorSpace;texture.anisotropy=4;// not turned: the sheet faces the character (see pose), so its top edge is the far one and north reads up for the one holding it
  return texture;
 }
 // A tuft or fern (coverShape) as a geometry: every triangle twice (both windings) with the normal straight up, so it is lit like the ground from either side.
@@ -63,7 +66,7 @@ export function createMenuScene({createCharacter,appearance,vehicle=MENU_VEHICLE
 
  // Pines: one InstancedMesh per model and material (6 draw calls for 16 trees). The wind moves the instance matrices.
  const nature=createNatureMaterials(SOLID);for(const m of [nature.bark,nature.pineLeaves,nature.broadleafLeaves])owned.push(m,m.map);
- const groves=PINES.map((id,k)=>{
+ const groves=MENU_PINES.map((id,k)=>{
   const spots=MENU_TREES.filter(t=>t[2]===k),meshes=['bark','leaves'].map(part=>{const mesh=new THREE.InstancedMesh(modelGeometry(id,part),part==='bark'?nature.bark:nature.pineLeaves,Math.max(1,spots.length));mesh.count=spots.length;mesh.frustumCulled=false;scene.add(mesh);return mesh});
   return {spots,meshes};
  });
@@ -74,15 +77,17 @@ export function createMenuScene({createCharacter,appearance,vehicle=MENU_VEHICLE
  const avatar=createCharacter(appearance),spot=leanSpot(vehicle,propInfo(vehicle.prop).width);
  avatar.group.position.set(spot.x,0,spot.z);avatar.group.rotation.y=spot.yaw;avatar.setMotion?.(0);scene.add(avatar.group);
  let sheet=null;try{sheet=plansTexture()}catch{}if(sheet)own(sheet);
- const plans=new THREE.Mesh(own(new THREE.PlaneGeometry(.46,.32)),own(new THREE.MeshStandardMaterial({color:sheet?'#ffffff':'#efe7cf',map:sheet,roughness:.95,side:THREE.DoubleSide})));plans.name='menu-plans';
+ const plans=new THREE.Mesh(own(new THREE.PlaneGeometry(.46,.32)),own(new THREE.MeshStandardMaterial({color:sheet?'#ffffff':'#efe7cf',map:sheet,roughness:.95,side:THREE.FrontSide})));plans.name='menu-plans';
+ plans.add(new THREE.Mesh(plans.geometry,own(new THREE.MeshStandardMaterial({color:'#e6ddc2',roughness:.95,side:THREE.BackSide})))); // the camera is in front of the character, so it sees the plain back of the sheet, not the drawing mirrored
  if(!sheet){const lines=new THREE.Mesh(own(new THREE.PlaneGeometry(.38,.2)),own(new THREE.MeshStandardMaterial({color:'#3f6f96',roughness:1,side:THREE.DoubleSide})));lines.position.set(0,.02,.002);plans.add(lines)}
  avatar.group.add(plans);
  const handR=new THREE.Vector3(),handL=new THREE.Vector3();let head=null,headHome=null;
  function pose(p,dt){
   const lift=p.breath*.012;
   avatar.setLean(-vehicle.lean.angle-p.shift*.015);avatar.group.rotation.z=p.shift*.012;
-  avatar.reach('R',handR.set(-.22,1.29+lift,.34),1);avatar.reach('L',handL.set(.22,1.29+lift,.34),1);avatar.setHandCurl('R',.6);avatar.setHandCurl('L',.6);
-  plans.position.set(0,1.31+lift,.37);plans.rotation.set(-.8+p.plans.tilt,0,p.plans.roll);
+  // The sheet's face is toward the character (turned half a turn about Y, then leaned back 0.8 rad: top edge away, face up and to the reader); the hands hold its two side edges, a little below the middle.
+  avatar.reach('R',handR.set(-HAND.x,HAND.y+lift,HAND.z),1);avatar.reach('L',handL.set(HAND.x,HAND.y+lift,HAND.z),1);avatar.setHandCurl('R',.6);avatar.setHandCurl('L',.6);
+  plans.position.set(0,1.31+lift,.37);plans.rotation.set(PLANS_LEAN+p.plans.tilt,Math.PI,p.plans.roll);
   // The head turn is laid over the animation: put the animated value back before the mixer runs, add the turn after it.
   const bone=avatar.bone('Head');if(bone!==head){head=bone;headHome=null}
   if(head&&headHome)head.quaternion.copy(headHome);

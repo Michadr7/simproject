@@ -25,12 +25,19 @@ export function tagFemaleHair(mesh,partName){
  };
  mesh.material=Array.isArray(mesh.material)?mesh.material.map(retag):retag(mesh.material);
 }
+// The pack's Idle clips end a hair away from where they start (up to about 3 degrees on a shoulder, a thumb or a thigh), so every 1.67 s loop the whole figure gave a small twitch: the
+// idle that the menu and the character creator both show. Making each track's last key equal its first closes the loop; Walk, Run and Sprint are left as the pack made them.
+export function closeLoop(clip){
+ if(!/^Idle/.test(clip.name))return clip;
+ for(const track of clip.tracks){const v=track.values,s=track.getValueSize();if(v.length>=2*s)v.copyWithin(v.length-s,0,s)}
+ return clip;
+}
 function extract(gltf,kind){
  const meshes=[];gltf.scene.traverse(o=>{if(o.isSkinnedMesh)meshes.push(o)});
  if(!meshes.length)throw new Error('Character file has no skinned meshes');
  const skeleton=meshes[0].skeleton,container=gltf.scene.getObjectByName('character')||gltf.scene;
  const topOf=node=>{while(node.parent&&node.parent!==container)node=node.parent;return node};
- const rigRoot=topOf(skeleton.bones[0]),parts=new Map(),clips=new Map(gltf.animations.map(c=>[c.name,c]));
+ const rigRoot=topOf(skeleton.bones[0]),parts=new Map(),clips=new Map(gltf.animations.map(c=>[c.name,closeLoop(c)]));
  for(const mesh of meshes){
   const key=topOf(mesh).name;if(!parts.has(key))parts.set(key,[]);
   if(kind==='female')tagFemaleHair(mesh,key);
