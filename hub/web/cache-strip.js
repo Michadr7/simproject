@@ -15,6 +15,24 @@ export function mountCacheStrip(box,{placeholder=true}={}){
   const ctx=contextOf(c),win=Number.isFinite(c.window)&&c.window>0?c.window:null,sp=splitOf(c);
   size.textContent=`Conversation size: ${fmt(ctx)}${win?` of ${fmt(win)}`:''} tokens`;
   sizeBar.hidden=!win;if(win){sizeBar.firstChild.style.width=Math.min(100,ctx/win*100)+'%';sizeBar.dataset.state=ctx/win>=0.9?'full':ctx/win>=0.6?'warn':''}
-  state.textContent=stripText(stateOf({lastReplyAt:c.at,now,lifetime:source.life}));
+  state.textContent=stripText(stateOf({lastReplyAt:c.at,now,lifetime:source.life,ttlMs:c.ttlMs}));
   const all=sp.reused+sp.written;parts.hidden=!all;if(all){parts.children[0].style.width=(sp.reused/all*100)+'%';parts.children[1].style.width=(sp.written/all*100)+'%'}
   legend.textContent=all?`Last message: ${fmt(sp.reused)} re-used from cache (cheap) · ${fmt(sp.written)} written new`:''}}
+
+// The compact meter beside the Send button, like the one in the VS Code chat: a ring for how full the conversation is, a clock for how long the cache has left. Hover (or focus) for the sentence.
+// The ring needs the context window and the clock needs the cache lifetime: until the hub knows them, each says so in the sentence and shows a dash. Nothing is guessed.
+export function chipOf(source,now=Date.now()){
+ const c=source&&source.cache;
+ if(!c)return {ring:null,clock:'–',tip:'Conversation size and cache: measured after the next reply.',state:'none'};
+ const ctx=contextOf(c),win=Number.isFinite(c.window)&&c.window>0?c.window:null,st=stateOf({lastReplyAt:c.at,now,lifetime:source.life,ttlMs:c.ttlMs});
+ const left=st.state==='warm'&&Number.isFinite(st.countdownMs)?Math.max(0,Math.ceil(st.countdownMs/60000)):null;
+ const clock=left!=null?(left>=60?'1h':left+'m'):st.state==='cold'?'cold':st.ageMs==null?'–':(st.ageMs<60000?'now':Math.round(st.ageMs/60000)+'m ago');
+ const tip=`${win?`Conversation: ${fmt(ctx)} of ${fmt(win)} tokens (${Math.round(ctx/win*100)}%). `:`Conversation: ${fmt(ctx)} tokens (the window size is not known yet). `}${stripText(st)}.`;
+ return {ring:win?Math.min(1,ctx/win):null,clock,tip,state:st.state,over:win?ctx/win>=0.6:false}}
+export function mountCacheChip(box){
+ const ring=h('span',{class:'cring','aria-hidden':'true'}),clock=h('span',{class:'cclock'}),root=h('span',{class:'cchip',tabindex:'0',role:'img'},ring,clock);
+ box.append(root);
+ return function paint(source,now=Date.now()){
+  const c=chipOf(source,now);
+  ring.style.setProperty('--p',c.ring==null?'0':String(Math.round(c.ring*100)));ring.dataset.known=c.ring==null?'no':'yes';ring.dataset.high=c.over?'yes':'no';
+  clock.textContent=c.clock;root.title=c.tip;root.setAttribute('aria-label',c.tip);root.dataset.state=c.state}}

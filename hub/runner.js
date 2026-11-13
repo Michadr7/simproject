@@ -10,7 +10,7 @@ import {spawn,execFile} from 'node:child_process';
 import {parseRunOutput,evaluate,shouldStop,DEFAULTS} from './watcher.js';
 import {cleanEnv} from './probe.js';
 import {NEEDS,PLACEHOLDER_RATE} from './runplan.js';
-import {usageOf} from './web/cache.js';
+import {usageOf,ttlOf} from './web/cache.js';
 
 export const MODEL_IDS={haiku:'claude-haiku-5-5',sonnet:'claude-sonnet-5-5',opus:'claude-opus-5-5',fable:'claude-fable-5-2'};
 export const READ_TOOLS=['Read','Grep','Glob'],RUN_TOOLS=[...READ_TOOLS,'Edit','Write'];
@@ -116,7 +116,7 @@ export function runTurn({claude,args,prompt,cwd,cap,state,rate=null,extraEnv={},
  const handle=line=>{
   const {events,usage}=reducer.take(line);for(const ev of events)emit(ev);
   const rd=reducer.readings;if(events.some(x=>x.kind==='gauges')&&rd.length){gaugeState=evaluate([{at:now(),...rd[rd.length-1]}],{now:now(),config:state?.config||DEFAULTS});baseTokens=tracker.total}
-  if(usage){const r=tracker.add(usage.id,usage.usage);if(r.counted){const uu={...usageOf(usage.usage),at:now()};firstU=firstU||uu;lastU=uu;emit({kind:'tokens',total:r.total,capPct:tracker.pct,last:usageOf(usage.usage)});
+  if(usage){const r=tracker.add(usage.id,usage.usage);if(r.counted){const uu={...usageOf(usage.usage),ttlMs:ttlOf(usage.usage),at:now()};firstU=firstU||uu;lastU=uu;emit({kind:'tokens',total:r.total,capPct:tracker.pct,last:usageOf(usage.usage)});
    if(r.warn)emit({kind:'cap-warning',capPct:tracker.pct});
    if(r.capped){emit({kind:'cap-stop',capPct:tracker.pct});stop('capped')}
    else if(gaugeState){const g=shouldStop(gaugeState,{tokensSince:r.total-baseTokens,rate:rate??PLACEHOLDER_RATE});if(g.stop){emit({kind:'gauge-stop',stopKind:g.kind});stop(g.kind==='pause'?'pause':'gauge-stop')}}}}

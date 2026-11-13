@@ -5,7 +5,7 @@ import {runCall,errorText} from './runs-api.js';
 import {modelName,fmt,chatActionState,chatActionCall,withoutActions,withoutRecords,draftStore} from './run-actions.js';
 import {recordsCall} from './records-api.js';
 import {agoText} from './plans.js';
-import {mountCacheStrip} from './cache-strip.js';
+import {mountCacheStrip,mountCacheChip} from './cache-strip.js';
 import {contextOf,stateOf,coldSendWarning,modelSwitchWarning,newChatHint} from './cache.js';
 
 export const MODEL_CHOICES=['haiku','sonnet','opus','fable'];
@@ -28,7 +28,8 @@ export function mountChat(view,{onChange}={}){
  ta.addEventListener('keydown',e=>{if(e.key==='Enter'&&(e.ctrlKey||e.metaKey)){e.preventDefault();send()}});
  const sendBtn=h('button',{class:'btn pri',type:'button',onclick:()=>send()},'Send');
  const stopBtn=h('button',{class:'btn danger',type:'button',onclick:()=>act('chat-stop',{})},'Stop');
- const composer=h('div',{class:'chat-composer'},ta,h('div',{class:'btns'},sendBtn,stopBtn,h('span',{class:'small dim'},'Ctrl+Enter sends. Every message is a model call and counts on the gauges.')));
+ const chipBox=h('span',{class:'cchipbox'}),paintChip=mountCacheChip(chipBox); // the ring and the clock beside Send, as in the VS Code chat
+ const composer=h('div',{class:'chat-composer'},ta,h('div',{class:'btns'},sendBtn,stopBtn,chipBox,h('span',{class:'small dim'},'Ctrl+Enter sends. Every message is a model call and counts on the gauges.')));
  const cbox=h('div',{}),hint=h('p',{class:'small dim'}),warn=h('div',{class:'cwarn',role:'status',hidden:true}),paintCache=mountCacheStrip(cbox);hint.hidden=true;
  const head=h('div',{class:'chat-head'},top,cbox,hint); // one bordered header: the model picker on top, the conversation and cache meter under it
  view.append(head,warn,note,list,composer);
@@ -98,7 +99,7 @@ export function mountChat(view,{onChange}={}){
    if(acts.length){const [p,r,j,g]=await Promise.all([getJson('/api/plans'),getJson('/api/runs'),getJson('/api/jobs'),acts.some(a=>a.op==='commit'||a.op==='push')?getJson('/api/commit/summary'):null]);if(!alive)return;ctx={plans:p&&p.plans||[],runs:r&&r.runs||[],ready:r&&r.ready||[],jobs:j,git:g}}
    if(d.messages.some(m=>m.records&&m.records.length)){const a=await getJson('/api/assets/summary');if(!alive)return;undone=new Set(a&&Array.isArray(a.records)?a.records.filter(r=>r.undone).map(r=>r.id):[])}
    const s=[d.model,d.working,d.tokens,d.pending&&d.pending.model,d.messages.length&&d.messages[d.messages.length-1].id,JSON.stringify(acts.map(a=>chatActionState(a,ctx))),[...undone].join(',')].join('|');
-   paintCache(d);const hn=newChatHint(contextOf(d.cache),d.cache&&d.cache.window);hint.textContent=hn||'';hint.hidden=!hn;
+   paintCache(d);paintChip(d);const hn=newChatHint(contextOf(d.cache),d.cache&&d.cache.window);hint.textContent=hn||'';hint.hidden=!hn;
    if(force||s!==sig){sig=s;drawTop(d);drawList(d)}
    sendBtn.disabled=d.working;stopBtn.hidden=!d.working;ta.disabled=false}
   if(!alive)return;

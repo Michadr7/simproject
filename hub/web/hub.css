@@ -435,3 +435,13 @@ html[data-bot=open] .bot-face{display:none}
 
 /* ---- Hub 2.7.9: room below the last line of a pane ---- */
 .page.two .pane{padding-bottom:28px}.page{padding-bottom:20px}
+
+/* ---- Hub 2.7.11: the ring and the clock beside Send ---- */
+.cchipbox{display:inline-flex;align-items:center}
+.cchip{display:inline-flex;align-items:center;gap:6px;padding:3px 10px 3px 6px;border:1px solid var(--line);border-radius:99px;background:rgba(15,17,21,.6);color:var(--dim);font:600 11.5px var(--mono);cursor:help}
+.cchip:hover,.cchip:focus-visible{color:var(--ink);border-color:var(--acc)}
+.cchip[data-state=warm] .cclock{color:var(--ok)}.cchip[data-state=cold] .cclock{color:var(--watch)}
+.cring{--p:0;width:16px;height:16px;border-radius:50%;background:conic-gradient(var(--acc) calc(var(--p) * 1%),rgba(255,255,255,.14) 0);position:relative;flex:none}
+.cring::after{content:"";position:absolute;inset:3px;border-radius:50%;background:#14161a}
+.cring[data-high=yes]{background:conic-gradient(var(--watch) calc(var(--p) * 1%),rgba(255,255,255,.14) 0)}
+.cring[data-known=no]{background:rgba(255,255,255,.14)}

@@ -9,6 +9,8 @@ export const COLD_WARN_TOKENS=40000,NEW_CHAT_SHARE=0.6;
 
 // Turn the raw `usage` of the Claude CLI into the four numbers.
 export const usageOf=u=>({input:n(u&&u.input_tokens),output:n(u&&u.output_tokens),cacheRead:n(u&&u.cache_read_input_tokens),cacheWrite:n(u&&u.cache_creation_input_tokens)});
+// How long the cache that a reply WROTE lives, as the API itself reports it: usage.cache_creation splits the written tokens into a 5-minute and a 1-hour part. null when the reply wrote nothing (its reads kept the earlier TTL).
+export function ttlOf(u){const c=u&&u.cache_creation;if(!c||typeof c!=='object')return null;if(n(c.ephemeral_1h_input_tokens)>0)return 60*MIN;if(n(c.ephemeral_5m_input_tokens)>0)return 5*MIN;return null}
 export const addUsage=(a,b)=>({input:n(a&&a.input)+n(b&&b.input),output:n(a&&a.output)+n(b&&b.output),cacheRead:n(a&&a.cacheRead)+n(b&&b.cacheRead),cacheWrite:n(a&&a.cacheWrite)+n(b&&b.cacheWrite)});
 // How big the conversation was when the reply was made: everything sent, whether re-used or written.
 export const contextOf=u=>n(u&&u.input)+n(u&&u.cacheRead)+n(u&&u.cacheWrite);
@@ -29,9 +31,11 @@ export function lifetime(observations){
  return {longestHitMs,shortestMissMs,hits:hits.length,misses:misses.length,sure}}
 
 // {state:'warm'|'cold'|'unknown', ageMs, countdownMs?}. A countdown only when the lifetime is sure and the reply is inside the longest hit. Between the longest hit and the shortest miss nobody knows.
-export function stateOf({lastReplyAt,now,lifetime:lt}){
+export function stateOf({lastReplyAt,now,lifetime:lt,ttlMs=null}){
  if(!Number.isFinite(lastReplyAt)||!Number.isFinite(now))return {state:'unknown',ageMs:null};
  const ageMs=Math.max(0,now-lastReplyAt);
+ // the API said how long the cache it wrote lives (ttlMs): that is a fact, not a guess, so the countdown can show from the first reply. Every read renews it, so it runs from the last reply.
+ if(Number.isFinite(ttlMs)&&ttlMs>0){return ageMs<=ttlMs?{state:'warm',ageMs,countdownMs:ttlMs-ageMs}:{state:'cold',ageMs}}
  if(lt&&lt.sure){
   if(ageMs<=lt.longestHitMs)return {state:'warm',ageMs,countdownMs:lt.longestHitMs-ageMs};
   if(ageMs>=lt.shortestMissMs)return {state:'cold',ageMs}}

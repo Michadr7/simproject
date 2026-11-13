@@ -1,6 +1,6 @@
 // Mikkadr Hub v2.5a: the cache rules (hub/cache.js) and the runner's cache numbers.
 import assert from 'node:assert/strict';
-import {usageOf,addUsage,contextOf,splitOf,observe,lifetime,stateOf,rewriteCost,stripText,coldSendWarning,modelSwitchWarning,newChatHint,MIN,COLD_WARN_TOKENS} from '../hub/web/cache.js';
+import {ttlOf,usageOf,addUsage,contextOf,splitOf,observe,lifetime,stateOf,rewriteCost,stripText,coldSendWarning,modelSwitchWarning,newChatHint,MIN,COLD_WARN_TOKENS} from '../hub/web/cache.js';
 import {createReducer,windowOf} from '../hub/runner.js';
 
 assert.deepEqual(usageOf({input_tokens:5,output_tokens:7,cache_read_input_tokens:100,cache_creation_input_tokens:20,junk:'x'}),{input:5,output:7,cacheRead:100,cacheWrite:20});
@@ -66,4 +66,18 @@ const red2=createReducer({});red2.take(L({type:'result',is_error:false,result:'o
  assert.equal(replyCache(root,c,'opus',{first:null,last:null},t,t),c,'a turn with no usage keeps the old record');
  for(const l of fs.readFileSync(path.join(root,'.hub','cache.jsonl'),'utf8').trim().split('\n'))assert.deepEqual(Object.keys(JSON.parse(l)).sort(),['at','context','gapMs','hit','modelSwitch','model'].sort(),'numbers and flags only');
  fs.rmSync(root,{recursive:true,force:true})}
+// 2.7.11: the API says how long the cache it wrote lives, so the countdown needs no learning
+{const m60=60*MIN;
+ assert.equal(ttlOf({cache_creation:{ephemeral_1h_input_tokens:500,ephemeral_5m_input_tokens:0}}),m60);assert.equal(ttlOf({cache_creation:{ephemeral_5m_input_tokens:500,ephemeral_1h_input_tokens:0}}),5*MIN);assert.equal(ttlOf({cache_creation:{ephemeral_1h_input_tokens:0,ephemeral_5m_input_tokens:0}}),null,'nothing written, nothing said');assert.equal(ttlOf({}),null);assert.equal(ttlOf(null),null);assert.equal(ttlOf({cache_creation:{ephemeral_1h_input_tokens:1,ephemeral_5m_input_tokens:9}}),m60,'a part written for an hour makes it an hour');
+ assert.deepEqual(stateOf({lastReplyAt:0,now:3*MIN,lifetime:unsure,ttlMs:m60}),{state:'warm',ageMs:3*MIN,countdownMs:57*MIN},'the countdown shows from the first reply');
+ assert.equal(stateOf({lastReplyAt:0,now:61*MIN,lifetime:unsure,ttlMs:m60}).state,'cold');assert.equal(stateOf({lastReplyAt:0,now:6*MIN,lifetime:unsure,ttlMs:5*MIN}).state,'cold','a 5 minute cache is cold after 5');assert.equal(stateOf({lastReplyAt:0,now:3*MIN,lifetime:unsure,ttlMs:null}).state,'unknown','no ttl said, nothing claimed');
+ assert.match(stripText(stateOf({lastReplyAt:0,now:3*MIN,lifetime:unsure,ttlMs:m60})),/^Cache warm · last reply 3 min ago · about 57 min left$/);
+ const {chipOf}=await import('../hub/web/cache-strip.js');
+ let c=chipOf(null);assert.equal(c.clock,'–');assert.equal(c.ring,null);assert.match(c.tip,/measured after the next reply/);
+ c=chipOf({cache:{at:0,input:0,cacheRead:90000,cacheWrite:10000,window:200000,ttlMs:m60},life:null},3*MIN);assert.equal(c.clock,'57m');assert.equal(c.state,'warm');assert.equal(c.ring,0.5);assert.match(c.tip,/100,000 of 200,000 tokens \(50%\)/);assert.match(c.tip,/about 57 min left/);
+ c=chipOf({cache:{at:0,input:10,cacheRead:0,cacheWrite:1000,window:null,ttlMs:null},life:null},12*MIN);assert.equal(c.clock,'12m ago','without a said ttl: minutes since the last reply, no countdown');assert.equal(c.ring,null,'without a window: no ring');assert.match(c.tip,/window size is not known yet/);
+ assert.equal(chipOf({cache:{at:0,input:1,cacheRead:0,cacheWrite:0,ttlMs:5*MIN},life:null},9*MIN).clock,'cold');
+ const fs2=(await import('node:fs')).default,os2=(await import('node:os')).default,path2=(await import('node:path')).default,{replyCache}=await import('../hub/cache-store.mjs'),r2=fs2.mkdtempSync(path2.join(os2.tmpdir(),'hub-ttl-'));
+ let rc=replyCache(r2,null,'sonnet',{first:{input:1,output:1,cacheRead:0,cacheWrite:9,ttlMs:m60,at:1},last:{input:1,output:1,cacheRead:0,cacheWrite:9,ttlMs:m60,at:1},window:null},0,1);assert.equal(rc.ttlMs,m60);
+ rc=replyCache(r2,rc,'sonnet',{first:{input:1,output:1,cacheRead:9,cacheWrite:0,ttlMs:null,at:2},last:{input:1,output:1,cacheRead:9,cacheWrite:0,ttlMs:null,at:2},window:null},2,2);assert.equal(rc.ttlMs,m60,'a reply that only read keeps the earlier ttl');fs2.rmSync(r2,{recursive:true,force:true})}
 console.log('hub-cache: usage, context and split, hit and miss, lifetime not sure on thin data, model switch ignored, countdown only when sure, warnings, and the runner window passed.');

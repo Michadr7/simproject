@@ -71,7 +71,7 @@ export function buildActivity(input={}){
  const asks=runs.filter(r=>r.status==='waiting-answer'||r.status==='confirming').length+(chat&&chat.pending?1:0);
  // the last reply of what is on show: that run, or the chat, or the newest of the two
  const times=[onShow&&onShow.cache&&onShow.cache.at,a.source!=='run'&&chat&&chat.cache&&chat.cache.at].filter(Number.isFinite),at=times.length?Math.max(...times):null;
- const cs=at==null?null:stateOf({lastReplyAt:at,now,lifetime:life}),shell=[...ev].reverse().find(e=>e.kind==='shell');
+ const cs=at==null?null:stateOf({lastReplyAt:at,now,lifetime:life,ttlMs:((a.source==='run'?onShow&&onShow.cache:chat&&chat.cache)||{}).ttlMs}),shell=[...ev].reverse().find(e=>e.kind==='shell');
  const facts={used:a.tokens||0,cap:a.cap??null,file:lastTarget(ev,['Read','Edit','Write']),cmd:a.source==='job'&&job?String(job.label||'').slice(0,40):lastTarget(ev,['Shell']),
   result:scene==='pass'?'passed':scene==='fail'?'failed':null,resultOf:shell?String(shell.target).slice(0,30):null,
   reason:stoppedRun&&Object.hasOwn(STOP_SIGN,stoppedRun.status)?stoppedRun.status:null,sign:stoppedRun&&Object.hasOwn(STOP_SIGN,stoppedRun.status)?STOP_SIGN[stoppedRun.status]:null,

@@ -23,5 +23,5 @@ export function lifeOf(root){
 export function replyCache(root,prev,model,out,startedAt,now){
  if(!out||!out.last)return prev||null;
  try{if(prev&&out.first){const o=observe(prev,{at:startedAt,model,input:out.first.input,cacheRead:out.first.cacheRead,cacheWrite:out.first.cacheWrite});if(o)appendObservation(root,{at:now,...o})}}catch{}
- const {input,output,cacheRead,cacheWrite}=out.last;
- return {at:now,model:model?String(model).slice(0,40):null,input,output,cacheRead,cacheWrite,window:Number.isFinite(out.window)&&out.window>0?out.window:(prev&&prev.window)||null}}
+ const {input,output,cacheRead,cacheWrite}=out.last,ttlMs=Number.isFinite(out.last.ttlMs)?out.last.ttlMs:(prev&&Number.isFinite(prev.ttlMs)?prev.ttlMs:null);
+ return {at:now,model:model?String(model).slice(0,40):null,input,output,cacheRead,cacheWrite,ttlMs,window:Number.isFinite(out.window)&&out.window>0?out.window:(prev&&prev.window)||null}}
