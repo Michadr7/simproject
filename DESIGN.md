@@ -1,4 +1,4 @@
-# City Life — design (current spec)
+# Eden Ridge — design (current spec)
 
 > Single source of truth for the plan: what is built, what is next, decisions, numbers. Superseded text and build narratives are in `DESIGN-history.md` (the previous full DESIGN.md). If the two disagree, this file wins. Read this file only; open the history only for old detail on a specific topic.
 > How to work, commands, environment gotchas and the file map are in `context.md` (not repeated here). Asset list and licences: `ASSETS.md`.

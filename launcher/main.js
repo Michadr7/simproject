@@ -1,4 +1,4 @@
-// City Life desktop launcher: serves the bundled game from 127.0.0.1 and shows it in a window.
+// Eden Ridge desktop launcher: serves the bundled game from 127.0.0.1 and shows it in a window.
 // A fixed port keeps the web address (and so the saves in localStorage) the same every run.
 const {app,BrowserWindow,shell,dialog,Menu}=require('electron');
 const http=require('http'),fs=require('fs'),path=require('path');
@@ -26,8 +26,8 @@ function listen(port,last){return new Promise((resolve,reject)=>{
  server.listen(port,'127.0.0.1',()=>resolve({server,port}));
 })}
 async function start(){
- let port;try{({port}=await listen(FIRST_PORT,FIRST_PORT+9));log('listening on '+port)}catch(e){log('listen failed: '+e.message);dialog.showErrorBox('City Life','Could not start the local game server: '+e.message);return app.quit()}
- const win=new BrowserWindow({width:1280,height:800,backgroundColor:'#000000',title:'City Life',autoHideMenuBar:true,webPreferences:{contextIsolation:true,sandbox:true}});
+ let port;try{({port}=await listen(FIRST_PORT,FIRST_PORT+9));log('listening on '+port)}catch(e){log('listen failed: '+e.message);dialog.showErrorBox('Eden Ridge','Could not start the local game server: '+e.message);return app.quit()}
+ const win=new BrowserWindow({width:1280,height:800,backgroundColor:'#000000',title:'Eden Ridge',autoHideMenuBar:true,webPreferences:{contextIsolation:true,sandbox:true}});
  Menu.setApplicationMenu(null);
  win.webContents.setWindowOpenHandler(({url})=>{if(/^https?:/.test(url)&&!url.startsWith('http://127.0.0.1:'))shell.openExternal(url);return {action:'deny'}});
  win.webContents.on('before-input-event',(e,i)=>{if(i.type==='keyDown'&&i.key==='F11'){win.setFullScreen(!win.isFullScreen());e.preventDefault()}});

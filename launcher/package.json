@@ -1,13 +1,13 @@
 {
   "name": "city-life-launcher",
   "version": "0.35.3",
-  "description": "City Life desktop launcher (bundled offline game)",
+  "description": "Eden Ridge desktop launcher (bundled offline game)",
   "main": "main.js",
   "private": true,
   "author": "Michadr",
   "build": {
     "appId": "com.michadr.citylife",
-    "productName": "City Life",
+    "productName": "Eden Ridge",
     "directories": {
       "output": "out"
     },

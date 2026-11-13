@@ -75,5 +75,5 @@ export function createDevServer({root='dist',port=8000,host='127.0.0.1'}={}){
 
 if(process.argv[1]&&import.meta.url===pathToFileURL(process.argv[1]).href){
  const dev=createDevServer({port:Number(process.env.PORT)||8000});
- dev.listen().then(port=>{console.log(`City Life dev server: http://localhost:${port}\nThe dev panel's interior editor saves into dist/interior-layouts.js (and the current release). Ctrl+C to stop.`)},error=>{console.error(error.code==='EADDRINUSE'?'That port is in use. Stop the other server, or run: PORT=8001 npm run dev (PowerShell: $env:PORT=8001; npm run dev)':error.message);process.exitCode=1});
+ dev.listen().then(port=>{console.log(`Eden Ridge dev server: http://localhost:${port}\nThe dev panel's interior editor saves into dist/interior-layouts.js (and the current release). Ctrl+C to stop.`)},error=>{console.error(error.code==='EADDRINUSE'?'That port is in use. Stop the other server, or run: PORT=8001 npm run dev (PowerShell: $env:PORT=8001; npm run dev)':error.message);process.exitCode=1});
 }

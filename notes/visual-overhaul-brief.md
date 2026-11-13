@@ -3,7 +3,7 @@
 Written for: the agent (Fable or Opus) that designs and builds the sky and day/night rig. Read PROJECT-BRIEF.md, notes/menu-scene-design.md and DESIGN.md first.
 
 ## Goal
-A complete visual update of City Life: better lighting and shaders, a real day and night cycle, lights that matter at night. The main menu uses the same rig at the time saved in the profile (log out at night: night menu).
+A complete visual update of Eden Ridge: better lighting and shaders, a real day and night cycle, lights that matter at night. The main menu uses the same rig at the time saved in the profile (log out at night: night menu).
 
 ## The look
 - Base: **Firewatch**. Flat, confident colour; a warm-to-cool sky gradient; strong haze that fades distance into the sky colour; low-poly shapes read well because of colour and fog.

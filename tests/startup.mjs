@@ -100,12 +100,12 @@ for(const saved of [false,true]){
  else {assert.equal(ids.get('creator').hidden,false);ids.get('characterName').value='Test';ids.get('creatorForm').onsubmit({preventDefault(){}});assert(ids.get('creator').hidden);nextFrame(performance.now()+32);assert.equal(ids.get('cash').textContent,'$0.00')}
  // Phone UI integration: keyboard, pointer release, movement lock, apps, acceptance and marker.
  const {GameState:phoneState}=await import(pathToFileURL(join(dir,'state.js')).href);
- const {CONTRACTS}=await import(pathToFileURL(join(dir,'contracts.js')).href);
+ const {availableContracts}=await import(pathToFileURL(join(dir,'gig-bridge.js')).href);
  let phoneNow=performance.now()+50000;
  const phoneFrame=()=>{phoneNow+=40;nextFrame(phoneNow)};
  const key=(code,repeat=false)=>{const e=new Event('keydown',{cancelable:true});e.code=code;e.repeat=repeat;win.dispatchEvent(e);return e};
  ids.get('closeDialog').click();
- phoneState.progress.gigBoard={ids:CONTRACTS.slice(0,3).map(j=>j.id),refreshAt:1e8};
+ const boardSize=availableContracts(phoneState.progress).length;assert(boardSize>=2,'the derived gig board offers gigs');
  assert(ids.get('phoneOverlay').hidden,'phone starts hidden');
  let releases=0;doc.pointerLockElement=ids.get('world');doc.exitPointerLock=()=>{releases++;doc.pointerLockElement=null;doc.dispatchEvent(new Event('pointerlockchange'))};
  key('KeyW');const phoneX=phoneState.me.position.x,phoneZ=phoneState.me.position.z;
@@ -119,11 +119,11 @@ for(const saved of [false,true]){
  assert.equal(ids.get('phoneFood').textContent,Math.round(phoneState.progress.life.food)+' / 100');
  const oldEnergy=phoneState.progress.life.energy;phoneState.progress.life.energy=1;
  ids.get('phoneApp-gigs').click();const accept=ids.get('phoneContracts').children[0].children.at(-1);
- assert(!accept.disabled,'low energy never blocks acceptance');assert.equal(ids.get('phoneContracts').children.filter(c=>!c.hidden).length,3);phoneState.progress.life.energy=oldEnergy;
+ assert(!accept.disabled,'low energy never blocks acceptance');assert.equal(ids.get('phoneContracts').children.filter(c=>!c.hidden).length,boardSize);phoneState.progress.life.energy=oldEnergy;
  ids.get('phoneApp-gigs').click();assert(!accept.disabled);accept.click();
- assert(ids.get('phoneOverlay').hidden);assert.equal(phoneState.progress.activeJob.id,CONTRACTS[0].id);
+ assert(ids.get('phoneOverlay').hidden);assert(phoneState.progress.gigs.active&&phoneState.progress.activeJob,'accepting starts a gig');
  assert.equal(phoneState.progress.life.energy,oldEnergy,'no upfront energy charge');
- assert.equal(JSON.parse(store.get('citylife.profile.v1')).progress.activeJob.id,CONTRACTS[0].id);
+ assert.equal(JSON.parse(store.get('citylife.profile.v1')).progress.gigs.active.id,phoneState.progress.gigs.active.id);
  for(let i=0;i<3;i++)phoneFrame();assert.equal(phoneState.me.position.z,phoneZ,'held key does not stick after closing phone');
  key('KeyP');ids.get('phoneApp-gigs').click();assert(accept.disabled,'active job blocks accepting again');assert(ids.get('phoneContracts').children[0].hidden,'cooling-down gig is hidden');key('Escape');assert(ids.get('phoneOverlay').hidden);
  if(saved){Object.assign(phoneState.me.position,{x:0,y:.02,z:3.9});for(let i=0;i<10;i++)phoneFrame();key('KeyE');for(let i=0;i<40;i++)phoneFrame();Object.assign(phoneState.me.position,{x:0,y:.02,z:4.4});for(let i=0;i<300;i++)phoneFrame()} // the cafe's double doors are opened by hand
@@ -141,15 +141,15 @@ for(const saved of [false,true]){
   phoneState.progress={...phoneState.progress,inventory:bagBefore}; // leave the bag as the rest of the test expects
  }
  phoneFrame();const gigMarker=globalThis.__renderScene.getObjectByName('gig-marker');assert(gigMarker.visible);
- assert.equal(gigMarker.position.x,CONTRACTS[0].location.x);
+ assert.equal(gigMarker.position.x,phoneState.progress.activeJob.location.x);
  const beforePay=phoneState.progress.cash;
- Object.assign(phoneState.me.position,{x:CONTRACTS[0].location.x,y:.165,z:CONTRACTS[0].location.z});phoneFrame();
- assert.equal(ids.get('gigStepGo').textContent,'☑');assert.equal(phoneState.progress.activeJob.stage,'task');assert.equal(phoneState.progress.cash,beforePay);
+ for(const s of phoneState.progress.gigs.active.places){Object.assign(phoneState.me.position,{x:s.x,y:.165,z:s.z});phoneFrame()}
+ assert.equal(ids.get('gigStepGo').textContent,'☑');assert.equal(phoneState.progress.activeJob.stage,'return');assert.equal(phoneState.progress.cash,beforePay);
  assert.match(ids.get('direction').style.transform,/^rotate\(/,'the arrow is the gig arrow (it used to be overwritten by the market beacon)');assert.equal(globalThis.__renderScene.getObjectByName('objective-beacon').visible,false,'no market beacon during a gig');
  ids.get('objectiveToggle').click();assert(ids.get('objectiveDetails').hidden);assert.equal(ids.get('objectiveToggle')['aria-expanded'],'false');ids.get('objectiveToggle').click();assert(!ids.get('objectiveDetails').hidden);
- for(let i=0;i<205;i++)phoneFrame();assert.equal(phoneState.progress.activeJob.stage,'return');assert.equal(ids.get('gigStepTask').textContent,'☑');
- Object.assign(phoneState.me.position,{x:CONTRACTS[0].returnLocation.x,y:.165,z:CONTRACTS[0].returnLocation.z});key('KeyE');phoneFrame();
- assert.equal(phoneState.progress.cash,beforePay+1000);assert.equal(phoneState.progress.activeJob,null);assert(!gigMarker.visible);
+ phoneFrame();assert.equal(phoneState.progress.activeJob.stage,'return');assert.equal(ids.get('gigStepTask').textContent,'☑');
+ Object.assign(phoneState.me.position,{x:phoneState.progress.activeJob.returnLocation.x,y:.165,z:phoneState.progress.activeJob.returnLocation.z});key('KeyE');phoneFrame();
+ assert(phoneState.progress.cash>beforePay,'the gig paid');assert.equal(phoneState.progress.activeJob,null);assert(!gigMarker.visible);
  if(saved){Object.assign(phoneState.me.position,{x:36,y:.165,z:-6.3});key('KeyE');phoneFrame()}
  // Exercise frame-level throttling, final stop delivery, mesh sync and remote events.
  const {GameState:state}=await import(pathToFileURL(join(dir,'state.js')).href);

@@ -1,4 +1,4 @@
-# Deploying City Life (Cloudflare Worker, static assets)
+# Deploying Eden Ridge (Cloudflare Worker, static assets)
 
 The game is static files in `dist/`, with no build step. A Cloudflare **Worker** named `simproject` serves them (`wrangler.jsonc` at the repo root: `assets.directory` is `./dist`). It is connected to the GitHub repo, so a push to `main` deploys in about a minute. The hosted multiplayer relay will be added to the same Worker later (Durable Objects).
 

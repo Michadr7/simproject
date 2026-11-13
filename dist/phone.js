@@ -1,6 +1,6 @@
 import {levelOf,perkText,perksText} from './skills.js';
 import {isAxe,hitsFor,bestAxe} from './tools.js';
-import {CONTRACTS,availableContracts} from './contracts.js';
+import {CONTRACTS,availableContracts} from './gig-bridge.js';
 import {money} from './jobs.js';
 import {clockText} from './routine.js';
 import {weekday} from './housing.js';
@@ -37,7 +37,7 @@ export function createPhone({document:doc,getState,canOpen,onOpen,onClose,onAcce
       close();
     };
     card.append(title,description,terms,button);$('phoneContracts').append(card);
-    return {job,button,card};
+    return {job,button,card,gTitle:title,gDesc:description,gTerms:terms};
   });
   // The Housing app: one card per home for rent or sale (built once, updated in place): a status line and the buttons that apply to where you stand with it.
   const homeCards=LISTED.map(h=>{
@@ -61,7 +61,7 @@ export function createPhone({document:doc,getState,canOpen,onOpen,onClose,onAcce
   const noVehicles=doc.createElement('p');noVehicles.className='phone-home-status';noVehicles.textContent='You do not own a vehicle yet. Buy one at the Eastbank lot, or order it in the Store.';$('phoneGarage').append(noVehicles);
   function refresh(){
     onRefresh?.();const state=getState(),progress=state.progress;
-    const available=new Set(availableContracts(progress).map(job=>job.id));
+    const offerBy=new Map(availableContracts(progress).map(job=>[job.id,job])),available=new Set(offerBy.keys());
     $('phoneClock').textContent=clockText(progress.routine);
     $('phoneDate').textContent=weekday(progress.housing.day)+' · Oak Street';
     $('phoneGreeting').textContent=state.me.name?`Hello, ${state.me.name}.`:'Your life, in reach.';
@@ -96,8 +96,8 @@ export function createPhone({document:doc,getState,canOpen,onOpen,onClose,onAcce
       buttons.buy.textContent=renting?`Buy · ${money(h.priceCents-held.deposit)}`:`Buy · ${money(h.priceCents)}`;
     }
     store.refresh();if(screen==='jobs')jobs.render();
-    for(const {job,button,card} of cards){
-      card.hidden=!available.has(job.id);
+    for(const {job,button,card,gTitle,gDesc,gTerms} of cards){
+      card.hidden=!available.has(job.id);{const o=offerBy.get(job.id);if(o){gTitle.textContent=o.title;gDesc.textContent=o.description;gTerms.textContent=money(o.reward)+' · '+o.terms}}
       const current=progress.activeJob?.id===job.id;
       button.disabled=!!progress.activeJob;
       button.textContent=current?'In progress':progress.activeJob?'Finish active gig':'Accept';

@@ -330,3 +330,34 @@ Where this differs from sections 6 to 8, this section is the truth. Stage 2's lo
 - The beam does not stop at walls: on Low it can show on the ground on the far side of a thin wall.
 
 **Not built in this stage:** shop signs and the fuel canopy following the night (the canopy keeps its constant glow of 2; the sign boards are unlit `MeshBasicMaterial`, so they are drawn at full brightness day and night and already read as lit signs), the Store model's windows, remote players' vehicle lamps, the CSS vignette that answer 12.2 moved here (`style.css` was being changed by another task), interiors at night (answer 12.9).
+
+## 15. Stage 4 as built: shadows only (2026-11-13)
+
+Where this differs from sections 7 and 8, this section is the truth. Only the shadows half of Stage 4 was built; the materials pass (rim light, foliage wind, water) was not.
+
+**Files.** New: `dist/shadow-rules.js` (pure: every number and rule), `dist/shadows.js` (three.js: the sun's shadow box, the fade edit and the Low patches; it replaces the planned `blob-shadows.js`), `tests/shadows.mjs`. Changed: `dist/game.js`, four single-line hooks: line 89 (the import), line 381 (`createShadows` next to `createNightLights`), line 1441 (`shadows.update` right after `sky.update`), line 1448 (`shadows` in the `?debug` hook). **Not touched:** `world.js`, `town.js`, `map-definition.js`, `sky.js`, `daynight.js`, `dev.js`, `applyQuality` and the dev panel's `setShadows` (both still only flip `renderer.shadowMap.enabled`).
+
+**High.** Still ONE 2048 x 2048 map on the one sun-and-moon light; nothing added.
+- **Box 90 m** (was 130 m): 4.4 cm of ground per texel (was 6.3 cm). The depth of the box (130 m) and the bias are unchanged.
+- **Texel snapping.** After `sky.update` has placed the light, `shadows.update` moves the light and its target together by at most half a texel so the box always sits on the same grid (`snapShadow`). Walking no longer makes shadow edges crawl. The sun itself still turns (0.125 degrees a real second), which moves edges slowly; that is real movement.
+- **Fade at low sun.** `shadowFade`: 0 while the sun or moon is under 6 degrees (real height, not the 8-degree clamped light direction), 1 over 12. The shader side is one edit of three.js r160's `getShadow` (`shadowmap_pars_fragment`): `return shadow;` becomes `return mix( 1.0, shadow, clamp( shadowRadius, 0.0, 1.0 ) );`. `light.shadow.radius` is not read by the soft filter the game uses (`PCFSoftShadowMap`), its default is 1, so every other light keeps full shadows, and it is a plain uniform: changing it recompiles nothing. If the filter type is ever changed to `PCFShadowMap` or `VSMShadowMap`, radius means blur there and this edit must be redone.
+- **The pass is skipped while fully faded** (`sun.shadow.autoUpdate=false`): 118 of 1,440 game minutes a day (05:31 to 06:29 and 17:31 to 18:29), about 4 real minutes of 48 with no shadow pass at all.
+- **Moon shadows are on** (the same pass; full from about 12 degrees of moon).
+- A room in the world scene (shops, office, warehouse) keeps full shadows, as it keeps its noon light.
+
+**Low.** No shadow map (as before). ONE instanced mesh `blob-shadows`: a soft round patch under each person (the player on foot, the six Oak Street walkers, remote players) and a soft rounded box under each vehicle (the drivable fleet, the two delivery trucks, the three Oak Street cars from `neighborhood.js`, and the 19 scenery cars of the map, found by their landmark ids `park-...` and `car-...`). **+1 draw call, at most 96 triangles** (48 patches; the nearest 48 within 80 m), no texture, no light, no render target. Opacity follows the directional light: 0.42 at noon, about 0.15 under the moon, 0 at the horizon. Patches fade out in the fog, lie on the slope under a person, take a moving vehicle's own tilt, and are hidden on High, in any room, and when too faint to see. The dev panel's Shadows switch on High shows no patches (it is for glitch hunting).
+
+**Counts** (a script building `world.js`'s scene in Node and running three.js's own frustum test with the shadow camera; `world.js` content only, not `game.js`'s boxes, the characters or the vehicles):
+
+| Spot, noon | 130 m box: calls / triangles | 90 m box: calls / triangles |
+|---|---|---|
+| Spawn | 25 / 59,941 | 15 / 32,359 |
+| Alder Center | 55 / 149,262 | 44 / 148,530 |
+| Bridge | 47 / 280,138 | 37 / 260,201 |
+| Forest | 17 / 306,509 | 14 / 294,357 |
+
+So the tighter box saves 3 to 11 draw calls a frame but few triangles outside the city: the trees are instanced meshes that the shadow pass draws whole (every tree the viewer cull keeps within 158 m is redrawn into the map, although only those within 45 m can land in it). **The forest's shadow pass is still about 300,000 triangles a frame on High.** Two cheaper options, not built:
+1. Trees cast only near the player: split each casting tree mesh in `world.js` into a near part that casts and a far part that does not (est. forest pass from about 300,000 to under 100,000 triangles). Needs a `world.js` change, so it needs a yes.
+2. Redraw the shadow map every second frame (`sun.shadow.autoUpdate` toggled): halves the pass on average; moving things' shadows lag one frame (invisible at 165 FPS, about 15 cm behind a runner at 30 FPS). One line in `shadows.js`.
+
+**Seen in screenshots** (software WebGL, Oak Street, the working copy served directly): High at 13:00 (shadows as before, sharper), 06:47 (faint long shadows, fading in), 06:12 (none), 00:00; Low at 13:00 and 00:00 (patches under the player, a walker and a parked car). No shader error in the console after switching Low and High. **Not seen or measured:** any frame time, any real GPU, shimmer while walking (the snap is tested as arithmetic, not by eye), the patches on steep ground, under a moving vehicle, or under remote players.

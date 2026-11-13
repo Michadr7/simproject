@@ -1,4 +1,4 @@
-# City Life — stage 1
+# Eden Ridge — stage 1
 Buildless Three.js browser game. Serve `dist/` with any static host, including Cloudflare Pages. Three.js is vendored locally (MIT).
 
 Controls: WASD/arrows, Shift run, drag camera, wheel zoom, E interact, R reset, Esc pause.
