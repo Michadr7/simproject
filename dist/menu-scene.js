@@ -4,10 +4,11 @@
 // Budget: 1 skinned character, about 16 draw calls, 16 tree instances, no shadow pass, 36 dust points, 1,570 ground-cover instances (2 draw calls, wind in the shader).
 import * as THREE from './vendor/three.module.js';
 import {createProp,createPropInstances,propInfo} from './props.js';import {applyPaint} from './paint-shader.js';
-import {PINES,modelGeometry,createNatureMaterials} from './nature.js';
+import {PINES,modelGeometry,createNatureMaterials} from './nature.js';import {createSky} from './sky.js';
 import {MENU_VEHICLE,leanSpot,menuPose,windSway,hazeAt,MENU_PLANS,plansOps,MENU_COVER,groundCover,coverShape,COVER_WIND} from './menu-scene-rules.js';
 
-const SOLID={apply:m=>m},DUST=36,PLANS_LEAN=.8,HAND={x:.2,y:1.33,z:.27}; // HAND: where each wrist goes (character space, metres); the fist hangs about 10 cm below and ahead of the wrist, so this puts it on the sheet's side edge
+const SOLID={apply:m=>m},DUST=36,PLANS_LEAN=.8,HAND={x:.27,y:1.3,z:.25}; // HAND: where each wrist goes (character space, metres); the fist hangs about 10 cm below and ahead of the wrist. The sheet is 46 cm wide (edge at 23 cm), so the wrist sits 4 cm outside the edge and the fist closes around it from the side and below, behind the sheet's plane, instead of through the face
+const GAME_MINUTES_PER_SECOND=.5; // the game clock runs 30 game minutes per real minute (timestep.js, advanceTime): the menu sky moves at the same speed
 // Trees stand in a ring behind and beside the clearing, never between the camera and the character. [x, z, model index, scale, phase]
 // pine.1 is left out: its bark has branch stubs that stick out of the trunk up to 1.8 m at 0.5 to 1.7 m high (the other two stay within 0.4 m there), which showed as a bent hook on a trunk close to the camera.
 // pine.2 is left out too: its leaves start 3.4 m up, so it stood as a bare trunk with a few sparse tiers on top (the glitchy tree on the right). pine.3 is full from 1 m up; variety comes from scale and turn.
@@ -26,6 +27,14 @@ function plansTexture(){
   else{ctx.beginPath();o.points.forEach(([x,y],i)=>i?ctx.lineTo(x,y):ctx.moveTo(x,y));if(o.op==='fill')ctx.fill();else{ctx.lineWidth=o.width;ctx.setLineDash(o.dash||[]);ctx.stroke()}}}
  const texture=new THREE.CanvasTexture(canvas);texture.colorSpace=THREE.SRGBColorSpace;texture.anisotropy=4;// not turned: the sheet faces the character (see pose), so its top edge is the far one and north reads up for the one holding it
  return texture;
+}
+// The pine's leaf cards with softened normals (a copy: the game's cached geometry is left alone). The cards are flat planes at many angles, so their own normals light neighbouring cards very differently
+// and the crown looks torn into jagged planes; pointing each normal mostly away from the trunk (a little upward) shades the crown as one rounded mass, like a distant tree.
+export function softLeaves(source){
+ const g=source.clone(),p=g.attributes.position,n=g.attributes.normal;g.computeBoundingBox();const {min,max}=g.boundingBox,cy=min.y+.4*(max.y-min.y);
+ for(let i=0;i<p.count;i++){let x=p.getX(i),y=(p.getY(i)-cy)*.5,z=p.getZ(i),l=Math.hypot(x,y,z)||1;x/=l;y/=l;z/=l;
+  let a=n.getX(i)*.3+x*.7,b=n.getY(i)*.3+y*.7,c=n.getZ(i)*.3+z*.7;l=Math.hypot(a,b,c)||1;n.setXYZ(i,a/l,b/l,c/l)}
+ n.needsUpdate=true;return g;
 }
 // A tuft or fern (coverShape) as a geometry: every triangle twice (both windings) with the normal straight up, so it is lit like the ground from either side.
 function coverGeometry(kind,root,tip){
@@ -49,11 +58,15 @@ function windMaterial(wind){
 }
 
 // createCharacter: character.js's (passed in so the loader is the game's one). appearance: the saved character or the default. cover: 0..1 of the ground cover (low quality draws less).
-export function createMenuScene({createCharacter,appearance,vehicle=MENU_VEHICLE,cover=1}){
+// minutes: the saved time of day (routine.minutes, 0 to 1440): the sky, sun or moon, hemisphere light, fog colour and exposure come from the game's day and night rig (daynight.js through sky.js)
+// and keep running from there at the game's speed. renderer: the game's (only toneMapping and toneMappingExposure are set); without one a plain object stands in.
+export function createMenuScene({createCharacter,appearance,vehicle=MENU_VEHICLE,cover=1,minutes=720,renderer=null}){
  const scene=new THREE.Scene(),owned=[]; // owned: geometries and materials made here (shared, cached geometry from props.js / nature.js is not ours to free)
  const own=x=>{owned.push(x);return x};
  scene.name='menu-scene';scene.background=new THREE.Color('#a9c4cf');scene.fog=new THREE.Fog('#a9c4cf',14,46);
  const hemi=new THREE.HemisphereLight('#eaf3f5','#44553a',1.5),sun=new THREE.DirectionalLight('#ffe2b8',2.4);scene.add(hemi,sun,sun.target);
+ const gear=renderer||{toneMapping:0,toneMappingExposure:1},sky=createSky({scene,renderer:gear,sun,hemi}),startMinutes=Number.isFinite(minutes)?minutes:720;
+ for(const part of [sky.dome,sky.stars])owned.push(part.geometry,part.material); // the dome and the stars are this scene's own copy
 
  const ground=new THREE.Mesh(own(new THREE.PlaneGeometry(120,120)),own(new THREE.MeshStandardMaterial({color:'#4c6a3b',roughness:1})));ground.rotation.x=-Math.PI/2;scene.add(ground);
  const dirt=new THREE.Mesh(own(new THREE.CircleGeometry(7.5,28)),own(new THREE.MeshStandardMaterial({color:'#6d5c43',roughness:1})));dirt.rotation.x=-Math.PI/2;dirt.position.y=.01;scene.add(dirt);
@@ -66,12 +79,13 @@ export function createMenuScene({createCharacter,appearance,vehicle=MENU_VEHICLE
 
  // Pines: one InstancedMesh per model and material (6 draw calls for 16 trees). The wind moves the instance matrices.
  const nature=createNatureMaterials(SOLID);for(const m of [nature.bark,nature.pineLeaves,nature.broadleafLeaves])owned.push(m,m.map);
+ nature.pineLeaves.alphaToCoverage=true;nature.pineLeaves.alphaTest=.4; // soft, anti-aliased cut-out edges (the renderer has MSAA) instead of the stair-stepped jagged ones
  const groves=MENU_PINES.map((id,k)=>{
-  const spots=MENU_TREES.filter(t=>t[2]===k),meshes=['bark','leaves'].map(part=>{const mesh=new THREE.InstancedMesh(modelGeometry(id,part),part==='bark'?nature.bark:nature.pineLeaves,Math.max(1,spots.length));mesh.count=spots.length;mesh.frustumCulled=false;scene.add(mesh);return mesh});
+  const spots=MENU_TREES.filter(t=>t[2]===k),meshes=['bark','leaves'].map(part=>{const mesh=new THREE.InstancedMesh(part==='bark'?modelGeometry(id,part):own(softLeaves(modelGeometry(id,part))),part==='bark'?nature.bark:nature.pineLeaves,Math.max(1,spots.length));mesh.count=spots.length;mesh.frustumCulled=false;scene.add(mesh);return mesh});
   return {spots,meshes};
  });
  const m4=new THREE.Matrix4(),q=new THREE.Quaternion(),e=new THREE.Euler(),at=new THREE.Vector3(),sc=new THREE.Vector3();
- function sway(t){for(const {spots,meshes} of groves){spots.forEach(([x,z,,scale,phase],i)=>{const s=windSway(t,phase);q.setFromEuler(e.set(s,phase,s*.6));m4.compose(at.set(x,0,z),q,sc.setScalar(scale));for(const mesh of meshes)mesh.setMatrixAt(i,m4)});for(const mesh of meshes)mesh.instanceMatrix.needsUpdate=true}}
+ function sway(t){for(const {spots,meshes} of groves){spots.forEach(([x,z,,scale,phase],i)=>{const s=windSway(t,phase);q.setFromEuler(e.set(s,phase,s*.6));m4.compose(at.set(x,0,z),q,sc.set(scale*(.92+.16*Math.abs(Math.sin(phase*2.7))),scale*(.95+.1*Math.abs(Math.sin(phase*1.9))),scale*(.92+.16*Math.abs(Math.sin(phase*3.3)))));for(const mesh of meshes)mesh.setMatrixAt(i,m4)});for(const mesh of meshes)mesh.instanceMatrix.needsUpdate=true}}
 
  // The character: back to the hull, both hands on the plans. character.js does the lean (setLean) and the arms (reach); nothing is copied from it.
  const avatar=createCharacter(appearance),spot=leanSpot(vehicle,propInfo(vehicle.prop).width);
@@ -114,13 +128,12 @@ export function createMenuScene({createCharacter,appearance,vehicle=MENU_VEHICLE
   pose(p,dt);sway(t);
   for(let i=0;i<DUST;i++){const d=hazeAt(t,i);dustAt[i*3]=d.x;dustAt[i*3+1]=d.y;dustAt[i*3+2]=d.z}dustGeometry.attributes.position.needsUpdate=true;
   camera.position.set(home.x+p.camera.x,home.y+p.camera.y,home.z+p.camera.z);camera.lookAt(look);
-  const [r,g,b]=p.light.sky;scene.background.setRGB(r,g,b);scene.fog.color.copy(scene.background);
-  sun.intensity=p.light.sun;sun.color.setRGB(1,.9-.12*p.light.warmth,.74-.2*p.light.warmth);sun.position.set(look.x+9*Math.cos(p.light.angle),7-2.5*p.light.warmth,look.z+9*Math.sin(p.light.angle));sun.target.position.copy(look);
+  sky.update(startMinutes+t*GAME_MINUTES_PER_SECOND,{target:look});scene.fog.near=14;scene.fog.far=46; // the game's rig sets sun or moon, hemisphere, fog colour, sky and exposure; the menu keeps its own short haze distance
  }
- return {scene,camera,avatar,plans,vehicle:car,covers,update,frame,
+ return {scene,camera,avatar,plans,vehicle:car,covers,update,frame,sky,exposure:()=>gear.toneMappingExposure,
   setAppearance(a){avatar.apply(a)},
   dispose(){
-   avatar.clearReach?.();scene.remove(avatar.group);
+   avatar.clearReach?.();scene.remove(avatar.group);scene.remove(sky.dome,sky.stars);
    for(const mesh of avatar.meshes||[])for(const m of [].concat(mesh.material||[]))if(m.userData?.cloned)m.dispose();
    for(const {meshes} of groves)for(const mesh of meshes)mesh.dispose();for(const mesh of covers)mesh.dispose();logs.dispose?.();
    for(const x of owned)x?.dispose?.();owned.length=0;scene.clear();

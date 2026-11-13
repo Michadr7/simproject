@@ -51,9 +51,9 @@ export function summarize(save,meta={}){
  return {name:save.profile.name||save.character?.name||'Unnamed',cash:p.cash,vehicles:p.vehicles?.length||0,day:p.housing?.day??1,clock:formatClock(p.routine?.minutes??0),game:meta.game??null,savedAt:meta.savedAt??null};
 }
 export function readSaveFile(text){
- if(typeof text!=='string'||text.length>MAX_FILE_BYTES)return {ok:false,error:`That file is too big to be a ${GAME_NAME} save.`};
+ if(typeof text!=='string'||text.length>MAX_FILE_BYTES)return {ok:false,error:`That file is too big to be a ${GAME_NAME} save file.`};
  const f=parse(text.replace(/^﻿/,''));
- if(!f||typeof f!=='object'||f.format!==SAVE_FORMAT)return {ok:false,error:`That is not a ${GAME_NAME} save file.`};
+ if(!f||typeof f!=='object'||f.format!==SAVE_FORMAT)return {ok:false,error:`That is not a save file from ${GAME_NAME}.`};
  if(!Number.isInteger(f.formatVersion)||f.formatVersion<1)return {ok:false,error:'That save file is damaged.'};
  if(f.formatVersion>SAVE_FORMAT_VERSION)return {ok:false,error:`That save was made by a newer version of the game (${typeof f.game==='string'?f.game.slice(0,12):'?'}). Update the game, then import it.`};
  if(!f.profile||typeof f.profile!=='object')return {ok:false,error:'That save file has no player in it.'};

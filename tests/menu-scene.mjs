@@ -132,6 +132,18 @@ function rig(over={}){
  for(const id of MENU_PINES){const p=modelGeometry(id,'bark').attributes.position;let r=0;for(let i=0;i<p.count;i++)if(p.getY(i)>.3&&p.getY(i)<2)r=Math.max(r,Math.hypot(p.getX(i),p.getZ(i)));assert(r<.6,`${id} bark stays near the trunk between 0.3 and 2 m (${r.toFixed(2)})`)}
  assert(MENU_TREES.length===16&&MENU_TREES.every(t=>t[2]>=0&&t[2]<MENU_PINES.length),'every tree uses a model that is in the list');}
 
+// --- The menu follows the game's day and night rig, and the pine crown is shaded as one mass ------------------------------------
+{const src=await readFile('dist/menu-scene.js','utf8'),game=await readFile('dist/game.js','utf8');
+ assert(/createSky\(\{scene,renderer:gear,sun,hemi\}\)/.test(src)&&/sky\.update\(startMinutes\+t\*GAME_MINUTES_PER_SECOND/.test(src),'the menu light, sky and fog come from sky.js (the game rig) at the saved time, running at game speed');
+ assert(!/p\.light/.test(src),'the old fixed late-afternoon light no longer drives the scene');
+ assert(/minutes:GameState\.progress\.routine\.minutes,renderer/.test(game),'game.js hands the menu the saved time of day and the renderer');assert(/s\.exposure\(\)/.test(game),'and draws it at the rig exposure');
+ const {skyAt}=await import('../dist/daynight.js');assert(skyAt(0).lightStrength<skyAt(720).lightStrength/5&&skyAt(0).stars>.9&&skyAt(720).stars===0,'the rig gives a dim starry night and a bright day, which the menu now shows');
+ const THREE=await import('../dist/vendor/three.module.js'),{softLeaves}=await import('../dist/menu-scene.js'),g=new THREE.BufferGeometry();
+ g.setAttribute('position',new THREE.BufferAttribute(new Float32Array([2,1,0, 0,1,2, 0,5,0]),3));g.setAttribute('normal',new THREE.BufferAttribute(new Float32Array([0,0,1, 1,0,0, 0,1,0]),3));
+ const s=softLeaves(g);assert.notEqual(s,g,'a copy');assert.deepEqual([...g.attributes.normal.array],[0,0,1,1,0,0,0,1,0],'the shared geometry is untouched');
+ for(let i=0;i<3;i++)assert(Math.abs(Math.hypot(s.attributes.normal.getX(i),s.attributes.normal.getY(i),s.attributes.normal.getZ(i))-1)<1e-5,'unit normals');
+ assert(s.attributes.normal.getX(0)>.6,'a card out on the +x side now faces mostly away from the trunk (+x), not along its own plane normal')}
+
 // --- The page: the picture is still there as the fallback, and the live class only removes it ------------------------------
 {const html=await readFile('dist/index.html','utf8'),css=await readFile('dist/style.css','utf8');
  assert(!/id="welcome"[^>]*menu-background/.test(html),'the first paint is the dark backdrop, never the old picture');{const rules=await readFile('dist/menu-scene-rules.js','utf8');assert(/MENU_STILL=/.test(rules)&&/menu-background\.jpg/.test(rules),'the picture is kept as the fallback, put on by the controller')}assert(/\.main-menu\.live\{[^}]*linear-gradient/.test(css),'live: the dark side behind the buttons stays');
@@ -157,7 +169,7 @@ function rig(over={}){
   assert(sheet?.material.map?.isCanvasTexture,'the plans carry the drawn sheet');
   {const n=new menu.constructor().position.set(0,0,1).applyQuaternion(sheet.quaternion);assert(n.z<-.5&&n.y>.5,`the drawn face looks back at the character (up and toward them), got ${n.x.toFixed(2)},${n.y.toFixed(2)},${n.z.toFixed(2)}`);assert.equal(sheet.material.side,0,'only the drawn face is drawn on the sheet itself (FrontSide)');assert(sheet.children.length>=1,'the plain back is a separate mesh')}
   {const src=await readFile('dist/menu-scene.js','utf8'),m=/HAND=\{x:([\d.]+),y:([\d.]+),z:([\d.]+)\}/.exec(src);assert(m,'the hand targets are one named constant');const [x,y,z]=m.slice(1).map(Number);
-   assert(x>=.15&&x<=.25&&y>=1.25&&y<=1.4&&z>=.2&&z<=.4,'each wrist sits at the sheet side edge, about 20 cm out, chest height (checked by eye: the fist closes over the edge)')}
+   assert(x>=.25&&x<=.32&&y>=1.25&&y<=1.4&&z>=.2&&z<=.4,'each wrist sits just outside the sheet side edge (23 cm), chest height: the fist holds the edge, not the face')}
   assert.equal(found['props-log'].count,3,'one stack of three logs: no stray log at the edge of the picture');
   g.ids.get('start').click();globalThis.__menuScene=null;g.pump(.2);assert.equal(g.menuScene(),null,'Play: the menu scene is not drawn again');assert(!welcome.classList.contains('live'),'and the menu scene is gone');assert.equal(menu.children.length,0,'disposed');
  }

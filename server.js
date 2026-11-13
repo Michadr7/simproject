@@ -30,7 +30,7 @@ if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) 
   // Loopback only unless you ask: the relay has no login, so --lan (npm run server:lan) lets anyone who can reach this computer join.
   const lan = process.argv.includes('--lan');
   const server = startServer({host: lan ? '0.0.0.0' : '127.0.0.1'});
-  server.on('listening', () => console.log('City Life WebSocket server: ws://localhost:8080' +
+  server.on('listening', () => console.log('Eden Ridge WebSocket server: ws://localhost:8080' +
     (lan ? '\nOPEN TO YOUR NETWORK (no login): players join with this computer\'s address, e.g. 192.168.1.20 (find it with ipconfig).' : '')));
   server.on('error', error => { console.error(error.message); process.exitCode = 1; });
   const stop = () => { for (const client of server.clients) client.terminate(); server.close(); };

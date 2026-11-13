@@ -27,7 +27,7 @@ export async function handleRequest(request,env){
   if(url.pathname.startsWith('/auth/google/'))return handleGoogle(request,env); // sign in with Google (worker/google.js)
   const m=/^\/relay\/([^/]+)\/?$/.exec(url.pathname);
   if(!m)return new Response('Not found',{status:404});
-  if(request.headers.get('upgrade')?.toLowerCase()!=='websocket')return new Response('This is the City Life relay: connect with a WebSocket.',{status:426,headers:{upgrade:'websocket'}});
+  if(request.headers.get('upgrade')?.toLowerCase()!=='websocket')return new Response('This is the Eden Ridge relay: connect with a WebSocket.',{status:426,headers:{upgrade:'websocket'}});
   if(!originAllowed(request))return new Response('Forbidden',{status:403});
   const forward=(code,create)=>{
    const headers=new Headers(request.headers);headers.set(CODE_HEADER,code);headers.set(CREATE_HEADER,create?'1':'0');

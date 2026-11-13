@@ -1,6 +1,6 @@
-// The game's name, in ONE place. It is a placeholder for now ('City Life'): change GAME_NAME here and the title, the menu, the HUD logo, the credits and the
+// The game's name, in ONE place. It is 'Eden Ridge' (was City Life): change GAME_NAME here and the title, the menu, the HUD logo, the credits and the
 // save-file messages all follow. index.html keeps the same words as its no-script fallback (tests/game-name.mjs checks they match).
-export const GAME_NAME='City Life',GAME_SUBTITLE='First Block';
+export const GAME_NAME='Eden Ridge',GAME_SUBTITLE='First Block';
 export const pageTitle=(name=GAME_NAME)=>`${name} · ${GAME_SUBTITLE}`;
 // Writes the name into the page: <title>, and every element marked data-game-name="text" (the words) or "upper" (the logo's first text, in capitals; its <span> stays).
 export function applyGameName(doc=typeof document!=='undefined'?document:null,name=GAME_NAME){
