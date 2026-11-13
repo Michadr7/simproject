@@ -76,14 +76,14 @@ function stepOf(p,run,rd,enabled){
   model:run?run.model:rd?rd.model:p.run?p.run.model:null,capTokens:run?run.capTokens:rd?rd.capTokens:p.run?allowanceOf(p.run.model,p.run.size):null,tokens:run?run.tokens||0:0};
  let status;
  if(p.status==='waiting')status='waiting';
- else if(p.status==='denied'){status='stopped';base.denied=true;base.reason='you denied this plan'+(p.note?`: ${cut(p.note,120)}`:'')}
+ else if(p.status==='denied'){status='stopped';base.denied=true;base.reason='you closed this plan'+(p.note?`: ${cut(p.note,120)}`:'')}
  else if(run){status=RUN_STATUS[run.status]||'stopped';base.runStatus=run.status;base.at=run.updatedAt||base.at;
   if(status==='stopped')base.reason=STOP_REASON[run.status]||'it ended early';
   if(run.status==='confirming'){base.reason='press again to confirm (expensive model)';base.pendingKind=run.pending&&run.pending.kind==='more'?'more':'start'}
   if(run.status==='done')base.flagged=Array.isArray(run.flagged)?run.flagged.length:0}
  else if(p.runProblem||!p.run){status='blocked';base.reason=cut(p.runProblem||'The plan has no "## Run" section.',160)}
  else{status='approved';if(rd){base.canStart=!!rd.canStart;base.reasons=rd.reasons||[];base.secondYes=!!rd.secondYes}else if(!enabled)base.runsOff=true;else{base.canStart=false;base.reasons=['The hub has not listed it as ready yet.']}}
- const s=STATUS[status],step={...base,status,label:status==='stopped'?`Stopped: ${base.reason}`:s.label,meaning:s.meaning,glyph:base.denied?'todo':s.glyph,needsYou:YOU.includes(status)&&!base.denied};
+ const s=STATUS[status],step={...base,status,label:base.denied?(p.note?`Closed by you: ${cut(p.note,100)}`:'Closed by you'):status==='stopped'?`Stopped: ${base.reason}`:s.label,meaning:base.denied?'You closed this plan. A new revision of it would put it back on your list.':s.meaning,glyph:base.denied?'ok':s.glyph,needsYou:YOU.includes(status)&&!base.denied};
  step.next=nextStep(step);return step}
 
 const KIND={asset:'asset','tokens-critical':'tokens','tokens-high':'tokens'};

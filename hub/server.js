@@ -290,6 +290,7 @@ export function createHubServer({root,port=0,runs=null,chat=null,jobs=null,commi
      if(runs&&runs.locked())return json(423,{error:'Plans are locked while a run works. Stop the run or wait for it.'});
      if(b.note!==undefined&&typeof b.note!=='string')return json(400,{error:'note must be text'});
      const plan=readPlan(plansDir,r.id);if(!plan)return json(404,{error:'no such plan'});
+     if(plan.status==='approved'&&b.verdict==='denied'&&runs&&runs.list().runs.some(x=>x.planId===plan.id&&x.status!=='closed'))return json(409,{error:'A run of this plan is not closed yet. Close the run first.'});
      const a=answerPlan(plan,{verdict:b.verdict,note:b.note,revision:b.revision,now:Date.now()});
      if(a.error)return json(a.code,{error:a.error});
      savePlan(plansDir,a.plan);return json(200,planOf(root,r.id))}

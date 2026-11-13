@@ -116,7 +116,7 @@ export function mountAssets(view,{onChange}={}){
   for(const r of list)recBox.append(h('div',{class:'as-rec'},h('span',{class:'plan-meta'},`${agoText(r.at)} · ${recordLine(r)}`),r.canUndo?h('button',{class:'btn',type:'button',onclick:()=>doUndo(r.id)},'Undo'):null))}
  function drawLinks(){
   links.textContent='';
-  links.append(h('a',{href:'/assets',target:'_blank',rel:'noopener'},'The pictures page'),' · ',h('a',{href:'/viewer.html',target:'_blank',rel:'noopener'},'3D viewer'),data.loadError?h('span',{class:'warn'},` · The game's modules could not be read (${data.loadError}); the shipped counts are missing.`):null)}
+  links.append(h('a',{href:'/assets',target:'_blank',rel:'noopener'},'The pictures page'),' · ',h('a',{href:'/viewer.html',target:'_blank',rel:'noopener'},'3D viewer'),data.loadError?h('span',{class:'warn'},` · The game's modules could not be read (${data.loadError}); the shipped counts are missing.`):'')}
 
  async function load(force){
   clearTimeout(timer);

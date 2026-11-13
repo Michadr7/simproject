@@ -55,6 +55,11 @@ export function mountPlans(view,{id,onChange,embedded=false}={}){
   const doc=new DOMParser().parseFromString(p.html,'text/html');body.append(...doc.body.childNodes);view.append(body);
   if(p.answers.length)view.append(h('div',{class:'answers'},h('h3',{},'Answers'),p.answers.map(a=>h('p',{class:'ans '+a.verdict},h('b',{},`${a.verdict==='approved'?'Approved':'Denied'} revision ${a.revision}`),` · ${agoText(a.at)}`,a.note?h('span',{class:'ans-note'},a.note):null))));
   if(!isLatest){view.append(h('p',{class:'msg'},`You are reading revision ${p.shown}. Only the newest revision (${latest}) can be answered.`,' ',h('button',{class:'btn',type:'button',onclick:()=>drawPlan()},'Show the newest')));return}
+  if(p.status==='approved'){ // approved but not built: it can still be closed (already built another way, or no longer wanted). That is a denial with a reason; the hub refuses while a run of it is not closed.
+   const ta2=h('textarea',{rows:'2',placeholder:'Why? For example: built in VS Code, or no longer wanted','aria-label':'Why close it'}),msg2=h('p',{class:'msg err',role:'alert',hidden:true});
+   view.append(h('p',{class:'msg approved'},`Approved. Press Start. (Revision ${latest}; a new revision would put it back on your list.)`),
+    h('details',{class:'fold'},h('summary',{},'Close this plan without building it'),h('div',{class:'answer'},ta2,msg2,h('div',{class:'acts'},h('button',{class:'btn danger',type:'button',onclick:async()=>{const note=ta2.value.trim();if(!note){msg2.textContent='Write why in the box.';msg2.hidden=false;ta2.focus();return}
+     const a=await api(`/api/plans/${p.id}/answer`,{verdict:'denied',note,revision:latest});if(!alive)return;if(a.ok){if(onChange)onChange();drawPlan();return}msg2.textContent=(a.data&&a.data.error)||'That did not work.';msg2.hidden=false}},'Close without building')))));return}
   if(p.status!=='waiting'){view.append(h('p',{class:'msg '+p.status},p.status==='approved'?`Approved. Press Start. (Revision ${latest}; a new revision would put it back on your list.)`:`You denied revision ${latest}. A new revision would put it back on your list.`));return}
   const ta=h('textarea',{id:'note',rows:'3',placeholder:'Note (needed to deny, optional to approve)','aria-label':'Note'});
   const msg=h('p',{class:'msg err',role:'alert',hidden:true});

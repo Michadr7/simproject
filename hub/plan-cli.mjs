@@ -4,10 +4,12 @@
 //   npm run plan -- <file.md> [--title "..."] [--from name]   send a plan (the same file from the same sender = the next revision)
 //   npm run plan -- --status <id or file.md>                   print verdict, note and revision
 //   npm run plan -- --list                                     one line per plan
+//   npm run plan -- --close <id or file.md> --why "built in VS Code"   close a waiting or approved plan that was built another way (or is no longer wanted); Work shows it under Done
 import fs from 'node:fs';
 import path from 'node:path';
 import {fileURLToPath} from 'node:url';
-import {sendPlan,listPlans,findPlan} from './plans-store.mjs';
+import {sendPlan,listPlans,findPlan,closePlan} from './plans-store.mjs';
+import {listRuns} from './run-store.mjs';
 import {statusOf,latestRevision} from './plans.js';
 import {describeRun} from './runplan.js';
 
@@ -20,6 +22,11 @@ if(flag('--list')){
  const plans=listPlans(DIR);
  if(!plans.length)console.log('No plans yet.');
  for(const p of plans)console.log(`${p.id}  ${p.status}  revision ${latestRevision(p).n}  ${p.title}`);
+}else if(flag('--close')){
+ const key=value('--close');if(!key||key.startsWith('--'))fail('--close needs a plan id or the file it was sent from.');
+ const r=closePlan(DIR,key,value('--why'),{openRun:p=>listRuns(ROOT).some(x=>x.planId===p.id&&x.status!=='closed')});
+ if(r.error)fail(r.error);
+ console.log(`Closed ${r.plan.id} (revision ${latestRevision(r.plan).n}). Work now shows it under Done.`);
 }else if(flag('--status')){
  const key=value('--status');if(!key)fail('--status needs a plan id or the file it was sent from.');
  const p=findPlan(DIR,key)||findPlan(DIR,sourceKey(key));
@@ -30,8 +37,8 @@ if(flag('--list')){
  console.log(describeRun(latestRevision(p).text));
  if(!s.buildable)process.exitCode=1;
 }else{
- const file=args.find(a=>!a.startsWith('--')&&a!==value('--title')&&a!==value('--from'));
- if(!file)fail('Usage: npm run plan -- <file.md> [--title "..."] [--from name] | --status <id or file> | --list');
+ const file=args.find(a=>!a.startsWith('--')&&a!==value('--title')&&a!==value('--from')&&a!==value('--close')&&a!==value('--why'));
+ if(!file)fail('Usage: npm run plan -- <file.md> [--title "..."] [--from name] | --status <id or file> | --list | --close <id or file> --why "..."');
  if(!fs.existsSync(file))fail(`File not found: ${file}`);
  const r=sendPlan(DIR,{source:sourceKey(file),title:value('--title'),from:value('--from'),text:fs.readFileSync(file,'utf8').replace(/^﻿/,'')});
  if(r.error)fail(r.error);

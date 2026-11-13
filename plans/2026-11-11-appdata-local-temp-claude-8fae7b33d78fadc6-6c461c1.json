@@ -3,7 +3,7 @@
  "title": "Hub v2 V1: the tree, the Work area, narrow cards, plain words",
  "from": "claude",
  "source": "../../../AppData/Local/Temp/claude/8fae7b33d78fadc6/6c461c1e-388f-4733-a362-ae8a7d822053/scratchpad/plans/hub-v2-v1-plan.md",
- "status": "approved",
+ "status": "denied",
  "revisions": [
   {
    "n": 1,
@@ -18,6 +18,12 @@
    "at": 1794446712695,
    "verdict": "approved",
    "note": ""
+  },
+  {
+   "revision": 1,
+   "at": 1794536576809,
+   "verdict": "denied",
+   "note": "Closed from the terminal: built in VS Code as hub 2.1"
   }
  ]
 }

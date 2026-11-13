@@ -432,3 +432,6 @@ html[data-bot=open] .bot-face{display:none}
 .cstrip .label{display:none}
 /* ---- Hub 2.7.4: the Refresh button beside the gauges ---- */
 .gbtn{flex:none;font:600 11px var(--mono);letter-spacing:.06em;color:var(--dim);border:1px solid var(--line);border-radius:99px;padding:3px 11px;background:rgba(15,17,21,.6);cursor:pointer}.gbtn:hover:not(:disabled){color:var(--ink);border-color:var(--acc)}.gbtn:disabled{opacity:.5;cursor:default}
+
+/* ---- Hub 2.7.9: room below the last line of a pane ---- */
+.page.two .pane{padding-bottom:28px}.page{padding-bottom:20px}

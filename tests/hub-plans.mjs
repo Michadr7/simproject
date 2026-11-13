@@ -4,7 +4,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import {submitPlan,answerPlan,statusOf,normalizePlan,planId,slugify,titleOf,hashText,latestRevision} from '../hub/plans.js';
-import {sendPlan,listPlans,readPlan,findPlan} from '../hub/plans-store.mjs';
+import {sendPlan,listPlans,readPlan,findPlan,savePlan} from '../hub/plans-store.mjs';
 
 const T0=Date.UTC(2026,10,10,12);
 // ids and titles
@@ -28,6 +28,7 @@ assert.equal(answerPlan(plan,{verdict:'approved',revision:2,now:T0}).code,400,'r
 const rev2=submitPlan(plan,{source:'p.md',from:'claude',text:'# T\nbody v2',now:T0+5}).plan;
 assert.equal(rev2.revisions.length,2);assert.equal(latestRevision(rev2).n,2);
 assert.equal(answerPlan(rev2,{verdict:'approved',revision:1,now:T0}).code,409,'answer to an old revision');
+{const ap=answerPlan(plan,{verdict:'approved',note:'go',revision:1,now:T0}).plan;assert.equal(answerPlan(ap,{verdict:'denied',note:'  ',revision:1,now:T0}).code,400,'closing an approved plan needs a reason');const cl=answerPlan(ap,{verdict:'denied',note:'built in VS Code',revision:1,now:T0+1});assert.equal(cl.plan.status,'denied','an approved plan can be closed without building it');assert.equal(answerPlan(cl.plan,{verdict:'approved',revision:1,now:T0+2}).code,409,'and not re-approved');assert.equal(answerPlan(ap,{verdict:'approved',revision:1,now:T0}).code,409,'approving twice is still refused')}
 const denied=answerPlan(rev2,{verdict:'denied',note:'too big',revision:2,now:T0+9}).plan;
 assert.equal(denied.status,'denied');assert.deepEqual(statusOf(denied),{id:denied.id,title:'T',status:'denied',revision:2,verdict:'denied',note:'too big',buildable:false});
 assert.equal(answerPlan(denied,{verdict:'approved',revision:2,now:T0}).code,409,'already answered');
@@ -80,4 +81,16 @@ try{
  const h=scanPlanFiles(d2)[0].hash;addIgnored(pd,h);addIgnored(pd,h);assert.deepEqual(readIgnored(pd),[h],'hiding twice keeps one entry');assert.throws(()=>addIgnored(pd,'nope'));
  assert.equal(foundPlans(d2,pd).length,3);fs.writeFileSync(path.join(pd,'ignored.json'),'{broken');assert.deepEqual(readIgnored(pd),[],'a broken ignored file counts as empty');
 }finally{fs.rmSync(d2,{recursive:true,force:true})}
+// Hub 2.7.8: closing a plan that was built outside the hub
+{const {closePlan}=await import('../hub/plans-store.mjs'),cdir=fs.mkdtempSync(path.join(os.tmpdir(),'hub-close-'));
+ const w=sendPlan(cdir,{source:'w.md',title:'Waiting one',from:'claude',text:'# Waiting one\nbody',now:1000}).plan,a=sendPlan(cdir,{source:'a.md',title:'Approved one',from:'claude',text:'# Approved one\nbody',now:1000}).plan;
+ savePlan(cdir,answerPlan(a,{verdict:'approved',note:'go',revision:1,now:2000}).plan);
+ assert.match(closePlan(cdir,w.id,'',{}).error,/needs a reason/);assert.match(closePlan(cdir,w.id,'   ',{}).error,/needs a reason/);assert.match(closePlan(cdir,'nope','x',{}).error,/No plan found/);
+ assert.match(closePlan(cdir,a.id,'x',{openRun:()=>true}).error,/not closed yet/,'not from under a run');assert.equal(readPlan(cdir,a.id).status,'approved','a refusal changes nothing');
+ let r=closePlan(cdir,w.id,'built in VS Code',{now:3000});assert.equal(r.plan.status,'denied');assert.equal(readPlan(cdir,w.id).answers.at(-1).note,'Closed from the terminal: built in VS Code');
+ r=closePlan(cdir,'a.md','built in VS Code',{now:3000});assert.equal(r.plan.status,'denied','an approved plan, found by the file it was sent from');assert.equal(readPlan(cdir,a.id).answers.length,2);
+ assert.match(closePlan(cdir,a.id,'again',{}).error,/already closed/);
+ const longNote=sendPlan(cdir,{source:'l.md',title:'Long',from:'claude',text:'# Long\nbody',now:1000}).plan;assert.ok(closePlan(cdir,longNote.id,'x'.repeat(900),{}).plan.answers[0].note.length<=500,'the note stays inside its limit');
+ const src=fs.readFileSync(path.resolve(path.dirname(import.meta.url.replace('file:///','')),'..','hub','plan-cli.mjs'),'utf8');assert.ok(src.includes("flag('--close')")&&src.includes('closePlan('),'the command is wired');
+ fs.rmSync(cdir,{recursive:true,force:true})}
 console.log('hub-plans ok');

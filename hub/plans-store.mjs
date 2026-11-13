@@ -3,7 +3,7 @@
 // Mikkadr Hub P4, S1: the plans folder. plans/<id>.json, written to a temp file and then renamed so a crash never leaves half a plan.
 import fs from 'node:fs';
 import path from 'node:path';
-import {ID_PATTERN,MAX_TEXT,HASH_PATTERN,hashText,isPlanFileName,unsentOf,normalizePlan,findBySource,submitPlan,planId} from './plans.js';
+import {ID_PATTERN,MAX_TEXT,HASH_PATTERN,hashText,isPlanFileName,unsentOf,normalizePlan,findBySource,submitPlan,planId,answerPlan,latestRevision} from './plans.js';
 
 const NOT_PLANS=new Set(['ignored.json']);
 export function writeAtomic(file,text){const tmp=`${file}.${process.pid}.tmp`;try{fs.writeFileSync(tmp,text);fs.renameSync(tmp,file)}catch(e){try{fs.unlinkSync(tmp)}catch{}throw e}} // a failed write leaves no .tmp file behind
@@ -54,3 +54,16 @@ export const foundPlans=(root,dir)=>unsentOf(scanPlanFiles(root),listPlans(dir).
 
 // Find a plan by id, or by the source file it came from.
 export const findPlan=(dir,key)=>{const plans=listPlans(dir);return plans.find(p=>p.id===key)||plans.find(p=>p.source===key)||null};
+
+// Closes a plan that was built outside the hub (VS Code) or is no longer wanted, so the Work list stays true. It is the owner's denial with a reason, written by whoever finished the work: the note says it came from the terminal.
+// key: a plan id or the file it was sent from. openRun(plan): true while a run of that plan is not closed (the caller knows; the hub refuses to close the plan from under it). Returns {plan} or {error}.
+export function closePlan(dir,key,why,{openRun=()=>false,now=Date.now()}={}){
+ const text=String(why??'').trim();
+ if(!text)return {error:'--close needs a reason: --why "built in VS Code"'};
+ const plan=findPlan(dir,key);if(!plan)return {error:`No plan found for ${key}.`};
+ if(plan.status==='denied')return {error:`${plan.id} is already closed.`};
+ if(plan.status!=='waiting'&&plan.status!=='approved')return {error:`${plan.id} is ${plan.status}; only a waiting or an approved plan can be closed.`};
+ if(openRun(plan))return {error:`A run of ${plan.id} is not closed yet. Close the run in the hub first.`};
+ const a=answerPlan(plan,{verdict:'denied',note:`Closed from the terminal: ${text}`.slice(0,500),revision:latestRevision(plan).n,now});
+ if(a.error)return {error:a.error};
+ savePlan(dir,a.plan);return {plan:a.plan}}

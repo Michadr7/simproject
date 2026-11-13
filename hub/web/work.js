@@ -14,7 +14,7 @@ export const GLYPH={you:'●',ok:'✓',todo:'○',run:'▶'};
 export const stepHref=s=>s.planId&&s.key===s.planId?'#work/'+s.planId:s.runId?'#runs/'+s.runId:'#work';
 export const stepName=s=>s.code?`${s.code} ${s.name}`:s.name;
 // Which group a step belongs to: what it needs from you decides.
-export const groupOf=s=>s.needsYou?'you':s.status==='working'?'run':s.status==='done'?'done':'wait';
+export const groupOf=s=>s.denied?'done':s.needsYou?'you':s.status==='working'?'run':s.status==='done'?'done':'wait';
 export const GROUPS=[['you','Needs you'],['run','Working'],['wait','Waiting'],['done','Done']];
 // "2 need you · 1 working · 3 waiting · 4 done", or '' when there are no steps.
 export function statusLine(tree){

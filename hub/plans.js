@@ -41,7 +41,8 @@ export function answerPlan(plan,{verdict,note,revision,now}){
  const last=latestRevision(plan);
  if(!Number.isInteger(revision)||revision<1||revision>last.n)return {error:'The revision is not one of this plan\'s.',code:400};
  if(revision!==last.n)return {error:`A newer revision (${last.n}) exists; read it first.`,code:409};
- if(plan.status!=='waiting')return {error:`This plan is already ${plan.status}.`,code:409};
+ // a plan that is approved but not built yet may still be closed without building it: that is a denial, and it needs a reason
+ if(plan.status!=='waiting'&&!(plan.status==='approved'&&verdict==='denied'))return {error:`This plan is already ${plan.status}.`,code:409};
  return {plan:{...plan,status:verdict,answers:[...plan.answers,{revision,at:now,verdict,note:text}]}}}
 
 // What `--status` reports: the verdict for the newest revision, with the note and revision number.

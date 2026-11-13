@@ -108,7 +108,10 @@ try{
  const stale=await post(A,{verdict:'approved',note:'ok',revision:1});assert.equal(stale.status,409);assert.match(JSON.parse(stale.body).error,/newer revision/);
  assert.equal(readPlan(plans,'2026-11-10-alpha-plan').answers.length,0,'a refused answer changes nothing');
  const good=await post(A,{verdict:'approved',note:'go',revision:2});assert.equal(good.status,200);const gp=JSON.parse(good.body);assert.equal(gp.status,'approved');assert.equal(gp.answers[0].note,'go');assert.equal(gp.answers[0].revision,2);
- assert.equal((await post(A,{verdict:'denied',note:'late',revision:2})).status,409,'already answered');
+ assert.equal((await post(A,{verdict:'approved',note:'again',revision:2})).status,409,'already answered');
+ assert.equal((await post(A,{verdict:'denied',note:'',revision:2})).status,400,'closing an approved plan needs a reason too');
+ assert.equal((await post(A,{verdict:'denied',note:'built in VS Code',revision:2})).status,200,'an approved plan can be closed without building it');assert.equal(readPlan(plans,'2026-11-10-alpha-plan').status,'denied');
+ assert.equal((await post(A,{verdict:'approved',note:'again',revision:2})).status,409,'a closed plan stays closed until a new revision');
  // revisions can be read one by one
  const r1=JSON.parse((await call('GET','/api/plans/2026-11-10-alpha-plan?rev=1')).body);assert.equal(r1.shown,1);assert.equal(r1.revision,2);assert.match(r1.html,/step &lt;b&gt;one/,'revision 1 text, escaped');assert.ok(!/revised/.test(r1.html));
  assert.equal(JSON.parse((await call('GET','/api/plans/2026-11-10-alpha-plan?rev=99')).body).shown,2,'an unknown revision shows the newest');

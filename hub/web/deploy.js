@@ -64,14 +64,14 @@ export function mountDeploy(view,{onChange}={}){
     h('span',{class:'plan-meta tool-res '+(br?'run':bl&&bl.summary?(bl.summary.ok?'ok':'bad'):'')},br?'Working…':bl&&bl.summary?bl.summary.text+(bl.endedAt?' · '+hm(bl.endedAt)+' ('+agoText(bl.endedAt,Date.now())+')':''):'Not used from the hub yet'),
     h('span',{class:'plan-meta'},plan.ok?plan.from+' becomes '+plan.to+'. Then the hub makes the release and runs the tests. Nothing goes online.':plan.why)),
    h('span',{class:'acts'},sel,h('button',{class:'btn pri',type:'button',disabled:!plan.ok||br||d.busy,onclick:()=>bump(plan)},plan.ok?'Bump to '+plan.to:'Bump')))),
-   !br&&bl&&bl.tail&&bl.tail.length?h('details',{class:'fold tool-fold'},h('summary',{},`Last output (${bl.tail.length} line${bl.tail.length===1?'':'s'})`),h('pre',{class:'tool-out'},bl.tail.join('\n'))):null);  // Publish: only after a passing check from the last 10 minutes; the browser asks once more, naming both versions. The hub and the script check it all again.
+   !br&&bl&&bl.tail&&bl.tail.length?h('details',{class:'fold tool-fold'},h('summary',{},`Last output (${bl.tail.length} line${bl.tail.length===1?'':'s'})`),h('pre',{class:'tool-out'},bl.tail.join('\n'))):'');  // Publish: only after a passing check from the last 10 minutes; the browser asks once more, naming both versions. The hub and the script check it all again.
   const can=canPublish(job&&job.last,Date.now(),pub&&pub.last),pl=pub&&pub.last,pr=!!(pub&&pub.running);
   body.append(h('h2',{class:'sect'},'Go online'),h('div',{class:'box tool'+(pr?' on':'')},h('div',{class:'tool-head'},
    h('span',{class:'plan-main'},h('span',{class:'plan-title'},'Publish the game'),
     h('span',{class:'plan-meta tool-res '+(pr?'run':pl&&pl.summary?(pl.summary.ok?'ok':'bad'):'')},pr?'Publishing…':pl&&pl.summary?pl.summary.text+(pl.endedAt?' · '+hm(pl.endedAt)+' ('+agoText(pl.endedAt,Date.now())+')':''):'Not published from the hub yet'),
     h('span',{class:'plan-meta'},can.ok?'Runs wrangler deploy for '+job.last.summary.version+'. One press, one deploy. It is never forced.':can.why)),
    h('span',{class:'acts'},h('button',{class:'btn pri danger',type:'button',disabled:!can.ok||pr||d.busy,onclick:()=>publish(job.last.summary)},'Publish')))),
-   !pr&&pl&&pl.tail&&pl.tail.length?h('details',{class:'fold tool-fold'},h('summary',{},`Last output (${pl.tail.length} line${pl.tail.length===1?'':'s'})`),h('pre',{class:'tool-out'},pl.tail.join('\n'))):null)}
+   !pr&&pl&&pl.tail&&pl.tail.length?h('details',{class:'fold tool-fold'},h('summary',{},`Last output (${pl.tail.length} line${pl.tail.length===1?'':'s'})`),h('pre',{class:'tool-out'},pl.tail.join('\n'))):'')}
  async function load(force){
   clearTimeout(timer);
   const d=await getJson('/api/jobs');if(!alive)return;
