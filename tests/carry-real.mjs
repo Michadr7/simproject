@@ -1,5 +1,5 @@
 import {mkdtemp,readFile,writeFile,cp,rm} from 'node:fs/promises';
-import {tmpdir} from 'node:os';import {join,resolve} from 'node:path';import {pathToFileURL} from 'node:url';import assert from 'node:assert/strict';
+import './support/unref-game-timers.mjs';import {tmpdir} from 'node:os';import {join,resolve} from 'node:path';import {pathToFileURL} from 'node:url';import assert from 'node:assert/strict';
 import * as THREE from '../dist/vendor/three.module.js';
 
 // The carry as the player gets it: no debug hooks and no assignment to progress.carry. A log or a stack of planks is put on the ground, E is pressed beside it (the real interaction: candidates, the bend, the

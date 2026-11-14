@@ -141,6 +141,16 @@ has(broken(m=>{m.reserved.find(p=>p.id==='R2').path.x1=119.5}),/plot R2 path is 
 // A landmark that names a plot must stand inside it.
 has(broken(m=>{m.landmarks.find(l=>l.id==='house-r1').plot='R9'}),/house-r1 names an unknown plot R9/);
 has(broken(m=>{m.landmarks.find(l=>l.id==='house-r1').x=130}),/house-r1 is not inside its plot R1/);
+// F3: the world frame (F2 data) is pinned beside the old ground, which stays exactly as it was. Old-area assertions above and below are untouched; these add the world level.
+assert.deepEqual(MAP.world,{x0:-450,x1:1050,z0:-1200,z1:600},'the world is x -450..1050, z -1200..600');
+assert.deepEqual(MAP.wilds,{x0:-440,x1:1040,z0:-1190,z1:590},'the wilds stop 10 m short of the world edge (the wall)');
+assert(MAP.world.x0<=MAP.ground.x0&&MAP.world.x1>=MAP.ground.x1&&MAP.world.z0<=MAP.ground.z0&&MAP.world.z1>=MAP.ground.z1,'the world holds the old ground');
+assert((MAP.world.x1-MAP.world.x0)%100===0&&(MAP.world.z1-MAP.world.z0)%100===0&&(((MAP.world.x0%100)+100)%100)===50&&MAP.world.z0%100===0,'the world is whole 100 m chunks, with the old block at offset 0');
+assert.equal(MAP.gates.length,1,'one gate through the old rim');assert.deepEqual(MAP.gates[0],{id:'freight-east',x0:290,x1:300,z0:62,z1:74});
+assert(MAP.gates.every(g=>g.x0>=MAP.ground.x0&&g.x1<=MAP.ground.x1&&g.z0>=MAP.ground.z0&&g.z1<=MAP.ground.z1),'every gate lies in the old ground rim');
+has(broken(m=>{m.world={x0:-100,x1:1050,z0:-1200,z1:600}}),/the world must be a rectangle that holds the ground/);
+has(broken(m=>{m.gates[0].x1=999}),/gate freight-east must be a rectangle inside the ground/);
+has(broken(m=>{m.wilds={x0:-9999,x1:1040,z0:-1190,z1:590}}),/the wilds must be a rectangle inside the world/);
 // The playable area, plot frontage and road widths.
 has(broken(m=>{m.playable={x0:-999,x1:290,z0:-380,z1:100}}),/the playable area must be a rectangle inside the ground/);
 has(broken(m=>{delete m.reserved[0].facing}),/reserved plot C1 has no facing/);

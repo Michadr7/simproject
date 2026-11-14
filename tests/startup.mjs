@@ -2,7 +2,7 @@ import {addItem,hotbarItems} from '../dist/inventory.js';
 import * as THREE from '../dist/vendor/three.module.js';
 // Exercise the real game startup and UI with a synthetic DOM and GPU-only renderer stub.
 import {mkdtemp,readFile,writeFile,cp,mkdir,rm} from 'node:fs/promises';
-import {tmpdir} from 'node:os';import {join,resolve} from 'node:path';import {pathToFileURL} from 'node:url';import assert from 'node:assert/strict';
+import './support/unref-game-timers.mjs';import {tmpdir} from 'node:os';import {join,resolve} from 'node:path';import {pathToFileURL} from 'node:url';import assert from 'node:assert/strict';
 const html=await readFile('dist/index.html','utf8');
 class El extends EventTarget{
  constructor(tag='div'){super();this.tag=tag;this.hidden=false;this.value='';this.children=[];this.dataset={};this.style={setProperty(){}};this.classList={add(){},remove(){},toggle(){}};this.selectors=new Map()}

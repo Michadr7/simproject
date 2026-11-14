@@ -15,6 +15,9 @@ export const parseChunkKey=key=>{const [i,j]=key.split(':').map(Number);return {
 export const chunkBounds=(i,j)=>({x0:FRAME.x0+i*CHUNK,z0:FRAME.z0+j*CHUNK,x1:FRAME.x0+(i+1)*CHUNK,z1:FRAME.z0+(j+1)*CHUNK});
 // The chunk rectangle (inclusive indices) that covers a ground rectangle: today's map by default.
 export function chunkRange(ground=MAP.ground){const a=chunkIndex(ground.x0,ground.z0),b=chunkIndex(ground.x1-1e-6,ground.z1-1e-6);return Object.freeze({i0:a.i,j0:a.j,i1:b.i,j1:b.j,cols:b.i-a.i+1,rows:b.j-a.j+1})}
+// The whole WORLD (F2): every chunk of the frame. chunkRange() with no argument is still today's ground (the old block); the streaming world uses worldRange().
+ export const WORLD=FRAME;
+ export const worldRange=(map=MAP)=>chunkRange(map.world||FRAME);
 export const inRange=(range,i,j)=>i>=range.i0&&i<=range.i1&&j>=range.j0&&j<=range.j1;
 export const clampToRange=(range,i,j)=>({i:Math.max(range.i0,Math.min(range.i1,i)),j:Math.max(range.j0,Math.min(range.j1,j))});
 
@@ -69,7 +72,7 @@ export function createChunkIndex({layout,fences,map=MAP,range=chunkRange(map.gro
 // The 0.5 m walk/surface/zone mask of one chunk (200 x 200 cells = 40,000 per layer, 120 KB), painted by the SAME code as the whole-map build and clipped to the chunk
 // (and to the ground at the map's edge). Every cell equals the matching cell of buildTerrain(map): tests/chunks.mjs compares them.
 export function maskTile(i,j,map=MAP){
- const b=chunkBounds(i,j),g=map.ground,w={x0:Math.max(b.x0,g.x0),x1:Math.min(b.x1,g.x1),z0:Math.max(b.z0,g.z0),z1:Math.min(b.z1,g.z1)};
+ const b=chunkBounds(i,j),g=map.world||map.ground,w={x0:Math.max(b.x0,g.x0),x1:Math.min(b.x1,g.x1),z0:Math.max(b.z0,g.z0),z1:Math.min(b.z1,g.z1)}; // F2: the whole world has tiles (the wilds are walkable open country); the whole-map mask still stops at the old ground
  if(w.x1<=w.x0||w.z1<=w.z0)return null;
  return buildTerrain(map,{window:w});
 }

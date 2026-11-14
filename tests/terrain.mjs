@@ -75,6 +75,24 @@ for(const [x,z] of line)assert(ct.walkable(x,z)&&ct.surfaceAt(x,z)===SURFACE.ROA
 const mid=line[Math.floor(line.length/2)];assert(mid[1]<-65,'it really bends (its middle is at z '+mid[1].toFixed(1)+')');
 assert.notEqual(ct.surfaceAt(260,-50),SURFACE.ROAD,'the inside of the bend is not road');assert.notEqual(ct.surfaceAt(mid[0],mid[1]-6),SURFACE.ROAD,'nor is ground 6 m off the centreline');
 assert(ct.walkable(250,-60)&&ct.walkable(280,-45),'and the meadow around it is open country, so it joins everything');
+// ── F3: world level (the 1500 x 1800 m frame, F2). The whole-map mask above still pins the OLD ground (rim and outside are walls there); the chunk tiles pin the world, through isWalkableLive's source (maskTile). Old-area assertions above are unchanged. ──
+{const {maskTile,chunkIndex,WORLD}=await import('../dist/chunks.js'),{isWalkableLive}=await import('../dist/world.js');
+ const tileAt=(x,z)=>{const c=chunkIndex(x,z);return maskTile(c.i,c.j)};
+ // with no streamer running, isWalkableLive is the whole-map mask: the rim and the outside of the old ground are walls
+ assert(!isWalkableLive(MAP.ground.x0-5,0)&&!isWalkableLive(0,MAP.ground.z1+5)&&!isWalkableLive(500,-500),'without chunks the live walls are the old mask (the wilds are not walkable there)');
+ assert.equal(isWalkableLive(0,6),isWalkable(0,6),'and inside the old ground live equals the mask');
+ // the gate is the only opening through the old rim, and only in the tile (the whole mask keeps it a wall)
+ const g=MAP.gates[0],gx=(g.x0+g.x1)/2,gz=(g.z0+g.z1)/2;
+ assert(!isWalkable(gx,gz)&&tileAt(gx,gz).walkable(gx,gz),'the freight gate: a wall in the whole mask, open in its chunk tile');
+ for(const z of [g.z0-6,g.z1+6])assert(!tileAt(gx,z).walkable(gx,z),'beside the gate the rim stays a wall in the tile ('+z+')');
+ // the wilds: walkable (water excepted) in tiles on a 20 m grid sampled across the whole world, the 10 m rim of the world is a wall (a 2 m coarse reach check is in chunks.mjs)
+ const W=MAP.wilds;let wild=0,rim=0,waterSeen=0,bad=[];
+ for(let x=W.x0+1;x<W.x1;x+=20)for(let z=W.z0+1;z<W.z1;z+=20){const inOld=x>=MAP.ground.x0&&x<=MAP.ground.x1&&z>=MAP.ground.z0&&z<=MAP.ground.z1;if(inOld)continue;const t=tileAt(x,z),s=t.surfaceAt(x,z),water=s===SURFACE.WATER||s===SURFACE.BANK;wild++;if(water){waterSeen++;if(t.walkable(x,z)&&bad.length<5)bad.push(['water walkable',x,z])}else if(!t.walkable(x,z)&&bad.length<5)bad.push([x,z,s])}
+ for(let x=WORLD.x0+1;x<WORLD.x1;x+=50){for(const z of [WORLD.z0+4,WORLD.z1-4]){rim++;if(tileAt(x,z).walkable(x,z)&&bad.length<5)bad.push(['rim',x,z])}}
+ for(let z=WORLD.z0+1;z<WORLD.z1;z+=50){for(const x of [WORLD.x0+4,WORLD.x1-4]){rim++;if(tileAt(x,z).walkable(x,z)&&bad.length<5)bad.push(['rim',x,z])}}
+ assert.deepEqual(bad,[]);assert(wild>4000&&rim>100&&waterSeen>0,wild+' wilds ('+waterSeen+' water: the river runs on through the wilds, not walkable) and '+rim+' rim samples');
+ // water in a tile is not walkable (the old river through the city chunk)
+ const rz=riverZAt(MAP.water.rivers[0],0);assert(!tileAt(0,rz).walkable(0,rz),'the river is water in the tile too')}
 console.log(`Terrain mask: ${built.cols} x ${built.rows} cells in ${ms.toFixed(0)} ms; the city identical to the old rules at ${cityPoints} points; open country walkable (no invisible walls), the river and the map edge not; both bridges aligned; the Cedar Heights loop closed and smooth; plots on open grass; all districts reachable.`);
 // feet and wheels stand on the top of the mesh drawn there: rural asphalt -0.045, dirt roads -0.066, fields -0.069 (they sank 3-5 cm before)
 assert.equal(FOOTING[SURFACE.ROAD],-.045);assert.equal(FOOTING[SURFACE.DIRT],-.066);assert([SURFACE.WHEAT,SURFACE.PLOWED,SURFACE.GREEN].every(k=>FOOTING[k]===-.069),'fields');

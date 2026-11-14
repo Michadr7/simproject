@@ -1,5 +1,5 @@
 import {mkdtemp,readFile,writeFile,cp,rm} from 'node:fs/promises';
-import {tmpdir} from 'node:os';import {join,resolve} from 'node:path';import {pathToFileURL} from 'node:url';import assert from 'node:assert/strict';
+import './support/unref-game-timers.mjs';import {tmpdir} from 'node:os';import {join,resolve} from 'node:path';import {pathToFileURL} from 'node:url';import assert from 'node:assert/strict';
 import * as THREE from '../dist/vendor/three.module.js';
 
 // Refuelling in the real game loop (0.35): the packaged game starts with a worktruck saved in the Eastbank drive-through lane, beside the pumps, with a low tank. The player takes a nozzle with

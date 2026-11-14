@@ -1,5 +1,5 @@
 import {mkdtemp,readFile,writeFile,cp,rm} from 'node:fs/promises';
-import {tmpdir} from 'node:os';import {join,resolve} from 'node:path';import {pathToFileURL} from 'node:url';import assert from 'node:assert/strict';
+import './support/unref-game-timers.mjs';import {tmpdir} from 'node:os';import {join,resolve} from 'node:path';import {pathToFileURL} from 'node:url';import assert from 'node:assert/strict';
 import * as THREE from '../dist/vendor/three.module.js';
 import {MAP} from '../dist/map-definition.js';
 import {propInfo} from '../dist/props.js';

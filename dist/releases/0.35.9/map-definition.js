@@ -353,6 +353,10 @@ export const MAP=deepFreeze({
  ground:{x0:-260,x1:300,z0:-390,z1:110},
  // Where you can walk: everywhere inside this rectangle except water (and trees, fences and buildings, which are solid objects). The zones name and shape the districts; they no longer fence them in.
  playable:{x0:-250,x1:290,z0:-380,z1:100},
+ // The WORLD (F2): the 1500 x 1800 m frame the chunks tile (chunks.js); the old block keeps its coordinates inside it. ground and playable stay the OLD block (the whole-map mask, the tree layout and every pinned test read them); wilds is the open country outside the old ground that streamed chunk tiles make walkable (no zones, roads or trees yet: later stages fill it).
+ world:{x0:-450,x1:1050,z0:-1200,z1:600},wilds:{x0:-440,x1:1040,z0:-1190,z1:590},
+ // Gates: the only openings through the old ground's 10 m rim (which stays a wall in the whole-map mask and in every pinned test): Freight South runs on east through its rim into the wilds. Only chunk tiles know them.
+ gates:[{id:'freight-east',x0:290,x1:300,z0:62,z1:74}],
  openCountry:{id:'open',name:'Open Country',label:'OPEN COUNTRY',subtitle:'Meadows between districts',color:'#6e8a5c'}, // how far the ground is drawn (scenery fades into fog beyond the walkable zones)
  zones,roads,water,fields,buildings,shops,reserved,properties,paving,bayRows,yards,vehicles,relief,employers,offices,exits,dwellings,posts,
  // The marked parking lot behind the south row of shops: bays 2.7 m wide and 5 m deep along its north edge, an aisle to Alder Street, the lot's own asphalt.
@@ -436,7 +440,7 @@ export const MAP=deepFreeze({
  {id:'eastbank-tank',prop:'tank-small',zone:'eastbank',x:137,z:34,yaw:0,decor:true}
  ], // Signposts: boards are read from the front (yaw 0 faces south, towards walkers arriving from the bridge).
  signs:[
-  {id:'fork',zone:'county',x:-25.5,z:n(-170),yaw:0,boards:[{text:'← WILLOW FIELDS',y:2.1},{text:'PINE RIDGE →',y:2.9}]},
+  {id:'fork',zone:'forest',x:-23.8,z:n(-170),yaw:0,boards:[{text:'← WILLOW FIELDS',y:2.1},{text:'PINE RIDGE →',y:2.9}]},
   {id:'alder-sign',zone:'alder',x:57,z:-56,yaw:0,boards:[{text:'IRONWOOD',y:2.4}]},
   {id:'cedar-sign',zone:'cedar',x:127,z:-44,yaw:0,boards:[{text:'CEDAR HEIGHTS',y:2.4}]},
   {id:'eastbank-sign',zone:'eastbank',x:74,z:-5,yaw:-1.5707963267948966,boards:[{text:'EASTBANK WORKS →',y:2.4}]},
@@ -507,6 +511,7 @@ export function validateMap(map=MAP){
  const roadPoints=edge=>{const a=map.roads.nodes[edge.from],b=map.roads.nodes[edge.to];return [[a.x,a.z],...(edge.path||[]),[b.x,b.z]]};
  if(!rectOk(map.ground))bad('ground is not a valid rectangle');
  if(!rectOk(map.playable)||!inside(map.playable,map.ground))bad('the playable area must be a rectangle inside the ground');
+ if(map.world&&(!rectOk(map.world)||!inside(map.ground,map.world)))bad('the world must be a rectangle that holds the ground');for(const gt of map.gates||[])if(!rectOk(gt)||!inside(gt,map.ground))bad('gate '+gt.id+' must be a rectangle inside the ground');if(map.wilds&&(!rectOk(map.wilds)||!inside(map.wilds,map.world||map.ground)))bad('the wilds must be a rectangle inside the world');
  const ids=new Set();
  for(const zone of map.zones){
   if(ids.has(zone.id))bad(`duplicate zone id ${zone.id}`);ids.add(zone.id);

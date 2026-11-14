@@ -135,7 +135,7 @@ for(const {l,r} of rects.filter(x=>x.l.plot)){const plot=MAP.reserved.find(p=>p.
  at(0,0);assert.equal(s2.getObjectByName('prop-barn').visible,false,'the barn is not drawn from the city');assert.equal(s2.getObjectByName('prop-sawmill-v4').visible,false);
  at(-62,-220);assert.equal(s2.getObjectByName('prop-barn').visible,true,'but is drawn from the farm road');assert.equal(s2.getObjectByName('prop-sawmill-v4').visible,false);at(104,-250);assert.equal(s2.getObjectByName('prop-sawmill-v4').visible,true)}
 // The signpost at the fork.
-{const sign=MAP.signs[0];assert.equal(sign.zone,'county');assert(world.blocked(sign.x,sign.z),'the post is solid');assert.deepEqual(sign.boards.map(b=>b.text),['← WILLOW FIELDS','PINE RIDGE →'])}
+{const sign=MAP.signs[0];assert.equal(sign.zone,'forest');assert(world.blocked(sign.x,sign.z),'the post is solid');assert.deepEqual(sign.boards.map(b=>b.text),['← WILLOW FIELDS','PINE RIDGE →'])}
 // The sawmill is solid where its machinery is: flood-fill from open ground around it. The posts, bench, conveyor and log pile cannot be walked through, the decks can be entered, and every place the player must reach is reachable.
 {const sawmill=MAP.landmarks.find(l=>l.id==='sawmill'),info=propInfo(sawmill.prop),step=.5,R=rotated(sawmill),x0=R.x0-3,z0=R.z0-3,nx=Math.round((R.x1+3-x0)/step)+1,nz=Math.round((R.z1+3-z0)/step)+1,c=Math.round(Math.cos(sawmill.yaw)),s=Math.round(Math.sin(sawmill.yaw));
  const toWorld=(x,z)=>[sawmill.x+x*c+z*s,sawmill.z-x*s+z*c],toModel=(x,z)=>[(x-sawmill.x)*c-(z-sawmill.z)*s,(x-sawmill.x)*s+(z-sawmill.z)*c];

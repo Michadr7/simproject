@@ -145,16 +145,13 @@ second "exit" by sea (cargo ferry) later.
   for the whole ring, not per chunk. Characters 15, cars 10 stay as today (m).
 - NPC routes across chunks need the road graph, not the cell mask.
 
-### 1.7 Pinned tests that must change
-- tests/height.mjs line 35 (m): valleyFade(-270) = 0 and valleyFade(310) = 0; the river now continues
-  past both. RIVER_WATER_Y as one constant becomes per-reach.
-- tests/terrain.mjs (m): lines 21..27 scan the whole playable area (10 times more cells; lake and sea
-  must count as water); line 36 uses riverZAt by x; line 54 whole-map reach; line 70 nodes at x 290.
-- tests/map.mjs (m): line 145 playable literal; exit-outside-playable rule; "river leaves the ground"
-  rule; bridge rules.
-- tests/roads.mjs (m): one paved network within 0.5 m; every new region road must join it.
-- tests/town.mjs: not inspected; with offset 0 it should not change.
-
+### 1.7 Pinned tests (F3 done 2026-11-14: what is pinned, and how)
+Rule kept by F3: the OLD-area assertions are unchanged (MAP.ground and MAP.playable are still the old rectangle, so the whole-map mask, the tree layout and every old test still hold). The world level is pinned beside them, through chunk tiles (`maskTile`, what `isWalkableLive` reads when chunks are loaded), never through a whole-world mask (10.8 M cells; it is never built).
+- tests/terrain.mjs: whole-map mask scans stay (1.1 x 1.3 m sample of the old ground, 44 ms to build); 'outside the playable area is not walkable' stays true for the whole-map mask and for isWalkableLive with no streamer. New F3 block: the freight gate is a wall in the whole mask and open in its tile, the rim beside it stays a wall; the wilds are walkable (water excepted, the river runs on through them) on a 20 m grid over the whole world; the 10 m world rim is a wall in tiles; water is not walkable in a tile.
+- tests/chunks.mjs (F1/F2): 270 tiles cover the world exactly; a tile cell equals the whole mask (sample every 7th cell, one busy chunk cell for cell); 2 m coarse flood fill from the spawn reaches the whole wilds and every world edge; merged ground equals the loose ground.
+- tests/map.mjs: old ground and every old rule unchanged; new data pins: world, wilds, gates, world holds the ground, whole 100 m chunks, and three broken-map checks (world, gate, wilds) caught by validateMap.
+- tests/height.mjs, roads.mjs, town.mjs: unchanged (offset 0; they build the plain world once, 0.3-0.4 s each). Still TODO when the map grows: height.mjs valleyFade(-270)/(310) and RIVER_WATER_Y per reach, roads.mjs one paved network, bridge rules; do them with the stage that moves those things.
+- Test time: npm test 312 s before F3, about 122 s after. The pinned map files were never the cost (terrain 2.3 s, the rest under 1 s). The cost was every booted game keeping the process alive for its own timers (update check 2.5 s, a 4.5 s toast); tests/support/unref-game-timers.mjs unrefs them (about 4.5 s per file saved, 35 files).
 ### 1.8 Risks
 1. Streaming is a rebuild of how the world, mask and colliders are made, not an add-on: largest risk.
 2. Hitches when chunks build; cure is time slicing and merged meshes.

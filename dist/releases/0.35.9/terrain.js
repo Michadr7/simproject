@@ -50,6 +50,9 @@ export function buildTerrain(map=MAP,{cell=.5,window=null}={}){
  }
  // 0. open country: walkable everywhere inside the playable rectangle
  rect(map.playable||g,c=>{walk[c]=1});
+ // 0b. the wilds (F2): open country OUTSIDE the old ground, walkable, only in chunk tiles (window); the whole-map mask never has a cell out there, so it stays today's size
+ if(window&&map.wilds)rect(map.wilds,c=>{const x=centreX(c%cols),z=centreZ((c-c%cols)/cols);if(x<map.ground.x0||x>=map.ground.x1||z<map.ground.z0||z>=map.ground.z1)walk[c]=1});
+ if(window)for(const gate of map.gates||[])rect(gate,c=>{walk[c]=1}); // the gates through the old ground's rim (tiles only)
  // 1. zones (the first zone in the list wins where two touch, as zoneAtPoint does)
  for(let k=map.zones.length-1;k>=0;k--)rect(map.zones[k].bounds,c=>{walk[c]=1;zone[c]=k+1});
  // 1b. driveways and front paths (painted before the roads, so a driveway ends under the road it joins)

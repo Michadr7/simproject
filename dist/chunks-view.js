@@ -17,13 +17,13 @@ export function createChunkView({index,colliders,scene=null,build={},map,ring=2,
  const STEPS=[
   ['mask',c=>{c.tile=maskTile(c.i,c.j,map)}],
   ['live',c=>{grid[slot(c.i,c.j)]=c.tile;colliders?.setChunkLive?.(c.key,true);c.ready=true;for(const f of listeners.build)f(c)}],
-  ['meshes',c=>{if(build.fences&&c.slice.fences.length){c.object=build.fences(c.slice);if(c.object&&scene)scene.add(c.object)}}]
+  ['meshes',c=>{for(const fn of Object.values(build)){const o=fn(c.slice);if(o){c.objects.push(o);if(scene)scene.add(o)}}}] // every builder in the build option (world.js: fences, merged ground) gets the chunk's slice and returns an object or null
  ];
- function chunkFor(i,j){const key=chunkKey(i,j);let c=chunks.get(key);if(!c){c={key,i,j,slice:index.slice(i,j),step:0,ready:false,tile:null,object:null,leftAt:null};chunks.set(key,c)}return c}
+ function chunkFor(i,j){const key=chunkKey(i,j);let c=chunks.get(key);if(!c){c={key,i,j,slice:index.slice(i,j),step:0,ready:false,tile:null,objects:[],leftAt:null};chunks.set(key,c)}return c}
  function runStep(c){const [name,fn]=STEPS[c.step],t=now();fn(c);record(name,now()-t);c.step++;if(c.step>=STEPS.length)stat.built++;return c.step>=STEPS.length}
  function dispose(c){
   if(c.tile)grid[slot(c.i,c.j)]=null;colliders?.setChunkLive?.(c.key,false);
-  if(c.object){disposeObject(c.object);c.object=null}
+  for(const o of c.objects)disposeObject(o);c.objects=[];
   c.tile=null;c.ready=false;chunks.delete(c.key);stat.disposed++;for(const f of listeners.dispose)f(c);
  }
  const complete=c=>{while(c.step<STEPS.length)runStep(c)};
@@ -61,10 +61,13 @@ export function createChunkView({index,colliders,scene=null,build={},map,ring=2,
    return tile.walkable(x,z);
   },
   on(event,fn){listeners[event].push(fn)},
+  // Draw calls a chunk adds (one per Mesh in what it built; an empty chunk adds none).
+  meshesOf(key){const c=chunks.get(key);let n=0;for(const ob of c?.objects||[])ob.traverse?.(o=>{if(o.isMesh)n++});return n},
   loadedKeys:()=>[...chunks.values()].filter(c=>c.ready).map(c=>c.key),
   stats(){const steps={};for(const [k,s] of Object.entries(stat.steps))steps[k]={n:s.n,avgMs:s.total/s.n,maxMs:s.max};
    let ready=0;for(const c of chunks.values())if(c.ready)ready++;
-   return {...stat,steps,loaded:ready,tracked:chunks.size,maskBytes:ready*40000*3}},
+   let meshes=0;for(const c of chunks.values())for(const ob of c.objects)ob.traverse?.(o=>{if(o.isMesh)meshes++});
+   return {...stat,steps,loaded:ready,tracked:chunks.size,maskBytes:ready*40000*3,maskCells:ready*40000,worldCells:range.cols*range.rows*40000,chunkMeshes:meshes}},
   disposeAll(){for(const c of [...chunks.values()])dispose(c);colliders?.stream?.(false)}
  };
  return view;

@@ -1,7 +1,7 @@
 // Boots the real packaged game (the release dist/index.html points at) in Node with a synthetic DOM and a renderer stub, like startup.mjs.
 // Not a test itself: it lives in tests/support so run-tests.mjs (which only reads tests/*.mjs) leaves it alone.
 import {mkdtemp,readFile,writeFile,cp,rm} from 'node:fs/promises';
-import {tmpdir} from 'node:os';import {join,resolve} from 'node:path';import {pathToFileURL} from 'node:url';
+import {tmpdir} from 'node:os';import './unref-game-timers.mjs';import {join,resolve} from 'node:path';import {pathToFileURL} from 'node:url';
 
 export class El extends EventTarget{
  constructor(tag='div'){super();this.tag=tag;this.hidden=false;this.value='';this.children=[];this.dataset={};this.style={setProperty(){}};{const set=new Set();this.classList={add:(...n)=>n.forEach(x=>set.add(x)),remove:(...n)=>n.forEach(x=>set.delete(x)),toggle:(n,force)=>{const on=force===undefined?!set.has(n):!!force;on?set.add(n):set.delete(n);return on},contains:n=>set.has(n)}}this.selectors=new Map()}
