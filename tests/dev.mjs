@@ -130,7 +130,7 @@ assert.match(await readFile('dist/dev-flag.js','utf8'),/export const DEV_MODE=tr
   g.find('devInteriorSave').click();await new Promise(r=>setTimeout(r,50));assert.match(g.find('devMessage').textContent,/npm run dev/);assert.equal(g.find('devMessage').dataset.kind,'error');
  }
  // The save keeps what the panel did
- {const saved=JSON.parse(g.store.get('citylife.profile.v1')).progress;assert.equal(saved.cash,S.progress.cash,'the save holds the cash the panel added');assert(saved.routine.minutes<30,'and the time it set (the clock has only run on a little since the last save)');assert(saved.inventory.slots.length>0,'and the items it spawned')}
+ {const saved=JSON.parse(g.store.get('edenridge.profile.v1')).progress;assert.equal(saved.cash,S.progress.cash,'the save holds the cash the panel added');assert(saved.routine.minutes<30,'and the time it set (the clock has only run on a little since the last save)');assert(saved.inventory.slots.length>0,'and the items it spawned')}
  g.find('devClose').click();assert(panel.hidden,'the close button hides it');g.send('keydown','F2');assert(!panel.hidden);
  {const e=new Event('keydown',{cancelable:true});e.code='Escape';panel.dispatchEvent(e);assert(panel.hidden,'Escape inside the panel closes it')}
  await g.done();

@@ -1,3 +1,4 @@
+import './legacy-keys.js';
 // Dev mode: a "Dev Mode" entry on the main menu and a panel with teleport, set time, add money, spawn items and unstick.
 // Loaded only when DEV_MODE (dev-flag.js) is true. It touches the game only through the `api` object game.js passes in, and adds its own markup and CSS at runtime,
 // so deleting this file (and the block at the end of game.js) leaves no trace in index.html or style.css.
@@ -5,9 +6,9 @@
 import {NIGHT_FLOOR,NIGHT_FLOOR_MIN,NIGHT_FLOOR_MAX,EXPOSURE_MIN,EXPOSURE_MAX} from './daynight.js';import {GLOW_SCALE_MIN,GLOW_SCALE_MAX} from './night-lights-rules.js';
 export const QUICK_TIMES=[['Dawn',360],['Noon',720],['Dusk',1080],['Night',1380]];
 export const MONEY_STEPS=[10000,100000,1000000]; // cents
-export const UNLOCK_KEY='citylife.devUnlocked'; // set once D is pressed four times on the main menu: the Dev Mode button then shows in this browser
+export const UNLOCK_KEY='edenridge.devUnlocked'; // set once D is pressed four times on the main menu: the Dev Mode button then shows in this browser
 export const clockLabel=minutes=>{const total=Math.floor(minutes)%1440,hour=Math.floor(total/60);return `${hour%12||12}:${String(total%60).padStart(2,'0')} ${hour<12?'AM':'PM'}`};
-export const SKY_KEY='citylife.dev.sky.v1',COST_WINDOW_MS=5000; // the night floor and exposure sliders are remembered in this browser only; the cost line looks at the last 5 seconds
+export const SKY_KEY='edenridge.dev.sky.v1',COST_WINDOW_MS=5000; // the night floor and exposure sliders are remembered in this browser only; the cost line looks at the last 5 seconds
 // The cost line: the renderer's counters for the last world draw (on High the draw calls include the shadow pass) and whole-frame times in milliseconds.
 export function frameCostText(cost,times=[]){
  const sorted=[...times].sort((a,b)=>a-b),pick=q=>sorted.length?sorted[Math.min(sorted.length-1,Math.floor(sorted.length*q))].toFixed(1)+' ms':'–';

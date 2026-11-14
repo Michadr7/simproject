@@ -1,3 +1,4 @@
+import './legacy-keys.js';
 // Character appearance: a body type (male/female), one outfit per part (head, top, legs, shoes) and
 // skin/hair colours. Parts come from the Quaternius Ultimate Modular Men/Women packs (CC0); see
 // scripts/build-characters.mjs. This file is pure data so it can be used without loading any models.
@@ -43,7 +44,7 @@ export const outfitIds=body=>(OUTFITS[body]||OUTFITS.male).map(([id])=>id);
 export const defaults={name:'',body:'male',head:'Casual_Hoodie',top:'Casual_Hoodie',legs:'Casual_Hoodie',feet:'Casual_Hoodie',skin:'#b88f72',hair:'#574033'};
 // A whole outfit from one set, e.g. outfit('female','Formal').
 export const outfit=(body,id,extra={})=>({...defaults,body,head:id,top:id,legs:id,feet:id,...extra});
-export const SAVE_KEY='citylife.character.v1';
+export const SAVE_KEY='edenridge.character.v1';
 export function normalizeAppearance(value){
  const a=value&&typeof value==='object'?value:{};const result={...defaults};
  result.name=typeof a.name==='string'?a.name.replace(/[\u0000-\u001f\u007f]/g,'').trim().slice(0,24):'';

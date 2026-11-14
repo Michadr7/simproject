@@ -9,7 +9,7 @@ try{
  // Export on the main menu: a file with this player's game
  let exported=null;globalThis.__download=(name,text)=>{exported={name,text}};
  g.ids.get('menuExport').click();
- assert.match(exported.name,/^citylife-tester-\d{4}-\d\d-\d\d\.json$/);const file=JSON.parse(exported.text);
+ assert.match(exported.name,/^edenridge-tester-\d{4}-\d\d-\d\d\.json$/);const file=JSON.parse(exported.text);
  assert.equal(file.profile.progress.cash,1000);assert.equal(file.character.name,'Tester');assert.match(g.ids.get('menuSaveStatus').textContent,/Saved as/);
  // Play makes one backup: the save as it was loaded
  assert.equal(backups().length,0);g.ids.get('start').click();

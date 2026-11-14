@@ -5,8 +5,8 @@
 //   POST /api/logout          ends this session
 //   POST /api/dev-login       {name}: local development only (env.DEV_LOGIN === '1' and a localhost address); signs in as dev:<name>
 // Sign-in methods (Google, email links) add identities through signIn(); they are built in later steps.
-// Sessions: a random token in an HttpOnly cookie; only its SHA-256 is stored. Changes need the X-City-Life header and a same-site Origin (no cross-site requests).
-import {SAVE_FORMAT,SAVE_FORMAT_VERSION} from '../dist/save-file-format.js';
+// Sessions: a random token in an HttpOnly cookie; only its SHA-256 is stored. Changes need the X-Eden-Ridge header (or the old X-City-Life) and a same-site Origin (no cross-site requests).
+import {SAVE_FORMAT_VERSION,isSaveFormat} from '../dist/save-file-format.js';
 
 export const SESSION_COOKIE='cl_session',SESSION_DAYS=30,MAX_SAVE_BYTES=512*1024,MIN_SAVE_INTERVAL_MS=3000;
 const DAY=86400000;
@@ -25,7 +25,7 @@ const isLocal=url=>['localhost','127.0.0.1','[::1]'].includes(new URL(url).hostn
 
 // A change must come from this site's own page: the custom header cannot be sent cross-site without a CORS preflight we never answer, and Origin must match.
 export function sameSiteChange(request){
- if(request.headers.get('x-city-life')!=='1')return false;
+ if(request.headers.get('x-eden-ridge')!=='1'&&request.headers.get('x-city-life')!=='1')return false; // x-city-life: clients cached from before the rename
  const origin=request.headers.get('origin');
  return !origin||origin===new URL(request.url).origin;
 }
@@ -59,7 +59,7 @@ export async function signIn(env,identity,now){const userId=await findOrCreateUs
 
 // Only the envelope is checked here; the game normalises everything inside it when it loads (save-file.js), so the Worker needs none of the game's code.
 export function checkSaveFile(file){
- if(!file||typeof file!=='object'||file.format!==SAVE_FORMAT)return 'not a save file';
+ if(!file||typeof file!=='object'||!isSaveFormat(file.format))return 'not a save file';
  if(!Number.isInteger(file.formatVersion)||file.formatVersion<1||file.formatVersion>SAVE_FORMAT_VERSION)return 'unknown save format';
  if(!file.profile||typeof file.profile!=='object')return 'no player in the save';
  return null;

@@ -23,8 +23,8 @@ try{
  const win=new EventTarget();win.matches=()=>false;const store=new Map();
  // A worktruck saved in the south lane of the drive-through, heading east, its tank cap beside the diesel pump, with a low tank (5 of 21 gallons). The player starts beside it.
  const truckPose={x:159.5,z:-5,yaw:Math.PI/2,fuelMgal:5000};
- store.set('citylife.character.v1',JSON.stringify({version:1,appearance:{name:'Tester'}}));
- store.set('citylife.progress.v1',JSON.stringify({version:1,progress:{cash:5000,completed:5,phase:'available',position:{x:157.3,z:-6.95},vehicles:[{uid:'v1',model:'worktruck',...truckPose}],orders:{nextVehicle:2}}}));
+ store.set('edenridge.character.v1',JSON.stringify({version:1,appearance:{name:'Tester'}}));
+ store.set('edenridge.progress.v1',JSON.stringify({version:1,progress:{cash:5000,completed:5,phase:'available',position:{x:157.3,z:-6.95},vehicles:[{uid:'v1',model:'worktruck',...truckPose}],orders:{nextVehicle:2}}}));
  let nextFrame;Object.assign(globalThis,{document:doc,window:win,localStorage:{getItem:k=>store.get(k)||null,setItem:(k,v)=>store.set(k,v)},innerWidth:1400,innerHeight:900,devicePixelRatio:1,requestAnimationFrame:fn=>{nextFrame=fn}});
  await import(pathToFileURL(join(dir,'game.js')).href);nextFrame(performance.now()+16);
  ids.get('start').click();assert(ids.get('welcome').hidden,'Play starts the game');
@@ -36,7 +36,7 @@ try{
  const local=name=>{person.updateMatrixWorld(true);const v=new THREE.Vector3();person.getObjectByName(name).getWorldPosition(v);return person.worldToLocal(v)};
  pump(1);
  const gasUse={x:155.7,z:-6.95},dieselUse={x:157.3,z:-6.95},nearCap={x:157.3,z:-6.95};
- const profile=()=>JSON.parse(store.get('citylife.profile.v1')).progress;
+ const profile=()=>JSON.parse(store.get('edenridge.profile.v1')).progress;
  const truck=()=>profile().vehicles.find(v=>v.uid==='v1');
  const truckMesh=scene.getObjectByName('vehicle-v1'),marker=truckMesh.getObjectByName('filler-marker');
  assert(scene.getObjectByName('nozzle-eastbank-gas-1')&&scene.getObjectByName('nozzle-eastbank-gas-0'),'both nozzles are in the scene, in their holsters');

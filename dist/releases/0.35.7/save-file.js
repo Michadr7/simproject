@@ -1,3 +1,4 @@
+import './legacy-keys.js';
 // Save files and local backups. A player's game is two storage keys: the profile (id, name, all progress; profile.js) and the character (appearance.js).
 // A save file is one JSON envelope around both, so it can be downloaded, imported on another browser or address, and later sent to cloud saves.
 // Everything read back goes through the game's own normalisers, so an old, hand-edited or damaged file can never put bad data into the game.
@@ -8,9 +9,9 @@ import {PROFILE_KEY} from './profile.js';
 import {formatClock} from './routine.js';import {GAME_NAME} from './game-name.js';
 
 export {PROFILE_KEY,CHARACTER_KEY};
-import {SAVE_FORMAT,SAVE_FORMAT_VERSION} from './save-file-format.js';
+import {SAVE_FORMAT,SAVE_FORMAT_VERSION,isSaveFormat} from './save-file-format.js';
 export {SAVE_FORMAT,SAVE_FORMAT_VERSION};
-export const BACKUPS_KEY='citylife.backups.v1';
+export const BACKUPS_KEY='edenridge.backups.v1';
 export const MAX_BACKUPS=5,MAX_BACKUP_BYTES=1_000_000,MAX_FILE_BYTES=2_000_000;
 
 const parse=text=>{try{return JSON.parse(text)}catch{return undefined}};
@@ -43,7 +44,7 @@ export function makeSaveFile(save,{version,now=Date.now()}){
 }
 export function saveFileName(file){
  const who=(file.profile?.name||file.character?.name||'player').toLowerCase().replace(/[^a-z0-9]+/g,'-').replace(/^-|-$/g,'')||'player';
- return `citylife-${who}-${String(file.savedAt||'').slice(0,10)||'save'}.json`;
+ return `edenridge-${who}-${String(file.savedAt||'').slice(0,10)||'save'}.json`;
 }
 // What the player is told about a save before it replaces theirs.
 export function summarize(save,meta={}){
@@ -53,7 +54,7 @@ export function summarize(save,meta={}){
 export function readSaveFile(text){
  if(typeof text!=='string'||text.length>MAX_FILE_BYTES)return {ok:false,error:`That file is too big to be a ${GAME_NAME} save file.`};
  const f=parse(text.replace(/^﻿/,''));
- if(!f||typeof f!=='object'||f.format!==SAVE_FORMAT)return {ok:false,error:`That is not a save file from ${GAME_NAME}.`};
+ if(!f||typeof f!=='object'||!isSaveFormat(f.format))return {ok:false,error:`That is not a save file from ${GAME_NAME}.`};
  if(!Number.isInteger(f.formatVersion)||f.formatVersion<1)return {ok:false,error:'That save file is damaged.'};
  if(f.formatVersion>SAVE_FORMAT_VERSION)return {ok:false,error:`That save was made by a newer version of the game (${typeof f.game==='string'?f.game.slice(0,12):'?'}). Update the game, then import it.`};
  if(!f.profile||typeof f.profile!=='object')return {ok:false,error:'That save file has no player in it.'};

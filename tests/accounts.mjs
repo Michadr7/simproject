@@ -17,7 +17,7 @@ let now=1_800_000_000_000;
 const LOCAL='http://127.0.0.1:8787',LIVE='https://simproject.ghostjumper007.workers.dev';
 let cookie='';
 const call=async(path,{method='GET',body,base=LOCAL,headers={},jar=true,e=env}={})=>{
- const h={...(method!=='GET'?{'x-city-life':'1',origin:base}:{}),...(jar&&cookie?{cookie}:{}),...headers};
+ const h={...(method!=='GET'?{'x-eden-ridge':'1',origin:base}:{}),...(jar&&cookie?{cookie}:{}),...headers};
  const res=await handleAccounts(new Request(base+path,{method,headers:h,body:body===undefined?undefined:typeof body==='string'?body:JSON.stringify(body)}),e,now);
  const set=res.headers.get('set-cookie');
  return {status:res.status,body:await res.json(),set};
@@ -33,7 +33,7 @@ assert.equal((await call('/api/save')).status,401);
 assert.equal((await call('/api/dev-login',{method:'POST',body:{name:'ada'},e:{DB:D1}})).status,404,'off unless DEV_LOGIN=1');
 assert.equal((await call('/api/dev-login',{method:'POST',body:{name:'ada'},base:LIVE})).status,404,'never on the live address');
 // Changes need the header and this site's Origin
-assert.equal((await call('/api/dev-login',{method:'POST',body:{name:'ada'},headers:{'x-city-life':''}})).status,403);
+assert.equal((await call('/api/dev-login',{method:'POST',body:{name:'ada'},headers:{'x-eden-ridge':''}})).status,403);
 assert.equal((await call('/api/dev-login',{method:'POST',body:{name:'ada'},headers:{origin:'https://evil.example'}})).status,403);
 const login=await call('/api/dev-login',{method:'POST',body:{name:'ada',email:'Ada@Example.com'}});
 assert.equal(login.status,200);assert.match(login.set,new RegExp(`^${SESSION_COOKIE}=[A-Za-z0-9_-]{43}; Path=/; HttpOnly; Secure; SameSite=Lax; Max-Age=2592000$`));

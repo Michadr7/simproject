@@ -1,3 +1,4 @@
+import './legacy-keys.js';
 // The in-game scene editor (E3): fly over the map, pick a prop, drag it on the ground, turn it, remove it, copy it, undo.
 // Loaded with a dynamic import() only when the Dev Mode panel's "Open Editor" button is pressed (dev.js), so the deployed game never fetches it.
 // Every change goes through the E1 transactions (scene-edit.js) and then the E2 redraw: overlay.rebuild(edits) for props the editor placed, and a matrix update of the yard
@@ -10,7 +11,7 @@ import {propInfo} from './props.js';
 import {SCENE_EDITS} from './scene-edits.js';
 import {normaliseEdits,snap,snapYaw,move,turn,remove,copy,validateEdits,summary,createHistory,sceneKeys,applyToNamed} from './scene-edit.js';
 
-export const STORAGE_KEY='citylife.sceneEdit.v1';
+export const STORAGE_KEY='edenridge.sceneEdit.v1';
 export const LIMITS={perModel:200,total:400}; // most props of one model, and most props in all, the editor will keep
 export const TURN_STEP=15; // degrees for R
 export const CAM_LIMITS={dist:[3,250],pitch:[.1,1.5],ty:[0,120]};

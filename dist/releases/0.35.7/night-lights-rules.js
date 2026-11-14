@@ -20,7 +20,7 @@ export const glowScale=v=>Number.isFinite(v)?clamp(v,GLOW_SCALE_MIN,GLOW_SCALE_M
 // ── Street lamps ──────────────────────────────────────────────────────────────────────────────────────────────────────────────
 // Heads: the emissive strength of the lamp-head material (0.55 by day, as it always was). Halo: a soft round sprite at each head. Pool: a round patch of light on the ground.
 // poolLift: the patches float this far above the ground's height, more than a kerb (0.185 m): a patch that spans a kerb or a raised yard would otherwise cut under the higher side.
-export const LAMP={headDay:.55,headNight:2.6,colour:'#ffdf9e',haloSize:2.6,haloStrength:.5,haloDrop:.25,poolRadius:7,poolStrength:.13,poolLift:.2,poolRings:3,poolSegments:12};
+export const LAMP={headDay:.55,headNight:2.6,colour:'#ffdf9e',haloSize:2.6,haloStrength:.5,haloDrop:.25,poolRadius:7,poolStrength:.13,poolLift:.2,poolRings:6,poolSegments:24};
 export const lampHeadGlow=level=>mix(LAMP.headDay,LAMP.headNight,clamp(level,0,1));
 // A round ground patch as flat data: vertices [dx, dz, strength] (strength 1 in the middle, 0 at the rim: nothing is seen where it ends) and triangle indices.
 export function poolShape(radius=LAMP.poolRadius,rings=LAMP.poolRings,segments=LAMP.poolSegments){

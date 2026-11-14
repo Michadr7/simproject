@@ -21,9 +21,9 @@ const pickFile=async(t,text)=>{t.$('menuImportFile').files=[{text:async()=>text}
 // Export downloads a save file named after the player
 {const s=memory();writeStoredSave(s,player(12345));const t=build({storage:s});
  assert(!t.$('menuExport').disabled);t.$('menuExport').click();
- const [kind,name,text]=t.log[0];assert.equal(kind,'download');assert.match(name,/^citylife-ada-\d{4}-\d\d-\d\d\.json$/);
- const file=JSON.parse(text);assert.equal(file.format,'citylife-save');assert.equal(file.game,'0.34.3');assert.equal(file.profile.progress.cash,12345);
- assert.match(t.$('menuSaveStatus').textContent,/Saved as citylife-ada/);}
+ const [kind,name,text]=t.log[0];assert.equal(kind,'download');assert.match(name,/^edenridge-ada-\d{4}-\d\d-\d\d\.json$/);
+ const file=JSON.parse(text);assert.equal(file.format,'edenridge-save');assert.equal(file.game,'0.34.3');assert.equal(file.profile.progress.cash,12345);
+ assert.match(t.$('menuSaveStatus').textContent,/Saved as edenridge-ada/);}
 
 // Backup on Play: once per page load
 {const s=memory();writeStoredSave(s,player(1));const t=build({storage:s});
@@ -58,7 +58,7 @@ const pickFile=async(t,text)=>{t.$('menuImportFile').files=[{text:async()=>text}
  t.$('menuSaveConfirmYes').click();assert.equal(t.$('menuSaveStatus').dataset.kind,'error');assert.match(t.$('menuSaveStatus').textContent,/would not store/);assert.equal(t.log.length,0,'no reload');assert.equal(readStoredSave(s).profile.name,'Kept');}
 
 // Half a write is undone: the character key refuses, the profile goes back to what it was
-{const s=memory();writeStoredSave(s,player(5,'Kept'));const before=s.m.get('citylife.profile.v1');const set=s.setItem;s.setItem=(k,v)=>{if(k==='citylife.character.v1')throw new Error('Quota');set(k,v)};
- assert.equal(writeStoredSave(s,player(9,'Other')),false);assert.equal(s.m.get('citylife.profile.v1'),before,'profile rolled back');assert.equal(readStoredSave(s).character.name,'Kept');}
+{const s=memory();writeStoredSave(s,player(5,'Kept'));const before=s.m.get('edenridge.profile.v1');const set=s.setItem;s.setItem=(k,v)=>{if(k==='edenridge.character.v1')throw new Error('Quota');set(k,v)};
+ assert.equal(writeStoredSave(s,player(9,'Other')),false);assert.equal(s.m.get('edenridge.profile.v1'),before,'profile rolled back');assert.equal(readStoredSave(s).character.name,'Kept');}
 assert.equal(money(123456),'$1,234.56');assert.equal(money(0),'$0.00');
 console.log('Save menu: export off without a save, export downloads a named file, one backup per Play, import refuses bad files, asks first, Cancel changes nothing, Replace backs up then reloads, the backup list and Restore, a refused write changes nothing.');

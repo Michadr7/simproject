@@ -155,7 +155,7 @@ function rig(over={}){
  // Edit character on the menu: saving comes back to the menu with the new look saved, and the game has not started.
  {const creator=g.ids.get('creator');g.ids.get('customizeSaved').click();assert(!creator.hidden&&welcome.hidden,'Edit character opens the creator over the menu');
   g.ids.get('characterName').value='Robin';g.ids.get('creatorForm').onsubmit({preventDefault(){}});assert(creator.hidden,'saving closes the creator');assert(!welcome.hidden,'and returns to the main menu, not the game');
-  assert.equal(JSON.parse(g.store.get('citylife.character.v1')).appearance.name,'Robin','the new character is saved');
+  assert.equal(JSON.parse(g.store.get('edenridge.character.v1')).appearance.name,'Robin','the new character is saved');
   const drawn=g.scene();globalThis.__renderScene=null;g.pump(.3);assert.equal(g.scene(),null,'the game has not started: the world is not drawn');globalThis.__renderScene=drawn;
   if(menu){globalThis.__menuScene=null;g.pump(.3);assert.equal(g.menuScene(),menu,'the same menu scene draws again, with the new look')}
   g.ids.get('customizeSaved').click();g.ids.get('cancelCreator').click();assert(!welcome.hidden&&creator.hidden,'Back still returns to the menu')}

@@ -1,6 +1,7 @@
+import './legacy-keys.js';
 import {loadProgress, normalizeProgress} from './jobs.js';
 import {loadAppearance} from './appearance.js';
-export const PROFILE_KEY = 'citylife.profile.v1';
+export const PROFILE_KEY = 'edenridge.profile.v1';
 let sessionProfile;
 const storage = {
   getItem: key => localStorage.getItem(key),

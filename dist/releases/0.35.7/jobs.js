@@ -1,3 +1,4 @@
+import './legacy-keys.js';
 import {normalizeCoolers} from './water-cooler.js';
 import {MAP} from './map-definition.js';
 import {freshInventory,normalizeInventory,hasItem} from './inventory.js';
@@ -24,7 +25,7 @@ export const ROUTES=[
  {name:'Alder Coffee',description:'A fresh produce order for the coffee shop.',x:36,z:-6.3,pay:1400},
  {name:'Oak Street Laundry',description:'A grocery order for the laundry staff.',x:-10.2,z:-7,pay:1800}
 ];
-export const PROGRESS_KEY='citylife.progress.v1';
+export const PROGRESS_KEY='edenridge.progress.v1';
 export const freshProgress=()=>({schema:SCHEMA,properties:{},homeNotices:[],cash:0,completed:0,phase:'available',activeJob:null,inventory:freshInventory(),settings:{statDrainMultiplier:1},cooldowns:{},gigBoard:{ids:[],refreshAt:0},position:null,housing:freshHousing(),life:normalizeLife(),routine:normalizeRoutine(),cafe:normalizeCafe(),plots:{},equipped:null,skills:freshSkills(),stats:freshStats(),logs:[],nextLogId:1,carry:null,belt:0,plankDrops:[],vehicles:[],orders:freshOrders(),careers:{},companies:{},shift:null,payStubs:[],focus:null,gigs:freshGigs(),starter:freshStarter()});
 export const money=cents=>'$'+(cents/100).toFixed(2);
 export function normalizeProgress(value){

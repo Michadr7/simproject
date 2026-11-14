@@ -9,6 +9,7 @@ import {MENU_VEHICLE,leanSpot,menuPose,windSway,hazeAt,MENU_PLANS,plansOps,MENU_
 
 const SOLID={apply:m=>m},DUST=36,PLANS_LEAN=.8,HAND={x:.27,y:1.3,z:.25}; // HAND: where each wrist goes (character space, metres); the fist hangs about 10 cm below and ahead of the wrist. The sheet is 46 cm wide (edge at 23 cm), so the wrist sits 4 cm outside the edge and the fist closes around it from the side and below, behind the sheet's plane, instead of through the face
 // Menu-only night look (the game's night is unchanged): MOON is a cool directional fill from the camera side plus extra hemisphere light, both scaled by the night weight; HEADLAMP is the pickup's two front lamps (switched with the sun like the game's lamps).
+const MENU_LAMPS={offroad:{x:.9,y:1,z:2.4}}; // where the menu's lamps sit: the pickup's real headlight housings (measured on the model: the recessed corners of the nose, x +-.9, y 1.0, z 2.4), not the game's sprite spot in front of the grille
 const MOON={colour:'#8fb0ff',strength:1.5,hemi:.95,from:[-4,9,10]},HEADLAMP={colour:'#ffe2a8',spot:55,angle:.62,range:16,radius:.11,halo:1.15,pool:[7.5,9.5],poolStrength:.55,backoff:.07};
 const GAME_MINUTES_PER_SECOND=.5; // the game clock runs 30 game minutes per real minute (timestep.js, advanceTime): the menu sky moves at the same speed
 // Trees stand in a ring behind and beside the clearing, never between the camera and the character. [x, z, model index, scale, phase]
@@ -128,7 +129,7 @@ export function createMenuScene({createCharacter,appearance,vehicle=MENU_VEHICLE
 
  // Headlamps: the pickup's front pair (night-lights-rules.js VEHICLE_LAMPS), in the vehicle's frame. 2 emissive lamp meshes, 2 additive halo sprites, 1 additive ground pool (5 draw calls), 2 spot lights (always present, intensity 0 by day).
  const glowMap=(()=>{const n=32,d=new Uint8Array(n*n*4);for(let y=0;y<n;y++)for(let x=0;x<n;x++){const r=Math.hypot((x+.5)/n*2-1,(y+.5)/n*2-1),a=Math.pow(Math.max(0,1-r),2)*255;d.set([255,255,255,a],(y*n+x)*4)}const tex=new THREE.DataTexture(d,n,n);tex.needsUpdate=true;tex.colorSpace=THREE.SRGBColorSpace;return own(tex)})();
- const rig=new THREE.Group(),lampAt=VEHICLE_LAMPS[vehicle.prop]?.front||{x:.6,y:1.08,z:2.82},lampSpots=[],lampMeshes=[],halos=[];rig.rotation.y=vehicle.yaw;scene.add(rig);
+ const rig=new THREE.Group(),lampAt=MENU_LAMPS[vehicle.prop]||VEHICLE_LAMPS[vehicle.prop]?.front||{x:.6,y:1.08,z:2.82},lampSpots=[],lampMeshes=[],halos=[];rig.rotation.y=vehicle.yaw;scene.add(rig);
  const lampMat=own(new THREE.MeshBasicMaterial({color:HEADLAMP.colour,fog:false})),haloMat=own(new THREE.SpriteMaterial({map:glowMap,color:HEADLAMP.colour,blending:THREE.AdditiveBlending,transparent:true,depthWrite:false,fog:false})),lampGeometry=own(new THREE.SphereGeometry(HEADLAMP.radius,12,8));
  for(const side of [-1,1]){
   const x=side*lampAt.x,mesh=new THREE.Mesh(lampGeometry,lampMat);mesh.position.set(x,lampAt.y,lampAt.z);rig.add(mesh);lampMeshes.push(mesh);

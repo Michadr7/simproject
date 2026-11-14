@@ -62,7 +62,7 @@ esc();id('showSettings').click();id('settingsBack').click();id('resume').click()
 // ── Save and exit still goes to the main menu, from the first screen
 id('help').click();Object.assign(me,{x:14,z:-6.1});id('mainMenu').click();
 assert.equal(reloads,1,'the page reloads');
-assert.equal(JSON.parse(g.store.get('citylife.profile.v1')).progress.position.x,14,'and the game was saved where you stood');
+assert.equal(JSON.parse(g.store.get('edenridge.profile.v1')).progress.position.x,14,'and the game was saved where you stood');
 await g.done();
 console.log('Pause menu: four buttons on the first screen, Settings and Back, Esc goes back one level, Credits returns to Settings, Graphics saves, Save and exit works.');
 process.exit(0);

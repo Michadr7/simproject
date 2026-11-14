@@ -25,8 +25,8 @@ try{
  const win=new EventTarget();win.matches=()=>false;const store=new Map();
  // the player stands at the pickup's driver door (the door point of its home pose)
  const pick=MAP.vehicles.find(v=>v.id==='eastbank-worktruck'),pc=CLASSES.worktruck,door=doorPoint(pick.home,pc);
- store.set('citylife.character.v1',JSON.stringify({version:1,appearance:{name:'Tester'}}));
- store.set('citylife.progress.v1',JSON.stringify({version:1,progress:{cash:5000,completed:5,phase:'available',position:{x:door.x,z:door.z},vehicles:[{uid:'v1',model:'worktruck',x:pick.home.x,z:pick.home.z,yaw:pick.home.yaw},{uid:'v2',model:'offroad',x:MAP.vehicles[1].home.x,z:MAP.vehicles[1].home.z,yaw:MAP.vehicles[1].home.yaw},{uid:'v3',model:'offroad',x:130,z:10,yaw:1.5}],orders:{nextVehicle:4}}}));
+ store.set('edenridge.character.v1',JSON.stringify({version:1,appearance:{name:'Tester'}}));
+ store.set('edenridge.progress.v1',JSON.stringify({version:1,progress:{cash:5000,completed:5,phase:'available',position:{x:door.x,z:door.z},vehicles:[{uid:'v1',model:'worktruck',x:pick.home.x,z:pick.home.z,yaw:pick.home.yaw},{uid:'v2',model:'offroad',x:MAP.vehicles[1].home.x,z:MAP.vehicles[1].home.z,yaw:MAP.vehicles[1].home.yaw},{uid:'v3',model:'offroad',x:130,z:10,yaw:1.5}],orders:{nextVehicle:4}}}));
  let nextFrame;Object.assign(globalThis,{document:doc,window:win,localStorage:{getItem:k=>store.get(k)||null,setItem:(k,v)=>store.set(k,v)},innerWidth:1400,innerHeight:900,devicePixelRatio:1,requestAnimationFrame:fn=>{nextFrame=fn}});
  await import(pathToFileURL(join(dir,'game.js')).href);await new Promise(r=>setTimeout(r,150));nextFrame(performance.now()+16);
  ids.get('start').click();assert(ids.get('welcome').hidden,'Play starts the game');
@@ -89,7 +89,7 @@ try{
   for(const k of ['KeyA','KeyD','KeyW','KeyS']){test(k)}
   assert(minDist>=.32,`a walker is never closer to the hull than the player radius (closest ${minDist.toFixed(2)} m)`)}
  // 8. what is saved: the pickup where it was left, the player at its door, and nothing else changed
- {const profile=JSON.parse(store.get('citylife.profile.v1')),saved=profile.progress;assert.deepEqual(saved.vehicles.map(x=>x.uid).sort(),['v1','v2','v3'],'the pickup has left home, and the off-road pickup is where the save put it');const v=saved.vehicles.find(x=>x.uid==='v1');assert.equal(v.model,'worktruck');assert(Math.hypot(v.x-truck.position.x,v.z-truck.position.z)<.02&&Math.abs(wrap(v.yaw-truck.rotation.y))<.002,'saved at the pose it was left in');
+ {const profile=JSON.parse(store.get('edenridge.profile.v1')),saved=profile.progress;assert.deepEqual(saved.vehicles.map(x=>x.uid).sort(),['v1','v2','v3'],'the pickup has left home, and the off-road pickup is where the save put it');const v=saved.vehicles.find(x=>x.uid==='v1');assert.equal(v.model,'worktruck');assert(Math.hypot(v.x-truck.position.x,v.z-truck.position.z)<.02&&Math.abs(wrap(v.yaw-truck.rotation.y))<.002,'saved at the pose it was left in');
   assert.equal(profile.version,1,'the profile format is unchanged');assert.equal(saved.schema,2,'schema stays 2');assert(saved.position&&Number.isFinite(saved.position.x),'the player position is saved too')}
  // 9. back in at the door, then R: gets you out and sends you to the spawn; the vehicle stays exactly where it was
  {const left=truck.position.clone(),yawLeft=truck.rotation.y,d=doorPoint({x:left.x,z:left.z,yaw:yawLeft},pc);me.position.x=d.x;me.position.z=d.z;pump(.2);press('KeyE');pump(.3);assert(!person.visible,'E at the door again: back in');press('KeyR');pump(.5);assert(!person.visible,'R no longer throws you out of the vehicle');press('KeyE');pump(.5);assert(person.visible,'E gets you out');assert(truck.position.distanceTo(left)<.01&&Math.abs(truck.rotation.y-yawLeft)<1e-9,'the vehicle stays where you left it')}

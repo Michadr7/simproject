@@ -8,7 +8,7 @@ g.ids.get('help').click();assert(!g.ids.get('controls').hidden,'Esc / Controls o
 Object.assign(me,{x:14,z:-6.1});g.pump(.1); // paused: the position does not move on its own
 g.ids.get('mainMenu').click();
 assert.equal(reloads,1,'the page reloads');
-const saved=JSON.parse(g.store.get('citylife.profile.v1')).progress;assert.equal(saved.position.x,14,'and the game was saved first, where you were standing');
+const saved=JSON.parse(g.store.get('edenridge.profile.v1')).progress;assert.equal(saved.position.x,14,'and the game was saved first, where you were standing');
 // with no multiplayer connection it still works
 g.ids.get('mainMenu').click();assert.equal(reloads,2);
 await g.done();

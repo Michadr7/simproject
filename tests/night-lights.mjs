@@ -149,8 +149,8 @@ assert.deepEqual(spotlightPlan({high:true,on:false,level:1,present:false}),{pres
  s=lights.update(MOVING_HOLD,{sky:night,vehicles:[npc]});assert.equal(s.vehicleSprites,0,'parked: off');
  // capacity: more vehicles than slots never overflows
  s=lights.update(.04,{sky:night,vehicles:Array.from({length:MAX_VEHICLES+3},(_,i)=>({key:'v'+i,mesh:truck,model:'offroad',use:'driver'}))});assert.equal(s.beams,MAX_VEHICLES);assert.equal(lights.sprites.geometry.instanceCount,lamps0+MAX_VEHICLES*4);assert.equal(s.drawCalls,2);
- // the cost in triangles: 40 lamps in the real game
- const tris=(40*poolShape().indices.length+MAX_VEHICLES*BEAM_INDICES)/3+(40+MAX_VEHICLES*4)*2;assert(tris<3000,`at most ${tris} triangles for every pool, beam and sprite in the real game`);
+ // the cost in triangles: 40 lamps in the real game (the pools were 3 rings x 12 and showed hard polygon edges at night: now 6 x 24, about 10k triangles, cost is vertices only)
+ const tris=(40*poolShape().indices.length+MAX_VEHICLES*BEAM_INDICES)/3+(40+MAX_VEHICLES*4)*2;assert(tris<12000,`at most ${tris} triangles for every pool, beam and sprite in the real game`);
  // without a mask (Node, or a texture that would not decode) a building simply stays dark
  {const scene2=new THREE.Scene(),l=MAP.landmarks.find(x=>x.id==='house-r2'),mesh=new THREE.Mesh(new THREE.BoxGeometry(1,1,1),new THREE.MeshStandardMaterial());mesh.name='prop-'+l.prop;mesh.position.set(l.x,0,l.z);scene2.add(mesh);
   const bare=createNightLights({scene:scene2,makeMask:()=>{}}),st=bare.update(.04,{sky:skyAt(clock(20))});assert.equal(mesh.material.emissive.getHex(),0,'its material is not touched');assert.equal(mesh.material.emissiveMap,null);assert.equal(st.ready,0);assert.equal(st.lamps,0);assert.equal(st.drawCalls,2)}

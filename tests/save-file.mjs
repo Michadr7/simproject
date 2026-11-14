@@ -6,7 +6,7 @@ import {loadAppearance} from '../dist/appearance.js';
 const memory=(limit=Infinity)=>{const m=new Map();return {m,getItem:k=>m.get(k)??null,setItem:(k,v)=>{const used=[...m].reduce((n,[a,b])=>a===k?n:n+b.length,0);if(used+v.length>limit)throw new Error('QuotaExceededError');m.set(k,v)},removeItem:k=>m.delete(k)}};
 const player=(cash,name='Ada')=>({profile:{playerId:'p-1',name,progress:{cash}},character:{name,gender:'female'}});
 
-assert.equal(PROFILE_KEY,'citylife.profile.v1');assert.equal(CHARACTER_KEY,'citylife.character.v1');
+assert.equal(PROFILE_KEY,'edenridge.profile.v1');assert.equal(CHARACTER_KEY,'edenridge.character.v1');
 
 // Stored save: none, written, read back in the shapes the game reads
 {const s=memory();assert.equal(readStoredSave(s),null,'a new player has no save');
@@ -22,7 +22,7 @@ assert.equal(PROFILE_KEY,'citylife.profile.v1');assert.equal(CHARACTER_KEY,'city
 // Save files: round trip, name, refusals
 {const file=makeSaveFile(player(500),{version:'0.35.0',now:Date.UTC(2026,10,5,12)});
  assert.equal(file.format,SAVE_FORMAT);assert.equal(file.formatVersion,SAVE_FORMAT_VERSION);assert.equal(file.game,'0.35.0');assert.equal(file.savedAt,'2026-11-05T12:00:00.000Z');
- assert.equal(saveFileName(file),'citylife-ada-2026-11-05.json');assert.equal(saveFileName({...file,profile:{name:'Ü ../x'}}),'citylife-x-2026-11-05.json');
+ assert.equal(saveFileName(file),'edenridge-ada-2026-11-05.json');assert.equal(saveFileName({...file,profile:{name:'Ü ../x'}}),'edenridge-x-2026-11-05.json');
  const r=readSaveFile(JSON.stringify(file));assert(r.ok);assert.equal(r.save.profile.progress.cash,500);
  assert.deepEqual(r.summary,{name:'Ada',cash:500,vehicles:0,day:1,clock:'9:00 AM',game:'0.35.0',savedAt:'2026-11-05T12:00:00.000Z'});
  assert(readSaveFile('﻿'+JSON.stringify(file)).ok,'a byte-order mark (Windows editors) is fine');

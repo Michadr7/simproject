@@ -1,3 +1,4 @@
+import './legacy-keys.js';
 // Main menu: Play, Multiplayer (host / join), Settings, Credits. The DOM lives in index.html (#welcome); game.js passes in what the menu needs.
 // Online: the hosted relay (worker/lobby.js) with lobby codes. Local server: a browser page cannot start a server, so "host" means "use the relay running on this computer" and "join" means "use the relay at this address".
 import {normalizeLobbyCode,REFUSED} from './relay-protocol.js';import './game-name.js'; // puts GAME_NAME into the page title, the menu, the logo and the credits when the page loads
@@ -17,7 +18,7 @@ export function refusalText(reason){
   [REFUSED.full]:'That lobby is full (8 players).',
   [REFUSED.noLobby]:'No lobby has that code. Check it, or create a new lobby.'}[reason]||'The server turned the connection down.';
 }
-export const SERVER_KEY='citylife.server.v1',SETTINGS_KEY='citylife.settings.v1';
+export const SERVER_KEY='edenridge.server.v1',SETTINGS_KEY='edenridge.settings.v1';
 const CONNECT_TIMEOUT_MS=8000;
 
 // Accepts "", "localhost", "192.168.1.20", "192.168.1.20:9000", "ws://host:port" or "wss://host". A bare host gets the relay's port, 8080.

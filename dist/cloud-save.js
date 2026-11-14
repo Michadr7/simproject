@@ -1,10 +1,11 @@
+import './legacy-keys.js';
 // Cloud saves for a signed-in player (the Worker side is worker/accounts.js). One save per account, with revisions.
-// This browser remembers which cloud revision its save is based on and a fingerprint of the save as last synced (citylife.cloud.v1),
+// This browser remembers which cloud revision its save is based on and a fingerprint of the save as last synced (edenridge.cloud.v1),
 // so it can tell who changed what: only this browser -> upload; only the cloud (another browser) -> download; both -> ask the player.
 // A download replaces the save through save-file.js, so the save it replaces is backed up first.
 import {readStoredSave,makeSaveFile,readSaveFile,replaceSave,summarize} from './save-file.js';
 
-export const CLOUD_KEY='citylife.cloud.v1',PUSH_EVERY_MS=120000;
+export const CLOUD_KEY='edenridge.cloud.v1',PUSH_EVERY_MS=120000;
 // FNV-1a over the normalised save, plus its length: equal saves always match, and a change is all but certain to show.
 export function fingerprint(save){const s=JSON.stringify(save);let h=0x811c9dc5;for(let i=0;i<s.length;i++){h^=s.charCodeAt(i);h=Math.imul(h,0x01000193)>>>0}return h.toString(16)+':'+s.length}
 export function loadCloudState(storage){try{const v=JSON.parse(storage.getItem(CLOUD_KEY));return v&&typeof v.userId==='string'&&Number.isInteger(v.revision)&&typeof v.fingerprint==='string'?v:null}catch{return null}}
@@ -27,7 +28,7 @@ export function planSync({local,cloud,state,userId}){
 export function createCloud({fetchFn,storage,version,now=()=>Date.now()}){
  let user=null,methods=[]; // methods: the sign-in buttons the server offers ('google', 'dev')
  const api=async(path,{method='GET',body}={})=>{
-  const res=await fetchFn(path,{method,credentials:'same-origin',headers:{'x-city-life':'1',...(body?{'content-type':'application/json'}:{})},body:body?JSON.stringify(body):undefined});
+  const res=await fetchFn(path,{method,credentials:'same-origin',headers:{'x-eden-ridge':'1',...(body?{'content-type':'application/json'}:{})},body:body?JSON.stringify(body):undefined});
   let data=null;try{data=await res.json()}catch{}
   return {status:res.status,data};
  };

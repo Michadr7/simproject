@@ -19,7 +19,7 @@ for(const saved of [false,true]){
  await writeFile(join(dir,'vendor/three.module.js'),`export * from '${threeURL}';export class WebGLRenderer{constructor(){this.shadowMap={}}setPixelRatio(){}setSize(){}setViewport(){}clear(){}render(scene,camera){if(scene.name!=='menu-scene')globalThis.__renders=(globalThis.__renders||0)+1;globalThis.__renderScene=scene;globalThis.__renderCamera=camera}}`);
  const ids=new Map([...html.matchAll(/id="([^"]+)"/g)].map(m=>[m[1],new El(m[1]==='characterName'?'input':'div')]));
  const doc=new EventTarget();doc.getElementById=id=>ids.get(id)||null;doc.createElement=tag=>new El(tag);doc.body=new El();doc.querySelectorAll=()=>[];doc.hidden=false;
- const win=new EventTarget();win.matches=()=>false;const store=new Map();if(saved){store.set('citylife.character.v1',JSON.stringify({version:1,appearance:{name:'Michadr'}}));store.set('citylife.progress.v1',JSON.stringify({version:1,progress:{cash:11200,completed:5,phase:'available',position:{x:1,z:-6.3}}}))}
+ const win=new EventTarget();win.matches=()=>false;const store=new Map();if(saved){store.set('edenridge.character.v1',JSON.stringify({version:1,appearance:{name:'Michadr'}}));store.set('edenridge.progress.v1',JSON.stringify({version:1,progress:{cash:11200,completed:5,phase:'available',position:{x:1,z:-6.3}}}))}
  let nextFrame;Object.assign(globalThis,{document:doc,window:win,localStorage:{getItem:k=>store.get(k)||null,setItem:(k,v)=>store.set(k,v)},innerWidth:1400,innerHeight:900,devicePixelRatio:1,requestAnimationFrame:fn=>{nextFrame=fn}});
  const originalSocket=globalThis.WebSocket;
  class FakeSocket extends EventTarget {
@@ -93,7 +93,7 @@ for(const saved of [false,true]){
  const wheel=new Event('wheel',{cancelable:true});wheel.deltaY=-400;wheel.deltaMode=0;ids.get('world').dispatchEvent(wheel);pump(4);assert(globalThis.__renderCamera.position.distanceTo(person.position)<5);
  go(roomModule.EXIT.x,roomModule.EXIT.z);pressE();enter(36);const shopRoot=globalThis.__renderScene.getObjectByName('cafe-interior');assert.equal(person.parent,shopRoot);assert(shopRoot.children.filter(m=>m.name==='storefront-glass').every(m=>m.material.transparent&&m.material.opacity<.2));
  go(0,-2);pressE();ids.get('jobAction').click();ids.get('jobAction').click();pressE();ids.get('jobAction').click();ids.get('jobAction').click();pump(10);
- for(const drink of ['Latte','Espresso']){go(-2.3,-.7);pressE();assert(ids.get('dialogText').textContent.includes(drink.toLowerCase()));ids.get('jobAction').click();go(-1.25,-2.25);pressE();if(drink==='Latte'){ids.get('jobAction').click();assert(!ids.get('dialog').hidden);ids.get('extraAction').click()}else ids.get('jobAction').click();pump(4);assert.equal(JSON.parse(store.get('citylife.profile.v1')).progress.cafe.stage,'serve');go(-2.3,-.7);pressE();pump(10);pressE();pump(14)}
+ for(const drink of ['Latte','Espresso']){go(-2.3,-.7);pressE();assert(ids.get('dialogText').textContent.includes(drink.toLowerCase()));ids.get('jobAction').click();go(-1.25,-2.25);pressE();if(drink==='Latte'){ids.get('jobAction').click();assert(!ids.get('dialog').hidden);ids.get('extraAction').click()}else ids.get('jobAction').click();pump(4);assert.equal(JSON.parse(store.get('edenridge.profile.v1')).progress.cafe.stage,'serve');go(-2.3,-.7);pressE();pump(10);pressE();pump(14)}
  go(0,-2);pressE();ids.get('jobAction').click();ids.get('jobAction').click();pump(.1);assert.equal(ids.get('cash').textContent,'$36.00');pressE();ids.get('jobAction').click();ids.get('jobAction').click();pump(.1);assert.equal(ids.get('cash').textContent,'$36.00');
  }
 
@@ -123,7 +123,7 @@ for(const saved of [false,true]){
  ids.get('phoneApp-gigs').click();assert(!accept.disabled);accept.click();
  assert(ids.get('phoneOverlay').hidden);assert(phoneState.progress.gigs.active&&phoneState.progress.activeJob,'accepting starts a gig');
  assert.equal(phoneState.progress.life.energy,oldEnergy,'no upfront energy charge');
- assert.equal(JSON.parse(store.get('citylife.profile.v1')).progress.gigs.active.id,phoneState.progress.gigs.active.id);
+ assert.equal(JSON.parse(store.get('edenridge.profile.v1')).progress.gigs.active.id,phoneState.progress.gigs.active.id);
  for(let i=0;i<3;i++)phoneFrame();assert.equal(phoneState.me.position.z,phoneZ,'held key does not stick after closing phone');
  key('KeyP');ids.get('phoneApp-gigs').click();assert(accept.disabled,'active job blocks accepting again');assert(ids.get('phoneContracts').children[0].hidden,'cooling-down gig is hidden');key('Escape');assert(ids.get('phoneOverlay').hidden);
  if(saved){Object.assign(phoneState.me.position,{x:0,y:.02,z:3.9});for(let i=0;i<10;i++)phoneFrame();key('KeyE');for(let i=0;i<40;i++)phoneFrame();Object.assign(phoneState.me.position,{x:0,y:.02,z:4.4});for(let i=0;i<300;i++)phoneFrame()} // the cafe's double doors are opened by hand
@@ -206,7 +206,7 @@ for(const saved of [false,true]){
  Object.assign(state.me.position,{x:19,y:.165,z:-7.5});for(let i=0;i<100;i++)networkFrame();Object.assign(state.me.position,{x:19,y:.165,z:-8.9});for(let i=0;i<300;i++)networkFrame();Object.assign(state.me.position,{x:0,y:.02,z:-2});key('KeyE');
  // Noah offers a short menu: browse the store or ask about jobs.
  assert.equal(ids.get('dialogKicker').textContent,'Noah');assert.equal(ids.get('jobAction').textContent,'View items for sale');assert.equal(ids.get('extraAction').textContent,'View jobs');assert(ids.get('storeOverlay').hidden);ids.get('jobAction').click();assert(!ids.get('storeOverlay').hidden);
- const beforeBuy=state.progress.cash;const buyApple=ids.get('storeItems').children[0].children.at(-1);assert.equal(buyApple.id,'buy-apple');buyApple.click();assert.equal(state.progress.cash,beforeBuy-100);assert(ids.get('storeMessage').textContent.startsWith('✓'),'a purchase is confirmed in the pinned header');assert.equal(ids.get('storeMessage').dataset.kind,'ok');assert.equal(state.progress.inventory.slots[0].id,'apple');assert.equal(JSON.parse(store.get('citylife.profile.v1')).progress.cash,beforeBuy-100);
+ const beforeBuy=state.progress.cash;const buyApple=ids.get('storeItems').children[0].children.at(-1);assert.equal(buyApple.id,'buy-apple');buyApple.click();assert.equal(state.progress.cash,beforeBuy-100);assert(ids.get('storeMessage').textContent.startsWith('✓'),'a purchase is confirmed in the pinned header');assert.equal(ids.get('storeMessage').dataset.kind,'ok');assert.equal(state.progress.inventory.slots[0].id,'apple');assert.equal(JSON.parse(store.get('edenridge.profile.v1')).progress.cash,beforeBuy-100);
  ids.get('storeFilter-drink').click();assert.equal(ids.get('storeItems').children.length,5);ids.get('storeClose').click();assert(ids.get('storeOverlay').hidden);
  key('KeyI');assert(!ids.get('inventoryOverlay').hidden);assert.equal(ids.get('inventoryGrid').children[0].children[1].textContent,'Apple');key('Escape');
  console.log(saved?'Existing save: gameplay, phone apps/controls/gigs, and multiplayer frame checks passed.':'Fresh save: creator, phone apps/controls/gigs, and multiplayer frame checks passed.');

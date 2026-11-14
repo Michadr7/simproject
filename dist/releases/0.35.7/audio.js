@@ -1,7 +1,8 @@
+import './legacy-keys.js';
 // Sound, generated with the Web Audio API (no sound files). One AudioContext, created on the first click or key (browsers do not allow sound before one); a master volume and a mute that are saved;
 // at most three sounds at once: the blade, the belt and the lever click. Every sound is placed in the world: it is loudest within NEAR metres and silent beyond HEARING metres of the player.
 // Mono on purpose (no panning yet). Nothing here runs unless a source is near enough to hear.
-export const AUDIO_KEY='citylife.audio.v1',NEAR=2.5,HEARING=40,MAX_CLICKS=3;
+export const AUDIO_KEY='edenridge.audio.v1',NEAR=2.5,HEARING=40,MAX_CLICKS=3;
 
 // How much of a sound reaches the player at `distance` metres: 1 up close, falling off smoothly to 0 at HEARING.
 export const attenuate=d=>d<=NEAR?1:d>=HEARING?0:Math.pow(1-(d-NEAR)/(HEARING-NEAR),2);
