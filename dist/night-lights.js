@@ -107,7 +107,7 @@ export function createNightLights({scene,footing=()=>0,cityWindows=[],cityLampHe
  function writeVehicle(n,source,strength,beamShare){
   const mesh=source.mesh,info=sizeOf(source.model),points=lampPoints(source.model,info),s0=lamps.length+n*4;mesh.updateMatrixWorld();
   [...points.front,...points.rear].forEach((p,k)=>{const front=k<2,i=s0+k,c=front?LAMP_SPRITE.front:LAMP_SPRITE.rear,g=(front?LAMP_SPRITE.frontStrength:LAMP_SPRITE.rearStrength)*strength;
-   v.set(p[0],p[1],p[2]).applyMatrix4(mesh.matrixWorld);centre.set([v.x,v.y,v.z],i*3);tint.set([c[0]*g,c[1]*g,c[2]*g],i*3);size[i]=front?LAMP_SPRITE.frontSize:LAMP_SPRITE.rearSize});
+   v.set(p[0],p[1],p[2]+(front?LAMP_SPRITE.frontOut:-LAMP_SPRITE.rearOut)).applyMatrix4(mesh.matrixWorld);centre.set([v.x,v.y,v.z],i*3);tint.set([c[0]*g,c[1]*g,c[2]*g],i*3);size[i]=front?LAMP_SPRITE.frontSize:LAMP_SPRITE.rearSize});
   const hz=info.hz||2.2,yaw=mesh.rotation.y,sin=Math.sin(yaw),cos=Math.cos(yaw),g0=beamBase+n*BEAM_VERTICES;
   beam.vertices.forEach(([lx,lz,s],k)=>{const z0=lz+hz,x=mesh.position.x+lx*cos+z0*sin,z=mesh.position.z-lx*sin+z0*cos,o=(g0+k)*3,g=s*BEAM.strength*strength*beamShare;gPos.set([x,footing(x,z)+LAMP.poolLift+.01,z],o);gTint.set([BEAM.colour[0]*g,BEAM.colour[1]*g,BEAM.colour[2]*g],o)});
  }

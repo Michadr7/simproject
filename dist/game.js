@@ -269,7 +269,8 @@ function getOnFork(){const pr=GameState.progress;if(!onRidgeline()||careerOf(pr,
  stowTool();{player.updateMatrixWorld(true);const h=avatar.bone?.('Hips');if(h){const v=new THREE.Vector3(),o=new THREE.Vector3();h.getWorldPosition(v);player.getWorldPosition(o);if(v.y-o.y>.6&&v.y-o.y<1.3)forkHips=v.y-o.y}}fork.on=true;fork.state={...fork.state,speed:0};keys.clear();toast('On the forklift: the controls are in the vehicle panel')}
 // Seated at the wheel: the thighs forward (character.js seated pose) and both hands on the steering wheel (forklift-local (±0.14, 1.5, -0.21), turned into the character's own frame)
 const forkHand={R:new THREE.Vector3(),L:new THREE.Vector3()};
-function updateForkPose(){avatar.setSeated(fork.on);if(!fork.on)return;const y=1.5-(forklift.SEAT_TOP+FORK_SIT-forkHips),z=-.21-forklift.SEAT.z;forkHand.R.set(-.14,y,z);forkHand.L.set(.14,y,z);avatar.reach('R',forkHand.R,1);avatar.reach('L',forkHand.L,1);avatar.setHandCurl('R',.8);avatar.setHandCurl('L',.8)}
+let cabHeld=false;const cabHand=new THREE.Vector3(),cabRim=new THREE.Vector3(),cabZ=new THREE.Vector3(0,0,1);function updateCabPose(){const s=driving.seatedAt();avatar.setSeated(!!s);if(s&&s.driver){const m=driving.active.mesh.userData,sw=m.steeringWheel,a=m.seats.driver,g=m.grip;for(const [side,k] of [['R',-1],['L',1]]){cabRim.set(Math.sin(k*g.angle)*g.radius,Math.cos(k*g.angle)*g.radius,0).applyAxisAngle(cabZ,sw.rotation.z);avatar.reach(side,cabHand.set(sw.position.x+cabRim.x-a[0],sw.position.y+cabRim.y-(a[1]-forkHips),sw.position.z-g.back-(a[2]+g.hips)),1);avatar.setHandCurl(side,.8)}avatar.setLean(g.lean);cabHeld=true}else if(cabHeld){cabHeld=false;avatar.clearReach();avatar.setLean(0);avatar.setHandCurl('R',0);avatar.setHandCurl('L',0)}} // seated in the shortbed: both hands on the steering wheel (reach targets are in the player's own frame, which here is the truck's)
+function updateForkPose(){if(!fork.on){updateCabPose();return}avatar.setSeated(true);const y=1.5-(forklift.SEAT_TOP+FORK_SIT-forkHips),z=-.21-forklift.SEAT.z;forkHand.R.set(-.14,y,z);forkHand.L.set(.14,y,z);avatar.reach('R',forkHand.R,1);avatar.reach('L',forkHand.L,1);avatar.setHandCurl('R',.8);avatar.setHandCurl('L',.8)}
 function getOffFork(){const s=fork.state;fork.on=false;avatar.setSeated(false);avatar.clearReach();avatar.setHandCurl('R',0);avatar.setHandCurl('L',0);fork.state={...s,speed:0};const spot=[[-1.45,0],[1.45,0],[0,-2.3],[-1.9,-1.4],[1.9,-1.4]].map(([x,z])=>forklift.toWorld(s,x,z)).find(p=>!blocked(p.x,p.z))||forklift.seatOf(s);placeSafely(spot.x,.02,spot.z);keys.clear();updateFork()}
 // Physical forks (DESIGN 4.16 I, step 2): there is no E to lift or set a pallet down. The forks go into a pallet's pocket (fork-pallets.js), raising them lifts it, and lowering a carried pallet onto a free shelf
 // cell, the floor or an order's staging square sets it down there (a pallet set on an order's square gives the order its planks). The panel says why the forks are stopped.
@@ -390,8 +391,8 @@ function syncSawmill(){
 // Rendering consumes the simulation state; gameplay never reads mesh transforms.
 function syncPlayerMesh(){
  player.position.set(me.position.x,me.position.y,me.position.z);
- player.rotation.y=me.rotation.y;player.visible=!driving.active; // no seated pose in the cab in 0.33: the avatar is hidden while driving a truck
- if(fork.on){const p=forklift.seatOf(fork.state);player.position.set(p.x,forklift.SEAT_TOP+FORK_SIT-forkHips,p.z)} // on the forklift (an open cab) you are seen sitting on its seat: hips on the cushion
+ player.rotation.y=me.rotation.y;player.visible=!driving.active||!!driving.seatedAt(); // the shortbed shows you seated in its cab (hips on the seat anchor); the other vehicles have no seat model: the avatar is hidden there
+ {const s=driving.seatedAt();if(s)player.position.set(s.x,s.y-forkHips,s.z)} if(fork.on){const p=forklift.seatOf(fork.state);player.position.set(p.x,forklift.SEAT_TOP+FORK_SIT-forkHips,p.z)} // on the forklift (an open cab) you are seen sitting on its seat: hips on the cushion
 }
 function getMeWorldPosition(target){
  target.set(me.position.x,me.position.y,me.position.z);
@@ -736,19 +737,19 @@ function fuelTick(dt){
  if(r.soldMgal<want){fillBlocked=true;fillAcc=0;fuelFlow=0;toast(r.target.mgal>=info.capacityMgal?`The tank is full. ${gallons(fillSale.mgal)} gal for ${money(fillSale.cents)}.`:'You cannot pay for any more fuel.');audio.chime(fuel.held.use,listenerAt(),{ok:r.target.mgal>=info.capacityMgal})}
 }function interact(key='E'){if(!active||modal||actionBusy()||putting)return;const hit=chooseInteraction(candidates().filter(c=>key==='H'?c.key==='H':c.key!=='H'),me.position,me.rotation.y);if(hit)hit.run()}
 // Driving (driving.js, vehicle.js): E at a vehicle's driver door gets in (refused while carrying), E while driving gets out once you are below 1 m/s, at the door (else the other side, behind, in front).
-function enterVehicle(id,seat='driver'){
+function enterVehicle(id,seat='driver',go=false){
  if(driving.active||inside||shop||consuming||putting||actionBusy())return;
  if(GameState.progress.carry){toast('Your hands are full. Put it down first (X).');return}
  if(driving.byId.get(id)?.display){toast('It is not yours. Buy it at the dealership lot or order it on your phone.');return}
- if(!driving.enter(id,seat))return;fuel.putBack();if(driving.active.fuelMgal>0||!driving.active.spec.fuel){audio.ignition(me.position,listenerAt(),{tier:driving.active.cls.tier});const tip=driving.exhaust();if(tip)smoke.burst(tip,START_PUFFS[driving.active.cls.tier]??6)}
+ if(!go&&driving.doorThen(id,seat,()=>enterVehicle(id,seat,true)))return;if(!driving.enter(id,seat))return;fuel.putBack();if(driving.active.fuelMgal>0||!driving.active.spec.fuel){audio.ignition(me.position,listenerAt(),{tier:driving.active.cls.tier});const tip=driving.exhaust();if(tip)smoke.burst(tip,START_PUFFS[driving.active.cls.tier]??6)}
  const at=driving.seat();me.position.x=at.x;me.position.z=at.z;me.rotation.y=driving.yaw;keys.clear();look.resetMotion();
  yaw=driving.yaw+Math.PI;pitch=driving.cameraPitch();zoom=zoomTarget=driving.cameraZoom();driveIdle=9;persist();
  toast(seat==='driver'?`Driving the ${driving.active.spec.name.replace(/^Eastbank /,'')} · W S accelerate and brake, A D steer, Space brakes, E gets out`:`Riding in the ${driving.active.spec.name.replace(/^Eastbank /,'')} · you are the passenger: nobody is driving · E gets out`);
 }
 function drinkCooler(key){const r=useCooler(GameState.progress,key);if(r.error){toast(r.error);return}GameState.progress=r.state;persist();toast(r.message);audio.drink(me.position,listenerAt())} // free water at work (water-cooler.js)
-function exitVehicle(){
+function exitVehicle(now){
  if(!driving.active)return;
- if(driving.speed>=1){toast('Stop first.');return}
+ if(driving.speed>=1){toast('Stop first.');return}if(now!==true&&driving.doorThen(null,driving.seatSide,()=>exitVehicle(true)))return; // the door opens first, then you step out (shortbed)
  const f=driving.active,seatWas=driving.seatSide,door=driving.door(),p=driving.leave((x,z)=>!blocked(x,z));
  if(p){me.position.x=p.x;me.position.z=p.z}else placeSafely(door.x,me.position.y,door.z);
  me.rotation.y=f.state.yaw+(driving.seatSide==='passenger'||seatWas==='passenger'?-Math.PI/2:Math.PI/2);keys.clear();look.resetMotion();pitch=.38;zoom=zoomTarget=7;persist();
@@ -1289,7 +1290,7 @@ let passT=null,passMoved=false;
 function startPassOut(){passT=0;passMoved=false;phone?.close();$('dialog').hidden=true;clearWorldPanel();modal=true;keys.clear();look.release();const fe=$('sleepFade');fe.hidden=false;fe.style.opacity='0';fe.textContent='You passed out from exhaustion'}
 function passOutMove(){
  if(fork.on)getOffFork();
- if(driving.active){driving.active.state.speed=0;exitVehicle()}
+ if(driving.active){driving.active.state.speed=0;exitVehicle(true)}
  busy=null;putting=null;
  {const cur=GameState.progress;if(cur.carry&&!inside&&!shop){const log=cur.carry.kind==='log',x=me.position.x,z=me.position.z,r=log?putDownLog(cur,{x,z,rot:me.rotation.y+Math.PI/2}):putDownPlanks(cur,{x,z,q:quarterOf(me.rotation.y)});if(!r.error){GameState.progress=r.state;if(log)world.setLogs(GameState.progress.logs)}}}
  if(shop)leaveShop(0);

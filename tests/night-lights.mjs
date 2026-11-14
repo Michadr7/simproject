@@ -5,7 +5,7 @@ import {skyAt,moodAt} from '../dist/daynight.js';
 import {MAP} from '../dist/map-definition.js';
 import {CLASSES,doorPoint} from '../dist/vehicle.js';
 import {vehicleHudModel} from '../dist/vehicle-hud.js';
-import {SWITCH_FROM,SWITCH_FULL,BASE_LEVEL,SHOW_FROM,DUSK_MINUTE,DAWN_MINUTE,LAMP,WINDOW,BEAM,BEAM_VERTICES,BEAM_INDICES,SPOT,VEHICLE_LAMPS,LIGHT_KEY,LIGHT_MODES,MOVING_HOLD,DAY_BEAM,GLOW_SCALE_MIN,GLOW_SCALE_MAX,
+import {LAMP_SPRITE,SWITCH_FROM,SWITCH_FULL,BASE_LEVEL,SHOW_FROM,DUSK_MINUTE,DAWN_MINUTE,LAMP,WINDOW,BEAM,BEAM_VERTICES,BEAM_INDICES,SPOT,VEHICLE_LAMPS,LIGHT_KEY,LIGHT_MODES,MOVING_HOLD,DAY_BEAM,GLOW_SCALE_MIN,GLOW_SCALE_MAX,
  lightSwitch,lightLevel,isDark,glowScale,lampHeadGlow,poolShape,hashOf,windowsLit,windowBucket,buildingKind,isGlass,GLASS_PROPS,glassMaskBytes,nextLightMode,headlightsOn,lightsLabel,vehicleGlow,lampPoints,beamShape,spotlightPlan} from '../dist/night-lights-rules.js';
 import {bootGame} from './support/boot-game.mjs';
 
@@ -73,7 +73,7 @@ assert.equal(vehicleGlow(0),DAY_BEAM,'lamps switched on by day are still seen');
 for(const [model,cls] of Object.entries(CLASSES)){
  assert(VEHICLE_LAMPS[model],`${model} has its own lamp spots`);
  const p=lampPoints(model,{hx:cls.hx,hz:cls.hz});assert.equal(p.front.length,2);assert.equal(p.rear.length,2);
- for(const [x,y,z] of p.front){assert(Math.abs(x)<cls.hx&&Math.abs(x)>cls.hx*.3,`${model}: a headlamp each side, inside the width`);assert(z>cls.hz-.3&&z<cls.hz+.15,`${model}: at the nose`);assert(y>.4&&y<1.6,`${model}: at lamp height`)}
+ for(const [x,y,z] of p.front){assert(Math.abs(x)<cls.hx&&Math.abs(x)>cls.hx*.3,`${model}: a headlamp each side, inside the width`);assert(z>cls.hz-.5&&z<cls.hz+.15,`${model}: at the nose (the off-road pickup's lamps sit on its slanted corners, 0.35 m back)`);assert(y>.4&&y<1.6,`${model}: at lamp height`)}
  for(const [x,y,z] of p.rear){assert(Math.abs(x)<cls.hx&&Math.abs(x)>cls.hx*.3);assert(z<-cls.hz+.3&&z>-cls.hz-.15,`${model}: tail lamps at the back`);assert(y>.4&&y<1.6)}
  assert.equal(p.front[0][0],-p.front[1][0]);assert.equal(p.rear[0][0],-p.rear[1][0]);
 }
@@ -130,7 +130,7 @@ assert.deepEqual(spotlightPlan({high:true,on:false,level:1,present:false}),{pres
  s=lights.update(.04,{sky:night,high:false,vehicles:[own]});
  assert.deepEqual({sprites:s.vehicleSprites,beams:s.beams,spot:s.spot,own:s.ownOn,calls:s.drawCalls},{sprites:4,beams:1,spot:false,own:true,calls:2},'Low: lamps and the beam on the ground, no SpotLight, still two draw calls');assert.equal(count(),2);
  assert.equal(lights.sprites.geometry.instanceCount,lamps0+4);assert.equal(lights.ground.geometry.drawRange.count,5*poolShape().indices.length+BEAM_INDICES);
- {const c=lights.sprites.geometry.attributes.aCentre,t=lights.sprites.geometry.attributes.aTint;near(c.getX(lamps0),100+CLASSES.worktruck.hz+.02,1e-4,'the headlamps are at the nose');near(c.getY(lamps0),1+VEHICLE_LAMPS.worktruck.front.y,1e-4,'at lamp height');assert(c.getX(lamps0+2)<100-2.9,'the tail lamps at the back');
+ {const c=lights.sprites.geometry.attributes.aCentre,t=lights.sprites.geometry.attributes.aTint;near(c.getX(lamps0),100+VEHICLE_LAMPS.worktruck.front.z+LAMP_SPRITE.frontOut,1e-4,'the headlamps are at the nose, on the lens');near(c.getY(lamps0),1+VEHICLE_LAMPS.worktruck.front.y,1e-4,'at lamp height');assert(c.getX(lamps0+2)<100-2.9,'the tail lamps at the back');
   assert(t.getY(lamps0)>.5&&t.getY(lamps0+2)<.2&&t.getX(lamps0+2)>.5,'white in front, red behind');
   const pos=lights.ground.geometry.attributes.position,g0=5*(1+LAMP.poolRings*LAMP.poolSegments);for(let i=g0;i<g0+BEAM_VERTICES;i++){assert(pos.getX(i)>100+3,'the beam lies ahead of the truck');near(pos.getY(i),footing(pos.getX(i),pos.getZ(i))+LAMP.poolLift+.01,1e-5,'on the ground')}}
  s=lights.update(.04,{sky:night,high:true,vehicles:[own]});assert.equal(s.spot,true);assert.equal(count(),3,'High: ONE SpotLight is added');near(s.spotIntensity,SPOT.intensity,1e-6,'at full strength in full night');

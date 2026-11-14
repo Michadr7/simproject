@@ -86,12 +86,12 @@ export const vehicleGlow=level=>Math.max(DAY_BEAM,clamp(level,0,1));
 export const MOVING_HOLD=1.5,MOVING_SPEED=.2;
 // Lamp spots in the vehicle's own frame (metres; +z is forward, y from the ground under it), one side: the other is mirrored in x. First guesses from the models' shapes.
 export const VEHICLE_LAMPS=Object.freeze({
- worktruck:{front:{x:.72,y:1.05,z:3.02},rear:{x:.85,y:.8,z:-3.02}},
- offroad:{front:{x:.6,y:1.08,z:2.82},rear:{x:.88,y:1.12,z:-2.68}},
- flatbed:{front:{x:1,y:.86,z:4.47},rear:{x:1.2,y:1,z:-4.32}},
- shortbed:{front:{x:.72,y:.97,z:2.681},rear:{x:.819,y:1.035,z:-2.602}}, // the model's own anchor_headlight_L and anchor_taillight_L
+ worktruck:{front:{x:.69,y:1.03,z:2.745},rear:{x:.86,y:1.18,z:-3.02}},
+ offroad:{front:{x:.775,y:1.08,z:2.5},rear:{x:.88,y:1.12,z:-2.68}},
+ flatbed:{front:{x:.75,y:1.35,z:4.215},rear:{x:1.05,y:1,z:-4.285}},
+ shortbed:{front:{x:.717,y:.94,z:2.695},rear:{x:.89,y:1.035,z:-2.636}}, // the centres of the model's own lamp lenses (its lights part)
 });
-export const LAMP_SPRITE={frontSize:.9,rearSize:.6,front:[1,.95,.8],rear:[1,.12,.08],frontStrength:1.1,rearStrength:.8};
+export const LAMP_SPRITE={frontSize:.26,rearSize:.2,front:[1,.95,.8],rear:[1,.12,.08],frontStrength:.7,rearStrength:.55,frontOut:.03,rearOut:.03};
 // size: {hx, hz, height} (vehicle.js CLASSES and the prop's height). A model without its own entry gets lamps from its size.
 export function lampPoints(model,size={}){
  const own=VEHICLE_LAMPS[model],hx=size.hx||1,hz=size.hz||2.2,h=size.height||1.5;
@@ -110,7 +110,7 @@ export function beamShape(hz=2.2){
 }
 // The player's own headlight on High: ONE SpotLight. It is put in the scene the first time it is needed in the dark and taken out again when day comes or the quality drops
 // to Low (each of the two costs one shader recompile, a hitch the user accepted); while it is dark and the lamps are merely switched off it stays in, at strength 0.
-export const SPOT={colour:'#fff2d0',intensity:420,distance:48,angle:.42,penumbra:.6,decay:2,height:1.1,aimDrop:.9,aimAhead:14};
+export const SPOT={colour:'#fff2d0',intensity:260,distance:48,angle:.36,penumbra:.9,decay:2,height:1.1,aimDrop:.9,aimAhead:14};
 export function spotlightPlan({high=false,on=false,level=0,present=false}={}){
  if(!high||level<=SHOW_FROM)return {present:false,intensity:0};
  if(on)return {present:true,intensity:SPOT.intensity*clamp(level,0,1)};

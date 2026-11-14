@@ -9,8 +9,8 @@ import {MENU_VEHICLE,leanSpot,menuPose,windSway,hazeAt,MENU_PLANS,plansOps,MENU_
 
 const SOLID={apply:m=>m},DUST=36,PLANS_LEAN=.8,HAND={x:.27,y:1.3,z:.25}; // HAND: where each wrist goes (character space, metres); the fist hangs about 10 cm below and ahead of the wrist. The sheet is 46 cm wide (edge at 23 cm), so the wrist sits 4 cm outside the edge and the fist closes around it from the side and below, behind the sheet's plane, instead of through the face
 // Menu-only night look (the game's night is unchanged): MOON is a cool directional fill from the camera side plus extra hemisphere light, both scaled by the night weight; HEADLAMP is the pickup's two front lamps (switched with the sun like the game's lamps).
-const MENU_LAMPS={offroad:{x:.9,y:1,z:2.4}}; // where the menu's lamps sit: the pickup's real headlight housings (measured on the model: the recessed corners of the nose, x +-.9, y 1.0, z 2.4), not the game's sprite spot in front of the grille
-const MOON={colour:'#8fb0ff',strength:1.5,hemi:.95,from:[-4,9,10]},HEADLAMP={colour:'#ffe2a8',spot:55,angle:.62,range:16,radius:.11,halo:1.15,pool:[7.5,9.5],poolStrength:.55,backoff:.07};
+const MENU_LAMPS={offroad:{x:.775,y:1.08,z:2.5,w:.24,h:.2,ry:.38},worktruck:{x:.69,y:1.03,z:2.765,w:.23,h:.15,ry:0},flatbed:{x:.75,y:1.35,z:4.215,w:.3,h:.2,ry:0}}; // each vehicle's real lamp lens, measured on the model (centre, size in metres, turn about y of the slanted pickup corner): the menu lights a flat lens-shaped panel exactly on it, not a ball
+const MOON={colour:'#8fb0ff',strength:1.5,hemi:.95,from:[-4,9,10]},HEADLAMP={colour:'#ffe2a8',spot:55,angle:.62,range:16,halo:.7,pool:[7.5,9.5],poolStrength:.55,backoff:.07};
 const GAME_MINUTES_PER_SECOND=.5; // the game clock runs 30 game minutes per real minute (timestep.js, advanceTime): the menu sky moves at the same speed
 // Trees stand in a ring behind and beside the clearing, never between the camera and the character. [x, z, model index, scale, phase]
 // pine.1 is left out: its bark has branch stubs that stick out of the trunk up to 1.8 m at 0.5 to 1.7 m high (the other two stay within 0.4 m there), which showed as a bent hook on a trunk close to the camera.
@@ -127,14 +127,14 @@ export function createMenuScene({createCharacter,appearance,vehicle=MENU_VEHICLE
   const list=coverSpots.filter(s=>s.kind===kind),mesh=new THREE.InstancedMesh(own(coverGeometry(kind,root,tip)),coverMaterial,Math.max(1,list.length));mesh.count=list.length;mesh.name='menu-cover-'+kind;mesh.frustumCulled=false;
   list.forEach((s,i)=>{q.setFromEuler(e.set(0,s.yaw,0));mesh.setMatrixAt(i,m4.compose(at.set(s.x,0,s.z),q,sc.setScalar(s.scale)))});mesh.instanceMatrix.needsUpdate=true;scene.add(mesh);return mesh});
 
- // Headlamps: the pickup's front pair (night-lights-rules.js VEHICLE_LAMPS), in the vehicle's frame. 2 emissive lamp meshes, 2 additive halo sprites, 1 additive ground pool (5 draw calls), 2 spot lights (always present, intensity 0 by day).
- const glowMap=(()=>{const n=32,d=new Uint8Array(n*n*4);for(let y=0;y<n;y++)for(let x=0;x<n;x++){const r=Math.hypot((x+.5)/n*2-1,(y+.5)/n*2-1),a=Math.pow(Math.max(0,1-r),2)*255;d.set([255,255,255,a],(y*n+x)*4)}const tex=new THREE.DataTexture(d,n,n);tex.needsUpdate=true;tex.colorSpace=THREE.SRGBColorSpace;return own(tex)})();
- const rig=new THREE.Group(),lampAt=MENU_LAMPS[vehicle.prop]||VEHICLE_LAMPS[vehicle.prop]?.front||{x:.6,y:1.08,z:2.82},lampSpots=[],lampMeshes=[],halos=[];rig.rotation.y=vehicle.yaw;scene.add(rig);
- const lampMat=own(new THREE.MeshBasicMaterial({color:HEADLAMP.colour,fog:false})),haloMat=own(new THREE.SpriteMaterial({map:glowMap,color:HEADLAMP.colour,blending:THREE.AdditiveBlending,transparent:true,depthWrite:false,fog:false})),lampGeometry=own(new THREE.SphereGeometry(HEADLAMP.radius,12,8));
+ // Headlamps: the pickup's front pair (night-lights-rules.js VEHICLE_LAMPS), in the vehicle's frame. 2 flat emissive lens panels, 2 additive halo sprites, 1 additive ground pool (5 draw calls), 2 spot lights (always present, intensity 0 by day).
+ const glowMap=(()=>{const n=32,d=new Uint8Array(n*n*4);for(let y=0;y<n;y++)for(let x=0;x<n;x++){const r=Math.hypot((x+.5)/n*2-1,(y+.5)/n*2-1),a=Math.pow(Math.max(0,1-r),2)*255;d.set([255,255,255,a],(y*n+x)*4)}const tex=new THREE.DataTexture(d,n,n);tex.magFilter=tex.minFilter=THREE.LinearFilter;tex.generateMipmaps=false;tex.needsUpdate=true;tex.colorSpace=THREE.SRGBColorSpace;return own(tex)})();
+ const rig=new THREE.Group(),lampAt=MENU_LAMPS[vehicle.prop]||{...(VEHICLE_LAMPS[vehicle.prop]?.front||{x:.6,y:1.08,z:2.82}),w:.25,h:.16,ry:0},lampSpots=[],lampMeshes=[],halos=[];rig.rotation.y=vehicle.yaw;scene.add(rig);
+ const lampMat=own(new THREE.MeshBasicMaterial({color:HEADLAMP.colour,fog:false})),haloMat=own(new THREE.SpriteMaterial({map:glowMap,color:HEADLAMP.colour,blending:THREE.AdditiveBlending,transparent:true,depthWrite:false,fog:false})),lampGeometry=own(new THREE.PlaneGeometry(lampAt.w,lampAt.h));
  for(const side of [-1,1]){
-  const x=side*lampAt.x,mesh=new THREE.Mesh(lampGeometry,lampMat);mesh.position.set(x,lampAt.y,lampAt.z);rig.add(mesh);lampMeshes.push(mesh);
-  const halo=new THREE.Sprite(haloMat);halo.position.set(x,lampAt.y,lampAt.z+.12);halo.scale.setScalar(HEADLAMP.halo);rig.add(halo);halos.push(halo);
-  const spotLight=new THREE.SpotLight(HEADLAMP.colour,0,HEADLAMP.range,HEADLAMP.angle,.7,1.4);spotLight.position.set(x,lampAt.y,lampAt.z+.1);spotLight.target.position.set(x*1.3,0,lampAt.z+7);rig.add(spotLight,spotLight.target);lampSpots.push(spotLight);
+  const x=side*lampAt.x,nx=side*Math.sin(lampAt.ry),nz=Math.cos(lampAt.ry),mesh=new THREE.Mesh(lampGeometry,lampMat);mesh.position.set(x+nx*.012,lampAt.y,lampAt.z+nz*.012);mesh.rotation.y=side*lampAt.ry;rig.add(mesh);lampMeshes.push(mesh);
+  const halo=new THREE.Sprite(haloMat);halo.position.set(x+nx*.09,lampAt.y,lampAt.z+nz*.09);halo.scale.setScalar(HEADLAMP.halo);rig.add(halo);halos.push(halo);
+  const spotLight=new THREE.SpotLight(HEADLAMP.colour,0,HEADLAMP.range,HEADLAMP.angle,.7,1.4);spotLight.position.set(x+nx*.1,lampAt.y,lampAt.z+nz*.1);spotLight.target.position.set(x*1.3,0,lampAt.z+7);rig.add(spotLight,spotLight.target);lampSpots.push(spotLight);
  }
  const poolMat=own(new THREE.MeshBasicMaterial({map:glowMap,color:HEADLAMP.colour,blending:THREE.AdditiveBlending,transparent:true,depthWrite:false,fog:false})),pool=new THREE.Mesh(own(new THREE.PlaneGeometry(...HEADLAMP.pool)),poolMat);
  pool.rotation.x=-Math.PI/2;pool.position.set(0,.04,lampAt.z+HEADLAMP.pool[1]*.38);pool.renderOrder=1;rig.add(pool);

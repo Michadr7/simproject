@@ -1,0 +1,20 @@
+# ATV round 2 prompts (2026-11-14). Send each to the model that made the matching v2. The first full contract is notes/atv-model-prompt.md (the model should still have it in its chat; if not, paste it first).
+
+## A. For GPT Sol (Sol v2 is the best so far: keep its shape)
+Your v2 ATV is the best of the round: the tyres, racks, tank cover, seat and foot platform are right. Do NOT redesign it. Make a v3 that keeps this shape and fixes only these things:
+1. Lights: I cannot see headlight or taillight lenses. Add two bright headlight lenses in housings in the nose (material `ATV_Headlight`, bright light grey or white, not black, not emissive) at the anchors anchor_headlight_L/_R (+/-0.15, 0.52, 0.92 glTF axes), and two red taillight lenses (`ATV_Taillight`) at the tail (+/-0.34, 0.62, -0.975) plus a small centre brake lens.
+2. Fender plastics: the wedges are angular. Add bevels or a subdivision-free smoothing (bevel width about 1 to 2 cm, 2 segments) so they read as moulded plastic; no spikes, no dents; merge duplicate vertices and recalculate normals.
+3. Contract: rename and parent exactly as the contract says: root `ATV_Default_Source`; `wheel_FL/FR/RL/RR` (origin at hub, spin about local X); `steer_FL/FR` empties at the front hubs and parents of the front wheels; `handlebar` pivot at (0, 0.70, 0.34); empties `seat`, `seat_2`, `exhaust`; body meshes split by material as `Body_Paint`, `Body_Frame`, `Body_Trim`, `Body_Metal`, `Body_Headlights`, `Body_Taillights`; materials named `Paint` (body plastics only), `ATV_Frame`, `ATV_Tire`, `ATV_Rim`, `ATV_Trim`, `ATV_Metal`, `ATV_Headlight`, `ATV_Taillight`; all 20 anchors at the listed coordinates.
+4. Size and ground: about 2.05 x 1.16 x 1.14 m, wheel radius 0.30, all four tyres touch y = 0, nothing below, transforms applied, nose to Blender -Y.
+5. Check the front fenders and rack do not hit the front tyres when they are turned 35 degrees.
+Then export `ATV Sol - V3 Game.glb`, re-import it and report node names, triangle count, material list, bounds (glTF axes) and lowest y; render front 3/4, side, rear 3/4, top, a close-up of the front and a close-up of the rear, and look at every one before you hand it in. Say what you did not check.
+
+## B. For Sonnet 5.5 (Sonnet V2: better than v1 but toy-like)
+Your v2 ATV has working wheels and rounded fenders. Make a v3 that fixes these, keeping the overall layout:
+1. Tyres are smooth black rings. Give them real off-road tread: 20 to 24 raised tread blocks around the circumference, each block attached to the tread surface (overlapping the tyre by about 1 cm), alternating left and right, plus a visible thick sidewall (tyre width about 0.23 m, radius 0.30 m). Tread blocks must not float.
+2. The rims show a speckled pattern: overlapping or duplicate faces fighting (z-fighting) and bad normals. Build the rim as one clean shape (outer lip, dished face, hub cap, 5 bolts), no coplanar duplicate faces, then recalculate normals outward and merge by distance.
+3. Proportions: the wheels look small under big blobby fenders and the body is soft. Make the body slimmer and lower (the plastics about 1 cm bevel, not a 5 cm round-over), fenders closer over the tyres (4 to 6 cm clearance), racks lower profile, so it reads as a chunky utility ATV. Keep 2.05 m x 1.16 m x 1.14 m.
+4. Lights: add bright headlight lenses in housings at the nose (`ATV_Headlight`) and keep the red tail lenses (`ATV_Taillight`); lenses at the anchor positions.
+5. Contract: names, parents, materials and the 20 anchors exactly as in the contract prompt (root `ATV_Default_Source`, `wheel_*`, `steer_*` as parents of the front wheels, `handlebar` pivot, `seat`, `seat_2`, `exhaust`, `Body_*` split by material, material `Paint` on body plastics only).
+6. Check front tyres turned 35 degrees do not hit the fenders or the bumper tube.
+Then export `ATV Sonnet - V3 Game.glb`, re-import it and report names, triangles, materials, bounds and lowest y; render front 3/4, side, rear 3/4, top and a close-up of a wheel and the front, and LOOK at each before you hand it in (floating parts, speckled faces, tyres off the ground). Say what you did not check.

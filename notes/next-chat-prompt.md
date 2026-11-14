@@ -1,27 +1,21 @@
-michadr. New chat, 2026-11-15 or later. Eden Ridge map planning is done; building starts now.
-
-READ FIRST (in this order, do not read whole big files): context.md top section and the "How the user wants you to work" list; notes/map-master.md section 8 (build order, Grep "### 8."); notes/streaming-brief.md; notes/map-overview-hub.md (one page).
+michadr. New chat, 2026-11-17 or later (after the Tuesday 08:00 weekly reset). Read notes/todo-after-reset.md FIRST, then context.md top section and its "How the user wants you to work" list, notes/streaming-brief.md, and notes/map-master.md section 8 (Grep "### 8."). Do not read big files whole.
 
 STATE
-- Nothing is committed or deployed from the last session. Built but uncommitted: I1 (Ironwood display rename), I2 (street trees and square planters removed, three benches moved), BZ1 (Ridgeline office and warehouse interior origins now (420, 0.165, 1500) and (440, 0.165, 1500)), plus test message fixes, the asset register entries (eden-signs, weld-shop-props), notes/, scripts/glb-inspect.cjs and scripts/glb-tree.cjs.
-- npm test: 168 of 169. The one red file is tests/real-models.mjs ("15 street trees as models: 24 !== 15"): it runs the packaged release 0.35.7, which is older than the source. It goes green after a version bump to 0.35.8 and `npm run release` (no --force: 0.35.7 may be live).
-- The user says the planks bug is fixed (not verified by Claude).
+- Package 0.35.8 (not deployed, so `npm run release -- --force` is allowed for it). npm test: 170 of 170. The user commits in the hub; ask whether the last work is committed.
+- Last session built (uncommitted until the user commits): I1, I2, BZ1; the Kasumuchi S70 shortbed (V7 model with raised cab, interior, lights, doors, seated driver with hands on the wheel, cargo bed 44 planks); menu and vehicle headlight fixes; hotel props register entry; notes (damage design, collision feel, ATV prompts, to-do).
+- The old ATV files were deleted on request. assets-src\Vehicles\ATV does not exist. The user will copy a new ATV (GPT Sol V5 is the best candidate) and say its file name. The register entry atv-default is stage "wanted".
 
-NEXT STEPS, in order (ask before switching model or agent; name the model per stage; stop and report after each stage)
-1. Haiku: bump package.json to 0.35.8, `npm run release`, `npm test` (expect 169 of 169). The user commits by hand and deploys.
-2. Sonnet: stage F1 (streaming on the old map) from notes/streaming-brief.md. It is the riskiest stage. Then F2, F3, RU6.
-3. Then phase P2 of notes/map-master.md section 8.1.
+NEXT, IN ORDER (ask the user for the weekly meter before each agent; ask before switching model or agent; one stage per run; stop and report after each)
+1. F1 streaming on the old map (Sonnet 5.5, notes/streaming-brief.md). The user's answers are in notes/todo-after-reset.md. Then F2, F3, RU6.
+2. A small S70 fix stage (Sonnet): rear cab wall is single-sided so you can see out the back; enter and exit lag (ask the user: every time or first time, day or night); canopy clearance; check hands at full lock.
+3. ATV conform: run `node scripts/glb-inspect.cjs` and `glb-tree.cjs` on the user's file, then a Sonnet conform job to the contract in notes/atv-model-prompt.md.
+4. C1 collision feel (notes/collision-feel.md) after F1; then the damage build VD1 to VD4 (notes/vehicle-damage-design.md, user decisions in section 12).
+5. The user's smear-when-moving report: diagnostics in notes/todo-after-reset.md (ask the monitor/other-game tests first).
 
-USAGE
-Weekly limit resets Tuesday 08:00. Last reading 86% on 2026-11-14, Fable 67%. Never reach 100% weekly: stop launching agents at about 92 to 95%. Opus design runs cost about 60 to 80k tokens each; Sonnet build stages about 50 to 110k. Fable only if the user says yes, stage by stage.
+USAGE RULES: never reach 100% weekly; stop launching agents at about 92 to 95% (the user reads the meter; 1% is roughly 150k tokens from last week); Fable only when the user says yes; Opus is on standby for design only (every call needs a yes). Blender 5.2 headless is installed and usable from the chat.
 
-ASK THE USER ONLY WHEN A STAGE NEEDS IT (the user said "ask me later, when needed in a pass")
-Ridgeline's new office (own building or a room in the warehouse); plot prices; fast travel; lone sleeper in co-op; Eden products beyond Tier 5; fines and Standing numbers; chase end rules and police vehicles; ATV speeds and price per model; the 5 streaming questions at the end of notes/streaming-brief.md.
+ASK THE USER ONLY WHEN A STAGE NEEDS IT: plot prices, Ridgeline's new office, fast travel, lone sleeper in co-op, Eden products beyond Tier 5, fines and Standing, chase rules, ATV speeds and price, the damage questions not yet answered (see todo note), the 5 streaming questions are answered.
 
-USER-SIDE WORK (do not wait on it)
-- Hotel props (counter, bell, key rack, suitcase) from DeepSeek: the user will copy them to assets-src\Hotel; then add a register entry (licence "Own work", no credit) like eden-signs.
-- Weldingv3.glb in assets-src\Factory: manifests are missing; mannequin is not on the game's rig. Ignore until Eden Industries is built.
-- ATV (default) from DeepSeek flash; Tier 5 welding parts (utility trailer and jig first) from Sonnet 5.5 / Sol 6.1.
+USER-SIDE WORK (do not wait on it): ATV file; Tier 5 welding parts (the Blender agent has the Tier 4 fixes; next is the jig, trailer, ATV frame per notes/welding-tier5-plan.md); hotel props are in assets-src\Hotel (registered, not converted until stages I7 to I10).
 
-RULES THAT APPLY
-Own Blender models need no credit. Triangle caps are soft; flag draw calls, materials, shadows. Check .glb files with `node scripts/glb-inspect.cjs file.glb` and `node scripts/glb-tree.cjs file.glb`. Design notes: notes/crime-system-design.md, atv-handling-design.md, water-design.md, welding-job-brief.md, welding-reconcile.md, welding-tier5-plan.md.
+RULES THAT APPLY: own Blender models need no credit; triangle caps are soft (flag draw calls, materials, shadows); every new cargo vehicle gets a bed entry in dist/cargo.js; the user commits by hand and wants smooth push-style collisions with no big gaps (after F1).

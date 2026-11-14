@@ -46,7 +46,7 @@ export function createDriving({scene,surface,footing,baseBlocked,saved=[]}){
  const fleet=MAP.vehicles.filter(v=>v.sale!=='online').map(spec=>build(spec,defaultColour(spec.model),true));
  const byId=new Map(fleet.map(f=>[f.spec.id,f])),others=skip=>fleet.filter(f=>f!==skip&&f.present).map(f=>({state:f.state,cls:f.cls}));
  const envFor=(f,people)=>({blocked:baseBlocked,surface,others:others(f),people});
- let devCount=0,driven=null,side='driver',lastHit=false,pulse=0,walker=null;
+ let devCount=0,driven=null,side='driver',lastHit=false,pulse=0,walker=null,pending=null,seatVec=new THREE.Vector3();
  const nearPoint=(f,p,side,reach)=>loadPoints(f.spec.model).some(pt=>pt.side===side&&(()=>{const w=toWorld(f.state,pt.x,pt.z);return Math.hypot(w.x-p.x,w.z-p.z)<=reach})());
  // An owned vehicle comes into the world at its saved pose (or, if that has become blocked, the nearest clear one: never stuck, never lost). A display vehicle standing where it is (you bought it there) is taken off the lot.
  const slotOf=model=>MAP.vehicles.find(v=>v.model===model);
@@ -83,9 +83,13 @@ const tilt=f=>{const s=f.state,sy=Math.sin(s.yaw),cy=Math.cos(s.yaw),at=(lx,lz)=
   // The muffler tip of a vehicle in the world (x, y, z) and the way the pipe points (dx, dz: straight back), for the smoke.
   exhaust(f=driven){if(!f||!f.cls.exhaust)return null;const e=f.cls.exhaust,w=toWorld(f.state,e.x,e.z);return e.stack?{x:w.x,y:f.y+e.y,z:w.z,dx:0,dz:0,up:true}:{x:w.x,y:f.y+e.y,z:w.z,dx:-Math.sin(f.state.yaw),dz:-Math.cos(f.state.yaw)}}, // a stack (the flatbed) points up
   door(){return driven?doorPoint(driven.state,driven.cls,side):null},
-  enter(id,seat='driver'){const f=byId.get(id);if(!f||driven)return false;driven=f;side=seat;f.lastSpeed=f.state.speed=0;f.state.steer=0;(f.doorHold=f.doorHold||{driver:0,passenger:0})[seat]=1.2;return true},
+  enter(id,seat='driver'){const f=byId.get(id);if(!f||driven)return false;driven=f;side=seat;f.lastSpeed=f.state.speed=0;f.state.steer=0;(f.doorHold=f.doorHold||{driver:0,passenger:0})[seat]=f.doorOpen?.[seat]>=1?.8:1.2;return true}, // the door stays open while you sit down, then shuts (already open from doorThen: 0.8 s more; called straight: it must swing open first)
+  // Doors first (the shortbed): the door on that side opens, and 	hen runs when it is open (0.875 s plus a beat): you get in or out through an open door. False if the vehicle has no doors (the caller carries on at once); a second call while waiting does nothing.
+  doorThen(id,seat,then){const f=id?byId.get(id):driven;if(!f||!f.mesh.userData.doors)return false;if(pending)return true;(f.doorHold=f.doorHold||{driver:0,passenger:0})[seat]=SHORTBED_DOOR_SECONDS+.5;pending={t:SHORTBED_DOOR_SECONDS+.1,then};return true},
+  // Where the occupant's hips are (world x, y, z) and the heading, for a vehicle that shows you seated (the shortbed: its seats anchor); null otherwise.
+  seatedAt(){const s=driven?.mesh.userData.seats?.[side];if(!s)return null;driven.mesh.updateMatrixWorld();seatVec.set(s[0],s[1],s[2]+(driven.mesh.userData.grip?.hips??.2)).applyMatrix4(driven.mesh.matrixWorld);return {x:seatVec.x,y:seatVec.y,z:seatVec.z,yaw:driven.state.yaw,driver:side==='driver'}},
   // Get out: your own door, else the other side, behind, in front (`free(x, z)` is the game's blocked() inverted). Returns the point, or null (the caller then uses its safe-spot search).
-  leave(free){if(!driven)return null;const f=driven,p=exitPoint(f.state,f.cls,free,side);(f.doorHold=f.doorHold||{driver:0,passenger:0})[side]=1.6;driven=null;f.state.speed=0;f.state.steer=0;return p},
+  leave(free){if(!driven)return null;const f=driven,p=exitPoint(f.state,f.cls,free,side);(f.doorHold=f.doorHold||{driver:0,passenger:0})[side]=.9;driven=null;f.state.speed=0;f.state.steer=0;return p},
   // One slice of driving (dt <= 1/30 s). input: {throttle, steer, brake}; people: [{x, z, r}] pedestrians. A passenger does not steer: the vehicle stands still.
   step(dt,input,people=[]){if(!driven||side!=='driver')return null;const f=driven,fuelled=!!f.spec.fuel,inp=fuelled&&f.fuelMgal<=0?{...input,throttle:0}:input; // an empty tank: no throttle, the vehicle coasts to a stop
    const load=loadOf(f.spec.model,f.cargo),before=f.state,r=stepVehicle(f.state,inp,dt,withLoad(f.cls,load),envFor(f,people));f.state=r.state;lastHit=r.hit;
@@ -94,7 +98,7 @@ const tilt=f=>{const s=f.state,sy=Math.sin(s.yaw),cy=Math.cos(s.yaw),at=(lx,lz)=
   // Meshes follow the states (every frame; a parked vehicle just stays where it is).
   // Shows the filler markers (while a nozzle is in your hand): every present vehicle's cap pulses in its own fuel colour, bright if the nozzle in hand is the right fuel and dim if it is not.
   showFillers(show,nozzleFuel=null){for(const f of fleet){if(!f.marker)continue;f.marker.visible=!!show&&f.present&&f!==driven;f.markerBright=nozzleFuel===null||nozzleFuel===f.spec.fuel.type}},
-  update(dt){pulse+=dt;for(const f of fleet){f.mesh.visible=f.present;if(f.marker&&f.marker.visible){const k=(f.markerBright?.8:.3)*(.6+.4*Math.sin(pulse*6));for(const part of f.marker.children)part.material.opacity=k}
+  update(dt){pulse+=dt;if(pending){pending.t-=dt;if(pending.t<=0){const run=pending.then;pending=null;run()}}for(const f of fleet){f.mesh.visible=f.present;if(f.marker&&f.marker.visible){const k=(f.markerBright?.8:.3)*(.6+.4*Math.sin(pulse*6));for(const part of f.marker.children)part.material.opacity=k}
    const s=f.state,accel=dt>0?(s.speed-f.lastSpeed)/dt:0,lateral=s.speed*(Math.abs(s.speed)<.01?0:s.steer*s.speed/Math.max(f.cls.rMin,s.speed*s.speed/f.cls.aLat));f.lastSpeed=s.speed;
    const k=1-Math.exp(-dt*8);const g=tilt(f);f.pitch+=(clamp(-.01*accel,-.04,.04)+g.pitch-f.pitch)*k;f.roll+=(clamp(.012*lateral,-.05,.05)+g.roll-f.roll)*k;f.dynPitch=f.pitch-g.pitch;f.dynRoll=f.roll-g.roll;
    f.y+=(footing(s.x,s.z)-f.y)*(1-Math.exp(-dt*10));place(f);
