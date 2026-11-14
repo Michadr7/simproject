@@ -46,7 +46,7 @@ assert(tris<=50000,'parked cars cost '+tris+' triangles in all, and only the nea
 // The spawn stays clear: a step into a blocked point is refused, so a car parked over it leaves a new player unable to move at all.
 assert(!world.blocked(MAP.spawn.x,MAP.spawn.z),'nothing stands on the spawn point');for(const [dx,dz] of [[1,0],[-1,0],[0,1],[0,-1]])for(let d=.1;d<=3;d+=.1)assert(!world.blocked(MAP.spawn.x+dx*d,MAP.spawn.z+dz*d),`3 m of clear ground from the spawn toward ${dx},${dz}`);
 // ── Street furniture: on the pavement, clear of buildings and crossings, spaced out, each kind plentiful enough ───────────────────────────────────
-const spots=townSpots(),minimum={lamp:12,hydrant:6,bin:8,meter:5,bench:9,tree:10,planter:4,bollard:8};
+const spots=townSpots(),minimum={lamp:12,hydrant:6,bin:8,meter:5,bench:9,tree:4,bollard:8};assert.equal(spots.planter.length,0,'no planters');
 for(const [kind,n] of Object.entries(minimum))assert(spots[kind].length>=n,`${kind}: ${spots[kind].length} (at least ${n})`);
 const buildings=buildingRects(),crossings=crossingRects(),all=[];
 for(const kind of ['lamp','hydrant','bin','meter','bench','tree','planter','bollard'])for(const s of spots[kind]){
@@ -55,7 +55,7 @@ for(const kind of ['lamp','hydrant','bin','meter','bench','tree','planter','boll
  if(kind!=='bench'&&kind!=='bollard'&&kind!=='planter')assert(!buildings.some(b=>s.x>b.x0&&s.x<b.x1&&s.z>b.z0&&s.z<b.z1),`${kind} at ${s.x},${s.z} is not inside a building`);
  for(const o of all)assert(Math.hypot(o.x-s.x,o.z-s.z)>=.9,`${kind} at ${s.x},${s.z} is clear of a ${o.kind} at ${o.x},${o.z}`);all.push({kind,...s})}
 assert(spots.bin.concat(spots.hydrant).concat(spots.meter).every(s=>world.blocked(s.x,s.z)),'bins, hydrants and meters are solid');
-for(const [kind,name] of [['hydrant','hydrant'],['bin','bin'],['meter','parking-meter'],['bench','bench'],['planter','planter'],['bollard','bollard']])assert.equal(scene.getObjectByName(name).count,spots[kind].length,`${name}s are drawn, one instance each`);
+for(const [kind,name] of [['hydrant','hydrant'],['bin','bin'],['meter','parking-meter'],['bench','bench'],['bollard','bollard']])assert.equal(scene.getObjectByName(name).count,spots[kind].length,`${name}s are drawn, one instance each`);
 // Street trees are the Quaternius broadleaf models (bark and leaves, one pair per model), not cylinders and blobs.
 {const bark=[];scene.traverse(o=>{if(/^street-tree-broadleaf\.\d-bark$/.test(o.name))bark.push(o)});assert.equal(bark.reduce((n,m)=>n+m.count,0),spots.tree.length,'street trees are drawn, one instance each');assert(bark.every(m=>m.castShadow&&m.geometry.attributes.uv),'as textured models that cast shadows');assert.equal(scene.getObjectByName('tree'),undefined,'and none of the old cylinder-and-blob trees remain');
  assert(spots.tree.every(s=>world.blocked(s.x,s.z)),'every trunk is solid');

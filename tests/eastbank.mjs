@@ -67,7 +67,7 @@ assert(!world.blocked(161.8,30.4),'the dock plate is walked over (its ramp end; 
 {const camera=new THREE.PerspectiveCamera(),at=(x,z)=>{world.update(.016,camera,new THREE.Vector3(x,0,z));return Object.fromEntries(eb.chunks.map(c=>[c.id,c.holder.visible]))};
  assert(Object.values(at(-5,15)).every(v=>!v),'no yard is drawn from the spawn');
  const here=at(163,25);assert(here['warehouse-yard']&&here['freight-yard']&&here['gas-station'],'the warehouse yard, the freight yard and the gas station are drawn from the warehouse');
- assert(!at(-30,-100)['warehouse-yard'],'and not from Alder Center');
+ assert(!at(-30,-100)['warehouse-yard'],'and not from Ironwood');
  const s=at(163,25)&&eb.stats(163,25),far=eb.stats(-5,15);assert.equal(far.chunksOn,0);assert.equal(far.instances,0);
  // one InstancedMesh per model per yard, never one per prop: warehouse 7 models (dock plate, sign, bollard, three loaded pallets, empty pallet), freight yard 9 (three containers, empty and three loaded pallets, crate, bollard), timber yard 4, workshop 4, gas station 1
  assert.deepEqual(eb.chunks.map(c=>c.meshes.length),[7,9,4,4,4]); // the gas station: its bollards, the pump island and the canopy (a roof and its columns, two meshes, 0.35)

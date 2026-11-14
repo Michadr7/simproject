@@ -18,7 +18,7 @@ const zones=[
  {id:'farm',name:'Willow Fields',label:'WILLOW FIELDS',subtitle:'Fields & plots',color:'#c9ae63',grid:true,bounds:{x0:-170,x1:-35,z0:n(-216),z1:n(-108)},minimap:{label:{x:-102,z:n(-205)}}},
  {id:'forest',name:'Pine Ridge',label:'PINE RIDGE',subtitle:'Timber & trails',color:'#3f6a3c',grid:true,bounds:{x0:-25,x1:190,z0:n(-246),z1:n(-146)},minimap:{label:{x:82,z:n(-236)}}},
  // The south bank, north of Oak Street and east of the County Road: Alder Center (a town square), Cedar Heights (a quiet loop of homes) and Eastbank Works (workshops and freight).
- {id:'alder',name:'Alder Center',label:'ALDER CENTER',subtitle:'Town square',color:'#a39d8c',grid:false,bounds:{x0:-20,x1:58,z0:-125,z1:-48},minimap:{label:{x:19,z:-131}}},
+ {id:'alder',name:'Ironwood',label:'IRONWOOD',subtitle:'Downtown',color:'#a39d8c',grid:false,bounds:{x0:-20,x1:58,z0:-125,z1:-48},minimap:{label:{x:19,z:-131}}},
  {id:'cedar',name:'Cedar Heights',label:'CEDAR HEIGHTS',subtitle:'Quiet homes',color:'#9aa57e',grid:false,bounds:{x0:70,x1:170,z0:-135,z1:-40},minimap:{label:{x:120,z:-141}}},
  {id:'eastbank',name:'Eastbank Works',label:'EASTBANK WORKS',subtitle:'Workshops & freight',color:'#8e8a82',grid:false,bounds:{x0:70,x1:190,z0:-38,z1:75},minimap:{label:{x:130,z:83}}},
  {id:'freight',name:'Freight Road',label:'FREIGHT ROAD',subtitle:'The cargo route',color:'#7a7f83',grid:false,bounds:{x0:190,x1:200,z0:n(-246),z1:75},minimap:{label:{x:218,z:-60}}}
@@ -220,16 +220,16 @@ const properties=[
  {id:'house-r7',type:'house',size:'small',landmark:'house-r7',plot:'R7',name:'7 Cedar Loop',access:'owner',owner:null,listing:{rentCents:17500,depositCents:35000,priceCents:1350000}},
  {id:'house-r8',type:'house',size:'small',landmark:'house-r8',plot:'R8',name:'8 Cedar Loop',access:'owner',owner:{type:'npc',name:'Grace Whitfield',body:'female'}},
  // Alder Center: shop and office interiors arrive with later updates.
- {id:'alder-store',type:'shop',landmark:'alder-store',plot:'C1',name:'Alder Store',enterable:false,reason:'Shop interiors arrive with the store jobs update (cashier shifts).'},
- {id:'alder-offices',type:'commercial',landmark:'alder-offices',plot:'C2',name:'Alder Offices',enterable:false,reason:'Office interiors arrive with a later update.'},
- {id:'alder-tower',type:'commercial',landmark:'alder-tower',plot:'C3',name:'Alder Tower',enterable:false,reason:'Office interiors arrive with a later update.'},
- {id:'alder-bakery',type:'shop',landmark:'alder-bakery',plot:'C4',name:'Alder Bakery',enterable:false,reason:'Shop interiors arrive with the store jobs update.'},
- {id:'alder-barber',type:'shop',landmark:'alder-barber',plot:'C5',name:'Alder Barber',enterable:false,reason:'Shop interiors arrive with the store jobs update.'},
- {id:'alder-pharmacy',type:'shop',landmark:'alder-pharmacy',plot:'C6',name:'Alder Pharmacy',enterable:false,reason:'Shop interiors arrive with the store jobs update.'},
- {id:'alder-bank',type:'commercial',landmark:'alder-bank',plot:'C7',name:'Alder Bank',enterable:false,reason:'Office interiors arrive with a later update.'},
+ {id:'alder-store',type:'shop',landmark:'alder-store',plot:'C1',name:'Ironwood Store',enterable:false,reason:'Shop interiors arrive with the store jobs update (cashier shifts).'},
+ {id:'alder-offices',type:'commercial',landmark:'alder-offices',plot:'C2',name:'Ironwood Offices',enterable:false,reason:'Office interiors arrive with a later update.'},
+ {id:'alder-tower',type:'commercial',landmark:'alder-tower',plot:'C3',name:'Ironwood Tower',enterable:false,reason:'Office interiors arrive with a later update.'},
+ {id:'alder-bakery',type:'shop',landmark:'alder-bakery',plot:'C4',name:'Ironwood Bakery',enterable:false,reason:'Shop interiors arrive with the store jobs update.'},
+ {id:'alder-barber',type:'shop',landmark:'alder-barber',plot:'C5',name:'Ironwood Barber',enterable:false,reason:'Shop interiors arrive with the store jobs update.'},
+ {id:'alder-pharmacy',type:'shop',landmark:'alder-pharmacy',plot:'C6',name:'Ironwood Pharmacy',enterable:false,reason:'Shop interiors arrive with the store jobs update.'},
+ {id:'alder-bank',type:'commercial',landmark:'alder-bank',plot:'C7',name:'Ironwood Bank',enterable:false,reason:'Office interiors arrive with a later update.'},
  {id:'police-station',type:'civic',landmark:'police-station',plot:'C8',name:'Police Station',enterable:false,reason:'Its interior arrives with a later update.'},
- {id:'alder-books',type:'shop',landmark:'alder-books',plot:'C9',name:'Alder Books',enterable:false,reason:'Shop interiors arrive with the store jobs update.'},
- {id:'alder-cinema',type:'commercial',landmark:'alder-cinema',plot:'C10',name:'Alder Cinema',enterable:false,reason:'Its interior arrives with a later update.'},
+ {id:'alder-books',type:'shop',landmark:'alder-books',plot:'C9',name:'Ironwood Books',enterable:false,reason:'Shop interiors arrive with the store jobs update.'},
+ {id:'alder-cinema',type:'commercial',landmark:'alder-cinema',plot:'C10',name:'Ironwood Cinema',enterable:false,reason:'Its interior arrives with a later update.'},
  // The farm and the timber yard.
  {id:'farm-house',type:'farm',landmark:'farm-house',name:'Willow Farmhouse',access:'owner',owner:{type:'npc',name:'Hal Brennan',body:'male',outfit:'Farmer'}},
  {id:'farm-barn',type:'farm',landmark:'farm-barn',name:'The Barn',enterable:false,reason:'Barn interiors (storage, animal pens) arrive with the farming update.'},
@@ -285,8 +285,8 @@ const vehicles=[
 // Company offices (0.35): a building with a door you walk up to (E, open during the employer's hours) and an interior room that sits far from the map and is shown only while you are inside (like a shop's).
 // door: where you stand outside, and the yaw you face leaving; sign: the company's name board above the door. The room is the shops' layout (market interior numbers), so its entry, exit and counter are the same.
 const offices=[
- {id:'ridgeline-office',employer:'ridgeline',building:'ridgeline-office',door:{x:80.9,z:58.3,out:{x:81.5,z:58.3},yaw:Math.PI/2},sign:{x:78.66,y:3.2,z:53.5,yaw:Math.PI/2},interior:{...interior('double'),origin:{x:420,y:.165,z:300}}},
- {id:'ridgeline-warehouse',kind:'warehouse',name:'Ridgeline Warehouse',employer:'ridgeline',building:'eastbank-warehouse',door:{x:166.9,z:31.5,face:32.52,out:{x:166.9,z:30.2},yaw:Math.PI},sign:{x:166.9,y:3.72,z:32.62,yaw:Math.PI},interior:{origin:{x:440,y:.165,z:300},...WAREHOUSE_INTERIOR}} // the lumber warehouse (4.16): a person door on the north wall beside the loading door (the model has no person door: it is drawn there), open in the employer's hours
+ {id:'ridgeline-office',employer:'ridgeline',building:'ridgeline-office',door:{x:80.9,z:58.3,out:{x:81.5,z:58.3},yaw:Math.PI/2},sign:{x:78.66,y:3.2,z:53.5,yaw:Math.PI/2},interior:{...interior('double'),origin:{x:420,y:.165,z:1500}}},
+ {id:'ridgeline-warehouse',kind:'warehouse',name:'Ridgeline Warehouse',employer:'ridgeline',building:'eastbank-warehouse',door:{x:166.9,z:31.5,face:32.52,out:{x:166.9,z:30.2},yaw:Math.PI},sign:{x:166.9,y:3.72,z:32.62,yaw:Math.PI},interior:{origin:{x:440,y:.165,z:1500},...WAREHOUSE_INTERIOR}} // the lumber warehouse (4.16): a person door on the north wall beside the loading door (the model has no person door: it is drawn there), open in the employer's hours
 ];
 // Map exits (0.35, DESIGN 4.15 K): where NPC vehicles (customer trucks) come onto the map and leave it. `path` runs from the far end (off the map, where a vehicle appears and is
 // removed) inward; its first point must lie outside the playable rectangle (validateMap), so making the map bigger means moving the exit too. Lanes: Freight South is centred on
@@ -368,18 +368,18 @@ export const MAP=deepFreeze({
   {id:'oak-n',a:[-36,-4.1],b:[52,-4.1],face:[0,1],lamp:24,lampAt:5,hydrant:40,hydrantAt:17,bin:44,binAt:35},
   {id:'oak-s',a:[-36,16.2],b:[52,16.2],face:[0,-1],lamp:24,lampAt:17,hydrant:40,hydrantAt:29,bin:44,binAt:8},
   {id:'ave-e',a:[-20.9,-56],b:[-20.9,20],face:[-1,0],lamp:24,lampAt:8,hydrant:40,hydrantAt:21,bin:44,binAt:34},
-  {id:'cross-s',a:[-19,-83.4],b:[42,-83.4],face:[0,-1],lamp:24,lampAt:9,hydrant:61,hydrantAt:21,bin:30,binAt:24,meter:12,meterAt:6,tree:12,treeAt:2},
+  {id:'cross-s',a:[-19,-83.4],b:[42,-83.4],face:[0,-1],lamp:24,lampAt:9,hydrant:61,hydrantAt:21,bin:30,binAt:24,meter:12,meterAt:6},
   {id:'cross-sb',a:[-19,-81.6],b:[42,-81.6],face:[0,-1],bench:15,benchAt:7.5},
-  {id:'cross-n',a:[-19,-96.6],b:[9,-96.6],face:[0,1],lamp:24,lampAt:9,bin:30,binAt:20,meter:12,meterAt:6,tree:12,treeAt:2},
+  {id:'cross-n',a:[-19,-96.6],b:[9,-96.6],face:[0,1],lamp:24,lampAt:9,bin:30,binAt:20,meter:12,meterAt:6},
   {id:'cross-ne',a:[38.5,-96.6],b:[42.5,-96.6],face:[0,1],bin:30,binAt:2},
   {id:'st-w-n',a:[44.5,-121],b:[44.5,-100],face:[1,0],lamp:24,lampAt:4,bin:30,binAt:14},
   {id:'st-w-s',a:[44.5,-83],b:[44.5,-65],face:[1,0],lamp:24,lampAt:3,hydrant:60,hydrantAt:12},
   {id:'st-e-n',a:[55.5,-121],b:[55.5,-97],face:[-1,0],lamp:24,lampAt:4,bin:30,binAt:15},
-  {id:'st-e-s',a:[55.5,-83],b:[55.5,-53],face:[-1,0],lamp:24,lampAt:3,hydrant:60,hydrantAt:20,bench:16,benchAt:7,tree:14,treeAt:12}],
+  {id:'st-e-s',a:[55.5,-83],b:[55.5,-53],face:[-1,0],lamp:24,lampAt:3,hydrant:60,hydrantAt:20,bench:16,benchAt:7}],
  // The town square (a raised paved square north of the cross street): a fountain in the middle, a ring path, planters at the corners, benches round the edge, trees and bollards on its street side.
  plazas:[{id:'alder-square',x0:9,x1:38,z0:-122,z1:-96,fountain:{x:23.5,z:-109,r:3.4},
-  planters:[[11.5,-119.5],[35.5,-119.5],[11.5,-98.5],[35.5,-98.5]],trees:[[14,-114],[33,-114],[14,-104],[33,-104]],
-  benches:[{x:18,z:-120.2,yaw:0},{x:23.5,z:-120.2,yaw:0},{x:29,z:-120.2,yaw:0},{x:10.2,z:-109,yaw:Math.PI/2},{x:36.8,z:-109,yaw:-Math.PI/2},{x:17,z:-98.2,yaw:Math.PI},{x:30,z:-98.2,yaw:Math.PI}],
+  planters:[],trees:[[14,-114],[33,-114],[14,-104],[33,-104]],
+  benches:[{x:15.5,z:-118.2,yaw:0},{x:19.5,z:-118.2,yaw:0},{x:27.5,z:-118.2,yaw:0},{x:10.2,z:-109,yaw:Math.PI/2},{x:36.8,z:-109,yaw:-Math.PI/2},{x:17,z:-98.2,yaw:Math.PI},{x:30,z:-98.2,yaw:Math.PI}],
   bollards:{z:-96.5,x0:11,x1:36,every:3}}],
  // The bus stop on Alder Street's east sidewalk, facing the road.
  busStop:{x:56.4,z:-72,yaw:-Math.PI/2},
@@ -435,7 +435,7 @@ export const MAP=deepFreeze({
  ], // Signposts: boards are read from the front (yaw 0 faces south, towards walkers arriving from the bridge).
  signs:[
   {id:'fork',zone:'county',x:-25.5,z:n(-170),yaw:0,boards:[{text:'← WILLOW FIELDS',y:2.1},{text:'PINE RIDGE →',y:2.9}]},
-  {id:'alder-sign',zone:'alder',x:57,z:-56,yaw:0,boards:[{text:'ALDER CENTER',y:2.4}]},
+  {id:'alder-sign',zone:'alder',x:57,z:-56,yaw:0,boards:[{text:'IRONWOOD',y:2.4}]},
   {id:'cedar-sign',zone:'cedar',x:127,z:-44,yaw:0,boards:[{text:'CEDAR HEIGHTS',y:2.4}]},
   {id:'eastbank-sign',zone:'eastbank',x:74,z:-5,yaw:-1.5707963267948966,boards:[{text:'EASTBANK WORKS →',y:2.4}]},
   {id:'riden-deals-sign',zone:'eastbank',x:78,z:-1.5,yaw:0,boards:[{pictures:true,y:3.0,h:1.0,bg:'#111111'},{text:'RIDEN DEALS',y:2.1,bg:'#111111',fg:'#f5c518'},{text:'NEW & USED VEHICLES',y:1.45,bg:'#111111',fg:'#f1ebd9'}]} // on the grass at the lot's south-west side, beside Oak Street East, read from the road (keep it off the strip in front of the lot: trucks turning out of the bays swing over it)

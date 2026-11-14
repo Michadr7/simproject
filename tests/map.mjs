@@ -19,7 +19,7 @@ assert.deepEqual(WALKABLE.map(({zone,x0,x1,z0,z1})=>({zone,x0,x1,z0,z1})),[{zone
  {zone:'alder',x0:-20,x1:58,z0:-125,z1:-48},{zone:'cedar',x0:70,x1:170,z0:-135,z1:-40},{zone:'eastbank',x0:70,x1:190,z0:-38,z1:75},{zone:'freight',x0:190,x1:200,z0:-316,z1:75}]);
 assert.deepEqual(WALKABLE.map(w=>w.grid),[false,false,true,true,false,false,false,false]);
 assert.deepEqual(ZONES.farm,{id:'farm',name:'Willow Fields',label:'WILLOW FIELDS',subtitle:'Fields & plots',color:'#c9ae63'});assert.equal(ZONES.city.label,'WESTSIDE');assert.equal(ZONES.forest.name,'Pine Ridge');assert.equal(ZONES.county.label,'COUNTY ROAD');
-assert.deepEqual([ZONES.alder.label,ZONES.cedar.label,ZONES.eastbank.label,ZONES.freight.label],['ALDER CENTER','CEDAR HEIGHTS','EASTBANK WORKS','FREIGHT ROAD']);
+assert.deepEqual([ZONES.alder.label,ZONES.cedar.label,ZONES.eastbank.label,ZONES.freight.label],['IRONWOOD','CEDAR HEIGHTS','EASTBANK WORKS','FREIGHT ROAD']);
 // The north bank moved by exactly one shift: every north-bank number equals its old value minus 70.
 assert.deepEqual(DIRT_ROADS.map(({zone,x0,x1,z0,z1})=>[zone,x0,x1,z0,z1]),[["farm", -164, -34, -233.5, -226.5], ["forest", -26, 195, -253.5, -246.5], ["forest", 87.5, 92.5, -316, -216]]);
 assert.deepEqual(roadRects('asphalt').map(({id,x0,x1,z0,z1})=>[id,x0,x1,z0,z1]),[["oak-street", -55, 55, -3.5, 15.5], ["alder-avenue", -38, -22, -60, 60], ["county-road", -34, -26, -316, -60], ["alder-street", 45, 55, -125, -3.5], ["alder-cross", -30, 84, -96, -84], ["oak-east", 55, 195, 0, 12], ["cedar-link", 115.5, 124.5, -57, 6], ["freight-south", 72, 199.5, 62, 74], ["freight-out", 199.5, 290, 62, 74], ["freight-road", 190.5, 199.5, -253.5, 68], ["works-lane", 96, 108, 6, 68]],'straight roads only: the loop is a ribbon');
@@ -165,4 +165,4 @@ has(broken(m=>{m.shops.cafe.interior.exitDoor.near.z=4.5}),/exit door would open
 has(broken(m=>{m.shops.market.interior.counter.x=7}),/counter is outside the room/);
 has(broken(m=>{delete m.shops.cafe.doorway}),/needs a doorway and an interior/);
 has(broken(m=>{delete m.studio.interior}),/studio interior needs an entry, exit and bed/);
-console.log('Map data is valid and frozen; zones, roads, fields, trees, shops, hours, studio and spawn match the numbers they replaced; 77 broken maps are each caught; Alder Center, Cedar Heights, Eastbank Works, the second bridge and the plots are in place.');
+console.log('Map data is valid and frozen; zones, roads, fields, trees, shops, hours, studio and spawn match the numbers they replaced; 77 broken maps are each caught; Ironwood, Cedar Heights, Eastbank Works, the second bridge and the plots are in place.');
