@@ -7,7 +7,7 @@ import {terrain,SURFACE,roadCenterline} from './terrain.js';
 import {lampSpots} from './streetfurniture.js';
 import {markingBars,townSpots,FOUNTAIN,BUS_STOP} from './town.js';
 import {propInfo,createProp} from './props.js';
-import {createEastbank} from './eastbank.js';import {createSceneOverlay} from './scene-overlay.js';
+import {chunkKey,chunkIndex,chunkRange,createChunkIndex,maskTile} from './chunks.js';import {createChunkView} from './chunks-view.js';import {createEastbank} from './eastbank.js';import {createSceneOverlay} from './scene-overlay.js';
 
 // ─── Layout (pure data, safe to import from rules and tests) ──────────────────
 // The city keeps its original footprint. Oak Farms lies west of it, Alder Woods east.
@@ -29,7 +29,11 @@ export function zoneAt(x,z){
  return ZONES[zone?zone.id:'open'];
 }
 // Walking and footing come from the terrain mask (terrain.js), built from the map at first use.
-export function isWalkable(x,z){return terrain().walkable(x,z)}
+// Streaming (createWorld with streaming:true): isWalkableLive answers from the loaded chunk tiles and an unloaded chunk is a wall. Without streaming (tests, menu scenes) it is the whole-map mask.
+let walkSource=null;
+function screenFade(){if(typeof document==="undefined"||!document.body?.appendChild)return;const d=document.createElement("div");d.style.cssText="position:fixed;inset:0;background:#000;opacity:1;pointer-events:none;z-index:9999";document.body.appendChild(d);requestAnimationFrame(()=>requestAnimationFrame(()=>{d.style.transition="opacity .3s";d.style.opacity="0"}));setTimeout(()=>d.remove(),800)} // 0.3 s fade, only when a teleport lands outside the loaded ring
+export function isWalkable(x,z){return terrain().walkable(x,z)} // the whole-map mask: data checks (a saved position, a log, a plank stack) keep using it
+export function isWalkableLive(x,z){return walkSource?walkSource.walkable(x,z):terrain().walkable(x,z)} // what the player and vehicles bump into: the loaded chunk tiles, an unloaded chunk is a wall
 export function footingAt(x,z){return terrain().footingAt(x,z)}
 export {heightAt};
 // what feet, a put-down plank stack or a log stand on: the terrain elevation plus the deck (the sawmill's floors, measured from the ground) or the surface footing
@@ -124,16 +128,24 @@ export const cuttableTreeAt=key=>worldLayout().cuttableByKey.get(key)||null;
 
 // ─── Collisions: spatial hash of trunks and fence rails ───────────────────────
 const BUCKET=4,PLAYER_RADIUS=.33;
-function createColliders(){
- const buckets=new Map(),keyOf=(bx,bz)=>bx+':'+bz;
- function insert(c,x0,z0,x1,z1){for(let bx=Math.floor(x0/BUCKET);bx<=Math.floor(x1/BUCKET);bx++)for(let bz=Math.floor(z0/BUCKET);bz<=Math.floor(z1/BUCKET);bz++){const k=keyOf(bx,bz);if(!buckets.has(k))buckets.set(k,[]);buckets.get(k).push(c)}}
+// Every collider belongs to the chunk its centre is in (`c.chunk`). With streaming on (`stream()`), only colliders of LIVE chunks count: the rest have `off` set (kept in the buckets, skipped by blocked(),
+// so a chunk coming back is one flag per collider). `active` stays the tree-felling flag. remove(c) takes a collider out for good.
+export function createColliders(){
+ const buckets=new Map(),keyOf=(bx,bz)=>bx+':'+bz,byChunk=new Map();let live=null;
+ const own=c=>{const {i,j}=chunkIndex(c.x,c.z),k=chunkKey(i,j);c.chunk=k;c.off=live?!live.has(k):false;if(!byChunk.has(k))byChunk.set(k,new Set());byChunk.get(k).add(c);return c};
+ function insert(c,x0,z0,x1,z1){for(let bx=Math.floor(x0/BUCKET);bx<=Math.floor(x1/BUCKET);bx++)for(let bz=Math.floor(z0/BUCKET);bz<=Math.floor(z1/BUCKET);bz++){const k=keyOf(bx,bz);if(!buckets.has(k))buckets.set(k,[]);buckets.get(k).push(c)}c.box4=[x0,z0,x1,z1]}
  return {
-  circle(x,z,r,id=null){const c={circle:true,x,z,r,id,active:true};insert(c,x-r,z-r,x+r,z+r);return c},
-  box(x,z,hx,hz){const c={circle:false,x,z,hx,hz,active:true};insert(c,x-hx,z-hz,x+hx,z+hz);return c},
+  circle(x,z,r,id=null){const c=own({circle:true,x,z,r,id,active:true});insert(c,x-r,z-r,x+r,z+r);return c},
+  box(x,z,hx,hz){const c=own({circle:false,x,z,hx,hz,active:true});insert(c,x-hx,z-hz,x+hx,z+hz);return c},
+  remove(c){const [x0,z0,x1,z1]=c.box4||[];for(let bx=Math.floor(x0/BUCKET);bx<=Math.floor(x1/BUCKET);bx++)for(let bz=Math.floor(z0/BUCKET);bz<=Math.floor(z1/BUCKET);bz++){const a=buckets.get(keyOf(bx,bz));const n=a?a.indexOf(c):-1;if(n>=0)a.splice(n,1)}byChunk.get(c.chunk)?.delete(c);c.active=false},
+  // Streaming: stream() switches to live-chunks-only (all off until setChunkLive(key,true)); stream(false) puts everything back. countIn(key) = colliders owned by a chunk.
+  stream(on=true){live=on?new Set():null;for(const set of byChunk.values())for(const c of set)c.off=!!live},
+  setChunkLive(key,on){if(!live)return 0;if(on)live.add(key);else live.delete(key);const set=byChunk.get(key);if(set)for(const c of set)c.off=!on;return set?set.size:0},
+  countIn:key=>byChunk.get(key)?.size||0,
   blocked(x,z){
    const bx=Math.floor(x/BUCKET),bz=Math.floor(z/BUCKET);
    for(let dx=-1;dx<=1;dx++)for(let dz=-1;dz<=1;dz++)for(const c of buckets.get(keyOf(bx+dx,bz+dz))||[]){
-    if(!c.active)continue;
+    if(!c.active||c.off)continue;
     if(c.circle?Math.hypot(x-c.x,z-c.z)<c.r+PLAYER_RADIUS:Math.abs(x-c.x)<c.hx+PLAYER_RADIUS&&Math.abs(z-c.z)<c.hz+PLAYER_RADIUS)return true;
    }
    return false;
@@ -193,7 +205,7 @@ float fadeBayer(vec2 p){ivec2 i=ivec2(mod(p,4.0));int n=i.x+i.y*4;
 // options.label(text,x,y,z,width,rot,bg,fg,height) draws a sign (game.js's label helper).
 // The dealership sign's picture board: the two vehicle pictures side by side on the board's own canvas, drawn once they have loaded (the small module is imported only when this sign exists).
 async function paintSignPictures(mesh){try{const {SIGN_PICTURES}=await import('./sign-pictures.js'),c=mesh.material.map.image,ctx=c.getContext('2d'),imgs=(await Promise.all(SIGN_PICTURES.map(src=>new Promise(r=>{const i=new Image();i.onload=()=>r(i);i.onerror=()=>r(null);i.src=src})))).filter(Boolean),h=c.height*.94,w=h*1.6,gap=c.width*.04,x0=(c.width-imgs.length*w-(imgs.length-1)*gap)/2;imgs.forEach((i,k)=>ctx.drawImage(i,x0+k*(w+gap),(c.height-h)/2,w,h));mesh.material.map.needsUpdate=true}catch(e){console.warn('sign pictures',e)}}
-export function createWorld(scene,{label,cullRadius}={}){
+export function createWorld(scene,{label,cullRadius,streaming=false}={}){
  let fountainParts=null,townTime=0;
  const layout=worldLayout(),colliders=createColliders(),fade=createSightlineFade();
  const group=new THREE.Group();group.name='world-zones';scene.add(group);
@@ -315,18 +327,22 @@ export function createWorld(scene,{label,cullRadius}={}){
 
  // Fences (instanced posts and rails, solid for walking).
  const segments=fenceSegments(),wood=new THREE.MeshStandardMaterial({color:'#8b6d4b',roughness:.95});
- const posts=new THREE.InstancedMesh(new THREE.BoxGeometry(.14,1.1,.14).translate(0,.55,0),wood,segments.length*2);
- const rails=new THREE.InstancedMesh(new THREE.BoxGeometry(1,.09,.06),wood,segments.length*2);
- posts.castShadow=rails.castShadow=true;posts.name='fence-posts';rails.name='fence-rails';
+ // The fence meshes of a list of segments: one pair of instanced meshes (posts, rails). Whole map when streaming is off; one pair per loaded chunk when it is on (chunks-view.js). The colliders below are global
+ // data owned by the chunk they stand in (colliders.js ownership), whatever is drawn.
  const m4=new THREE.Matrix4(),q=new THREE.Quaternion(),v=new THREE.Vector3(),s=new THREE.Vector3(),yAxis=new THREE.Vector3(0,1,0);
- segments.forEach((g,i)=>{
-  const len=Math.hypot(g.x1-g.x0,g.z1-g.z0),angle=Math.atan2(g.z1-g.z0,g.x1-g.x0);
-  posts.setMatrixAt(i*2,m4.makeTranslation(g.x0,0,g.z0));posts.setMatrixAt(i*2+1,m4.makeTranslation(g.x1,0,g.z1));
-  q.setFromAxisAngle(yAxis,-angle);
-  for(const [k,h] of [[0,.45],[1,.85]])rails.setMatrixAt(i*2+k,m4.compose(v.set((g.x0+g.x1)/2,h,(g.z0+g.z1)/2),q,s.set(len,1,1)));
-  colliders.box((g.x0+g.x1)/2,(g.z0+g.z1)/2,Math.abs(g.x1-g.x0)/2+.07,Math.abs(g.z1-g.z0)/2+.07);
- });
- group.add(posts,rails);
+ function fenceSet(list){
+  const set=new THREE.Group(),posts=new THREE.InstancedMesh(new THREE.BoxGeometry(.14,1.1,.14).translate(0,.55,0),wood,list.length*2),rails=new THREE.InstancedMesh(new THREE.BoxGeometry(1,.09,.06),wood,list.length*2);
+  posts.castShadow=rails.castShadow=true;posts.name='fence-posts';rails.name='fence-rails';
+  list.forEach((g,i)=>{
+   const len=Math.hypot(g.x1-g.x0,g.z1-g.z0),angle=Math.atan2(g.z1-g.z0,g.x1-g.x0);
+   posts.setMatrixAt(i*2,m4.makeTranslation(g.x0,0,g.z0));posts.setMatrixAt(i*2+1,m4.makeTranslation(g.x1,0,g.z1));
+   q.setFromAxisAngle(yAxis,-angle);
+   for(const [k,h] of [[0,.45],[1,.85]])rails.setMatrixAt(i*2+k,m4.compose(v.set((g.x0+g.x1)/2,h,(g.z0+g.z1)/2),q,s.set(len,1,1)));
+  });
+  set.name='fences';set.add(posts,rails);return set;
+ }
+ for(const g of segments)colliders.box((g.x0+g.x1)/2,(g.z0+g.z1)/2,Math.abs(g.x1-g.x0)/2+.07,Math.abs(g.z1-g.z0)/2+.07);
+ if(!streaming)group.add(fenceSet(segments));
 
  // ── Trees: the Quaternius models (nature.js). One InstancedMesh per model per material (bark and leaves): 16 draw calls for the whole forest.
  // Which trees are *in* those meshes changes as you move (see rebuild): only trees within the fog distance are drawn, scenery well behind the
@@ -524,9 +540,13 @@ export function createWorld(scene,{label,cullRadius}={}){
  const MAX_LOG_INSTANCES=96;
  const logMesh=new THREE.InstancedMesh(new THREE.CylinderGeometry(.12,.12,1.15,8).rotateZ(Math.PI/2),new THREE.MeshStandardMaterial({map:nature.logBark,color:'#d2b080',roughness:1}),MAX_LOG_INSTANCES);
  logMesh.count=0;logMesh.castShadow=logMesh.receiveShadow=true;logMesh.frustumCulled=false;logMesh.name='ground-logs';group.add(logMesh);
- let clock=0;
+ let clock=0,chunkView=null;
+ if(streaming){ // chunk streaming (F1): the 5 x 5 chunks round the spawn are built here, behind the loading screen; world.update() keeps the ring loaded from then on
+  chunkView=createChunkView({index:createChunkIndex({layout,fences:segments}),colliders,scene:group,map:MAP,build:{fences:slice=>fenceSet(slice.fences.map(e=>e.item))},onFade:screenFade});
+  chunkView.ensure(MAP.spawn.x,MAP.spawn.z,2);walkSource=chunkView;
+ }
  return {
-  group,layout,trees,fade,addBroadleaves,eastbank,
+  group,layout,trees,fade,addBroadleaves,eastbank,chunks:chunkView,ensure:(x,z,radius=1)=>chunkView?chunkView.ensure(x,z,radius):{built:0,ready:true,ms:0},
   blocked:(x,z)=>colliders.blocked(x,z),
   // The height of a deck or platform under the point (a building's raised floor), or null on open ground.
   floorAt(x,z){for(const l of landmarks){if(!l.floor)continue;const cos=Math.round(Math.cos(l.yaw)),sin=Math.round(Math.sin(l.yaw)),dx=x-l.x,dz=z-l.z,lx=dx*cos-dz*sin,lz=dx*sin+dz*cos;for(const f of [].concat(l.floor))if(lx>=f.x0&&lx<=f.x1&&lz>=f.z0&&lz<=f.z1)return f.y}return null},
@@ -577,6 +597,7 @@ export function createWorld(scene,{label,cullRadius}={}){
    if(fountainParts){townTime+=dt;fountainParts.jet.scale.y=1+.14*Math.sin(townTime*3.1);fountainParts.jet.position.y=3.15+.08*Math.sin(townTime*3.1);fountainParts.water.material.opacity=.86+.04*Math.sin(townTime*1.7)}
    for(const l of landmarks)l.mesh.visible=Math.hypot(fadeTarget.x-l.x,fadeTarget.z-l.z)<viewDistance+l.radius; // far buildings are not drawn
    eastbank.update(fadeTarget.x,fadeTarget.z); // far yards are not drawn
+   chunkView?.update(fadeTarget.x,fadeTarget.z); // keeps the chunk ring loaded (2 ms budget a frame)
    clock+=dt;if(ring.visible)ring.scale.setScalar(1+.07*Math.sin(clock*6));
    let changed=false;
    for(const t of trees.values()){

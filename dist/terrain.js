@@ -31,8 +31,11 @@ function smoothClosed(p,step){
  out.push(out[0]);return out;
 }
 
-export function buildTerrain(map=MAP,{cell=.5}={}){
- const g=map.ground,cols=Math.ceil((g.x1-g.x0)/cell),rows=Math.ceil((g.z1-g.z0)/cell),n=cols*rows;
+// `window` ({x0,x1,z0,z1}, cell-aligned to the ground) builds just that part of the mask (chunks.js maskTile); the shapes below are computed once per map and shared by every tile.
+const shapeMemo=new WeakMap();
+function shapesOf(map){let s=shapeMemo.get(map);if(!s){const lines=new Map(),rivers=new Map();s={patches:junctionPatches(map),line:e=>{if(!lines.has(e))lines.set(e,roadCenterline(e,map));return lines.get(e)},river:r=>{if(!rivers.has(r))rivers.set(r,riverPath(r,2).map(p=>[p.x,p.z]));return rivers.get(r)}};shapeMemo.set(map,s)}return s}
+export function buildTerrain(map=MAP,{cell=.5,window=null}={}){
+ const S=shapesOf(map),g=window||map.ground,cols=Math.ceil((g.x1-g.x0)/cell),rows=Math.ceil((g.z1-g.z0)/cell),n=cols*rows;
  const walk=new Uint8Array(n),surface=new Uint8Array(n).fill(SURFACE.GRASS),zone=new Uint8Array(n);
  const centreX=i=>g.x0+(i+.5)*cell,centreZ=j=>g.z0+(j+.5)*cell;
  function rect(r,paint){
@@ -55,10 +58,10 @@ export function buildTerrain(map=MAP,{cell=.5}={}){
  for(const edge of map.roads.edges){
   const kind=edge.surface==='dirt'?SURFACE.DIRT:edge.level==='rural'?SURFACE.ROAD:SURFACE.STREET,named=edge.zone?map.zones.findIndex(z=>z.id===edge.zone)+1:0,
    paint=c=>{surface[c]=kind;if(edge.walkable){walk[c]=1;if(named)zone[c]=named}};
-  if(edge.path)ribbon(roadCenterline(edge,map),edge.width/2,paint);else rect(roadRect(edge,map),paint);
+  if(edge.path)ribbon(S.line(edge),edge.width/2,paint);else rect(roadRect(edge,map),paint);
  }
  // 2-joints. rounded corners at junctions and tapers where road widths change (junctions.js): ROAD, walkable and drivable like the roads they join
- for(const patch of junctionPatches(map)){const xs=patch.points.map(p=>p[0]),zs=patch.points.map(p=>p[1]);rect({x0:Math.min(...xs),x1:Math.max(...xs),z0:Math.min(...zs),z1:Math.max(...zs)},c=>{const x=centreX(c%cols),z=centreZ((c-c%cols)/cols);let inside=false;const P=patch.points;for(let i=0,j=P.length-1;i<P.length;j=i++){const [xi,zi]=P[i],[xj,zj]=P[j];if((zi>z)!==(zj>z)&&x<(xj-xi)*(z-zi)/(zj-zi)+xi)inside=!inside}if(inside){surface[c]=SURFACE.ROAD;walk[c]=1}})}
+ for(const patch of S.patches){const xs=patch.points.map(p=>p[0]),zs=patch.points.map(p=>p[1]);rect({x0:Math.min(...xs),x1:Math.max(...xs),z0:Math.min(...zs),z1:Math.max(...zs)},c=>{const x=centreX(c%cols),z=centreZ((c-c%cols)/cols);let inside=false;const P=patch.points;for(let i=0,j=P.length-1;i<P.length;j=i++){const [xi,zi]=P[i],[xj,zj]=P[j];if((zi>z)!==(zj>z)&&x<(xj-xi)*(z-zi)/(zj-zi)+xi)inside=!inside}if(inside){surface[c]=SURFACE.ROAD;walk[c]=1}})}
  // 2a. Eastbank Works paving (yards, aprons, the forecourt, the depot, driveway cuts): asphalt you can walk and drive on
  for(const p of map.paving||[])rect(p,c=>{surface[c]=SURFACE.DRIVEWAY;walk[c]=1})
  // 2b. parking lots: asphalt you can walk and drive on
@@ -71,7 +74,7 @@ export function buildTerrain(map=MAP,{cell=.5}={}){
  // 4b. rounded kerbs inside the towns (MAP.roundedCorners): the corner patch is street, walkable and drivable, even where the pavement rectangle used to cover it
  for(const c of map.roundedCorners||[]){const P=cornerRegion(c);rect({x0:Math.min(...P.map(p=>p[0])),x1:Math.max(...P.map(p=>p[0])),z0:Math.min(...P.map(p=>p[1])),z1:Math.max(...P.map(p=>p[1]))},k=>{if(inPolygon(P,centreX(k%cols),centreZ((k-k%cols)/cols))){surface[k]=SURFACE.STREET;walk[k]=1}})}
  // 5. the river: banks, then water; neither is walkable
- for(const river of map.water?.rivers||[]){const line=riverPath(river,2).map(p=>[p.x,p.z]);
+ for(const river of map.water?.rivers||[]){const line=S.river(river);
   ribbon(line,river.width/2+river.bank,c=>{surface[c]=SURFACE.BANK;walk[c]=0});ribbon(line,river.width/2,c=>{surface[c]=SURFACE.WATER;walk[c]=0})}
  // 6. bridge decks
  for(const bridge of map.water?.bridges||[])rect(bridge,c=>{surface[c]=SURFACE.BRIDGE;walk[c]=1});
