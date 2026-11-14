@@ -205,6 +205,9 @@ assets-src/Veichles/Logging Truck/flatbed.glb (FLATBED_SPEC_UPDATE_2.md): 5,796 
 
 - **Forklift (0.35 step 5):** "48-forklift" (assets-src/Veichles/Forklifts/48-forklift/Forklift.obj, public domain, author and source page to be confirmed) converted by scripts/build-forklift.mjs into dist/forklift-assets.js (about 14,000 triangles, 550 KB, three parts: body, mast, carriage; colours chosen in the script because the OBJ has none). Loaded only when the warehouse is first entered. Not used: the CC-BY Forklift Truck (Kray Ewan) and the Industrial Forklift GLB (one lump, forks not separate).
 
+## Kasumuchi S70 shortbed truck (0.35.8, the project owner's own model)
+assets-src/Vehicles/Kasumuchi S70/Kasumuchi S70 - V6 Game.glb (spec: Kasumuchi S70 - V6 Spec Sheet.md): 6,994 triangles, 11 colour-only materials, 51 nodes, 18 anchors, six door and gate clips (not used at run time: the doors are driven by code). **Licence: own work, no credit line** (credits.js lists it under the project owner). Converted by `node scripts/build-shortbed.mjs` into `dist/shortbed-assets.js` (about 330 KB; 13 parts with vertex colours) and built by `dist/shortbed.js` (13 draw calls per truck, 11 source materials become 5 in game). The tailgate is part of the static body (it stays closed). The glb's raw bounding box shows y -0.577 only because the door meshes are stored in their door pivot's frame (pivot at y 1.35); the truck's real extent is y 0.005 to 2.2.
+
 ## Water cooler (0.35)
 The project owner's own Blender model (ssets-src/assets/city_life_watercooler/water-cooler.glb, 3,886 triangles, flat colours, a see-through bottle with water). Embedded as base64 by 
 ode scripts/build-water-cooler.mjs into dist/water-cooler-asset.js (255 KB) and loaded with GLTFLoader by dist/water-cooler-view.js; one in the Ridgeline office, one in the warehouse. Static: the spec's water-motion module and the anchors are not used yet.

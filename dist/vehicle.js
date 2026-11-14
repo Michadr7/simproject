@@ -25,6 +25,7 @@ function makeClass(c){const L=c.hz*2;return {...c,gallonsPerMile:+(ARCADE_MILE_S
 export const CLASSES=Object.freeze({
  worktruck:makeClass({id:'worktruck',tier:'low',mpg:8,name:'Worktruck',hx:1.09,hz:3,top:17.9,reverse:5,accel:3,brake:8,drag:.9,rMin:7,aLat:10,doorZ:.5,exhaust:{x:-.7,y:.35,z:-3.02}}), // the starter: about 40 mph, thirsty
  flatbed:makeClass({id:'flatbed',tier:'low',mpg:6,name:'Tylan Flatbed',hx:1.45,hz:4.415,top:15.6,reverse:3.5,accel:1.6,brake:6,drag:.7,rMin:9,aLat:7,doorZ:1.765,exhaust:{x:-1.42,y:3.15,z:1,stack:true}}), // the timber truck (0.35): 35 mph, slow to get there, thirsty; the exhaust is the top of the stack
+ shortbed:makeClass({id:'shortbed',tier:'low',mpg:5,name:'Kasumuchi S70',hx:1.105,hz:2.757,top:29,reverse:4,accel:1.5,brake:7,drag:.8,rMin:7.5,aLat:9,doorZ:.9,exhaust:{x:-.6,y:.29,z:-2.7}}), // the cheap starter shortbed (0.35.8): 65 mph at the top but 19 s to get there, 5 mpg (1.6 gal/mi), a gas hog; the exhaust is the model's anchor_exhaust
  offroad:makeClass({id:'offroad',tier:'mid',mpg:14.5,name:'Pevrolet Off Road Pickup',hx:1.255,hz:2.8,top:26.8,reverse:6,accel:4.5,brake:9,drag:1,rMin:6.5,aLat:14,doorZ:.5,rough:.35,exhaust:{x:-.75,y:.42,z:-2.95}}) // mid tier: about 60 mph, nearly twice the mileage; grass, fields, paths and dirt cost it 35 points less speed (rough)
 });
 

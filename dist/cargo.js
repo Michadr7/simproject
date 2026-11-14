@@ -19,7 +19,8 @@ const CELL={w:.26,l:1.25},MAX_HEIGHT=1.25;
 export const BEDS=Object.freeze({
  flatbed:Object.freeze({x0:-1.25,x1:1.25,z0:-4.2,z1:.75,y:1.3,space:120,gate:'rear'}),
  worktruck:Object.freeze({x0:-.88,x1:.88,z0:-2.75,z1:-.95,y:.9,space:32}),
- offroad:Object.freeze({x0:-1,x1:1,z0:-2.74,z1:-.8,y:.8,space:32})
+ offroad:Object.freeze({x0:-1,x1:1,z0:-2.74,z1:-.8,y:.8,space:32}),
+ shortbed:Object.freeze({x0:-.9,x1:.9,z0:-2.55,z1:-.1,y:1.0,space:44,gate:'rear'}) // space 44 = bed area 4.4 m2 at about 10 per m2, a whole number of plank stacks (flatbed 120 on 12.4 m2, worktruck 32 on 3.2, pickup 32 on 3.9); the Kasumuchi S70 (0.35.8): the deck mesh runs z -2.57..0.06 at y 1.005 (the model's cargo anchors sit at y 1.002), the side walls leave about 1.8 m across, the tailgate hinges at z -2.585
 });
 export const hasBed=model=>!!BEDS[model];
 export const spaceOf=model=>BEDS[model]?.space||0;

@@ -249,7 +249,7 @@ const properties=[
 ];
 // Drivable vehicles (0.33, DESIGN 4.13 D): the two depot vehicles, parked nose to the back wall (north, so yaw pi: a model's front is +z) in the depot's first truck and car bays. Anyone can drive them (no keys yet). `model` is a converted
 // prop and a vehicle class (vehicle.js CLASSES); the id is the save key (`progress.vehicles`). The parked scenery cars and trucks elsewhere are not drivable.
-export const DRIVABLE_MODELS=Object.freeze(['worktruck','offroad','flatbed']);
+export const DRIVABLE_MODELS=Object.freeze(['worktruck','offroad','flatbed','shortbed']);
 // RULE: every vehicle model needs a `sale` field (DESIGN 4.14). 'dealership': a display vehicle on the Riden Deals lot, bought there only. 'online': in the phone Store only, no display slot and no `home`. 'both': display slot and Store.
 // The lot holds one display vehicle per dealership or both model, in the depot's bays (validateMap checks there are enough bays).
 export const SALE_MODES=Object.freeze(['dealership','online','both']);
@@ -276,7 +276,9 @@ const vehicles=[
  {id:'eastbank-worktruck',model:'worktruck',name:'Worktruck',sale:'both',home:{x:84.25,z:-13,yaw:PI},fuel:{type:'diesel',tankMgal:21000,port:{x:1.2,z:-2.2}}},
  {id:'eastbank-offroad',model:'offroad',name:'Pevrolet Off Road Pickup',sale:'both',home:{x:88.75,z:-13,yaw:PI},fuel:{type:'diesel',tankMgal:18000,port:{x:1.4,z:-2.2}}},
  // the Tylan Flatbed (0.35): the third truck bay; for sale from Lumberjack level 5 (shown, locked, before that). The fuel port is the model's anchor_fuel_port.
- {id:'eastbank-flatbed',model:'flatbed',name:'Tylan Flatbed',sale:'both',requires:{skill:'lumberjack',level:5},home:{x:93.25,z:-13,yaw:PI},fuel:{type:'diesel',tankMgal:30000,port:{x:1.22,z:-.235}}}
+ {id:'eastbank-flatbed',model:'flatbed',name:'Tylan Flatbed',sale:'both',requires:{skill:'lumberjack',level:5},home:{x:93.25,z:-13,yaw:PI},fuel:{type:'diesel',tankMgal:30000,port:{x:1.22,z:-.235}}},
+ // the Kasumuchi S70 shortbed (0.35.8, the project owner's model): the starter truck, $500, gasoline; it stands in the first car bay (x 96.85), nose to the back wall; the fuel port is the model's anchor_fuel_port (x 0.98, y 0.86, z -0.25)
+ {id:'eastbank-shortbed',model:'shortbed',name:'Kasumuchi S70',sale:'both',home:{x:96.85,z:-15.2,yaw:PI},fuel:{type:'gas',tankMgal:20000,port:{x:.98,y:.86,z:-.25}}}
 ];
 // Employers (0.35, DESIGN 4.15): a company with one owner (an NPC at the start), a skill, an office building, the places that count as "on site" (a zone, a plot or an
 // interior room), opening hours in game minutes (6 AM to 6 PM; the last clock-in half an hour before closing) and its ranks. A rank: what it needs (skill level,

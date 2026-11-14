@@ -80,7 +80,7 @@ const has=(problems,pattern)=>assert(problems.some(p=>pattern.test(p)),`expected
 assert(MAP.vehicles.every(v=>['dealership','online','both'].includes(v.sale)),'every vehicle model has a sale field');
 has(broken(m=>{delete m.vehicles[0].sale}),/needs a sale field/);has(broken(m=>{m.vehicles[0].sale='shop'}),/needs a sale field/);
 assert.deepEqual(broken(m=>{m.vehicles[1].sale='online';delete m.vehicles[1].home}),[],'an online-only model has no display slot and needs no home');
-has(broken(m=>{for(let i=0;i<9;i++)m.vehicles.push({...m.vehicles[0],id:'extra'+i})}),/lot has 9 bays but 12 models/);
+has(broken(m=>{for(let i=0;i<9;i++)m.vehicles.push({...m.vehicles[0],id:'extra'+i})}),/lot has 9 bays but 13 models/);
 has(broken(m=>{m.zones[2].bounds.x1=-30}),/zones county and farm overlap/);
 has(broken(m=>{m.zones[0].id='farm'}),/duplicate zone id/);
 has(broken(m=>{m.zones[3].bounds.x1=999}),/outside the ground/);

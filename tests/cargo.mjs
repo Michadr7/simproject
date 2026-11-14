@@ -10,7 +10,7 @@ import {MAP} from '../dist/map-definition.js';
 import {TAILGATE_OPEN} from '../dist/flatbed.js';
 
 const L={k:'log'},P=n=>({k:'planks',n});
-assert.deepEqual(Object.keys(BEDS).sort(),['flatbed','offroad','worktruck']);
+assert.deepEqual(Object.keys(BEDS).sort(),['flatbed','offroad','shortbed','worktruck']);
 assert.equal(spaceOf('flatbed'),120);assert.equal(capacity('flatbed','planks'),120);assert.equal(capacity('flatbed','log'),24);assert.equal(capacity('worktruck','log'),6);assert.equal(capacity('car','log'),0);
 // a full bed of each kind, and a mixed one, lie inside the bed and never too high
 for(const [model,bed] of Object.entries(BEDS)){assert(bed.x0>-CLASSES[model].hx&&bed.x1<CLASSES[model].hx&&bed.z0>-CLASSES[model].hz&&bed.z1<CLASSES[model].hz,`${model}: the bed is inside the body`);

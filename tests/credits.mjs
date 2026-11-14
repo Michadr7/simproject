@@ -3,12 +3,14 @@ import {PROPS} from '../dist/props-assets.js';
 import {AXES} from '../dist/axe-assets.js';
 import {SAWS} from '../dist/saw-assets.js';
 import {FLATBED} from '../dist/flatbed-assets.js';
+import {SHORTBED} from '../dist/shortbed-assets.js';
 import {RIGGED} from '../dist/rigged-assets.js';
 import {CREDITS,creditFor} from '../dist/credits.js';
 
 // Every model that ships has a credit: a new asset cannot be added without saying who made it.
 for(const [id,p] of Object.entries(PROPS))assert(creditFor(p.source),`${id} (${p.source}) has no credit in credits.js`);
 assert(creditFor(FLATBED.source),'the Tylan Flatbed has a credit');
+assert(creditFor(SHORTBED.source),'the Kasumuchi S70 has a credit (own work)');
 for(const [id,a] of Object.entries({...AXES,...SAWS}))assert(creditFor(a.source),`tool ${id} (${a.source}) has no credit in credits.js`);
 for(const [id,m] of Object.entries(RIGGED))assert(creditFor(m.source),`${id} (${m.source}) has no credit in credits.js`);
 for(const c of CREDITS){assert(c.who&&c.what&&c.licence&&(/^https:\/\//.test(c.url)||(c.url===null&&c.licence==='own work')),`${c.who}: author, what, licence and a link (own work needs none)`);assert(Array.isArray(c.covers))}

@@ -6,8 +6,9 @@ import {decode} from './nature.js';
 import {PLACEHOLDERS} from './placeholders.js';
 import {isRigged,riggedInfo,createRigged} from './rigged-props.js';
 import {FLATBED_INFO,buildFlatbed} from './flatbed.js';
+import {SHORTBED_INFO,buildShortbed} from './shortbed.js';
 // Props built from their own parts (a group with moving pieces), not one converted mesh: the Tylan Flatbed (flatbed.js).
-const CUSTOM={flatbed:{info:FLATBED_INFO,build:buildFlatbed}};
+const CUSTOM={flatbed:{info:FLATBED_INFO,build:buildFlatbed},shortbed:{info:SHORTBED_INFO,build:buildShortbed}};
 
 // A prop is a converted model (PROPS) or a placeholder (placeholders.js); both have width, depth, height, footprint, colliders and floor.
 export const propInfo=id=>{const p=PROPS[id]||CUSTOM[id]?.info||PLACEHOLDERS[id]||(isRigged(id)?riggedInfo(id):null);if(!p)throw new Error('Unknown prop '+id);return p}; // rigged props (rigged-props.js) answer from data too

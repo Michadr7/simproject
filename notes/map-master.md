@@ -812,6 +812,9 @@ The visual overhaul (sky, day/night, lights) is its own track; it shares night-l
 | P7 | Plots and multiplayer | RU3, RU4, M2..M5, L7 | Save format and relay last, once all features they carry exist | Two clients: plot buy, law, vehicles, animals in sync | 6 | high |
 | P8 | Look pass and tuning | W4, W5, W6, A8, I12, (I13 option), visual overhaul decision | Look decisions on the final world, real GPU | Full tour at noon, dusk, night; final FPS table | 6 | medium |
 
+Added 2026-11-14: **VD (vehicle damage)** is not designed yet. The user wants it after the world expansion phases. Plan: an Opus design brief (notes/vehicle-damage-design.md) before P7, because it adds a health field to the vehicle save and a sync field to multiplayer (M2..M5); build in P6 or P7 on the Sonnet side. It touches vehicle.js, driving.js, orders.js (repair, insurance), the auto shop (roadmap 0.40), crime fines (L-stages), the look (dents, smoke). Opus is on standby for the brief; every call needs the user's yes.
+**Update 2026-11-14:** the brief is written: notes/vehicle-damage-design.md. Placement: P6, after RU5 and before L2, as VD1 to VD4 (pure rules, wiring, look and sound, garage; VD1 needs A2 and comes before L4); VD5 (insurance) at the end of P6; VD6 (multiplayer) inside M2..M5 in P7; optional dents (VD3b) and tuning (VD7) in P8. 10 open questions for the user are in section 11 of the note.
+
 ### 8.2 Hard dependencies (A needs B)
 X0 needs nothing; publish needs X0 + bump. F1 needs F0. F2 needs F1, BZ1. F3 needs F2. Everything in P2 to P8 needs F3.
 W2 needs W1. W3 needs W2. R2 needs R1, W2. R3 needs R2, W3 (south bridge). R4 needs R3. RU2 needs RU1. A2 needs A1.

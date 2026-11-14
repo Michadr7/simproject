@@ -18,6 +18,14 @@ export const PAINT=Object.freeze({
   {id:'red',name:'Signal red',swatch:'#b3302a'},
   {id:'yellow',name:'Haul yellow',swatch:'#e3b21f'},
   {id:'black',name:'Black',swatch:'#232323'}]},
+ // the Kasumuchi S70: its paint is its own material (shortbed.js, shared by the body and both doors), so a colour is set directly (swatch); its own colour is white
+ shortbed:{direct:true,colours:[
+  {id:'white',name:'Fleet white',swatch:'#e3e8e6'},
+  {id:'blue',name:'Harbour blue',swatch:'#2d5f9a'},
+  {id:'red',name:'Brick red',swatch:'#a8322b'},
+  {id:'green',name:'Forest green',swatch:'#3f7a4a'},
+  {id:'yellow',name:'Taxi yellow',swatch:'#e0b320'},
+  {id:'black',name:'Black',swatch:'#232323'}]},
  offroad:{src:118,band:45,colours:[
   {id:'green',name:'Trail green',swatch:'#2fb51a',hue:null},
   {id:'red',name:'Rally red',swatch:'#c4301f',hue:4,sat:1,val:1.05},

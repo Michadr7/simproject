@@ -89,6 +89,7 @@ export const VEHICLE_LAMPS=Object.freeze({
  worktruck:{front:{x:.72,y:1.05,z:3.02},rear:{x:.85,y:.8,z:-3.02}},
  offroad:{front:{x:.6,y:1.08,z:2.82},rear:{x:.88,y:1.12,z:-2.68}},
  flatbed:{front:{x:1,y:.86,z:4.47},rear:{x:1.2,y:1,z:-4.32}},
+ shortbed:{front:{x:.72,y:.97,z:2.681},rear:{x:.819,y:1.035,z:-2.602}}, // the model's own anchor_headlight_L and anchor_taillight_L
 });
 export const LAMP_SPRITE={frontSize:.9,rearSize:.6,front:[1,.95,.8],rear:[1,.12,.08],frontStrength:1.1,rearStrength:.8};
 // size: {hx, hz, height} (vehicle.js CLASSES and the prop's height). A model without its own entry gets lamps from its size.

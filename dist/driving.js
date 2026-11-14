@@ -15,6 +15,7 @@ import {normalizeCargo,loadOf,loadPoints,LOAD_REACH,hasBed,BEDS} from './cargo.j
 import {createCargoView} from './cargo-view.js';
 import {withLoad} from './vehicle.js';
 import {TAILGATE_OPEN} from './flatbed.js';
+import {SHORTBED_DOOR_OPEN,SHORTBED_DOOR_SECONDS} from './shortbed.js';
 
 const clamp=THREE.MathUtils.clamp;
 // The filler cap marker (0.35): a glowing disc on the cap and a ring on the ground beside it, in the colour of the fuel the vehicle takes (the pumps' colours: gas red, diesel yellow). Shown only while a nozzle is in your hand.
@@ -22,7 +23,7 @@ export const FUEL_COLOURS=Object.freeze({gas:'#e0442f',diesel:'#f2c230'});
 function fillerMarker(fuel){
  const side=Math.sign(fuel.port.x)||1,group=new THREE.Group();group.name='filler-marker';group.visible=false;
  const make=geometry=>new THREE.Mesh(geometry,new THREE.MeshBasicMaterial({color:FUEL_COLOURS[fuel.type],transparent:true,opacity:.9,side:THREE.DoubleSide,fog:false}));
- const cap=make(new THREE.CircleGeometry(.14,20));cap.name='filler-cap';cap.position.set(fuel.port.x+side*.04,.95,fuel.port.z);cap.rotation.y=side*Math.PI/2;
+ const cap=make(new THREE.CircleGeometry(.14,20));cap.name='filler-cap';cap.position.set(fuel.port.x+side*.04,fuel.port.y??.95,fuel.port.z);cap.rotation.y=side*Math.PI/2;
  const halo=make(new THREE.RingGeometry(.17,.24,24));halo.name='filler-halo';halo.position.copy(cap.position);halo.rotation.y=cap.rotation.y;
  const ring=make(new THREE.RingGeometry(.3,.45,32));ring.name='filler-ground';ring.rotation.x=-Math.PI/2;ring.position.set(fuel.port.x+side*.95,.06,fuel.port.z);
  group.add(cap,halo,ring);return group;
@@ -82,9 +83,9 @@ const tilt=f=>{const s=f.state,sy=Math.sin(s.yaw),cy=Math.cos(s.yaw),at=(lx,lz)=
   // The muffler tip of a vehicle in the world (x, y, z) and the way the pipe points (dx, dz: straight back), for the smoke.
   exhaust(f=driven){if(!f||!f.cls.exhaust)return null;const e=f.cls.exhaust,w=toWorld(f.state,e.x,e.z);return e.stack?{x:w.x,y:f.y+e.y,z:w.z,dx:0,dz:0,up:true}:{x:w.x,y:f.y+e.y,z:w.z,dx:-Math.sin(f.state.yaw),dz:-Math.cos(f.state.yaw)}}, // a stack (the flatbed) points up
   door(){return driven?doorPoint(driven.state,driven.cls,side):null},
-  enter(id,seat='driver'){const f=byId.get(id);if(!f||driven)return false;driven=f;side=seat;f.lastSpeed=f.state.speed=0;f.state.steer=0;return true},
+  enter(id,seat='driver'){const f=byId.get(id);if(!f||driven)return false;driven=f;side=seat;f.lastSpeed=f.state.speed=0;f.state.steer=0;(f.doorHold=f.doorHold||{driver:0,passenger:0})[seat]=1.2;return true},
   // Get out: your own door, else the other side, behind, in front (`free(x, z)` is the game's blocked() inverted). Returns the point, or null (the caller then uses its safe-spot search).
-  leave(free){if(!driven)return null;const f=driven,p=exitPoint(f.state,f.cls,free,side);driven=null;f.state.speed=0;f.state.steer=0;return p},
+  leave(free){if(!driven)return null;const f=driven,p=exitPoint(f.state,f.cls,free,side);(f.doorHold=f.doorHold||{driver:0,passenger:0})[side]=1.6;driven=null;f.state.speed=0;f.state.steer=0;return p},
   // One slice of driving (dt <= 1/30 s). input: {throttle, steer, brake}; people: [{x, z, r}] pedestrians. A passenger does not steer: the vehicle stands still.
   step(dt,input,people=[]){if(!driven||side!=='driver')return null;const f=driven,fuelled=!!f.spec.fuel,inp=fuelled&&f.fuelMgal<=0?{...input,throttle:0}:input; // an empty tank: no throttle, the vehicle coasts to a stop
    const load=loadOf(f.spec.model,f.cargo),before=f.state,r=stepVehicle(f.state,inp,dt,withLoad(f.cls,load),envFor(f,people));f.state=r.state;lastHit=r.hit;
@@ -95,10 +96,12 @@ const tilt=f=>{const s=f.state,sy=Math.sin(s.yaw),cy=Math.cos(s.yaw),at=(lx,lz)=
   showFillers(show,nozzleFuel=null){for(const f of fleet){if(!f.marker)continue;f.marker.visible=!!show&&f.present&&f!==driven;f.markerBright=nozzleFuel===null||nozzleFuel===f.spec.fuel.type}},
   update(dt){pulse+=dt;for(const f of fleet){f.mesh.visible=f.present;if(f.marker&&f.marker.visible){const k=(f.markerBright?.8:.3)*(.6+.4*Math.sin(pulse*6));for(const part of f.marker.children)part.material.opacity=k}
    const s=f.state,accel=dt>0?(s.speed-f.lastSpeed)/dt:0,lateral=s.speed*(Math.abs(s.speed)<.01?0:s.steer*s.speed/Math.max(f.cls.rMin,s.speed*s.speed/f.cls.aLat));f.lastSpeed=s.speed;
-   const k=1-Math.exp(-dt*8);const g=tilt(f);f.pitch+=(clamp(-.01*accel,-.04,.04)+g.pitch-f.pitch)*k;f.roll+=(clamp(.012*lateral,-.05,.05)+g.roll-f.roll)*k;
+   const k=1-Math.exp(-dt*8);const g=tilt(f);f.pitch+=(clamp(-.01*accel,-.04,.04)+g.pitch-f.pitch)*k;f.roll+=(clamp(.012*lateral,-.05,.05)+g.roll-f.roll)*k;f.dynPitch=f.pitch-g.pitch;f.dynRoll=f.roll-g.roll;
    f.y+=(footing(s.x,s.z)-f.y)*(1-Math.exp(-dt*10));place(f);
    // wheels: roll with the distance travelled (angle = distance / radius, forward is +z so a positive turn about x), the front pair steers
-   f.spin+=s.speed*dt;for(const w of f.wheels){w.spin.rotation.x=f.spin/w.radius;if(w.front)w.pivot.rotation.y=s.steer*STEER_ANGLE}
+   f.spin+=s.speed*dt;for(const w of f.wheels){w.spin.rotation.x=f.spin/w.radius;if(w.front)w.pivot.rotation.y=s.steer*(w.max||STEER_ANGLE);if(w.rest!==undefined)w.pivot.position.y=w.rest+clamp(-(w.x*Math.sin(f.dynRoll||0)-w.z*Math.sin(f.dynPitch||0)),-.06,.1)} // a model with suspension (the shortbed): the wheel stays on the ground while the body pitches and rolls, up to the spec's 0.1 m of compression, from its rest height
+   const sw=f.mesh.userData.steeringWheel;if(sw)sw.rotation.z=-s.steer*1.6; // the steering wheel turns with the steering (left is counter-clockwise for the driver)
+   const dr=f.mesh.userData.doors;if(dr){f.doorOpen=f.doorOpen||{driver:0,passenger:0};f.doorHold=f.doorHold||{driver:0,passenger:0};for(const side of ['driver','passenger']){const want=f.doorHold[side]>0?1:0;f.doorHold[side]=Math.max(0,f.doorHold[side]-dt);const o=f.doorOpen[side]=f.doorOpen[side]+Math.sign(want-f.doorOpen[side])*Math.min(Math.abs(want-f.doorOpen[side]),dt/SHORTBED_DOOR_SECONDS);dr[side].pivot.rotation.y=dr[side].sign*SHORTBED_DOOR_OPEN*o}} // the doors (shortbed): the door on your side swings open (0.875 s, 70 degrees) when you get in or out (enter and leave set doorHold seconds) and shuts again
    // the tailgate (the flatbed): opened and closed by hand (toggleGate); it swings shut by itself when the vehicle moves or is driven; a quarter turn in about half a second
    const tg=f.mesh.userData.tailgate;if(tg){if(f===driven||Math.abs(s.speed)>=.05)f.gateOpen=false;const want=!f.display&&f.gateOpen?1:0;f.gate+=Math.sign(want-f.gate)*Math.min(Math.abs(want-f.gate),dt*2);tg.rotation.x=TAILGATE_OPEN*f.gate}}},
   // where the walking player is (null while driving): the flatbed's tailgate opens for them

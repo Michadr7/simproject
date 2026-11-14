@@ -87,7 +87,7 @@ assert.match(await readFile('dist/dev-flag.js','utf8'),/export const DEV_MODE=tr
   assert.equal(S.progress.inventory.slots.every(s=>s.quantity>=1),true)}
 
  // Drivable vehicles: Spawn brings one to a free spot in front of the player, Remove takes it out of the world
- {assert(g.find('devVehicle')&&g.find('devVehicleSpawn')&&g.find('devVehicleRemove'),'the vehicle controls are in the panel');const ids=g.find('devVehicle').children.map(o=>o.value);assert.deepEqual(ids,['eastbank-worktruck','eastbank-offroad','eastbank-flatbed'],'every drivable vehicle is listed');
+ {assert(g.find('devVehicle')&&g.find('devVehicleSpawn')&&g.find('devVehicleRemove'),'the vehicle controls are in the panel');const ids=g.find('devVehicle').children.map(o=>o.value);assert.deepEqual(ids,['eastbank-worktruck','eastbank-offroad','eastbank-flatbed','eastbank-shortbed'],'every drivable vehicle is listed');
   Object.assign(me,{x:30,z:20});const copies=()=>g.scene().children.filter(o=>/^vehicle-dev/.test(o.name));assert.equal(copies().length,0,'no dev copies yet');
   g.find('devVehicle').value='eastbank-offroad';g.find('devVehicleSpawn').click();assert.equal(g.find('devMessage').dataset.kind,'');assert.match(g.find('devMessage').textContent,/Pevrolet Off Road Pickup is/);g.pump(.2);const car=copies()[0];assert(car,'a free dev copy is in the scene');const d=Math.hypot(car.position.x-me.x,car.position.z-me.z);assert(d>3&&d<12,`spawned a few metres from the player (${d.toFixed(1)} m)`);assert(car.visible,'and visible');
   g.find('devVehicleSpawn').click();assert.equal(copies().length,2,'every Spawn makes another copy; no ownership, room or price');g.pump(.6);assert.equal(copies().every(c=>c.visible),true,'the 0.5 s order tick leaves them alone');
