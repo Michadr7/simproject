@@ -1,13 +1,15 @@
 // The live main-menu scene (notes/menu-scene-design.md): a forest clearing, a vehicle, and the player's character leaning on it reading the day's
 // logging plans. Built only from what the game already has: props.js (the vehicle, logs), nature.js (pines), character.js (the character, its lean and reach).
 // Every motion comes from menu-scene-rules.js (pure functions of time). game.js owns the renderer and calls update() then render() at a low frame rate.
-// Budget: 1 skinned character, about 16 draw calls, 16 tree instances, no shadow pass, 36 dust points, 1,570 ground-cover instances (2 draw calls, wind in the shader).
+// Budget: 1 skinned character, about 21 draw calls (16 + 5 headlamp pieces), 3 extra lights (moon, 2 headlamp spots), 16 tree instances, no shadow pass, 36 dust points, 1,570 ground-cover instances (2 draw calls, wind in the shader).
 import * as THREE from './vendor/three.module.js';
 import {createProp,createPropInstances,propInfo} from './props.js';import {applyPaint} from './paint-shader.js';
-import {PINES,modelGeometry,createNatureMaterials} from './nature.js';import {createSky} from './sky.js';
+import {PINES,modelGeometry,createNatureMaterials} from './nature.js';import {createSky} from './sky.js';import {lightSwitch,VEHICLE_LAMPS} from './night-lights-rules.js';
 import {MENU_VEHICLE,leanSpot,menuPose,windSway,hazeAt,MENU_PLANS,plansOps,MENU_COVER,groundCover,coverShape,COVER_WIND} from './menu-scene-rules.js';
 
 const SOLID={apply:m=>m},DUST=36,PLANS_LEAN=.8,HAND={x:.27,y:1.3,z:.25}; // HAND: where each wrist goes (character space, metres); the fist hangs about 10 cm below and ahead of the wrist. The sheet is 46 cm wide (edge at 23 cm), so the wrist sits 4 cm outside the edge and the fist closes around it from the side and below, behind the sheet's plane, instead of through the face
+// Menu-only night look (the game's night is unchanged): MOON is a cool directional fill from the camera side plus extra hemisphere light, both scaled by the night weight; HEADLAMP is the pickup's two front lamps (switched with the sun like the game's lamps).
+const MOON={colour:'#8fb0ff',strength:1.5,hemi:.95,from:[-4,9,10]},HEADLAMP={colour:'#ffe2a8',spot:55,angle:.62,range:16,radius:.11,halo:1.15,pool:[7.5,9.5],poolStrength:.55,backoff:.07};
 const GAME_MINUTES_PER_SECOND=.5; // the game clock runs 30 game minutes per real minute (timestep.js, advanceTime): the menu sky moves at the same speed
 // Trees stand in a ring behind and beside the clearing, never between the camera and the character. [x, z, model index, scale, phase]
 // pine.1 is left out: its bark has branch stubs that stick out of the trunk up to 1.8 m at 0.5 to 1.7 m high (the other two stay within 0.4 m there), which showed as a bent hook on a trunk close to the camera.
@@ -65,6 +67,7 @@ export function createMenuScene({createCharacter,appearance,vehicle=MENU_VEHICLE
  const own=x=>{owned.push(x);return x};
  scene.name='menu-scene';scene.background=new THREE.Color('#a9c4cf');scene.fog=new THREE.Fog('#a9c4cf',14,46);
  const hemi=new THREE.HemisphereLight('#eaf3f5','#44553a',1.5),sun=new THREE.DirectionalLight('#ffe2b8',2.4);scene.add(hemi,sun,sun.target);
+ const moon=new THREE.DirectionalLight(MOON.colour,0);moon.position.set(...MOON.from);scene.add(moon,moon.target); // always in the scene (intensity 0 by day) so the light count, and the compiled shaders, never change
  const gear=renderer||{toneMapping:0,toneMappingExposure:1},sky=createSky({scene,renderer:gear,sun,hemi}),startMinutes=Number.isFinite(minutes)?minutes:720;
  for(const part of [sky.dome,sky.stars])owned.push(part.geometry,part.material); // the dome and the stars are this scene's own copy
 
@@ -123,12 +126,30 @@ export function createMenuScene({createCharacter,appearance,vehicle=MENU_VEHICLE
   const list=coverSpots.filter(s=>s.kind===kind),mesh=new THREE.InstancedMesh(own(coverGeometry(kind,root,tip)),coverMaterial,Math.max(1,list.length));mesh.count=list.length;mesh.name='menu-cover-'+kind;mesh.frustumCulled=false;
   list.forEach((s,i)=>{q.setFromEuler(e.set(0,s.yaw,0));mesh.setMatrixAt(i,m4.compose(at.set(s.x,0,s.z),q,sc.setScalar(s.scale)))});mesh.instanceMatrix.needsUpdate=true;scene.add(mesh);return mesh});
 
+ // Headlamps: the pickup's front pair (night-lights-rules.js VEHICLE_LAMPS), in the vehicle's frame. 2 emissive lamp meshes, 2 additive halo sprites, 1 additive ground pool (5 draw calls), 2 spot lights (always present, intensity 0 by day).
+ const glowMap=(()=>{const n=32,d=new Uint8Array(n*n*4);for(let y=0;y<n;y++)for(let x=0;x<n;x++){const r=Math.hypot((x+.5)/n*2-1,(y+.5)/n*2-1),a=Math.pow(Math.max(0,1-r),2)*255;d.set([255,255,255,a],(y*n+x)*4)}const tex=new THREE.DataTexture(d,n,n);tex.needsUpdate=true;tex.colorSpace=THREE.SRGBColorSpace;return own(tex)})();
+ const rig=new THREE.Group(),lampAt=VEHICLE_LAMPS[vehicle.prop]?.front||{x:.6,y:1.08,z:2.82},lampSpots=[],lampMeshes=[],halos=[];rig.rotation.y=vehicle.yaw;scene.add(rig);
+ const lampMat=own(new THREE.MeshBasicMaterial({color:HEADLAMP.colour,fog:false})),haloMat=own(new THREE.SpriteMaterial({map:glowMap,color:HEADLAMP.colour,blending:THREE.AdditiveBlending,transparent:true,depthWrite:false,fog:false})),lampGeometry=own(new THREE.SphereGeometry(HEADLAMP.radius,12,8));
+ for(const side of [-1,1]){
+  const x=side*lampAt.x,mesh=new THREE.Mesh(lampGeometry,lampMat);mesh.position.set(x,lampAt.y,lampAt.z);rig.add(mesh);lampMeshes.push(mesh);
+  const halo=new THREE.Sprite(haloMat);halo.position.set(x,lampAt.y,lampAt.z+.12);halo.scale.setScalar(HEADLAMP.halo);rig.add(halo);halos.push(halo);
+  const spotLight=new THREE.SpotLight(HEADLAMP.colour,0,HEADLAMP.range,HEADLAMP.angle,.7,1.4);spotLight.position.set(x,lampAt.y,lampAt.z+.1);spotLight.target.position.set(x*1.3,0,lampAt.z+7);rig.add(spotLight,spotLight.target);lampSpots.push(spotLight);
+ }
+ const poolMat=own(new THREE.MeshBasicMaterial({map:glowMap,color:HEADLAMP.colour,blending:THREE.AdditiveBlending,transparent:true,depthWrite:false,fog:false})),pool=new THREE.Mesh(own(new THREE.PlaneGeometry(...HEADLAMP.pool)),poolMat);
+ pool.rotation.x=-Math.PI/2;pool.position.set(0,.04,lampAt.z+HEADLAMP.pool[1]*.38);pool.renderOrder=1;rig.add(pool);
+ function night(s){ // the menu's night look: moon fill and lamps follow the sky; returns nothing, all by day = 0
+  const n=Math.max(0,Math.min(1,s.weights?.night??0)),on=lightSwitch(s.sunHeight);
+  moon.intensity=MOON.strength*n;moon.target.position.set(look.x,0,look.z);moon.target.updateMatrixWorld();hemi.intensity+=MOON.hemi*n;
+  for(const l of lampSpots)l.intensity=HEADLAMP.spot*on;
+  lampMat.color.set(HEADLAMP.colour).multiplyScalar(.15+.85*on);haloMat.opacity=on*.8;poolMat.opacity=on*HEADLAMP.poolStrength;
+  const v=on>.01;for(const m of lampMeshes)m.visible=v;for(const h of halos)h.visible=v;pool.visible=v;
+ }
  function update(t,dt=0){
   const p=menuPose(t);wind.uTime.value=t;wind.uGust.value=p.gust;
   pose(p,dt);sway(t);
   for(let i=0;i<DUST;i++){const d=hazeAt(t,i);dustAt[i*3]=d.x;dustAt[i*3+1]=d.y;dustAt[i*3+2]=d.z}dustGeometry.attributes.position.needsUpdate=true;
   camera.position.set(home.x+p.camera.x,home.y+p.camera.y,home.z+p.camera.z);camera.lookAt(look);
-  sky.update(startMinutes+t*GAME_MINUTES_PER_SECOND,{target:look});scene.fog.near=14;scene.fog.far=46; // the game's rig sets sun or moon, hemisphere, fog colour, sky and exposure; the menu keeps its own short haze distance
+  night(sky.update(startMinutes+t*GAME_MINUTES_PER_SECOND,{target:look}));scene.fog.near=14;scene.fog.far=46; // the game's rig sets sun or moon, hemisphere, fog colour, sky and exposure; the menu keeps its own short haze distance
  }
  return {scene,camera,avatar,plans,vehicle:car,covers,update,frame,sky,exposure:()=>gear.toneMappingExposure,
   setAppearance(a){avatar.apply(a)},

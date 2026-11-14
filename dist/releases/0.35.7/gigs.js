@@ -3,6 +3,7 @@
 // ctx = {clients:[{id,name}], places:[{id,x,z,room}]}; the default is built lazily from the town (population.js + orders.js dropSpot).
 import {townPopulation} from './population.js';
 import {dropSpot} from './orders.js';
+import {propertyById} from './properties.js';
 const T=(id,title,base,o={})=>Object.freeze({id,title,base,stops:1,rep:0,bed:false,limit:0,hard:false,...o});
 export const GIG_TYPES=Object.freeze([
  T('grocery','Grocery run',1200,{limit:60,twist:'Deliver within 60 game minutes'}),
@@ -19,13 +20,15 @@ export const BOARD_SLOTS=4,SLOT_LIFE=90,SLOT_STAGGER=22,RECENT_MAX=30,CLIENT_RES
 export const gameMinutes=p=>((p.housing?.day||1)-1)*1440+(p.routine?.minutes||0);
 const int=(v,lo,hi,d=0)=>Number.isFinite(v)?Math.max(lo,Math.min(hi,Math.floor(v))):d;
 const hash=(...a)=>{let h=2166136261;for(const ch of a.join('|')){h^=ch.codePointAt(0);h=Math.imul(h,16777619)}h^=h>>>16;h=Math.imul(h,0x85ebca6b);h^=h>>>13;return (h>>>0)};
-const pt=v=>v&&Number.isFinite(v.x)&&Number.isFinite(v.z)?{id:typeof v.id==='string'?v.id.slice(0,60):'',x:Math.max(-2000,Math.min(2000,v.x)),z:Math.max(-2000,Math.min(2000,v.z)),room:typeof v.room==='string'?v.room.slice(0,24):'street'}:null;
+const pt=v=>v&&Number.isFinite(v.x)&&Number.isFinite(v.z)?{id:typeof v.id==='string'?v.id.slice(0,60):'',x:Math.max(-2000,Math.min(2000,v.x)),z:Math.max(-2000,Math.min(2000,v.z)),room:typeof v.room==='string'?v.room.slice(0,24):'street',name:typeof v.name==='string'?v.name.slice(0,60):''}:null;
 let defaultCtx=null;
+const EXTRA_PLACES=[{id:'oak-18',name:'18 Oak Street',x:3.8,z:-7},{id:'alder-coffee',name:'Alder Coffee',x:36,z:-6.3},{id:'oak-laundry',name:'Oak Street Laundry',x:-10.2,z:-7}];
 export function townContext(){
  if(defaultCtx)return defaultCtx;
  const pop=townPopulation(),clients=[],places=[],seen=new Set();
- for(const m of pop.people)if(m.resident&&m.home?.startsWith('property:'))clients.push({id:m.id,name:m.name,home:m.home.slice(9)});
- for(const c of clients){if(seen.has(c.home))continue;seen.add(c.home);const d=dropSpot(c.home);if(d)places.push({id:c.home,x:d.x,z:d.z,room:'street'})}
+ for(const m of pop.people)if(m.resident&&m.home?.startsWith('property:')&&m.home!=='property:farm-house')clients.push({id:m.id,name:m.name,home:m.home.slice(9)});
+ for(const c of clients){if(seen.has(c.home))continue;seen.add(c.home);const d=dropSpot(c.home);if(d)places.push({id:c.home,name:propertyById(c.home)?.name||'a house',x:d.x,z:d.z,room:'street'})}
+ for(const e of EXTRA_PLACES)places.push({...e,room:'street'}); // the street's own addresses near the market: short walks
  return defaultCtx={clients,places};
 }
 export const freshGigs=()=>({rep:0,recent:[],active:null,nextId:1,taken:{},clientsSeen:{},completed:0});
@@ -82,9 +85,9 @@ export function boardFor(p,now=gameMinutes(p),ctx=townContext()){
   const type=pool[hash('t',w,i,g.completed)%pool.length];
   const rested=ctx.clients.filter(c=>!usedC.has(c.id)&&!(c.id in g.clientsSeen&&day-g.clientsSeen[c.id]<CLIENT_REST_DAYS));
   const cl=rested.length?rested[hash('c',w,i,g.completed)%rested.length]:ctx.clients[0];
-  const places=[];for(let k=0;k<type.stops;k++)places.push(ctx.places[hash('p',w,i,k,g.completed)%ctx.places.length]);
+  const places=[],home=ctx.places.find(x=>x.id===cl?.home);for(let k=0;k<type.stops;k++)places.push(k===0&&home?home:ctx.places[hash('p',w,i,k,g.completed)%ctx.places.length]);
   usedT.add(type.id);if(cl)usedC.add(cl.id);
-  slots.push({slot:i,window:w,expiresAt,type:type.id,client:cl?.id||'',clientName:cl?.name||'',places,large:isLarge(g,type)});
+  slots.push({slot:i,window:w,expiresAt,type:type.id,client:cl?.id||'',clientName:cl?.name||'',places:places.map(x=>({...x})),large:isLarge(g,type)});
  }
  return slots;
 }

@@ -7,20 +7,20 @@ export {gameMinutes};
 const slotId=i=>'slot-'+i,slotOf=id=>/^slot-[0-3]$/.test(id)?+id.slice(5):-1;
 const point=pl=>({x:pl.x,y:.165,z:pl.z,room:pl.room||'street'});
 const nameOf=id=>townContext().clients.find(c=>c.id===id)?.name||'a neighbor';
-const termsOf=type=>type.limit?`${type.twist}`:type.twist;
+const stopsText=places=>'Go to '+places.map(x=>x.name||'the marked spot').join(', then ')+'.';
 export const atGigPoint=(position,room,point)=>room===point.room&&Math.hypot(position.x-point.x,position.z-point.z)<=1.35;
 // The shape the old code reads from progress.activeJob.
 export function activeView(p){
  const a=p.gigs?.active;if(!a)return null;const t=typeById(a.type),done=gigDone(p),next=a.places.find((_,i)=>!a.visited[i])||a.places.at(-1);
  const last=a.places.at(-1),now=gameMinutes(p);
- return {id:'gig-'+a.id,type:a.type,title:`${t.title} for ${nameOf(a.client)}`,description:t.twist,reward:payFor(a.type,100,repeatsToday(p.gigs.recent,a.type,now),p.gigs.rep,0,a.large),mode:'delivery',
+ return {id:'gig-'+a.id,type:a.type,title:`${t.title} for ${nameOf(a.client)}`,description:stopsText(a.places)+' '+t.twist+'.',reward:payFor(a.type,100,repeatsToday(p.gigs.recent,a.type,now),p.gigs.rep,0,a.large),mode:'delivery',
   stage:done?'return':a.visited.some(Boolean)?'task':'travel',location:point(next),taskLocation:point(next),returnLocation:point(last),stops:a.places.length,done:a.visited.filter(Boolean).length,dueAt:a.dueAt};
 }
 const withView=p=>({...p,activeJob:activeView(p)});
 // What the board slot offers (the phone card reads title, description, reward, terms).
 function offer(p,s){
  const t=typeById(s.type),now=gameMinutes(p),large=s.large;
- return {id:slotId(s.slot),title:`${t.title} for ${s.clientName||nameOf(s.client)}`,description:`${t.twist}. ${s.places.length>1?s.places.length+' stops.':'1 stop.'}`,reward:payFor(s.type,100,repeatsToday(p.gigs.recent,s.type,now),p.gigs.rep,0,large),terms:t.limit?`${t.limit} min limit`:'No time limit',mode:'delivery'};
+ return {id:slotId(s.slot),title:`${t.title} for ${s.clientName||nameOf(s.client)}`,description:stopsText(s.places)+' '+t.twist+'.',reward:payFor(s.type,100,repeatsToday(p.gigs.recent,s.type,now),p.gigs.rep,0,large),terms:t.limit?`${t.limit} min limit`:'No time limit',mode:'delivery'};
 }
 // Walking types only, until the vehicle gigs have their cargo and knock code.
 const LIVE=new Set(GIG_TYPES.filter(t=>t.live!==false).map(t=>t.id));
@@ -34,6 +34,8 @@ export function acceptContract(p,id){
  if(!liveBoard(p).some(s=>s.slot===i))return {error:'This gig is unavailable.'};
  const r=acceptGig(p,i,gameMinutes(p));return r.error?r:{state:withView(r.state)};
 }
+// What Noah's counter offers: the grocery and parcel gigs of the board.
+export const marketContracts=p=>p.activeJob||p.gigs?.active?[]:liveBoard(p).filter(s=>s.type==='grocery'||s.type==='parcel').map(s=>offer(p,s));
 export const gigTarget=job=>job.stage==='return'?job.returnLocation:job.location;
 export function tickContract(p,{position,room='street',dt=0,moving=false,distance=0}){
  if(!p.gigs?.active)return p;

@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import {CONTRACTS,acceptContract,tickContract,completeContract,availableContracts,gigTarget,refreshGigBoard,gameMinutes} from '../dist/gig-bridge.js';
+import {marketContracts,CONTRACTS,acceptContract,tickContract,completeContract,availableContracts,gigTarget,refreshGigBoard,gameMinutes} from '../dist/gig-bridge.js';
 import {freshProgress,normalizeProgress,saveProgress,loadProgress} from '../dist/jobs.js';
 import {advanceTime} from '../dist/routine.js';
 // The game's old gig hooks, on the new gigs: accept, walk to the stops, report back, get paid; saved and loaded; old active jobs dropped.
@@ -30,4 +30,5 @@ assert.equal(normalizeProgress({gigs:{active:{type:'grocery',places:'x'},rep:-5}
 // rush: the hard limit ends it
 let r=freshProgress();const rush=availableContracts(r).find(o=>o.title.startsWith('Rush'));
 if(rush){r=acceptContract(r,rush.id).state;r=advanceTime(r,30);r=tickContract(r,{position:{x:9999,z:0},room:'street',dt:.03});assert.equal(r.activeJob,null);assert.equal(r.gigs.active,null)}
+const mk=marketContracts(freshProgress());assert(mk.every(o=>/^(Grocery|Doorstep)/.test(o.title)&&/Go to /.test(o.description)),'Noah offers grocery and parcel gigs with street names');assert.deepEqual(marketContracts(p),[],'nothing while a gig is active');
 console.log('gigs-game ok');

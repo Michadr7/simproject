@@ -19,6 +19,7 @@ export const BEATS=Object.freeze([
  B('rent','Somewhere to park','Studio 2B is for rent. Rent it so the truck has a home.','rented','apartments'),
  B('sleep','Keep her','Hal gives you the truck. Sleep in the studio to end the day.','slept','apartments')
 ]);
+const DONE=Object.freeze({groceries:'Sophie thanks you and the groceries are delivered.',food:'Fed and watered. Off to the farm.',farm:'Hal pays you for the groceries. His truck waits in the yard: more soon.'});
 export const fresh=()=>({step:0,done:false,skipped:false,quality:100,fuelGiven:false,loanUid:null,loaded:false,noteGiven:false,gigDone:false});
 const int=(v,lo,hi,d=0)=>Number.isFinite(v)?Math.max(lo,Math.min(hi,Math.floor(v))):d;
 // An old save: anything done already. p is the progress being normalised (partly built is fine).
@@ -62,5 +63,5 @@ export function advanceStarter(p,event,data={}){
  if(event==='refuelled')o.fuelGiven=true;
  if(event==='arrived'&&data.loanUid)o.loanUid=data.loanUid;
  if(event==='slept'){o.done=true;o.loanUid=null}
- return {state:next(o),message:beat.id==='sleep'?'Hal: keep her. She is yours.':beat.title+' done.',cash:beat.event==='refuelled'&&s.fuelGiven?0:beat.cash};
+ return {state:next(o),message:beat.id==='sleep'?'Hal: keep her. She is yours.':DONE[beat.id]||beat.title+' done.',cash:beat.event==='refuelled'&&s.fuelGiven?0:beat.cash};
 }

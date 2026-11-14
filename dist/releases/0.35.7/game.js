@@ -49,7 +49,7 @@ import {DEV_MODE} from './dev-flag.js';import {VERSION} from './version.js';impo
 import {createInventoryUI} from './inventory-ui.js';
 import {addItem,useItem,unequipItem,hasItem,hotbarItems,equipTool,sellLogs,canOf,setCan} from './inventory.js';
 import {createPhone} from './phone.js';
-import {acceptContract,completeContract,tickContract,gigTarget,atGigPoint,refreshGigBoard,gameMinutes} from './gig-bridge.js';
+import {acceptContract,completeContract,tickContract,gigTarget,atGigPoint,refreshGigBoard,gameMinutes,marketContracts} from './gig-bridge.js';import {advanceStarter,starterObjective,skipStarter,PLACES as STORY_PLACES} from './starter.js';
 import {GameState,initializeState,setMePosition,tickLife,setStatDrainMultiplier} from './state.js';
 import {needsEffects} from './life.js';
 import {loadProfile,saveProfile} from './profile.js';
@@ -436,6 +436,11 @@ function notifyPhone(app,text){
  queueToast(text);phone?.notify(app);audio.ping();
 }
 function toast(text){showToast(text,4500)}
+function takeGig(id){const r=acceptContract(GameState.progress,id);if(r.error){toast(r.error);return}GameState.progress=r.state;persist();toast('Gig accepted · '+GameState.progress.activeJob.title+' · Follow the gold marker')}
+// The starter story (starter.js, "A Hand for Hal"): events move it on; the truck beats wait for the short flatbed.
+function storyEvent(event,data){const p=GameState.progress,r=advanceStarter(p,event,data);if(r.error)return false;const cash=r.cash||0;GameState.progress={...p,starter:r.state,cash:p.cash+cash,routine:{...p.routine,earned:p.routine.earned+cash}};notifyPhone('player',r.message+(cash?' · +'+money(cash):''));return true}
+function storyTick(){const p=GameState.progress,s=p.starter;if(!s||s.done||inside||s.step>3)return;if(s.step===0){if(!(p.messages||[]).some(m=>m.text.startsWith('Noah: Come by')))notifyPhone('player','Noah: Come by the market, I could use a hand.')}else if(s.step===3&&Math.hypot(me.position.x-STORY_PLACES.farmhouse.x,me.position.z-STORY_PLACES.farmhouse.z-4)<14)storyEvent('arrived')}
+function skipChoice(){const p=GameState.progress,s=p.starter;return s&&!s.done&&s.step<=1&&!p.completed?[{label:'Skip the introduction',run:()=>speak(shops.market.clerk.group,'Noah','If you skip, there is no story and no truck from Hal. He will sell you one for $2,800 later. Skip anyway?',[{label:'Yes, skip it',run:()=>{GameState.progress={...GameState.progress,starter:skipStarter()};persist();toast('Introduction skipped.')}},{label:'No, keep going',run:()=>{}}])}]:[]}
 const toastQueue=[];let toastShowing=false;
 function showToast(text,ms){$('jobToast').textContent=text;$('jobToast').hidden=false;toastShowing=true;clearTimeout(toast.timer);toast.timer=setTimeout(()=>{toastShowing=false;$('jobToast').hidden=true;const next=toastQueue.shift();if(next)showToast(next,3800)},ms)}
 // a notification toast: shown at once when nothing is showing, otherwise it waits (the three newest are kept); action feedback (toast) still shows at once
@@ -450,7 +455,7 @@ function showDialog(kicker,title,text,tag,action,label){
 function finishJob(action){
  if(action==='pickup'&&!shopOpen('market',GameState.progress.routine)){toast('The market has closed for today.');return}
  const result=transactJob(GameState.progress,action,me.position,{shop});if(result.error){toast(result.error);return}
- GameState.progress=result.state;persist();$('dialog').hidden=true;clearWorldPanel();modal=false;keys.clear();
+ GameState.progress=result.state;persist();$('dialog').hidden=true;clearWorldPanel();modal=false;keys.clear();if(action==='deliver')storyEvent('delivered');
  toast(result.paid?`${money(result.paid)} earned · delivery completed`:'Order collected. Follow the marker to your customer.');
 }
 function enterHome(target=studioHome){target.room.frontDoor?.snap(false);  if(target.kind==='studio'&&!GameState.progress.housing.rented)return;persist();home=target;home.room.setFloor?.(0);inside=true;if(home.kind==='house')zoom=zoomTarget=9;home.room.scene.add(player);setMePosition(home.ENTRY.x,.02,home.ENTRY.z);yaw=0;pitch=home.kind==='house'?.85:.4;camera.position.set(home.ENTRY.x,3,home.ENTRY.z+5.5);$('dialog').hidden=true;clearWorldPanel();modal=false;keys.clear();
@@ -473,7 +478,7 @@ function enterShop(kind,entry=SHOP_ENTRY){if(!shopOpen(kind,GameState.progress.r
 function enterOffice(o){persist();shop=o.key;if(o.kind==='warehouse'){syncWarehouse();loadForklift(o.room);updateFork()}o.room.exitDoor.manual&&o.room.exitDoor.snap(false);o.room.scene.visible=true;o.room.scene.add(player);{const en=o.interior.entry||SHOP_ENTRY;setMePosition(en.x,.02,en.z);yaw=0;pitch=.4;camera.position.set(o.interior.origin.x,3,o.interior.origin.z+en.z+5.1)}$('dialog').hidden=true;clearWorldPanel();keys.clear()}
 function leaveOffice(){const o=officeByKey(shop);doorCooldown=2;look.resetMotion();busy=null;for(const mesh of o.room.occluders){mesh.material.opacity=1;mesh.material.depthWrite=true}o.room.scene.visible=false;shop=null;scene.add(player);setMePosition(o.door.out.x,standHeight(o.door.out.x,o.door.out.z),o.door.out.z);me.rotation.y=o.door.yaw;yaw=0;pitch=.4;camera.position.set(o.door.out.x+1,3,o.door.out.z+7);persist();keys.clear()}
 function leaveShop(exitX=0){if(officeByKey(shop)){leaveOffice();return}doorCooldown=2;look.resetMotion();busy=null;const room=shops[shop];for(const mesh of [...room.occluders,...shopShells[shop]]){mesh.material.opacity=1;mesh.material.depthWrite=true}const door=SHOPS[shop],dw=MAP.shops[shop].doorway;shop=null;scene.add(player);setMePosition(door.x+Math.max(-dw.exit.clamp,Math.min(dw.exit.clamp,exitX)),.165,dw.exit.z);camera.position.set(door.x,3,door.z+6);persist();keys.clear()}
-function useLife(action){const place=shop||(inside?'home':null);const atCounter=shop&&Math.hypot(me.position.x-COUNTER.x,me.position.z-COUNTER.z)<1.6;const atKitchen=inside&&(home.room.floor||0)===0&&Math.hypot(me.position.x-home.KITCHEN.x,me.position.z-home.KITCHEN.z)<1.5;if(shop&&!shopOpen(shop,GameState.progress.routine)){toast('The shop has closed. Please return tomorrow.');return}if(!atCounter&&!atKitchen){toast('Move closer to the counter.');return}const r=lifeTransaction(GameState.progress,action,place);if(r.error){toast(r.error);return}GameState.progress=r.state;if(action==='cook'&&home.kind==='studio'&&GameState.progress.housing.rented)GameState.progress.housing.utilityUsage+=15;persist();$('dialog').hidden=true;clearWorldPanel();modal=false;keys.clear();toast(r.message)}
+function useLife(action){const place=shop||(inside?'home':null);const atCounter=shop&&Math.hypot(me.position.x-COUNTER.x,me.position.z-COUNTER.z)<1.6;const atKitchen=inside&&(home.room.floor||0)===0&&Math.hypot(me.position.x-home.KITCHEN.x,me.position.z-home.KITCHEN.z)<1.5;if(shop&&!shopOpen(shop,GameState.progress.routine)){toast('The shop has closed. Please return tomorrow.');return}if(!atCounter&&!atKitchen){toast('Move closer to the counter.');return}const r=lifeTransaction(GameState.progress,action,place);if(r.error){toast(r.error);return}GameState.progress=r.state;if(action==='cook'&&home.kind==='studio'&&GameState.progress.housing.rented)GameState.progress.housing.utilityUsage+=15;persist();if(action==='meal')storyEvent('ate');$('dialog').hidden=true;clearWorldPanel();modal=false;keys.clear();toast(r.message)}
 
 function nearestPerson(){return pedestrians.people.find(p=>Math.hypot(me.position.x-p.group.position.x,me.position.z-p.group.position.z)<1.5)}
 function commitCafe(action,drink){const r=cafeTransaction(GameState.progress,action,me.position,shop,drink);if(r.error){toast(r.error);return false}GameState.progress=r.state;persist();$('dialog').hidden=true;clearWorldPanel();modal=false;keys.clear();toast(r.message);if(['hire','clockin','order','clockout'].includes(action))look.capture();return true}
@@ -516,8 +521,8 @@ function managerMenu(){const c=GameState.progress.cafe,actor=shops.cafe.clerk.gr
  speak(actor,'Elena','Hi there. What can I help you with?',choices);
 }
 function marketWork(){
- const actor=shops.market.clerk.group,route=routeFor(GameState.progress);
- speak(actor,'Noah',GameState.progress.phase==='carrying'?'You’ve already collected an order for '+route.name+'. Bring that one over first.':'Could you take this grocery order to '+route.name+'? They’ll pay you '+money(route.pay)+'.',GameState.progress.phase==='carrying'?[]:[{label:'Sure, I’ll take it.',run:()=>finishJob('pickup')}]);
+ const actor=shops.market.clerk.group,route=routeFor(GameState.progress),first=GameState.progress.phase!=='carrying'&&GameState.progress.completed===0,offers=marketContracts(GameState.progress);
+ speak(actor,'Noah',GameState.progress.phase==='carrying'?'You’ve already collected an order for '+route.name+'. Bring that one over first.':first?'Could you take this grocery order to '+route.name+'? They’ll pay you '+money(route.pay)+'.':offers.length?'Here is what the board has for today.':'Nothing on the board right now. Check back in a little while.',GameState.progress.phase==='carrying'?[]:[...(first?[{label:'Sure, I’ll take it.',run:()=>finishJob('pickup')}]:[]),...offers.map(o=>({label:'Gig: '+o.title+' · '+money(o.reward),run:()=>takeGig(o.id)})),...skipChoice()]);
 }
 // Noah at the counter: browse the store, or ask about delivery work (both used to be buried in the store window).
 function marketMenu(){
@@ -789,8 +794,8 @@ function updateWork(dt){
   const floor=home.room.floor||0,st=home.STAIRS,exit=floor===0&&Math.hypot(me.position.x-home.EXIT.x,me.position.z-home.EXIT.z)<1.5,bed=floor===(home.BED_FLOOR||0)&&Math.hypot(me.position.x-home.BED.x,me.position.z-home.BED.z)<1.4,kitchen=floor===0&&Math.hypot(me.position.x-home.KITCHEN.x,me.position.z-home.KITCHEN.z)<1.5,stairs=!!st&&Math.hypot(me.position.x-st.x,me.position.z-(floor===0?st.footZ:st.topZ))<1.5;$('prompt').hidden=!active||modal||(!exit&&!bed&&!kitchen&&!stairs);$('prompt').querySelector('span').textContent=exit?'Go outside':kitchen?'Prepare a meal':stairs?(floor===0?'Go upstairs':'Go downstairs'):'Rest and recover';marker.visible=false;parcel.visible=carrying;return}
  $('cash').textContent=money(GameState.progress.cash);$('deliveryCount').textContent=GameState.progress.completed+' '+(GameState.progress.completed===1?'delivery':'deliveries')+' completed';
  $('objective').querySelector('.eyebrow').textContent=carrying?'ORDER COLLECTED':'DELIVERY WORK';
- $('objective').querySelector('h2').textContent=carrying?'Deliver to '+dest.name:GameState.progress.completed?'Ready for another?':'Earn your first wages.';
- $('objective').querySelector('p').textContent=carrying?(GameState.progress.completed%3===1?'Speak to Elena at the café counter. Payment: ':'Use the marked delivery box. Payment: ')+money(route.pay)+'.':'Speak to Noah at the market counter for delivery work. Next wage: '+money(route.pay)+'.';
+ $('objective').querySelector('h2').textContent=carrying?'Deliver to '+dest.name:starterObjective(GameState.progress)?.title||(GameState.progress.completed?'Ready for another?':'Earn your first wages.');
+ $('objective').querySelector('p').textContent=carrying?(GameState.progress.completed%3===1?'Speak to Elena at the café counter. Payment: ':'Use the marked delivery box. Payment: ')+money(route.pay)+'.':starterObjective(GameState.progress)?.text||(GameState.progress.completed?'Speak to Noah at the market counter, or take a gig on your phone.':'Speak to Noah at the market counter for delivery work. Next wage: '+money(route.pay)+'.');
  const distance=Math.hypot(me.position.x-dest.x,me.position.z-dest.z);
  $('distance').textContent=Math.round(distance)+' m · '+dest.name;
  const atJob=carrying&&nearby(me.position,dest),atApartment=nearby(me.position,STUDIO); // E here only delivers an order; shop doors need no prompt
@@ -1106,7 +1111,7 @@ function updateConsumption(dt){
  if(armRecovery&&armRecovery.update(dt)==='done')armRecovery=null;
  if(!consuming||modal)return;
  if(consuming.animation.update(dt)!=='used')return;
- const action=consuming;consuming=null;armRecovery=action.animation;$('consumeStatus').hidden=true;
+ const action=consuming;consuming=null;armRecovery=action.animation;if(itemById(action.id)?.type==='food')storyEvent('ate');$('consumeStatus').hidden=true;
  // Resolve against current state so clock, survival and job updates are preserved.
  const index=GameState.progress.inventory.slots[action.index]?.id===action.id?action.index:GameState.progress.inventory.slots.findIndex(slot=>slot.id===action.id);
  const result=commitInventory(useItem(GameState.progress,index));
@@ -1134,7 +1139,7 @@ phone=createPhone({document,getState:()=>GameState,onRead:app=>{const next=markR
  canOpen:()=>active&&!modal&&!creatorOpen&&!actionBusy(),
  onOpen:()=>{clearWorldPanel();modal=true;keys.clear();look.release()},
  onClose:()=>{modal=false;keys.clear();look.resetMotion()},
- onRefresh:()=>{const next=refreshGigBoard(GameState.progress);if(next!==GameState.progress){GameState.progress=next;persist()}},
+ onRefresh:()=>{storyEvent('read-message');const next=refreshGigBoard(GameState.progress);if(next!==GameState.progress){GameState.progress=next;persist()}},
  onAccept:id=>{
    const result=acceptContract(GameState.progress,id);
    if(result.error)return result;
@@ -1408,7 +1413,7 @@ function stepWorld(step){
 const load=Math.max(GameState.progress.activeJob?.id==='heavy-delivery'&&oldStage==='task'?2:1,carryEffects(GameState.progress.carry).load);
 tickLife(step,moving,running,load);if(passT===null&&sleepElapsed===null&&needsEffects(GameState.progress.life).passOut)startPassOut();
 GameState.progress=tickContract(GameState.progress,{position:me.position,room:currentRoom(),dt:step,moving,paused:!!consuming,running,distance:movedStep});
-if(oldStage!==GameState.progress.activeJob?.stage)persist();if(!inside&&!shop)pedestrians.update(step,me.position);regrowClock+=step;if(regrowClock>=5){regrowClock=0;tickRegrowth()}if(inside||shop){saveElapsed+=step;if(saveElapsed>=4){saveElapsed=0;persist()}}}
+if(oldStage&&!GameState.progress.activeJob)notifyPhone('gigs','Gig failed: the time ran out.');storyTick();if(oldStage!==GameState.progress.activeJob?.stage)persist();if(!inside&&!shop)pedestrians.update(step,me.position);regrowClock+=step;if(regrowClock>=5){regrowClock=0;tickRegrowth()}if(inside||shop){saveElapsed+=step;if(saveElapsed>=4){saveElapsed=0;persist()}}}
  if(active&&!modal&&!document.hidden)updateCafeVisuals(step);updateConsumption(step);updateDoors(step);updateChop(step);updatePutting(step);fuelTick(step);
  return pressed;
 }

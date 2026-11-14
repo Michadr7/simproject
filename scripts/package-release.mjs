@@ -28,7 +28,7 @@ html=html.replace(/<script type="module" src="[^"]+"><\/script>/,loader);
 html=html.replace(/href="(?:releases\/[^/"]+\/)?style\.css[^"]*"/,`href="releases/${version}/style.css"`);
 html=html.replace(/releases\/[^/'"]+\/game\.js/g,`releases/${version}/game.js`);
 // Version shown under the logo.
-html=html.replace(/(LIVING NEIGHBORHOOD \/ )\d+\.\d+\.\d+/g,`$1${version}`);
+html=html.replace(/(VERSION )\d+\.\d+\.\d+/g,`$1${version}`);
 if(!html.includes(`releases/${version}/game.js`)||!html.includes(`releases/${version}/style.css`)){console.error('Could not update dist/index.html to the new release paths.');process.exit(1)}
 await writeFile('dist/index.html',html);
 // The site's newest version, read by the running game (update-check.js). It must never be cached, or players would never hear about an update.

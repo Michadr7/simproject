@@ -19,6 +19,7 @@ export const BEATS=Object.freeze([
  B('rent','Somewhere to park','Studio 2B is for rent. Rent it so the truck has a home.','rented','apartments'),
  B('sleep','Keep her','Hal gives you the truck. Sleep in the studio to end the day.','slept','apartments')
 ]);
+const DONE=Object.freeze({groceries:'Sophie thanks you and the groceries are delivered.',food:'Fed and watered. Off to the farm.',farm:'Hal pays you for the groceries. His truck waits in the yard: more soon.'});
 export const fresh=()=>({step:0,done:false,skipped:false,quality:100,fuelGiven:false,loanUid:null,loaded:false,noteGiven:false,gigDone:false});
 const int=(v,lo,hi,d=0)=>Number.isFinite(v)?Math.max(lo,Math.min(hi,Math.floor(v))):d;
 // An old save: anything done already. p is the progress being normalised (partly built is fine).
@@ -33,8 +34,10 @@ export function normalizeStarter(v,p){
 }
 export const skipStarter=()=>({...fresh(),step:10,done:true,skipped:true});
 // The objective card and the tracker's story row read this. aim is a PLACES key.
-export function starterObjective(p){
- const s=p?.starter;if(!s||s.done)return null;
+// The truck beats (5, 6 and 10) need the short flatbed, which is not built yet: until VEHICLE_BEATS_READY the story pauses after beat 4 and the card goes back to the normal text.
+export const VEHICLE_BEATS_READY=false;
+export function starterObjective(p,{vehicleReady=VEHICLE_BEATS_READY}={}){
+ const s=p?.starter;if(!s||s.done||(!vehicleReady&&s.step>=4))return null;
  if(s.step===6||s.step===7){const left=BEATS.filter(b=>(b.event==='note-given'&&!s.noteGiven)||(b.event==='gig-done'&&!s.gigDone));const b=left[0];return b?{title:b.title,text:b.text,aim:b.place}:null}
  const b=BEATS[s.step];return b?{title:b.title,text:b.text,aim:b.place}:null;
 }
@@ -60,5 +63,5 @@ export function advanceStarter(p,event,data={}){
  if(event==='refuelled')o.fuelGiven=true;
  if(event==='arrived'&&data.loanUid)o.loanUid=data.loanUid;
  if(event==='slept'){o.done=true;o.loanUid=null}
- return {state:next(o),message:beat.id==='sleep'?'Hal: keep her. She is yours.':beat.title+' done.',cash:beat.event==='refuelled'&&s.fuelGiven?0:beat.cash};
+ return {state:next(o),message:beat.id==='sleep'?'Hal: keep her. She is yours.':DONE[beat.id]||beat.title+' done.',cash:beat.event==='refuelled'&&s.fuelGiven?0:beat.cash};
 }
