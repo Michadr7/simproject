@@ -55,7 +55,7 @@ assert.equal(quote(veh('v1','shortbed',1000)),null,'a perfect vehicle has nothin
  const wreck=veh('v1','shortbed',0,{x:600,z:-900,yaw:1}); // far off, in no loaded chunk: only the saved list knows it
  let p=prog([wreck]);const r=towTo(p,'v1',B,{now:hoursNow(p)});assert(!r.error,r.error);const fee=towFee(wreck,B);assert(fee>7500&&fee<=25000);assert.equal(r.fee,fee);assert.equal(r.state.cash,100000-fee);assert.deepEqual(r.appear,{uid:'v1',...B});
  assert.equal(r.state.vehicles[0].x,B.x);assert.equal(r.state.vehicles[0].cond,0,'the condition is kept');assert(inBay(r.state.vehicles[0]));assert.deepEqual(r.state.garage.shop,{},'a tow only brings it: the repair is paid at the counter');
- assert.match(towTo(p,'v1',B,{drivenUid:'v1'}).error,/driving/,'a driven vehicle cannot be towed');assert(towTo(prog([wreck],{cash:fee-1}),'v1',B).error,'cannot afford');assert(towTo(p,'v9',B).error,'not yours');assert(towTo(p,'v1',{x:NaN,z:0,yaw:0}).error);
+ {const d=towTo(p,'v1',B,{drivenUid:'v1'});assert(!d.error,'PB1: the vehicle you drive can be towed too');assert.equal(d.fee,fee);assert.deepEqual(d.appear,{uid:'v1',...B})}assert(towTo(prog([wreck],{cash:fee-1}),'v1',B).error,'cannot afford');assert(towTo(p,'v9',B).error,'not yours');assert(towTo(p,'v1',{x:NaN,z:0,yaw:0}).error);
  assert(towTo(prog([veh('v1','shortbed',0)]),'v1',B).error&&/already/.test(towTo(prog([veh('v1','shortbed',0)]),'v1',B).error),'already at the shop');
  const home=towTo(p,'v1',{x:-40,z:10,yaw:0});assert(!home.error&&home.fee===towFee(wreck,{x:-40,z:10}),'a tow to any spot works, by distance');
  const inS=startRepair(prog([veh('v1','shortbed',0)]),'v1',0).state;assert(towTo(inS,'v1',far).error,'a vehicle in the shop cannot be towed')}

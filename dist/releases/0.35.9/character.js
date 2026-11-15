@@ -6,6 +6,7 @@ import {normalizeAppearance} from './appearance.js';
 // scripts/build-characters.mjs. Each body type is one skeleton plus swappable head/top/legs/shoe parts.
 // The pack is authored in centimetres (about 187 high); this brings it to roughly 1.95 m.
 export const MODEL_SCALE=.0104;
+export const SOLE_LIFT=.012; // PB2: measured in idle, the soles of all 14 outfits hang 1.4 to 2.0 cm below the group's origin (the foot bones stand 2.4 cm up); the model is lifted 1.2 cm (not the full 1.6: the hand targets stay put, see game.js carryLog) so the idle soles end 0.2 to 0.8 cm under the stand height
 const PART_NAMES={head:'Head',top:'Body',legs:'Legs',feet:'Feet'};
 // Speeds (units/s) at which the pack's Walk and Run clips play at normal rate.
 const WALK_SPEED=1.5,RUN_SPEED=4.4;
@@ -132,7 +133,7 @@ export function createCharacter(input){
  function build(){
   memo.clear();
   if(kinds.model){group.remove(kinds.model);kinds.mixer.stopAllAction()}
-  const set=assets[appearance.body],model=new T.Group();model.scale.setScalar(MODEL_SCALE);group.add(model);
+  const set=assets[appearance.body],model=new T.Group();model.scale.setScalar(MODEL_SCALE);model.position.y=SOLE_LIFT;group.add(model);
   const root=set.rigRoot.clone(true),byName=new Map();root.traverse(o=>byName.set(o.name,o));
   const bones=set.bones.map(b=>byName.get(b.name));
   const skeleton=new T.Skeleton(bones,set.boneInverses);

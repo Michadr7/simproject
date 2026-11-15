@@ -4,7 +4,7 @@ import {patchGround,setGroundQuality} from './ground-shader.js';import {GROUND_K
 import {heightAt,valleyAt,deckAt,bridgeRise,RIVER_PATHS,RIVER_WATER_Y} from './height.js';
 import {MAP,zoneById,zoneAtPoint,roadRects,riverPath,riverDistance,riverIsLegacy,nearestOnRiver} from './map-definition.js';
 import {PINES,BROADLEAVES,modelInfo,modelGeometry,createNatureMaterials} from './nature.js';
-import {terrain,SURFACE,roadCenterline} from './terrain.js';
+import {terrain,SURFACE,FOOTING,roadCenterline} from './terrain.js';
 import {lampSpots} from './streetfurniture.js';
 import {markingBars,townSpots,FOUNTAIN,BUS_STOP} from './town.js';
 import {propInfo,createProp} from './props.js';
@@ -35,7 +35,7 @@ let walkSource=null;
 function screenFade(){if(typeof document==="undefined"||!document.body?.appendChild)return;const d=document.createElement("div");d.style.cssText="position:fixed;inset:0;background:#000;opacity:1;pointer-events:none;z-index:9999";document.body.appendChild(d);requestAnimationFrame(()=>requestAnimationFrame(()=>{d.style.transition="opacity .3s";d.style.opacity="0"}));setTimeout(()=>d.remove(),800)} // 0.3 s fade, only when a teleport lands outside the loaded ring
 export function isWalkable(x,z){return terrain().walkable(x,z)} // the whole-map mask: data checks (a saved position, a log, a plank stack) keep using it
 export function isWalkableLive(x,z){return walkSource?walkSource.walkable(x,z):terrain().walkable(x,z)} // what the player and vehicles bump into: the loaded chunk tiles, an unloaded chunk is a wall
-export function footingAt(x,z){return terrain().footingAt(x,z)}
+export function footingAt(x,z){const s=walkSource?.surfaceAt?.(x,z)||0;return s?FOOTING[s]:terrain().footingAt(x,z)} // PB2: the loaded chunk tile first, like the vehicles' surface (PB1): the whole-map mask has no cell outside the old ground (x over 300, the R3b roads there), where it said grass (-.095) under a road mesh drawn at -.045: feet and wheels stood 5 cm inside it
 export {heightAt};
 // what feet, a put-down plank stack or a log stand on: the terrain elevation plus the deck (the sawmill's floors, measured from the ground) or the surface footing
 export const standHeight=(x,z,deck=null)=>{const b=deckAt(x,z);return b!==null?b+footingAt(x,z):heightAt(x,z)+(deck??footingAt(x,z))}; // on a bridge: the deck's arch; elsewhere the ground
@@ -268,6 +268,8 @@ export function createWorld(scene,{label,cullRadius,streaming=false}={}){
  // line down the middle. The city's own streets are built in game.js.
  const asphalt=new THREE.MeshStandardMaterial({color:'#585d60',roughness:.95}),lineMaterial=new THREE.MeshStandardMaterial({color:'#e8e2c8',roughness:.9,polygonOffset:true,polygonOffsetFactor:-12,polygonOffsetUnits:-24}),upAxis=new THREE.Vector3(0,1,0);
  const densify=(points,max=6)=>{const out=[points[0]];for(let i=1;i<points.length;i++){const [ax,az]=points[i-1],[bx,bz]=points[i],k=Math.max(1,Math.ceil(Math.hypot(bx-ax,bz-az)/max));for(let s=1;s<=k;s++)out.push([ax+(bx-ax)*s/k,az+(bz-az)*s/k])}return out};
+ // PB2: where the ground bends (a river bank at a bridge approach, a hill foot) a 6 m chord lay up to 2 cm under the true surface; split a stretch in two (down to 1.5 m, 4 levels) until the middle is within 5 mm of the chord
+ const refine=points=>{const out=[points[0]],split=(a,b,d)=>{const len=Math.hypot(b[0]-a[0],b[1]-a[1]);if(d<4&&len>1.5){const m=[(a[0]+b[0])/2,(a[1]+b[1])/2];if(Math.abs(heightAt(m[0],m[1])-(heightAt(a[0],a[1])+heightAt(b[0],b[1]))/2)>.005){split(a,m,d+1);split(m,b,d+1);return}}out.push(b)};for(let i=1;i<points.length;i++)split(points[i-1],points[i],0);return out};
  const toPath=points=>points.map((p,i)=>{const a=points[Math.max(0,i-1)],b=points[Math.min(points.length-1,i+1)],l=Math.hypot(b[0]-a[0],b[1]-a[1])||1;return {x:p[0],z:p[1],tx:(b[0]-a[0])/l,tz:(b[1]-a[1])/l}});
  // Bridge crossings: the road is cut where it meets a bridge (the bridge builds its own deck, an arch over the river), and the road's own ribbon follows the ground (heightAt) so that it is
  // never left floating or buried where the ground is not flat. Points are added at each bridge end and every 2 m across the bridge so the arch is smooth.
@@ -288,7 +290,7 @@ export function createWorld(scene,{label,cullRadius,streaming=false}={}){
  function quadInto(kind,x0,x1,z0,z1){const d=bucketAt((x0+x1)/2,(z0+z1)/2)[kind],y=GROUND_Y[kind],k=d.pos.length/3;d.pos.push(x0,y,z0,x0,y,z1,x1,y,z1,x1,y,z0);d.idx.push(k,k+1,k+2,k,k+2,k+3)} for(const edge of MAP.roads.edges){
   if(edge.surface!=='asphalt'||edge.level!=='rural')continue;
   const line=withBridgePoints(densify(roadCenterline(edge)));
-  splitAtBridges(line).forEach((piece,k)=>streaming?ribbonInto(toPath(piece.line),edge.width/2,-.045,'road-'+edge.id+(k?'-'+k:'')):ribbon(toPath(piece.line),edge.width/2,-.045,asphalt,'road-'+edge.id+(k?'-'+k:''),true));
+  splitAtBridges(line).forEach((piece,k)=>streaming?ribbonInto(toPath(refine(piece.line)),edge.width/2,-.045,'road-'+edge.id+(k?'-'+k:'')):ribbon(toPath(refine(piece.line)),edge.width/2,-.045,asphalt,'road-'+edge.id+(k?'-'+k:''),true));
   const dashes=[];let carried=0;for(let i=1;i<line.length;i++){const [ax,az]=line[i-1],[bx,bz]=line[i],len=Math.hypot(bx-ax,bz-az);let at=6-carried;while(at<=len){dashes.push({x:ax+(bx-ax)*at/len,z:az+(bz-az)*at/len,yaw:Math.atan2(bx-ax,bz-az)});at+=6}carried=len-(at-6)}
   if(!dashes.length)continue;if(streaming){for(const d of dashes){const deck=deckAt(d.x,d.z);bucketAt(d.x,d.z).dashes.push({x:d.x,y:deck!==null?deck+.01:heightAt(d.x,d.z)-.032,z:d.z,yaw:d.yaw})}continue}
   const marks=new THREE.InstancedMesh(new THREE.BoxGeometry(.18,.02,2.2),lineMaterial,dashes.length),mat=new THREE.Matrix4(),at=new THREE.Vector3(),turn=new THREE.Quaternion(),one=new THREE.Vector3(1,1,1);

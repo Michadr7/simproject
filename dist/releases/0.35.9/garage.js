@@ -114,12 +114,11 @@ export function useKit(p,uid){
  return {state:{...p,inventory:{...p.inventory,slots},vehicles},cond:next,message:`Repair kit used: the ${nameOf(v)} is at ${percent(next)}%${next>=KIT_CAP?' (a kit goes no further)':''}.`};
 }
 // ---- towing ----
-// Tow a vehicle to `dest` ({x, z, yaw}; the shop bay for "Call a tow"). Works on saved data. Refused while you drive it or while it is in the shop. The fee comes from the straight-line distance; if hard luck applies and the destination is the shop, the tow is free and the shop starts the free repair too.
+// Tow a vehicle to `dest` ({x, z, yaw}; the shop bay for "Call a tow"). Works on saved data. PB1: works for the vehicle you are driving too (the game gets you out first); refused only while it is in the shop. The fee comes from the straight-line distance; if hard luck applies and the destination is the shop, the tow is free and the shop starts the free repair too.
 // `opts.drivenUid`: the vehicle being driven (if any); `opts.now`: game hours (needed for the free repair's ready time).
 export function towTo(p,uid,dest,{drivenUid=null,now=hoursNow(p)}={}){
  const fail=error=>({state:p,error}),v=find(p,uid);
  if(!v)return fail('You do not own that vehicle.');
- if(drivenUid===uid)return fail('Get out of it first: a tow truck cannot take a vehicle you are driving.');
  if(inShop(p,uid))return fail(`The ${nameOf(v)} is already in the shop.`);
  if(![dest?.x,dest?.z,dest?.yaw].every(Number.isFinite))return fail('Nowhere to tow it to.');
  const toShop=dest.x===bay().pose.x&&dest.z===bay().pose.z;

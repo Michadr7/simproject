@@ -24,7 +24,7 @@ export function dial(contactOrId,ctx={}){
  const ringSeconds=Math.min(2,Math.max(1,c.rings||1.5)),base={contact:c,ringSeconds,pick:false};
  if(c.handler==='tow'){
   if(!towLineOpen(ctx))return {...base,outcome:'busy',line:BUSY_LINE,ringSeconds:0};
-  return {...base,outcome:'answered',line:ctx.pull?'Tow service. Stuck? We can pull you out, or tow one of your vehicles.':'Tow service. Which of your vehicles do you want us to pick up?',pick:true,pull:!!ctx.pull}; // TR4: ctx.pull = a Stuck or soft-ground vehicle under you (the 'Pull me out' line)
+  return {...base,outcome:'answered',line:ctx.pull?'Tow service. Stuck? We can pull you out, or tow one of your vehicles, even the one you are in.':'Tow service. Which of your vehicles do you want us to pick up? (Even the one you are in: you will wait at the shop.)',pick:true,pull:!!ctx.pull}; // TR4: ctx.pull = a Stuck or soft-ground vehicle under you (the 'Pull me out' line)
  }
  if(!isOpen(c,ctx.minutes??0))return {...base,outcome:'no-answer',line:NO_ANSWER_LINE};
  return {...base,outcome:'answered',line:c.say||'Hello?'};

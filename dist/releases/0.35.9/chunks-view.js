@@ -60,7 +60,9 @@ export function createChunkView({index,colliders,scene=null,build={},map,ring=2,
    if(!tile){stat.wallHits++;const k=chunkKey(i,j);if(!warned.has(k)){warned.add(k);warn('chunks: '+k+' is not loaded yet; treating it as a wall (streaming is behind)')}return false}
    return tile.walkable(x,z);
   },
-  on(event,fn){listeners[event].push(fn)},
+   // PB1: the surface id under a point from the loaded tile, or 0 where no tile is loaded (the caller falls back to the whole-map mask, which has no cell outside the old ground: vehicles read speed, grip and sinking from the surface, and surface 0 is speed 0).
+  surfaceAt(x,z){const {i,j}=chunkIndex(x,z);if(!inRange(range,i,j))return 0;const tile=grid[slot(i,j)];return tile?tile.surfaceAt(x,z):0},
+ on(event,fn){listeners[event].push(fn)},
   // Draw calls a chunk adds (one per Mesh in what it built; an empty chunk adds none).
   meshesOf(key){const c=chunks.get(key);let n=0;for(const ob of c?.objects||[])ob.traverse?.(o=>{if(o.isMesh)n++});return n},
   loadedKeys:()=>[...chunks.values()].filter(c=>c.ready).map(c=>c.key),

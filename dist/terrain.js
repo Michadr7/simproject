@@ -10,7 +10,7 @@ import {MAP,roadRect,riverPath,riverIsLegacy,riverBank,seaLineZ} from './map-def
 
 export const SURFACE=Object.freeze({GRASS:1,STREET:2,ROAD:3,DIRT:4,PAVEMENT:5,WATER:6,BANK:7,BRIDGE:8,WHEAT:9,PLOWED:10,GREEN:11,DRIVEWAY:12,PATH:13,MUD:14,GRAVEL:15}); // MUD (TR3): painted from map.mud after the fields; GRAVEL (TR3): the ground of a 'gravel' road (no road uses it until R3)
 // How high the player's feet sit on each surface (the city's streets and pavements are raised meshes; the County Road is a plane on the grass).
-export const FOOTING=Object.freeze({1:-.095,2:.01,3:-.045,4:-.066,5:.165,6:-.095,7:-.095,8:-.01,9:-.069,10:-.069,11:-.069,12:-.04,13:-.04,14:-.064,15:-.066}); // MUD is the top of its ground mesh (-.064, just over a dirt track); GRAVEL is a dirt-road mesh (-.066) // 0.32.1: each is the top of the mesh drawn there (rural asphalt -0.045, dirt road -0.066, fields -0.069), so feet and wheels no longer sink 3-5 cm into them; grass stays (the city is pinned to it)
+export const FOOTING=Object.freeze({1:-.095,2:.01,3:-.045,4:-.066,5:.165,6:-.095,7:-.095,8:-.02,9:-.069,10:-.069,11:-.069,12:-.04,13:-.04,14:-.064,15:-.066}); // PB2: BRIDGE -.01 -> -.02 (measured: the deck mesh top lies 1.0 cm under the old stand height, up to 1.7 cm where the arch bends). MUD is the top of its ground mesh (-.064, just over a dirt track); GRAVEL is a dirt-road mesh (-.066) // 0.32.1: each is the top of the mesh drawn there (rural asphalt -0.045, dirt road -0.066, fields -0.069), so feet and wheels no longer sink 3-5 cm into them; grass stays (the city is pinned to it)
 export const MINIMAP_COLOUR=Object.freeze({2:'#45494b',3:'#45494b',4:'#9c8462',5:'#8d9294',6:'#3f7ea3',7:'#5b6448',8:'#6f5b43',9:'#d4b45a',10:'#6b4f3a',11:'#82a653',12:'#8f9396',13:'#b9b3a4',14:'#5b4630',15:'#a8a08e'});
 const FIELD_SURFACE={wheat:SURFACE.WHEAT,plowed:SURFACE.PLOWED,green:SURFACE.GREEN};
 
@@ -56,7 +56,7 @@ export function buildTerrain(map=MAP,{cell=.5,window=null}={}){
  // 0. open country: walkable everywhere inside the playable rectangle
  rect(map.playable||g,c=>{walk[c]=1});
  // 0b. the wilds (F2): open country OUTSIDE the old ground, walkable, only in chunk tiles (window); the whole-map mask never has a cell out there, so it stays today's size
- if(window&&map.wilds)rect(map.wilds,c=>{const x=centreX(c%cols),z=centreZ((c-c%cols)/cols);if(x<map.ground.x0||x>=map.ground.x1||z<map.ground.z0||z>=map.ground.z1)walk[c]=1});
+ if(window&&map.wilds)rect(map.wilds,c=>{walk[c]=1}); // PB1: the old ground's 10 m rim is open country in the tiles too (the rim only walled the whole-map mask: a truck east of the town stopped on open grass at x 290); zones, roads, water and the sea paint over it below
  if(window)for(const gate of map.gates||[])rect(gate,c=>{walk[c]=1}); // the gates through the old ground's rim (tiles only)
  // 1. zones (the first zone in the list wins where two touch, as zoneAtPoint does)
  for(let k=map.zones.length-1;k>=0;k--)rect(map.zones[k].bounds,c=>{walk[c]=1;zone[c]=k+1});
@@ -65,7 +65,7 @@ export function buildTerrain(map=MAP,{cell=.5,window=null}={}){
  // 2. roads: straight axis-aligned edges are their rectangle; edges with a path are ribbons. `walkable` roads also make their ground walkable.
  for(const edge of map.roads.edges){
   const kind=edge.surface==='dirt'?SURFACE.DIRT:edge.surface==='gravel'?SURFACE.GRAVEL:edge.level==='rural'?SURFACE.ROAD:SURFACE.STREET,named=edge.zone?map.zones.findIndex(z=>z.id===edge.zone)+1:0,
-   paint=c=>{surface[c]=kind;if(edge.walkable){walk[c]=1;if(named)zone[c]=named}};
+   paint=c=>{if(!((kind===SURFACE.DIRT||kind===SURFACE.GRAVEL)&&(surface[c]===SURFACE.ROAD||surface[c]===SURFACE.STREET)))surface[c]=kind;if(edge.walkable){walk[c]=1;if(named)zone[c]=named}};
   if(edge.path)ribbon(S.line(edge),edge.width/2,paint);else rect(roadRect(edge,map),paint);
  }
  // 2-joints. rounded corners at junctions and tapers where road widths change (junctions.js): ROAD, walkable and drivable like the roads they join

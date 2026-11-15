@@ -19,6 +19,7 @@ const root=resolve(process.argv[2]||'assets-src');
 // front faces +z; `cut` ('auto' removes a ground plate); `triangles` (null keeps all); `texture` [px, quality or 'png'] (only for models with one colour texture; models with plain
 // colours are baked to vertex colours); `collide`: a grid cell in metres, a height band (only upright faces inside it count), `walls` (ignore roofs and floors; vehicles and logs fill their rows);
 // `collide.fit`: one exact box around what stands in the band instead of grid cells (small props); `keepOrigin`: keep the file's x/z origin instead of centring the footprint (needs `fit`; 'xyz' keeps y too); `collide.none`: no collider at all; anchor_* empties are read as `anchors` and an emissive material as `glow`;
+// `nodes`: (SR90 farm vehicles and implements) keep the moving parts as data: triangles ordered body first then one run per wheel_*/steer_*/unload_auger group (record.parts, index units), their pivots in record.nodes; still ONE mesh, one draw call.
 // `door`: where the front door is, along the front wall (x, metres from the centre) and its size.
 const S=Number(process.env.SCALE_HOUSE||8); // metres per Kenney model unit (houses and shops): a front door comes out about 2 m high, checked against the avatar
 const DOOR=x=>({x,width:1.4,height:2.05});
@@ -74,6 +75,17 @@ const PROPS={
   .map(([id,file])=>[id,{file:`kenney_city-kit-industrial_2.0/Models/GLB format/${file}.glb`,scale:S,cut:null,triangles:null,texture:[128,'png'],collide:{cell:.5,band:[.5,2.1],walls:false,despeckle:false},
    ...(/^industrial-/.test(id)?{turn:180}:{}), // the kit puts every building's big doors (and the warehouse's loading door) on the -z side: turned so they face +z, the front, like every other building
    ...(id==='industrial-q'?{door:{x:1.2,width:3.7,height:2.15}}:{})}])), // the warehouse's loading door, a ground-level garage opening 3.7 m wide and 2.15 m high, centred 1.2 m right of the building's centre seen from the front (read off a metre-grid elevation of the model; the 2.7 m recess 6.8 m to the left is the covered man-door, not a dock)
+ // SR90 Low Poly Farming Pack (itch.io; no licence required, free to use; flat-colour conversion by us): assets-src/Farm/sr90/*.glb, exported by scripts/farm-sr90.py (metres, origin on the ground, flat colours as materials baked to vertex colours).
+ // Props: true size (bales rescaled in Blender to real size), origin on the ground at the footprint centre, one exact box. Vehicles, implements and trailers: file origin kept (rear axle / hitch contract in notes/farm-vehicle-contract.md), anchors and `nodes`; no simplification.
+ ...Object.fromEntries(Object.entries({'bale-round-hay':'bale_round_hay','bale-round-strapped':'bale_round_strapped','bale-square-large':'bale_square_large','bale-square-small':'bale_square_small','bale-square-green-a':'bale_square_green_a','bale-square-straw':'bale_square_straw','bale-square-green-b':'bale_square_green_b','bale-square-flat-green':'bale_square_flat_green','bale-large-green':'bale_large_green',
+  'crate-plastic-tall':'crate_plastic_tall','crate-plastic-mid':'crate_plastic_mid','crate-plastic-low':'crate_plastic_low','crate-wood-large-bin':'crate_wood_large_bin','crate-wood':'crate_wood','box-wood-small':'box_wood_small','pallet-wood':'pallet_wood',
+  'barrel-drum-lid':'barrel_drum_lid','barrel-drum-open':'barrel_drum_open','barrel-wood-cradle':'barrel_wood_cradle','barrel-wood-closed':'barrel_wood_closed','barrel-wood-open':'barrel_wood_open',
+  'trough-metal':'trough_metal','trough-metal-hay':'trough_metal_hay','manger-wood':'manger_wood','manger-wood-hay':'manger_wood_hay','trough-wood':'trough_wood','trough-wood-hay':'trough_wood_hay','rack-v-unclear':'rack_v_unclear',
+  'bag-feed-green':'bag_feed_green','bag-feed-open':'bag_feed_open','sack-closed':'sack_closed','sack-open-large':'sack_open_large','sack-tied':'sack_tied','bucket-metal':'bucket_metal','bucket-wood':'bucket_wood','milk-can':'milk_can','wheelbarrow':'wheelbarrow'})
+  .map(([id,file])=>['farm.'+id,{file:`Farm/sr90/${file}.glb`,scale:1,cut:null,triangles:null,collide:{cell:.1,band:[.02,2.4],walls:false,despeckle:false,fit:true}}])),
+ 'farm.water-tower':{file:'Farm/sr90/water_tower.glb',scale:1,cut:null,triangles:null,collide:{cell:.5,band:[.2,3],walls:true,despeckle:false}}, // a wooden tower on legs: boxes only where the legs are
+ ...Object.fromEntries(Object.entries({seeder:'seeder',cultivator:'cultivator',harrow:'harrow','baler-round':'baler_round','mower-bar':'mower_bar','mower-yellow':'mower_yellow','rake-tedder':'rake_tedder',sprayer:'sprayer',spreader:'trailer_grain','trailer-red':'trailer_red','trailer-tank-sr90':'trailer_tank','cart-small':'cart_small','combine-harvester':'combine_harvester','combine-header':'combine_header'}) // spreader = the pack's Trailer_Grain (a fertiliser spreader, not a grain cart); rake-tedder from the full file (its _lite twin only differs in the wheel materials, and one mesh is built anyway)
+  .map(([id,file])=>['farm.'+id,{file:`Farm/sr90/${file}.glb`,scale:1,cut:null,triangles:null,keepOrigin:true,nodes:true,collide:{cell:.5,band:[.3,1.9],walls:false,despeckle:false}}])),
  farmyard:{skip:true,file:'LowPOlyFarm_buildings.glb',width:40,cut:'auto',triangles:13000,texture:[1024,78],collide:{cell:1,band:[2,99],walls:false,despeckle:true}} // not used: it looked too rough in the game
 };
 // Rigged models (nodes, skins and animations kept; static meshes merged by material) are converted by scripts/rigged-glb.mjs into dist/rigged-assets.js, and loaded with GLTFLoader.
@@ -96,7 +108,7 @@ function readGltf(path){
  const acc=i=>{const a=json.accessors[i],v=json.bufferViews[a.bufferView],n={SCALAR:1,VEC2:2,VEC3:3,VEC4:4}[a.type],T={5126:Float32Array,5123:Uint16Array,5125:Uint32Array,5121:Uint8Array}[a.componentType];
   const off=(v.byteOffset||0)+(a.byteOffset||0),size=T.BYTES_PER_ELEMENT,stride=v.byteStride||n*size,out=new T(a.count*n),dv=new DataView(bin.buffer,bin.byteOffset);
   for(let k=0;k<a.count;k++)for(let c=0;c<n;c++){const at=off+k*stride+c*size;out[k*n+c]=T===Float32Array?dv.getFloat32(at,true):T===Uint16Array?dv.getUint16(at,true):T===Uint8Array?dv.getUint8(at):dv.getUint32(at,true)}return out};
- const parts=[],walk=(i,pm)=>{const n=json.nodes[i],m=mulM(pm,trsM(n));
+ const parts=[],pivots={},walk=(i,pm,grp="")=>{const n=json.nodes[i],m=mulM(pm,trsM(n)),g=n.mesh===undefined&&/^(wheel_|steer_|unload_auger$|steering_wheel$)/.test(n.name||"")?n.name.replace(/\.\d{3}$/,""):grp; /* g: the moving part a mesh belongs to (wheel_*, steer_*, unload_auger, steering_wheel), for spec.nodes */
   if(n.mesh!==undefined)for(const p of json.meshes[n.mesh].primitives){
    if(p.mode!==undefined&&p.mode!==4)continue;const P=acc(p.attributes.POSITION),N=p.attributes.NORMAL!==undefined?acc(p.attributes.NORMAL):null,U=p.attributes.TEXCOORD_0!==undefined?acc(p.attributes.TEXCOORD_0):null,
     idx=p.indices!==undefined?Uint32Array.from(acc(p.indices)):Uint32Array.from({length:P.length/3},(_,k)=>k),mat=json.materials?.[p.material]?.pbrMetallicRoughness||{};
@@ -104,15 +116,16 @@ function readGltf(path){
     if(tn){const a=N[k],b=N[k+1],c=N[k+2];tn[k]=m[0]*a+m[4]*b+m[8]*c;tn[k+1]=m[1]*a+m[5]*b+m[9]*c;tn[k+2]=m[2]*a+m[6]*b+m[10]*c;const l=Math.hypot(tn[k],tn[k+1],tn[k+2])||1;tn[k]/=l;tn[k+1]/=l;tn[k+2]/=l}} // normals are unit length again after a scaled node transform (the Worktruck's nodes scale by 0.0006 in all: quantised to bytes they were all zero)
    const ti=mat.baseColorTexture?json.textures[mat.baseColorTexture.index].source:null;
    const gm=json.materials?.[p.material]||{},strength=gm.extensions?.KHR_materials_emissive_strength?.emissiveStrength??1,glows=gm.emissiveFactor&&gm.emissiveFactor.some(v=>v>0); // an emissive material (a lit panel): kept apart so the game can draw it glowing
-   parts.push({pos:tp,nor:tn,uv:U,idx,color:(mat.baseColorFactor||[1,1,1,1]).slice(0,3),image:ti,node:n.name||'',emissive:glows?{color:gm.emissiveFactor.slice(0,3),strength}:null})}
+   parts.push({pos:tp,nor:tn,uv:U,idx,color:(mat.baseColorFactor||[1,1,1,1]).slice(0,3),image:ti,node:n.name||'',grp:g,emissive:glows?{color:gm.emissiveFactor.slice(0,3),strength}:null})}
   if(/^anchor_/.test(n.name||'')){const name=n.name.replace(/\.\d{3}$/,''); // Blender adds ".002" to a duplicated name (the island's petrol pump came out as anchor_use_py_0.002): dropped
    if(anchors[name])throw new Error('two anchors named '+name);anchors[name]=[m[12],m[13],m[14]]} // anchor empties (as in the sawmill GLB): their world position, converted with the prop below
-  for(const c of n.children||[])walk(c,m)};
+  if(n.mesh===undefined&&n.name&&!/^anchor_/.test(n.name)&&!/_Source$/.test(n.name))pivots[n.name.replace(/\.\d{3}$/,'')]=[m[12],m[13],m[14]]; // spec.nodes: the pivot (world position) of every other empty: wheel_*, steer_*, unload_auger, seat, tank_fill ...
+  for(const c of n.children||[])walk(c,m,g)};
  const anchors={};
  for(const r of json.scenes[json.scene||0].nodes)walk(r,[1,0,0,0,0,1,0,0,0,0,1,0,0,0,0,1]);
  const imageOf=i=>{const im=json.images[i];if(im.uri)return readFileSync(join(dirname(path),decodeURIComponent(im.uri)));const v=json.bufferViews[im.bufferView];return Buffer.from(bin.subarray(v.byteOffset||0,(v.byteOffset||0)+v.byteLength))};
  const clips=(json.animations||[]).map(a=>({name:(a.name||'').replace(/^.*\|/,''),seconds:+Math.max(...a.samplers.map(s=>json.accessors[s.input].max?.[0]||0)).toFixed(2)}));
- return {parts,imageOf,anchors,clips};
+ return {parts,imageOf,anchors,clips,pivots};
 }
 let fbxLoader=null;
 async function readFbx(path,spec={}){
@@ -165,9 +178,9 @@ for(const [id,spec] of Object.entries(PROPS)){
  const textured=model.parts.some(p=>p.image!==null);
  if(textured&&new Set(model.parts.map(p=>p.image)).size>1)throw new Error(id+' has several textures');
  if(textured&&model.parts.some(p=>p.image===null))throw new Error(id+' mixes textured and plain materials');
- let pos=[],nor=[],uv=[],col=[],idx=[],base=0;const group=[]; // group: 1 for a vertex of a wheel (a part whose name says wheel, tyre or tire), 0 otherwise
+ let pos=[],nor=[],uv=[],col=[],idx=[],base=0;const group=[],partNames=[]; // group: 1 for a vertex of a wheel (a part whose name says wheel, tyre or tire), 0 otherwise
  for(const p of model.parts){
-  const count=p.pos.length/3,isWheel=p.emissive?2:spec.wheels&&/wheel|tyre|tire/i.test(p.node||'')?1:0;for(let k=0;k<count;k++)group.push(isWheel); /* group 2: a vertex of an emissive (glowing) part */for(let k=0;k<p.pos.length;k++)pos.push(p.pos[k]);
+  const count=p.pos.length/3,isWheel=p.emissive?2:spec.wheels&&/wheel|tyre|tire/i.test(p.node||'')?1:0;let pi=0;if(spec.nodes&&p.grp){let q=partNames.indexOf(p.grp);if(q<0)q=partNames.push(p.grp)-1;pi=q+1} /* spec.nodes: part id in the bits above 2 */for(let k=0;k<count;k++)group.push(isWheel|(pi<<2)); /* group 2: a vertex of an emissive (glowing) part */for(let k=0;k<p.pos.length;k++)pos.push(p.pos[k]);
   if(p.nor)for(let k=0;k<p.nor.length;k++)nor.push(p.nor[k]);else for(let k=0;k<p.pos.length;k++)nor.push(0);
   if(textured)for(let k=0;k<count*2;k++)uv.push(p.patch?p.patch.uv[k%2]:p.uv[k]);else{const c=p.color.map(sRGB8);for(let k=0;k<count;k++)col.push(c[0],c[1],c[2])}
   for(const i of p.idx)idx.push(i+base);base+=count}
@@ -211,17 +224,20 @@ for(const [id,spec] of Object.entries(PROPS)){
   if(emit.length){if(emit.some(p=>p.emissive.strength!==emit[0].emissive.strength||p.emissive.color.join()!==emit[0].emissive.color.join()))throw new Error(id+' has several emissive materials');
    const plain=[],lit=[];for(let t=0;t<idx.length;t+=3)(group[idx[t]]===2?lit:plain).push(idx[t],idx[t+1],idx[t+2]);
    glow={from:plain.length,count:lit.length,color:emit[0].emissive.color.map(sRGB8),strength:emit[0].emissive.strength};idx=Uint32Array.from([...plain,...lit])}}
+ // spec.nodes: the triangles are put in order body first, then one run per moving part (wheel_*, steer_*, unload_auger): record.parts = [{name,from,count}] in INDEX units (3 per triangle), record.nodes = pivots
+ let partsRec=null;if(spec.nodes&&partNames.length){const buckets=[[]];partNames.forEach(()=>buckets.push([]));for(let t=0;t<idx.length;t+=3)buckets[group[idx[t]]>>2].push(idx[t],idx[t+1],idx[t+2]);let at=0;partsRec=[];buckets.forEach((b,q)=>{partsRec.push({name:q?partNames[q-1]:'body',from:at,count:b.length});at+=b.length});idx=Uint32Array.from(buckets.flat())}
  const used=new Map(),P=[],N=[],U=[],C=[],I=new Uint32Array(idx.length);let count=0;
  for(let i=0;i<idx.length;i++){const o=idx[i];if(!used.has(o)){used.set(o,count++);P.push(pos[o*3],pos[o*3+1],pos[o*3+2]);N.push(nor[o*3],nor[o*3+1],nor[o*3+2]);if(textured)U.push(uv[o*2],uv[o*2+1]);else C.push(col[o*3],col[o*3+1],col[o*3+2])}I[i]=used.get(o)}
  const lo=[1e9,1e9,1e9],hi=[-1e9,-1e9,-1e9];for(let i=0;i<P.length;i+=3)for(let c=0;c<3;c++){lo[c]=Math.min(lo[c],P[i+c]);hi[c]=Math.max(hi[c],P[i+c])}
  let k;if(spec.scale)k=spec.scale;else if(spec.width)k=spec.width/(hi[0]-lo[0]);else if(spec.length)k=spec.length/(hi[2]-lo[2]);else if(spec.height)k=spec.height/(hi[1]-lo[1]);else k=spec.longest/Math.max(hi[0]-lo[0],hi[2]-lo[2]);
- if(spec.keepOrigin&&!spec.collide.fit)throw new Error(id+': keepOrigin needs collide.fit (the grid boxes assume a centred prop)');
+ 
  const cx=spec.keepOrigin?0:(lo[0]+hi[0])/2,cz=spec.keepOrigin?0:(lo[2]+hi[2])/2,baseY=spec.keepOrigin==='xyz'?0:spec._ground??lo[1]; // keepOrigin: x and z stay where the file put its origin (the footprint is then off centre); 'xyz' keeps y too (a held nozzle: its origin is the grip, not the ground)
  for(let i=0;i<P.length;i+=3){P[i]=(P[i]-cx)*k;P[i+1]=(P[i+1]-baseY)*k;P[i+2]=(P[i+2]-cz)*k}
  const W=(hi[0]-lo[0])*k,D=(hi[2]-lo[2])*k;let sy=0;for(let i=1;i<P.length;i+=3)sy=Math.max(sy,P[i]);
  // 7. collision boxes: rasterise the triangles tall enough to be walls onto a grid, then cover the occupied cells with as few rectangles as possible
  const {cell,band,walls,despeckle}=spec.collide,gridN=Math.ceil(D/cell)+2,gridM=Math.ceil(W/cell)+2,grid=new Uint8Array(gridN*gridM);
- const gx=x=>Math.floor((x+W/2)/cell),gz=z=>Math.floor((z+D/2)/cell);
+ const mx0=((lo[0]+hi[0])/2-cx)*k,mz0=((lo[2]+hi[2])/2-cz)*k; // 0 for a centred prop; with keepOrigin the footprint centre is off the origin and the grid boxes are shifted back
+ const gx=x=>Math.floor((x-mx0+W/2)/cell),gz=z=>Math.floor((z-mz0+D/2)/cell);
  const faceUp=(a,b,c)=>{const ux=P[b]-P[a],uy=P[b+1]-P[a+1],uz=P[b+2]-P[a+2],vx=P[c]-P[a],vy=P[c+1]-P[a+1],vz=P[c+2]-P[a+2],nx=uy*vz-uz*vy,ny=uz*vx-ux*vz,nz=ux*vy-uy*vx;const l=Math.hypot(nx,ny,nz)||1;return {up:ny/l,area:l/2}};
  const floorBins=new Map(),floorTris=[],fit={x0:1e9,x1:-1e9,z0:1e9,z1:-1e9}; // fit: the extent of every triangle in the band, for `collide.fit` (one exact box instead of grid cells)
  for(let t=0;t<I.length;t+=3){const a=I[t]*3,b=I[t+1]*3,c=I[t+2]*3,top=Math.max(P[a+1],P[b+1],P[c+1]),bottom=Math.min(P[a+1],P[b+1],P[c+1]),face=faceUp(a,b,c);
@@ -238,7 +254,7 @@ for(const [id,spec] of Object.entries(PROPS)){
   let w=1;while(ix+w<gridM&&clean[iz*gridM+ix+w]&&!taken[iz*gridM+ix+w])w++;
   let h=1;grow:while(iz+h<gridN){for(let d=0;d<w;d++)if(!clean[(iz+h)*gridM+ix+d]||taken[(iz+h)*gridM+ix+d])break grow;h++}
   for(let dz=0;dz<h;dz++)for(let dx=0;dx<w;dx++)taken[(iz+dz)*gridM+ix+dx]=1;
-  boxes.push({x:+(((ix+w/2)*cell)-W/2).toFixed(2),z:+(((iz+h/2)*cell)-D/2).toFixed(2),hx:+(w*cell/2).toFixed(2),hz:+(h*cell/2).toFixed(2)})}
+  boxes.push({x:+(((ix+w/2)*cell)-W/2+mx0).toFixed(2),z:+(((iz+h/2)*cell)-D/2+mz0).toFixed(2),hx:+(w*cell/2).toFixed(2),hz:+(h*cell/2).toFixed(2)})}
  if(spec.collide.none)boxes.length=0; // held items and a roof on columns (the map adds the column boxes itself)
  else if(spec.collide.fit&&fit.x1>fit.x0)boxes.splice(0,boxes.length,{x:+((fit.x0+fit.x1)/2).toFixed(2),z:+((fit.z0+fit.z1)/2).toFixed(2),hx:+((fit.x1-fit.x0)/2).toFixed(2),hz:+((fit.z1-fit.z0)/2).toFixed(2)}); // `fit`: a single exact box around what stands in the band (pallets, boxes, crates, posts)
  // the floor: the most common top height among large level faces, and the rectangle those faces cover (null if there is no real deck)
@@ -262,7 +278,7 @@ for(const [id,spec] of Object.entries(PROPS)){
  const norQ=Int8Array.from(N.map(v=>Math.max(-127,Math.min(127,Math.round(v*127))))),posA=Float32Array.from(P),idxA=Uint16Array.from(I);
  let wx0=1e9,wx1=-1e9,wz0=1e9,wz1=-1e9;for(let i=0;i<P.length;i+=3){wx0=Math.min(wx0,P[i]);wx1=Math.max(wx1,P[i]);wz0=Math.min(wz0,P[i+2]);wz1=Math.max(wz1,P[i+2])}
  const record={source:spec.file,width:+(wx1-wx0).toFixed(2),depth:+(wz1-wz0).toFixed(2),height:+sy.toFixed(2),triangles:I.length/3,footprint:{x0:+wx0.toFixed(2),x1:+wx1.toFixed(2),z0:+wz0.toFixed(2),z1:+wz1.toFixed(2)},colliders:boxes,floor,
-  door:spec.door?{x:spec.door.x,z:+wz1.toFixed(2),width:spec.door.width,height:spec.door.height}:null,...(glow?{glow}:{}),...(model.clips?.length?{clips:model.clips}:{}),
+  door:spec.door?{x:spec.door.x,z:+wz1.toFixed(2),width:spec.door.width,height:spec.door.height}:null,...(glow?{glow}:{}),...(model.clips?.length?{clips:model.clips}:{}),...(partsRec?{parts:partsRec}:{}),...(spec.nodes&&Object.keys(model.pivots||{}).length?{nodes:Object.fromEntries(Object.entries(model.pivots).map(([nm,[x,y,z]])=>[nm,[+((x-cx)*k).toFixed(4),+((y-baseY)*k).toFixed(4),+((z-cz)*k).toFixed(4)]]))}:{}),
   ...(Object.keys(model.anchors||{}).length?{anchors:Object.fromEntries(Object.entries(model.anchors).map(([name,[x,y,z]])=>[name,[+((x-cx)*k).toFixed(4),+((y-baseY)*k).toFixed(4),+((z-cz)*k).toFixed(4)]]))}:{}),pos:b64(posA),nor:b64(norQ),norQ:true,idx:b64(idxA),vertices:count};
  if(textured){record.texture=texture;record.uv=b64(Float32Array.from(U))}else record.col=b64(Uint8Array.from(C));
  if(spec.splitWheels)Object.assign(record,splitWheels(record,{id})); // the wheels become separate meshes (scripts/split-wheels.mjs), centred on their axles

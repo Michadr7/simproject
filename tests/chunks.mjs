@@ -30,7 +30,7 @@ for(const [name,src] of [['fences',fences],['buildings',MAP.buildings],['fields'
 {const m=splitByRect([{x0:-340,x1:-240,z0:-399,z1:-301}],r=>r);eq([...m.keys()].sort(),['1:8','2:8'],'a rectangle goes into every chunk it touches')}
 
 // ── mask tiles equal the matching window of the whole mask (sampled 1 in 7) ──
-const whole=terrain(),inGate=(x,z)=>MAP.gates.some(g=>x>=g.x0&&x<=g.x1&&z>=g.z0&&z<=g.z1);let sampled=0,tileMs=0,tiles=0,maxTile=0;
+const whole=terrain(),inGate=(x,z)=>MAP.gates.some(g=>x>=g.x0&&x<=g.x1&&z>=g.z0&&z<=g.z1)||!(x>=MAP.playable.x0&&x<MAP.playable.x1&&z>=MAP.playable.z0&&z<MAP.playable.z1);let sampled=0,tileMs=0,tiles=0,maxTile=0; // PB1: inGate also covers the whole 10 m rim of the old ground: open in tiles, a wall in the whole mask
 for(let j=range.j0;j<=range.j1;j++)for(let i=range.i0;i<=range.i1;i++){
  const t0=performance.now(),tile=maskTile(i,j);const ms=performance.now()-t0;tileMs+=ms;maxTile=Math.max(maxTile,ms);tiles++;ok(tile,'tile '+i+':'+j);
  const ox=Math.round((tile.x0-whole.x0)/whole.cell),oz=Math.round((tile.z0-whole.z0)/whole.cell);ok(Number.isInteger(ox)&&Number.isInteger(oz),'tile is cell aligned');
@@ -92,7 +92,7 @@ ok(WRANGE.cols===15&&WRANGE.rows===18&&WRANGE.cols*WRANGE.rows===270,'the world 
  const GW=Math.ceil((WORLD.x1-WORLD.x0)/2),GH=Math.ceil((WORLD.z1-WORLD.z0)/2),grid=new Uint8Array(GW*GH);let area=0,n=0,t0=performance.now(),wild=MAP.wilds,bad=[];
  for(let j=WRANGE.j0;j<=WRANGE.j1;j++)for(let i=WRANGE.i0;i<=WRANGE.i1;i++){const tile=maskTile(i,j);ok(tile,'every chunk of the world has a tile: '+i+':'+j);area+=tile.cols*tile.rows*tile.cell*tile.cell;n++;
   for(let b=1;b<tile.rows;b+=4)for(let a=1;a<tile.cols;a+=4){const x=tile.x0+(a+.5)*tile.cell,z=tile.z0+(b+.5)*tile.cell,w=tile.walk[b*tile.cols+a];grid[Math.floor((z-WORLD.z0)/2)*GW+Math.floor((x-WORLD.x0)/2)]=w;
-   const inGround=whole.index(x,z)>=0,want=inGround?(inGate(x,z)?1:whole.walk[whole.index(x,z)]):(x>=wild.x0&&x<=wild.x1&&z>=wild.z0&&z<=wild.z1&&tile.surface[b*tile.cols+a]<6||tile.surface[b*tile.cols+a]>7?(x>=wild.x0&&x<=wild.x1&&z>=wild.z0&&z<=wild.z1?1:0):0);if(w!==want&&bad.length<5)bad.push([x,z,w,want])}}
+   const inGround=whole.index(x,z)>=0,want=inGround?(inGate(x,z)?(tile.surface[b*tile.cols+a]===6||tile.surface[b*tile.cols+a]===7?0:1):whole.walk[whole.index(x,z)]):(x>=wild.x0&&x<=wild.x1&&z>=wild.z0&&z<=wild.z1&&tile.surface[b*tile.cols+a]<6||tile.surface[b*tile.cols+a]>7?(x>=wild.x0&&x<=wild.x1&&z>=wild.z0&&z<=wild.z1?1:0):0);if(w!==want&&bad.length<5)bad.push([x,z,w,want])}}
  ok(n===270&&area===1500*1800,'the 270 tiles cover the world exactly ('+area+' m2)');eq(bad,[],'a tile cell is walkable exactly where the whole mask says (old ground), in a gate, or in the wilds');
  const seen=new Uint8Array(GW*GH),cell=(x,z)=>Math.floor((z-WORLD.z0)/2)*GW+Math.floor((x-WORLD.x0)/2),stack=[cell(MAP.spawn.x,MAP.spawn.z)];ok(grid[stack[0]]===1,'the spawn is walkable');seen[stack[0]]=1;
  while(stack.length){const c=stack.pop(),a=c%GW,b=(c-a)/GW;for(const [da,db] of [[1,0],[-1,0],[0,1],[0,-1]]){const p=a+da,q=b+db;if(p<0||q<0||p>=GW||q>=GH)continue;const d=q*GW+p;if(!seen[d]&&grid[d]){seen[d]=1;stack.push(d)}}}

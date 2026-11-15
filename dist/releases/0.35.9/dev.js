@@ -138,6 +138,9 @@ export function installDevMode(api){
  const unstick=make('button',{id:'devUnstick',textContent:'Unstick',onclick:()=>{const r=api.unstick();say(r.moved?'Moved to the nearest clear spot.':r.found?'You are already on clear ground.':'No clear ground within 30 m of here.',r.found?'':'error');refresh()}});
  const home=make('button',{id:'devSpawnPoint',textContent:'Back to spawn',onclick:()=>{const r=api.reset();say(r.moved?'Back at the starting point (nearest clear spot).':'Back at the starting point.');refresh()}});
 
+ // PB1: Wipe player (fresh save): two clicks. The first arms it (the button asks), the second wipes the player keys and reloads; 5 seconds or closing the panel disarms it. Only game.js knows the storage (profile.js wipePlayerKeys).
+ let wipeArmed=false,wipeTimer=null;const disarmWipe=()=>{wipeArmed=false;clearTimeout(wipeTimer);wipe.textContent='Wipe player (fresh save)'};
+ const wipe=make('button',{id:'devWipePlayer',textContent:'Wipe player (fresh save)',onclick:()=>{if(!wipeArmed){wipeArmed=true;wipe.textContent='Really wipe? Click again';say('This deletes your vehicles, money, items, skills, jobs and progress in this browser. Settings and dev tuning stay. Click again within 5 seconds to confirm.','error');clearTimeout(wipeTimer);wipeTimer=setTimeout(disarmWipe,5000);return}disarmWipe();const r=api.wipePlayer?.();say(r?'Player wiped. Reloading into a fresh game.':'Wipe is not available.',r?'':'error')}});
  const panel=make('section',{id:'devPanel',hidden:true},
   make('h2',{},'Dev mode',make('button',{id:'devClose',textContent:'×',title:'Close (F2)',onclick:()=>close()})),
   readout,
@@ -150,7 +153,7 @@ export function installDevMode(api){
   make('h3',{},'Sky and light'),make('div',{className:'dev-row'},'Look at',lookTime,lookLabel,skyFollow),make('div',{className:'dev-row'},'Night floor',floor,floorLabel),make('div',{className:'dev-row'},'Exposure',exposure,exposureLabel,skyReset),make('div',{className:'dev-row'},'Lights',glow,glowLabel),cost,lightsLine,
   make('p',{className:'dev-note'},'"Look at" changes the picture only: the clock and your save stay as they are. Night floor is how much light an unlit night keeps (0.04 near black, 0.30 light). Both sliders are remembered in this browser, not in the save.'),
   make('h3',{},'Furniture'),interiorToggle,make('h3',{},'Scene'),make('div',{className:'dev-row'},editorButton),make('p',{className:'dev-note'},'Open Editor pauses the game and lets you fly over the map to pick, move, turn and remove props. Close puts you back.'),
-  make('h3',{},'Safety'),make('div',{className:'dev-row'},unstick,home),
+  make('h3',{},'Safety'),make('div',{className:'dev-row'},unstick,home),make('div',{className:'dev-row'},wipe),
   message,
   make('p',{className:'dev-note'},'F2 shows or hides this panel. Changes are saved to your normal save.'));
  // Typing in the panel must not move the character or trigger game keys. Escape closes it; F2 still reaches the window so it can close it too.
@@ -158,7 +161,7 @@ export function installDevMode(api){
  document.body.append(panel,interiorBody);
 
  function open(){panel.hidden=false;api.releaseCursor();lastFrame=0;frameTimes=[];skyApi?.probe(probe);refresh();clearInterval(timer);timer=setInterval(refresh,250)} // the readout and the frame timer only run while the panel is open, four times a second
- function close(){panel.hidden=true;interiorBody.hidden=true;interiorToggle.textContent='Interior editor ▸';clearInterval(timer);timer=null;skyApi?.probe(null)}
+ function close(){disarmWipe();panel.hidden=true;interiorBody.hidden=true;interiorToggle.textContent='Interior editor ▸';clearInterval(timer);timer=null;skyApi?.probe(null)}
  function toggle(){if(panel.hidden)open();else close()}
 
  // ── The way in: a Dev Mode button on the main menu (hidden until unlocked), then F2 ──────────────────────────────────────

@@ -25,7 +25,7 @@ export async function bootGame({position=null,play=true,editRelease=async()=>{},
  const win=new EventTarget();win.matches=()=>false;const store=new Map();
  store.set('edenridge.character.v1',JSON.stringify({version:1,appearance:{name:'Tester'}}));
  store.set('edenridge.progress.v1',JSON.stringify({version:1,progress:{cash:1000,completed:0,phase:'available',...(position?{position}:{}),...progress}}));
- let nextFrame;Object.assign(globalThis,{document:doc,window:win,localStorage:{getItem:k=>store.get(k)||null,setItem:(k,v)=>store.set(k,v)},innerWidth:1400,innerHeight:900,devicePixelRatio:1,requestAnimationFrame:fn=>{nextFrame=fn}});
+ let nextFrame;Object.assign(globalThis,{document:doc,window:win,localStorage:{getItem:k=>store.get(k)||null,setItem:(k,v)=>store.set(k,v),removeItem:k=>store.delete(k)},innerWidth:1400,innerHeight:900,devicePixelRatio:1,requestAnimationFrame:fn=>{nextFrame=fn}});
  await import(pathToFileURL(join(dir,'game.js')).href);
  const {GameState}=await import(pathToFileURL(join(dir,'state.js')).href);
  nextFrame(performance.now()+16);if(play)ids.get('start').click();

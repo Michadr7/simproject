@@ -302,3 +302,63 @@ Sources: https://poly.pizza/bundle/Farm-Buildings-Bundle-ppbnhEfNEt and https://
 | `farm.sheep` | Sheep.glb | 0.5 x 1.2 x 0.9 | 610 | 2 | 1 |
 | `farm.zebra` | Zebra.glb | 0.5 x 1.9 x 1.45 | 1,354 | 2 | 1 |
 The animals are skinned in the file (28 bones, FBX2glTF, units 100 times too big): they are imported in the bind (rest) pose as static props, sized by `height`, with the clip names and lengths kept as `record.clips` (Cow, Horse, Zebra: Death, Idle, Jump, Run, Walk, WalkSlow; Llama, Pig, Pug, Sheep: Idle, Jump; Idle 6.25 s). The skin, weights and keyframes are NOT kept: playing them needs the RIGGED pipeline (`scripts/rigged-glb.mjs`, whole GLB embedded, about 1.6 MB for the seven). The two fence files are named a and b by file; the bundle does not say which is which (`fence-a` is the plainer 188-triangle one).
+
+## sr90 Low Poly Farming Pack (SR90-IMPORT, 2026-11-17; no licence required, free to use)
+Source: the pack `Low Poly Farming Pack` by sr90 on itch.io (the page link is not recorded; the licence is "no licence required, free to use", confirmed by the project owner). The pack is one Blender file, `assets-src/Farm/list1_detailed_FARM.blend`; every object uses ONE colour palette atlas (a grid of flat colour cells), so the conversion to flat colours is lossless: `scripts/farm-sr90.py` samples the atlas at each face's UV and writes flat-material GLBs into `assets-src/Farm/sr90/` (originals not committed; CATALOGUE.md there lists all 400+ objects). Flat-colour conversion by us. Imported into `dist/props-assets.js` by `scripts/build-props.mjs` (vertex colours, one mesh and one draw call each, origin on the ground, footprint and collision boxes in the data, nothing placed in the world): `TOOL_DIR=<tools> node scripts/build-props.mjs assets-src farm.seeder,...`. Bales are rescaled to real size in Blender (round about 1.5 m across x 1.25 m wide, square about 0.9 m long); the silage blocks and the wrapped bale are judged by eye (about 1.2 m). The combine's unloading auger is its own node (`unload_auger`, pivot at the base of the tube, with `unload_auger_tip` riding on it). Vehicles, implements and trailers keep the file origin (the contract in notes/farm-vehicle-contract.md), their anchors (`anchor_*`) and, new in the props data: `record.parts` (triangle runs, in index units, for the body and each `wheel_*` and `unload_auger`) and `record.nodes` (pivots of the wheels, auger, seat, tank_fill), so a later stage can split the wheels into spinning meshes without the RIGGED pipeline. Glass is drawn opaque dark (the props pipeline has no alpha). `farm.spreader` is the pack's Trailer_Grain, which is a fertiliser spreader, not a grain cart. `farm.trailer-tank-sr90` is named so it does not clash with the KidBi tank. Not imported: the textured barns, houses, shed and trees (notes/sr90-textured-assets.md).
+
+| Prop id | Source file | Size w x d x h (m) | Triangles | Boxes | Moving parts (nodes) |
+|---|---|---|---|---|---|
+| `farm.bale-round-hay` | bale_round_hay.glb | 1.3 x 1.4 x 1.5 | 1,622 | 1 |  |
+| `farm.bale-round-strapped` | bale_round_strapped.glb | 1.3 x 1.5 x 1.5 | 1,782 | 1 |  |
+| `farm.bale-square-large` | bale_square_large.glb | 0.9 x 0.5 x 0.4 | 1,484 | 1 |  |
+| `farm.bale-square-small` | bale_square_small.glb | 0.9 x 0.6 x 0.4 | 786 | 1 |  |
+| `farm.bale-square-green-a` | bale_square_green_a.glb | 1.2 x 1.2 x 1.1 | 3,355 | 1 |  |
+| `farm.bale-square-straw` | bale_square_straw.glb | 1.2 x 1.2 x 0.9 | 3,302 | 1 |  |
+| `farm.bale-square-green-b` | bale_square_green_b.glb | 1.2 x 1.1 x 0.8 | 2,041 | 1 |  |
+| `farm.bale-square-flat-green` | bale_square_flat_green.glb | 0.9 x 0.8 x 0.4 | 1,183 | 1 |  |
+| `farm.bale-large-green` | bale_large_green.glb | 1.5 x 1.7 x 1.4 | 1,646 | 1 |  |
+| `farm.crate-plastic-tall` | crate_plastic_tall.glb | 0.6 x 0.4 x 0.3 | 3,112 | 1 |  |
+| `farm.crate-plastic-mid` | crate_plastic_mid.glb | 0.6 x 0.4 x 0.3 | 2,720 | 1 |  |
+| `farm.crate-plastic-low` | crate_plastic_low.glb | 0.6 x 0.4 x 0.2 | 2,224 | 1 |  |
+| `farm.crate-wood-large-bin` | crate_wood_large_bin.glb | 1.1 x 1.1 x 0.8 | 543 | 1 |  |
+| `farm.crate-wood` | crate_wood.glb | 0.6 x 0.4 x 0.2 | 419 | 1 |  |
+| `farm.box-wood-small` | box_wood_small.glb | 0.3 x 0.2 x 0.1 | 317 | 1 |  |
+| `farm.pallet-wood` | pallet_wood.glb | 1.2 x 0.8 x 0.2 | 640 | 1 |  |
+| `farm.barrel-drum-lid` | barrel_drum_lid.glb | 0.6 x 0.6 x 1.0 | 558 | 1 |  |
+| `farm.barrel-drum-open` | barrel_drum_open.glb | 0.6 x 0.6 x 0.9 | 734 | 1 |  |
+| `farm.barrel-wood-cradle` | barrel_wood_cradle.glb | 0.9 x 1.3 x 1.0 | 1,366 | 1 |  |
+| `farm.barrel-wood-closed` | barrel_wood_closed.glb | 0.9 x 0.9 x 1.2 | 1,164 | 1 |  |
+| `farm.barrel-wood-open` | barrel_wood_open.glb | 0.9 x 0.9 x 1.2 | 1,456 | 1 |  |
+| `farm.trough-metal` | trough_metal.glb | 2.0 x 0.5 x 0.3 | 282 | 1 |  |
+| `farm.trough-metal-hay` | trough_metal_hay.glb | 2.0 x 0.5 x 0.4 | 1,033 | 1 |  |
+| `farm.manger-wood` | manger_wood.glb | 1.3 x 0.7 x 0.3 | 142 | 1 |  |
+| `farm.manger-wood-hay` | manger_wood_hay.glb | 1.3 x 0.7 x 0.4 | 527 | 1 |  |
+| `farm.trough-wood` | trough_wood.glb | 2.0 x 0.5 x 0.4 | 232 | 1 |  |
+| `farm.trough-wood-hay` | trough_wood_hay.glb | 2.0 x 0.5 x 0.4 | 1,010 | 1 |  |
+| `farm.rack-v-unclear` | rack_v_unclear.glb | 0.9 x 0.6 x 2.2 | 88 | 1 |  |
+| `farm.bag-feed-green` | bag_feed_green.glb | 0.6 x 0.4 x 0.9 | 360 | 1 |  |
+| `farm.bag-feed-open` | bag_feed_open.glb | 0.6 x 0.5 x 0.7 | 583 | 1 |  |
+| `farm.sack-closed` | sack_closed.glb | 0.6 x 0.4 x 0.9 | 192 | 1 |  |
+| `farm.sack-open-large` | sack_open_large.glb | 0.6 x 0.5 x 0.6 | 284 | 1 |  |
+| `farm.sack-tied` | sack_tied.glb | 0.6 x 0.4 x 0.8 | 428 | 1 |  |
+| `farm.bucket-metal` | bucket_metal.glb | 0.4 x 0.3 x 0.3 | 786 | 1 |  |
+| `farm.bucket-wood` | bucket_wood.glb | 0.3 x 0.3 x 0.3 | 646 | 1 |  |
+| `farm.milk-can` | milk_can.glb | 0.4 x 0.4 x 0.8 | 490 | 1 |  |
+| `farm.wheelbarrow` | wheelbarrow.glb | 0.7 x 1.4 x 0.7 | 1,254 | 1 |  |
+| `farm.water-tower` | water_tower.glb | 4.8 x 6.3 x 12.3 | 3,450 | 7 |  |
+| `farm.seeder` | seeder.glb | 3.7 x 1.6 x 1.4 | 13,716 | 2 |  |
+| `farm.cultivator` | cultivator.glb | 2.8 x 0.6 x 1.2 | 2,190 | 2 |  |
+| `farm.harrow` | harrow.glb | 1.8 x 3.3 x 1.9 | 3,715 | 1 |  |
+| `farm.baler-round` | baler_round.glb | 2.7 x 4.0 x 2.8 | 7,098 | 4 | wheel_fl, wheel_fr, wheel_rl, wheel_rr |
+| `farm.mower-bar` | mower_bar.glb | 9.9 x 1.8 x 1.7 | 7,995 | 1 |  |
+| `farm.mower-yellow` | mower_yellow.glb | 4.0 x 1.5 x 1.2 | 2,407 | 1 |  |
+| `farm.rake-tedder` | rake_tedder.glb | 9.3 x 6.8 x 1.8 | 14,336 | 5 | wheel_01, wheel_02, wheel_03, wheel_04, wheel_05, wheel_06, wheel_07, wheel_08 |
+| `farm.sprayer` | sprayer.glb | 22.2 x 6.2 x 3.0 | 18,553 | 5 | wheel_l, wheel_r |
+| `farm.spreader` | trailer_grain.glb | 2.6 x 5.1 x 2.9 | 6,161 | 3 | wheel_l, wheel_r |
+| `farm.trailer-red` | trailer_red.glb | 2.5 x 6.9 x 2.9 | 14,320 | 2 | wheel_fl, wheel_fr, wheel_rl, wheel_rr |
+| `farm.trailer-tank-sr90` | trailer_tank.glb | 2.2 x 7.9 x 3.1 | 12,473 | 3 | wheel_fl, wheel_fr, wheel_ml, wheel_mr, wheel_rl, wheel_rr |
+| `farm.cart-small` | cart_small.glb | 1.6 x 3.4 x 1.3 | 5,133 | 2 | wheel_l, wheel_r |
+| `farm.combine-harvester` | combine_harvester.glb | 4.4 x 11.1 x 4.5 | 16,578 | 8 | unload_auger, wheel_fl, wheel_fr, wheel_rl, wheel_rr |
+| `farm.combine-header` | combine_header.glb | 13.8 x 3.1 x 2.1 | 7,107 | 1 |  |
+
+52 ids, 176,023 triangles in all; props-assets.js 5.47 MB to 13.30 MB (static startup import, flagged to the project owner).

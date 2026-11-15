@@ -84,7 +84,7 @@ assert(ct.walkable(250,-60)&&ct.walkable(280,-45),'and the meadow around it is o
  // the gate is the only opening through the old rim, and only in the tile (the whole mask keeps it a wall)
  const g=MAP.gates[0],gx=(g.x0+g.x1)/2,gz=(g.z0+g.z1)/2;
  assert(!isWalkable(gx,gz)&&tileAt(gx,gz).walkable(gx,gz),'the freight gate: a wall in the whole mask, open in its chunk tile');
- for(const z of [g.z0-6,g.z1+6])assert(!tileAt(gx,z).walkable(gx,z),'beside the gate the rim stays a wall in the tile ('+z+')');
+ for(const z of [g.z0-6,g.z1+6])assert(!isWalkable(gx,z)&&tileAt(gx,z).walkable(gx,z),'PB1: beside the gate the rim is open country in the tile (a truck driven east at z '+z+' passes) and still a wall in the whole mask');
  // the wilds: walkable (water excepted) in tiles on a 20 m grid sampled across the whole world, the 10 m rim of the world is a wall (a 2 m coarse reach check is in chunks.mjs)
  const W=MAP.wilds;let wild=0,rim=0,waterSeen=0,bad=[];
  for(let x=W.x0+1;x<W.x1;x+=20)for(let z=W.z0+1;z<W.z1;z+=20){const inOld=x>=MAP.ground.x0&&x<=MAP.ground.x1&&z>=MAP.ground.z0&&z<=MAP.ground.z1;if(inOld)continue;const t=tileAt(x,z),s=t.surfaceAt(x,z),water=s===SURFACE.WATER||s===SURFACE.BANK;wild++;if(water){waterSeen++;if(t.walkable(x,z)&&bad.length<5)bad.push(['water walkable',x,z])}else if(!t.walkable(x,z)&&bad.length<5)bad.push([x,z,s])}
