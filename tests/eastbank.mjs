@@ -16,7 +16,7 @@ const rotated=l=>{const f=propInfo(l.prop).footprint,s=Math.round(Math.sin(l.yaw
  return {x0:Math.min(...pts.map(p=>p[0])),x1:Math.max(...pts.map(p=>p[0])),z0:Math.min(...pts.map(p=>p[1])),z1:Math.max(...pts.map(p=>p[1]))}};
 
 // Roads: straight and 9 m or more everywhere, 12 m where trucks turn; no new curves (the one ribbon is still Cedar Heights' loop, whose tightest bend is about 20 m).
-assert.equal(roads['freight-south'].width,12);assert.equal(roads['works-lane'].width,12);assert.equal(roads['oak-east'].width,12);assert.deepEqual(MAP.roads.edges.filter(e=>e.path).map(e=>e.id),['cedar-loop','blackstone-access','lake-road']);
+assert.equal(roads['freight-south'].width,12);assert.equal(roads['works-lane'].width,12);assert.equal(roads['oak-east'].width,12);assert.deepEqual(MAP.roads.edges.filter(e=>e.path).map(e=>e.id),['cedar-loop','blackstone-access','lake-road','west-bank-lane','coast-link','p5-spur']);
 assert.deepEqual(roadRect(roads['works-lane']),{x0:96,x1:108,z0:6,z1:68},'Works Lane joins Oak Street East and Freight South');
 // The loop Oak East -> Works Lane -> Freight South -> Freight Road is drivable end to end: flood the asphalt, driveway and bridge cells from Oak East.
 const drivable=new Set([SURFACE.ROAD,SURFACE.STREET,SURFACE.DRIVEWAY,SURFACE.BRIDGE]),seen=new Uint8Array(T.walk.length);

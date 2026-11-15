@@ -1508,7 +1508,7 @@ if(DEV_MODE){try{
   $,items:ITEMS,
   places:[at('spawn','Spawn · Oak Street',MAP.spawn.x,MAP.spawn.z),at('market','Corner Market (street)',street('market').x,street('market').z),at('cafe','Alder Coffee (street)',street('cafe').x,street('cafe').z),
    ...['alder','cedar','eastbank','farm','forest'].map(id=>at(id,MAP.zones.find(zone=>zone.id===id).name,centre(id).x,centre(id).z)),
-   ...MAP.water.bridges.map(b=>at(b.id,b.id==='county-bridge'?'County Bridge':'Freight Bridge',(b.x0+b.x1)/2,(b.z0+b.z1)/2))],
+   ...MAP.water.bridges.map(b=>at(b.id,b.name||(b.id==='county-bridge'?'County Bridge':'Freight Bridge'),(b.x0+b.x1)/2,(b.z0+b.z1)/2))],
   position(){const p=me.position;return {x:p.x,z:p.z,where:shop?'Inside a shop':inside?'Inside a home':(zoneAt(p.x,p.z)?.label||'Open Country')}},
   snapshot:()=>({minutes:GameState.progress.routine.minutes,cash:GameState.progress.cash}),
   setShadows(on){renderer.shadowMap.enabled=!!on;scene.traverse(m=>{if(m.material)m.material.needsUpdate=true})}, // for finding what causes a glitch on your GPU

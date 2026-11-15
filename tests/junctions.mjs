@@ -4,13 +4,13 @@ import {junctionPatches,FILLET_R} from '../dist/junctions.js';
 import {terrain,SURFACE} from '../dist/terrain.js';
 
 // Junction patches (0.34): rounded inside corners at crossings and T junctions, flares where road widths change; never inside a town, on paving, a plot, a building or a field.
-const P=junctionPatches(),T=terrain();
+const P=junctionPatches(),T=terrain(),{buildTerrain}=await import('../dist/terrain.js'),G=MAP.ground,outsideGround=(x,z)=>x<G.x0||x>G.x1||z<G.z0||z>G.z1,tileAt=(x,z)=>buildTerrain(MAP,{window:{x0:Math.floor(x/10)*10-30,x1:Math.floor(x/10)*10+40,z0:Math.floor(z/10)*10-30,z1:Math.floor(z/10)*10+40}}); // R3b: patches of the wild roads lie outside the old ground: read them from a chunk-style tile
 assert(P.length>=6,'there are patches: '+P.length);
 assert(P.some(p=>p.kind==='fillet')&&P.some(p=>p.kind==='taper'),'both kinds');
 for(const p of P){assert(p.points.length>=3,'a polygon');for(const [x,z] of p.points)assert(Number.isFinite(x)&&Number.isFinite(z));
  // every patch cell is road now (painted by terrain.js), and the ground just outside the patch's own roads is the road kind or the road it joins
- const m=p.points[Math.floor(p.points.length/2)],c=p.kind==='fillet'?[p.points[0][0]*.75+m[0]*.25,p.points[0][1]*.75+m[1]*.25]:p.points.reduce((a,q)=>[a[0]+q[0]/p.points.length,a[1]+q[1]/p.points.length],[0,0]);assert.equal(T.surfaceAt(...c),SURFACE.ROAD,`${p.kind} of ${p.roads.join('/')} is road at ${c.map(v=>v.toFixed(1))}`);
- assert(T.walkable?T.walkable(...c):true)}
+ const m=p.points[Math.floor(p.points.length/2)],c=p.kind==='fillet'?[p.points[0][0]*.75+m[0]*.25,p.points[0][1]*.75+m[1]*.25]:p.points.reduce((a,q)=>[a[0]+q[0]/p.points.length,a[1]+q[1]/p.points.length],[0,0]);assert.equal((outsideGround(...c)?tileAt(...c):T).surfaceAt(...c),SURFACE.ROAD,`${p.kind} of ${p.roads.join('/')} is road at ${c.map(v=>v.toFixed(1))}`);
+ assert((outsideGround(...c)?tileAt(...c):T).walkable(...c))}
 // a fillet is a quarter round: its corner point, then an arc of radius r (at most FILLET_R) around the point r away from the corner on both axes
 {const f=P.find(p=>p.kind==='fillet'),[cx,cz]=f.points[0],r=Math.hypot(f.points[1][0]-cx,f.points[1][1]-cz);assert(r<=FILLET_R+1e-6&&r>=1.5);const ctr=[f.points.at(-1)[0]+(f.points[1][0]-cx),f.points[1][1]+(f.points.at(-1)[1]-cz)];
  for(const q of f.points.slice(1,-1)){} assert(f.points.length>=8,'the arc has several steps')}

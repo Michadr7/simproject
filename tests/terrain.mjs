@@ -41,7 +41,7 @@ assert(!isWalkable(MAP.ground.x0-5,0)&&!isWalkable(0,MAP.ground.z1+5));assert.eq
 
 // ── Alignment: each bridge spans its river, meets its road at both ends, and has water on both sides ───────────────────────
 const river=MAP.water.rivers[0];
-for(const bridge of MAP.water.bridges){
+for(const bridge of MAP.water.bridges.filter(b=>!b.wild)){ // R3b: the wild bridges (axis x, outside the old ground) are pinned with chunk tiles in tests/road-r3b.mjs
  const cx=(bridge.x0+bridge.x1)/2;
  for(let z=bridge.z0;z<=bridge.z1;z+=.5)assert(isWalkable(cx,z),`${bridge.id}: the road is walkable all the way across at z=${z}`);
  const zWater=riverZAt(river,cx);assert(at(cx,zWater)===SURFACE.BRIDGE,`${bridge.id}: the deck is over the river's centre`);

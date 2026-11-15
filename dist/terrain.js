@@ -6,7 +6,7 @@
 // A cell counts as inside a shape when its centre is. Everything inside the map's `playable` rectangle starts walkable (open country); shapes painted later win, in this
 // order: zones, roads, fields, pavements, the river and its banks, bridges. Water and banks are never walkable; a bridge deck always is.
 import {junctionPatches,cornerRegion,inPolygon} from './junctions.js';
-import {MAP,roadRect,riverPath} from './map-definition.js';
+import {MAP,roadRect,riverPath,riverIsLegacy,riverBank,seaLineZ} from './map-definition.js';
 
 export const SURFACE=Object.freeze({GRASS:1,STREET:2,ROAD:3,DIRT:4,PAVEMENT:5,WATER:6,BANK:7,BRIDGE:8,WHEAT:9,PLOWED:10,GREEN:11,DRIVEWAY:12,PATH:13,MUD:14,GRAVEL:15}); // MUD (TR3): painted from map.mud after the fields; GRAVEL (TR3): the ground of a 'gravel' road (no road uses it until R3)
 // How high the player's feet sit on each surface (the city's streets and pavements are raised meshes; the County Road is a plane on the grass).
@@ -33,7 +33,7 @@ function smoothClosed(p,step){
 
 // `window` ({x0,x1,z0,z1}, cell-aligned to the ground) builds just that part of the mask (chunks.js maskTile); the shapes below are computed once per map and shared by every tile.
 const shapeMemo=new WeakMap();
-function shapesOf(map){let s=shapeMemo.get(map);if(!s){const lines=new Map(),rivers=new Map();s={patches:junctionPatches(map),line:e=>{if(!lines.has(e))lines.set(e,roadCenterline(e,map));return lines.get(e)},river:r=>{if(!rivers.has(r))rivers.set(r,riverPath(r,2).map(p=>[p.x,p.z]));return rivers.get(r)}};shapeMemo.set(map,s)}return s}
+function shapesOf(map){let s=shapeMemo.get(map);if(!s){const lines=new Map(),rivers=new Map();s={patches:junctionPatches(map),line:e=>{if(!lines.has(e))lines.set(e,roadCenterline(e,map));return lines.get(e)},river:r=>{if(!rivers.has(r))rivers.set(r,riverPath(r,2).map(p=>[p.x,p.z]));return rivers.get(r)},samples:r=>riverPath(r,2)};shapeMemo.set(map,s)}return s}
 export function buildTerrain(map=MAP,{cell=.5,window=null}={}){
  const S=shapesOf(map),g=window||map.ground,cols=Math.ceil((g.x1-g.x0)/cell),rows=Math.ceil((g.z1-g.z0)/cell),n=cols*rows;
  const walk=new Uint8Array(n),surface=new Uint8Array(n).fill(SURFACE.GRASS),zone=new Uint8Array(n);
@@ -47,6 +47,11 @@ export function buildTerrain(map=MAP,{cell=.5,window=null}={}){
   for(let s=0;s<points.length-1;s++){const [ax,az]=points[s],[bx,bz]=points[s+1],dx=bx-ax,dz=bz-az,len2=dx*dx+dz*dz||1;
    const i0=Math.max(0,Math.floor((Math.min(ax,bx)-half-g.x0)/cell)),i1=Math.min(cols-1,Math.ceil((Math.max(ax,bx)+half-g.x0)/cell)),j0=Math.max(0,Math.floor((Math.min(az,bz)-half-g.z0)/cell)),j1=Math.min(rows-1,Math.ceil((Math.max(az,bz)+half-g.z0)/cell));
    for(let j=j0;j<=j1;j++)for(let i=i0;i<=i1;i++){const x=centreX(i),z=centreZ(j),t=Math.max(0,Math.min(1,((x-ax)*dx+(z-az)*dz)/len2));if(Math.hypot(x-ax-dx*t,z-az-dz*t)<=half)paint(j*cols+i)}}
+ }
+ // every cell whose centre lies within `radius` of (x, z) (R3b: the discs of a river of changing width)
+ function disc(x,z,radius,paint){
+  const i0=Math.max(0,Math.floor((x-radius-g.x0)/cell)),i1=Math.min(cols-1,Math.ceil((x+radius-g.x0)/cell)),j0=Math.max(0,Math.floor((z-radius-g.z0)/cell)),j1=Math.min(rows-1,Math.ceil((z+radius-g.z0)/cell));
+  for(let j=j0;j<=j1;j++)for(let i=i0;i<=i1;i++)if(Math.hypot(centreX(i)-x,centreZ(j)-z)<=radius)paint(j*cols+i)
  }
  // 0. open country: walkable everywhere inside the playable rectangle
  rect(map.playable||g,c=>{walk[c]=1});
@@ -78,8 +83,14 @@ export function buildTerrain(map=MAP,{cell=.5,window=null}={}){
  // 4b. rounded kerbs inside the towns (MAP.roundedCorners): the corner patch is street, walkable and drivable, even where the pavement rectangle used to cover it
  for(const c of map.roundedCorners||[]){const P=cornerRegion(c);rect({x0:Math.min(...P.map(p=>p[0])),x1:Math.max(...P.map(p=>p[0])),z0:Math.min(...P.map(p=>p[1])),z1:Math.max(...P.map(p=>p[1]))},k=>{if(inPolygon(P,centreX(k%cols),centreZ((k-k%cols)/cols))){surface[k]=SURFACE.STREET;walk[k]=1}})}
  // 5. the river: banks, then water; neither is walkable
- for(const river of map.water?.rivers||[]){const line=S.river(river);
-  ribbon(line,river.width/2+river.bank,c=>{surface[c]=SURFACE.BANK;walk[c]=0});ribbon(line,river.width/2,c=>{surface[c]=SURFACE.WATER;walk[c]=0})}
+ for(const river of map.water?.rivers||[]){
+  if(riverIsLegacy(river)){const line=S.river(river);
+   ribbon(line,river.width/2+river.bank,c=>{surface[c]=SURFACE.BANK;walk[c]=0});ribbon(line,river.width/2,c=>{surface[c]=SURFACE.WATER;walk[c]=0})}
+  else{ // R3b: a new-form river changes width along its length (the estuary is 25 m), so every sample of the path paints a disc of its own radius: all the banks first, then all the water over them
+   const samples=S.samples(river),bank=riverBank(river);
+   for(const [r,paint] of [[s=>s.w/2+bank,c=>{surface[c]=SURFACE.BANK;walk[c]=0}],[s=>s.w/2,c=>{surface[c]=SURFACE.WATER;walk[c]=0}]])for(const s of samples)disc(s.x,s.z,r(s),paint)}}
+ // 5b. the sea (R3b): everything south of the shoreline is water, never walkable (the beach north of the line is dug but walkable: the feet follow heightAt)
+ {const sea=map.water?.sea;if(sea?.shoreline?.length>=2&&g.z1>Math.min(...sea.shoreline.map(p=>p[1])))for(let i=0;i<cols;i++){const lz=seaLineZ(sea,centreX(i));for(let j=Math.max(0,Math.floor((lz-g.z0)/cell-.5)+1);j<rows;j++){const c=j*cols+i;surface[c]=SURFACE.WATER;walk[c]=0}}}
  // 6. bridge decks
  for(const bridge of map.water?.bridges||[])rect(bridge,c=>{surface[c]=SURFACE.BRIDGE;walk[c]=1});
 

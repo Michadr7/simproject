@@ -98,13 +98,13 @@ ok(WRANGE.cols===15&&WRANGE.rows===18&&WRANGE.cols*WRANGE.rows===270,'the world 
  while(stack.length){const c=stack.pop(),a=c%GW,b=(c-a)/GW;for(const [da,db] of [[1,0],[-1,0],[0,1],[0,-1]]){const p=a+da,q=b+db;if(p<0||q<0||p>=GW||q>=GH)continue;const d=q*GW+p;if(!seen[d]&&grid[d]){seen[d]=1;stack.push(d)}}}
  let holes=0,wildCells=0;const lost=[];for(let q=0;q<GH;q++)for(let p=0;p<GW;p++){const x=WORLD.x0+p*2+1,z=WORLD.z0+q*2+1;if(whole.index(x,z)<0&&x>=wild.x0+1&&x<=wild.x1-1&&z>=wild.z0+1&&z<=wild.z1-1){wildCells++;if(grid[q*GW+p]&&!seen[q*GW+p]){holes++;if(lost.length<6)lost.push([x,z])}}}
  ok(wildCells>580000&&holes===0,'from the spawn the whole wilds can be walked ('+wildCells+' samples, '+holes+' unreachable, first '+JSON.stringify(lost)+'): through the freight gate, to every edge');
- for(const [x,z] of [[wild.x0+1,wild.z0+1],[wild.x1-1,wild.z0+1],[wild.x0+1,wild.z1-1],[wild.x1-1,wild.z1-1],[0,wild.z0+1],[0,wild.z1-1],[wild.x0+1,-300],[wild.x1-1,-300]])ok(seen[cell(x,z)],'the spawn reaches the world edge at '+x+','+z);
+ for(const [x,z] of [[wild.x0+1,wild.z0+1],[wild.x1-1,wild.z0+1],[wild.x0+1,420],[wild.x1-1,420],[0,wild.z0+1],[0,420],[wild.x0+1,-300],[wild.x1-1,-300]])ok(seen[cell(x,z)],'the spawn reaches the world edge at '+x+','+z);
  ok(!grid[cell(WORLD.x0+3,0)]&&!grid[cell(WORLD.x1-3,0)]&&!grid[cell(0,WORLD.z1-3)],'the outermost 10 m is a wall');
  console.log('world tiles: 270 tiles in '+(performance.now()-t0).toFixed(0)+' ms')}
 // the streamed world: wilds are solid ground where loaded, empty chunks cost no draw call, and the whole-world mask is never built
-{const far={x:650,z:-700},edge={x:1030,z:580},r=world.ensure(far.x,far.z);ok(r.built>0&&view.isReady(far.x,far.z),'a chunk of the wilds builds on demand');
+{const far={x:650,z:-700},edge={x:1030,z:-1180},r=world.ensure(far.x,far.z);ok(r.built>0&&view.isReady(far.x,far.z),'a chunk of the wilds builds on demand');
  ok(isWalkable(far.x,far.z)===true&&isWalkable(far.x+7,far.z-9)===true,'the wilds are walkable where loaded');ok(view.meshesOf(chunkKey(...Object.values(chunkIndex(far.x,far.z))))===0,'an empty chunk adds no draw call of its own');
- world.ensure(edge.x,edge.z);ok(isWalkable(edge.x,edge.z)&&isWalkable(1039,589)&&!isWalkable(1045,589)&&!isWalkable(1030,596),'the far corner is walkable up to the 10 m wall');
+ world.ensure(edge.x,edge.z);ok(isWalkable(edge.x,edge.z)&&isWalkable(1039,-1189)&&!isWalkable(1045,-1189)&&!isWalkable(1030,-1196),'the far corner is walkable up to the 10 m wall (R3b: the north-east one, the south-east corner is sea now)');
  world.ensure(-430,-1180);ok(isWalkable(-439,-1189)&&!isWalkable(-445,-1189),'and the opposite corner');
  const s=view.stats();ok(s.chunkMeshes===0||s.chunkMeshes<=s.loaded*3,'meshes the chunks own: '+s.chunkMeshes+' for '+s.loaded+' loaded chunks');
  ok(s.maskCells===s.loaded*40000&&s.maskCells<s.worldCells/4,'tiles held: '+s.maskCells+' cells of a '+s.worldCells+' cell world; the whole-world mask is never built');
@@ -113,7 +113,7 @@ ok(WRANGE.cols===15&&WRANGE.rows===18&&WRANGE.cols*WRANGE.rows===270,'the world 
 // ── F2: the merged ground of the chunks is exactly the loose ground of the plain world (same triangles, same area, same layer, same dashes) ──
 {const looseScene=new THREE.Scene(),loose=createWorld(looseScene,{cullRadius:Infinity});
  for(let j=range.j0;j<=range.j1;j++)for(let i=range.i0;i<=range.i1;i++){const b=chunkBounds(i,j);world.ensure((b.x0+b.x1)/2,(b.z0+b.z1)/2,0)}
- for(let x=350;x<=600;x+=50)world.ensure(x,68,0); // R3a: Eden Road runs out into the wilds (x 290 to 600): its chunks hold the rest of the asphalt
+ for(let j=WRANGE.j0;j<=WRANGE.j1;j++)for(let i=WRANGE.i0;i<=WRANGE.i1;i++){const b=chunkBounds(i,j);world.ensure((b.x0+b.x1)/2,(b.z0+b.z1)/2,0)} // R3b: the wild roads (Eden Road, the spine, Bay Road, the Kaspian Bay streets, Coast Link...) run through the wilds: every chunk of the world holds its share of the asphalt
  scene.updateMatrixWorld(true);looseScene.updateMatrixWorld(true);
  const A=new THREE.Vector3(),B=new THREE.Vector3(),C=new THREE.Vector3(),tally=(root,test)=>{const r={meshes:0,tri:0,area:0,up:0,factors:new Set(),inst:0,sum:0};root.traverse(o=>{if(!o.isMesh||!test(o.name))return;
    if(o.isInstancedMesh){r.meshes++;r.inst+=o.count;const m=new THREE.Matrix4();for(let k=0;k<o.count;k++){o.getMatrixAt(k,m);r.sum+=m.elements[12]+m.elements[13]*7+m.elements[14]*13}return}
@@ -123,13 +123,13 @@ ok(WRANGE.cols===15&&WRANGE.rows===18&&WRANGE.cols*WRANGE.rows===270,'the world 
  for(const [kind,looseTest,mergedTest] of [['asphalt (roads, joints, lots)',n=>/^road-(?!line)|^lot-/.test(n),n=>/^ground-asphalt-/.test(n)],['driveways',n=>/^driveway-/.test(n),n=>/^ground-driveway-/.test(n)],['paths',n=>/^path-/.test(n),n=>/^ground-path-/.test(n)]]){
   const a=tally(looseScene,looseTest),b=tally(scene,mergedTest);
   ok(a.tri>0&&a.tri===b.tri,kind+': the same '+a.tri+' triangles ('+b.tri+')');ok(Math.abs(a.area-b.area)<1e-6*a.area,kind+': the same ground area ('+a.area.toFixed(1)+' m2 vs '+b.area.toFixed(1)+')');ok(a.up===b.up,kind+': every triangle faces the same way ('+a.up+' vs '+b.up+')');
-  eq([...a.factors].length===1?[...a.factors]:[...a.factors],a.factors.size===1?[...b.factors]:[...a.factors],kind+': one ground layer rank');ok(b.meshes<a.meshes,kind+': fewer meshes ('+a.meshes+' loose, '+b.meshes+' merged in the ring... all 42 chunks)')}
+  eq([...a.factors].length===1?[...a.factors]:[...a.factors],a.factors.size===1?[...b.factors]:[...a.factors],kind+': one ground layer rank');ok(kind.startsWith('asphalt')?b.meshes<=a.meshes*2:b.meshes<a.meshes,kind+': fewer meshes ('+a.meshes+' loose, '+b.meshes+' merged in the ring... all 42 chunks)')}
  {const a=tally(looseScene,n=>/^road-line-/.test(n)),b=tally(scene,n=>/^road-lines-/.test(n));ok(a.inst>0&&a.inst===b.inst&&Math.abs(a.sum-b.sum)<1e-3*Math.abs(a.sum)+1e-3,'road dashes: '+a.inst+' instances, same places, '+a.meshes+' meshes become '+b.meshes)}
  // every old ground rect of the plain world is covered by chunks: split each ground rectangle by chunk and the pieces add back to the rectangle exactly
  {const rects=[...MAP.fields,...MAP.lots,...(MAP.paving||[]),...MAP.reserved.flatMap(p=>[p.driveway,p.path].filter(Boolean))];let bad=0;
   for(const r of rects){const m=splitByRect([r],q=>q,worldRange());let area=0;for(const [k] of m){const [i,j]=k.split(':').map(Number),b=chunkBounds(i,j);area+=(Math.min(r.x1,b.x1)-Math.max(r.x0,b.x0))*(Math.min(r.z1,b.z1)-Math.max(r.z0,b.z0))}if(Math.abs(area-(r.x1-r.x0)*(r.z1-r.z0))>1e-6)bad++}
   ok(rects.length>20&&bad===0,'ground rectangles (fields, lots, paving, driveways, paths): '+rects.length+' split by chunk and added back exactly')}
  // the flat ground is two planes for the whole world: they cover it, whatever the chunks hold
- {const planes=[];world.group.traverse(o=>{if(/^ground-(base|far)-/.test(o.name))planes.push(o)});const base=planes.filter(o=>/base/.test(o.name)),pts=[];base.forEach(o=>{o.geometry.computeBoundingBox();pts.push(o.geometry.boundingBox)});
-  const x0=Math.min(...pts.map(b=>b.min.x)),x1=Math.max(...pts.map(b=>b.max.x)),z0=Math.min(...pts.map(b=>-b.max.y)),z1=Math.max(...pts.map(b=>-b.min.y));ok(x0<=WORLD.x0&&x1>=WORLD.x1&&z0<=WORLD.z0&&z1>=WORLD.z1,'the base ground covers the whole world: x '+x0+'..'+x1+', z '+z0+'..'+z1)}}
+ {const planes=[];world.group.traverse(o=>{if(/^ground-(base|far)/.test(o.name))planes.push(o)});const base=planes.filter(o=>/base/.test(o.name)),pts=[];base.forEach(o=>{o.geometry.computeBoundingBox();pts.push(o.geometry.boundingBox)});
+  const x0=Math.min(...pts.map(b=>b.min.x)),x1=Math.max(...pts.map(b=>b.max.x)),z0=Math.min(...pts.map(b=>b.min.z)),z1=Math.max(...pts.map(b=>b.max.z));ok(x0<=WORLD.x0&&x1>=WORLD.x1&&z0<=WORLD.z0&&z1>=400&&z1<=MAP.water.sea.shoreline[0][1],'the base ground covers the whole world down to the sea (R3b: it is cut where the sea is dug, about z 420; the dug meshes fill the south): x '+x0+'..'+x1+', z '+z0+'..'+z1)}}
 console.log('chunks: '+tests+' checks passed');

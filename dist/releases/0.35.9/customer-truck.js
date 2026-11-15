@@ -9,7 +9,7 @@ import {CLASSES,insideHull,toWorld} from './vehicle.js';
 import {loadPoints,LOAD_REACH} from './cargo.js';
 import {BAY} from './customers.js';
 
-const SPEED=8,REVERSE=3,cls=CLASSES.flatbed;
+const SPEED=8,REVERSE=3,cls=CLASSES.flatbed,HIGHWAY_SPEED=22,HIGHWAY_FROM=330; // R3b: the exit moved to x 1082, so the trip east of x 330 (the Eden spine, rural class 22.4 m/s) runs at HIGHWAY_SPEED; the yard and the old block keep the slow 8 m/s
 // a path: [[x, z], ...] and whether it is driven backwards
 const lengthOf=pts=>{let s=0;for(let i=1;i<pts.length;i++)s+=Math.hypot(pts[i][0]-pts[i-1][0],pts[i][1]-pts[i-1][1]);return s};
 function at(pts,d){for(let i=1;i<pts.length;i++){const [ax,az]=pts[i-1],[bx,bz]=pts[i],l=Math.hypot(bx-ax,bz-az);if(d<=l||i===pts.length-1){const u=l?Math.min(1,d/l):1;return {x:ax+(bx-ax)*u,z:az+(bz-az)*u,heading:Math.atan2(bx-ax,bz-az)}}d-=l}return {x:pts[0][0],z:pts[0][1],heading:0}}
@@ -31,7 +31,7 @@ export function createCustomerTruck({scene,exit,groundAt=()=>0,route=null,name='
    if(truck?.stage==='waiting'&&phase!=='parked'&&phase!=='in'){phase='parked';state={x:bay.x,z:bay.z,yaw:bay.yaw};mesh.visible=true}
    if(phase==='away'&&truck?.stage==='coming'&&due)drive([{pts:R.inPath,back:false}],()=>{phase='parked';arrived?.()}),phase='in';
    if(phase==='parked'&&(!truck||truck.stage==='gone'))drive(R.backOut?[{pts:R.backOut,back:true},{pts:R.outPath,back:false}]:[{pts:R.outPath,back:false}],()=>{phase='away';mesh.visible=false;gone?.()}),phase='out';
-   if((phase==='in'||phase==='out')&&legs.length){const L=legs[leg],len=lengthOf(L.pts),v=L.back?REVERSE:SPEED;d+=v*dt;spin+=(L.back?-1:1)*v*dt;
+   if((phase==='in'||phase==='out')&&legs.length){const L=legs[leg],len=lengthOf(L.pts),v=L.back?REVERSE:state.x>HIGHWAY_FROM?HIGHWAY_SPEED:SPEED;d+=v*dt;spin+=(L.back?-1:1)*v*dt;
     const p=at(L.pts,Math.min(d,len)),want=L.back?wrap(p.heading+Math.PI):p.heading;state.x=p.x;state.z=p.z;state.yaw+=wrap(want-state.yaw)*Math.min(1,dt*3);
     if(d>=len){leg++;d=0;if(leg>=legs.length){legs=[];onDone?.()}}}
    view.set(truck&&truck.loaded?Array.from({length:Math.ceil(truck.loaded/4)},(_,i)=>({k:'planks',n:Math.min(4,truck.loaded-i*4)})):null);

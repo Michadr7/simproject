@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import {MAP,validateMap,roadRects,zoneAtPoint,zoneById,hoursOf,riverZAt,riverDistance} from '../dist/map-definition.js';
+import {MAP,validateMap,roadRects,zoneAtPoint,zoneById,hoursOf,riverZAt,riverDistance,riverWidth} from '../dist/map-definition.js';
 const inBridgeLane=(x,z)=>MAP.water.bridges.some(b=>x>=b.x0&&x<=b.x1&&z>=b.z0&&z<=b.z1);
 import {ZONES,WALKABLE,GROUND,DIRT_ROADS,FIELDS,CITY_WEST,CITY_EAST,WORLD_SEED,zoneAt,isWalkable,worldLayout,fenceSegments,inRiver} from '../dist/world.js';
 import {SHOPS,SHOP_ENTRY,SHOP_EXIT,COUNTER} from '../dist/shops.js';
@@ -22,27 +22,28 @@ assert.deepEqual(ZONES.farm,{id:'farm',name:'Willow Fields',label:'WILLOW FIELDS
 assert.deepEqual([ZONES.alder.label,ZONES.cedar.label,ZONES.eastbank.label,ZONES.freight.label],['IRONWOOD','CEDAR HEIGHTS','EASTBANK WORKS','FREIGHT ROAD']);
 // The north bank moved by exactly one shift: every north-bank number equals its old value minus 70.
 assert.deepEqual(DIRT_ROADS.map(({zone,x0,x1,z0,z1})=>[zone,x0,x1,z0,z1]),[["farm", -164, -34, -233.5, -226.5], ["forest", -26, 195, -253.5, -246.5], ["forest", 87.5, 92.5, -316, -216]]);
-assert.deepEqual(roadRects('asphalt').map(({id,x0,x1,z0,z1})=>[id,x0,x1,z0,z1]),[["oak-street", -55, 55, -3.5, 15.5], ["alder-avenue", -38, -22, -60, 60], ["county-road", -34, -26, -316, -60], ["alder-street", 45, 55, -125, -3.5], ["alder-cross", -30, 84, -96, -84], ["oak-east", 55, 195, 0, 12], ["cedar-link", 115.5, 124.5, -57, 6], ["freight-south", 72, 199.5, 62, 74], ["freight-out", 199.5, 290, 62, 74], ["freight-road", 190.5, 199.5, -253.5, 68], ["works-lane", 96, 108, 6, 68], ["eden-road", 290, 600, 62, 74]],'straight roads only: the loop is a ribbon');
-assert.deepEqual(MAP.roads.edges.filter(e=>e.path).map(e=>e.id),['cedar-loop','blackstone-access','lake-road'],'the loop and the two gravel wild roads are the ribbon roads');
+assert.deepEqual(roadRects('asphalt').map(({id,x0,x1,z0,z1})=>[id,x0,x1,z0,z1]),[["oak-street", -55, 55, -3.5, 15.5], ["alder-avenue", -38, -22, -60, 60], ["county-road", -34, -26, -316, -60], ["alder-street", 45, 55, -125, -3.5], ["alder-cross", -30, 84, -96, -84], ["oak-east", 55, 195, 0, 12], ["cedar-link", 115.5, 124.5, -57, 6], ["freight-south", 72, 199.5, 62, 74], ["freight-out", 199.5, 290, 62, 74], ["freight-road", 190.5, 199.5, -253.5, 68], ["works-lane", 96, 108, 6, 68], ["eden-road", 290, 600, 62, 74], ["eden-spine", 600, 1040, 62, 74], ["eden-haul", 955.5, 964.5, -62, 68], ["eden-car-link", 600, 700, -203, -197], ["bay-road", 245, 255, 68, 400], ["bay-front", 160, 520, 394, 406], ["bay-cross-west", 345, 355, 280, 400], ["bay-cross-east", 515, 525, 280, 400], ["estuary-road", 62, 160, 395, 405]],'straight roads only: the loop and the diagonals are ribbons');
+assert.deepEqual(MAP.roads.edges.filter(e=>e.path).map(e=>e.id),['cedar-loop','blackstone-access','lake-road','west-bank-lane','coast-link','p5-spur'],'the loop, the gravel wild roads, West Bank Lane and the two diagonals (Coast Link, the P5 spur) are the ribbon roads');
 assert.deepEqual(FIELDS.map(f=>[f.id,f.surface,f.x0,f.x1,f.z0,f.z1]),[['field-wheat','wheat',-165,-90,-278,-240],['field-plowed','plowed',-165,-115,-220,-184],['field-green','green',-108,-52,-220,-184]]);
 for(const f of FIELDS)assert((f.x1-f.x0)>=50&&(f.z1-f.z0)>=36,'big enough for a tractor to turn in: '+f.id);
 assert.equal(fenceSegments().length,240);
 const layout=worldLayout();let hash=0;for(const t of layout.cuttable)hash=(hash*31+Math.round(t.x*100)*7919+Math.round(t.z*100)*104729)%2147483647;for(const d of layout.decor)hash=(hash*31+Math.round(d.x*100)*7919+Math.round(d.z*100)*104729)%2147483647;
-assert.deepEqual([layout.cuttable.length,layout.decor.length,hash],[395,529,-609804324],'the generated forest and scenery are unchanged (a deliberate change to the map means updating these numbers; 0.34 dealership: Eastbank grew north to z -38, 9 scenery trees left; 0.32.0 took 2 pines and 2 decor trees out of the way of the truck, the small barn and the windmill; 0.33 removed the timber yard flatbed, which gave those 2 pines back: 393 -> 395; 0.34 laid the dirt track from Oak Street across the west meadow, which took 2 scenery trees off it; R3a laid Eden Road from x 290 east, which took 1 decor tree off its first 10 m inside the ground: 530 -> 529)');
+assert.deepEqual([layout.cuttable.length,layout.decor.length,hash],[395,525,-338730426],'the generated forest and scenery are unchanged (a deliberate change to the map means updating these numbers; 0.34 dealership: Eastbank grew north to z -38, 9 scenery trees left; 0.32.0 took 2 pines and 2 decor trees out of the way of the truck, the small barn and the windmill; 0.33 removed the timber yard flatbed, which gave those 2 pines back: 393 -> 395; 0.34 laid the dirt track from Oak Street across the west meadow, which took 2 scenery trees off it; R3a laid Eden Road from x 290 east, which took 1 decor tree off its first 10 m inside the ground: 530 -> 529; R3b laid Bay Road (x 250, z 68..110 is inside the ground), which took 4 decor trees off it: 529 -> 525)');
 // No tree stands in or against a placed prop: the yard's truck had two pines growing through it.
 {const keep=2.5-1e-6;for(const l of MAP.landmarks){const f=propInfo(l.prop).footprint,c=Math.round(Math.cos(l.yaw)),s=Math.round(Math.sin(l.yaw));for(const t of [...layout.cuttable,...layout.decor]){const dx=t.x-l.x,dz=t.z-l.z,lx=dx*c-dz*s,lz=dx*s+dz*c;assert(!(lx>f.x0-keep&&lx<f.x1+keep&&lz>f.z0-keep&&lz<f.z1+keep),`a tree at ${t.x.toFixed(1)}, ${t.z.toFixed(1)} is within 2.5 m of ${l.id}`)}}}
 const forestTrees=layout.cuttable.length+layout.decor.filter(t=>zoneAtPoint(t.x,t.z)?.id==='forest').length;assert(forestTrees>=400&&forestTrees<=500,'Pine Ridge has '+forestTrees+' trees');
 for(const c of MAP.scenery.forest.clearings)assert(![...layout.cuttable,...layout.decor].some(t=>((t.x-c.x)/c.rx)**2+((t.z-c.z)/c.rz)**2<1),'nothing grows in a clearing');
 assert(MAP.scenery.forest.clearings.some(c=>c.x===106&&c.z===-282&&c.rx===30&&c.rz===24),'the north-east Sawmill clearing is kept (60 x 48 m)');
 // The river: a gentle curve rising from the south-west to the north-east, 70 m north of where it was, crossed by two bridges.
-const river=MAP.water.rivers[0];assert.equal(river.id,'north-river');assert.equal(river.width,12);assert.equal(river.points.length,9);
-assert.deepEqual(MAP.water.bridges,[{id:'county-bridge',river:'north-river',x0:-35,x1:-25,z0:-174,z1:-146},{id:'freight-bridge',river:'north-river',x0:190,x1:200,z0:-226,z1:-186}]);
+const river=MAP.water.rivers[0];assert.equal(river.id,'north-river');assert.equal(river.width,undefined);assert.equal(riverWidth(river),25,'R3b: the river is a new-form river (width per point, the estuary is 25 m)');assert.equal(river.points.length,33);
+assert.deepEqual(MAP.water.bridges.slice(0,2),[{id:'county-bridge',river:'north-river',x0:-35,x1:-25,z0:-174,z1:-146},{id:'freight-bridge',river:'north-river',x0:190,x1:200,z0:-226,z1:-186}]);
+assert.deepEqual(MAP.water.bridges.slice(2).map(b=>[b.id,b.axis,b.x0,b.x1,b.z0,b.z1,b.wild]),[['west-bank-bridge','x',-349,-319,2,8,true],['estuary-bridge','x',105,145,395,405,true]],'R3b: the two wild bridges (axis x)');
 assert(Math.abs(riverZAt(river,-30)+160)<.01,'the river crosses the County Road at z = -160 (it was -90)');assert(Math.abs(riverZAt(river,195)+206)<1,'and the Freight Road near z = -206');
 const slopes=[];for(let x=-250;x<250;x+=50)slopes.push((riverZAt(river,x+50)-riverZAt(river,x))/50);
 assert(slopes.every(k=>k<-.05&&k>-.35),'always gently rising to the north-east: '+slopes.map(k=>k.toFixed(2)));assert(slopes.at(-1)<slopes[0]-.08,'and curving (steeper to the east)');
 for(const x of [-61,-30,0,58,120,190]){const z=riverZAt(river,x);assert(z<-125,'north of every south-bank district at x='+x+': '+z.toFixed(1))}
-for(const zone of MAP.zones.filter(z=>['alder','cedar','eastbank','city'].includes(z.id))){for(let x=zone.bounds.x0;x<=zone.bounds.x1;x+=5)assert(riverDistance(x,zone.bounds.z0,river)>river.width/2+river.bank+8,`${zone.id} keeps clear of the water at x=${x}`)}
-for(const b of MAP.buildings)assert(riverDistance(b.x,b.z,river)>b.d/2+river.width/2+river.bank+3,'no building near the river: '+(b.name||b.x));
+for(const zone of MAP.zones.filter(z=>['alder','cedar','eastbank','city'].includes(z.id))){for(let x=zone.bounds.x0;x<=zone.bounds.x1;x+=5)assert(riverDistance(x,zone.bounds.z0,river)>12/2+river.bank+8,`${zone.id} keeps clear of the water at x=${x}`)}
+for(const b of MAP.buildings)assert(riverDistance(b.x,b.z,river)>b.d/2+12/2+river.bank+3,'no building near the river: '+(b.name||b.x));
 for(const [x,z] of [[-30,-160],[-34.9,-160],[-25.1,-150],[-30,-170],[-30,-60],[195,-206],[190.1,-190],[199.9,-220]])assert(isWalkable(x,z),`a bridge and its roads are walkable at ${x},${z}`);
 for(const [x,z] of [[-35.1,-160],[-24.9,-160],[-100,-146],[100,-185],[0,-164],[250,-219],[189.9,-206],[200.1,-206],[-30,-385],[295,0]])assert(!isWalkable(x,z),`the river is a wall at ${x},${z}`);
 {const z0=riverZAt(river,0);assert(inRiver(-30,-160)&&inRiver(0,z0)&&!inRiver(-30,-140)&&inRiver(0,z0-8.6,4)&&!inRiver(0,z0-16,4));assert(riverDistance(0,z0,river)<.1)}
@@ -120,8 +121,8 @@ has(broken(m=>{m.water.bridges[0].x0=-36}),/not exactly as wide as a walkable zo
 has(broken(m=>{m.water.bridges[0].z0=-85}),/does not reach both banks/);
 has(broken(m=>{m.water.bridges[0].river='nowhere'}),/crosses an unknown river/);
 has(broken(m=>{m.water.rivers[0].points=[[0,0]]}),/needs at least two points and a width/);
-has(broken(m=>{m.water.rivers[0].points.push([900,-150])}),/leaves the ground/);
-has(broken(m=>{m.water.rivers[0].points[3]=[-30,-130]}),/walks into river/);
+has(broken(m=>{m.water.rivers[0].points.push({x:2000,z:-150,w:12,depth:.45,y:-.95,speed:.6})}),/leaves the ground/);
+has(broken(m=>{const P=m.water.rivers[0].points;P[P.findIndex(p=>p.x===-30)]={x:-30,z:-130,w:12,depth:.45,y:-.95,speed:.6}}),/walks into river/);
 has(broken(m=>{m.zones[2].bounds.x1=-40}),/zone farm cannot be reached on foot from the city/);
 has(broken(m=>{m.zones[3].bounds.x0=-20;m.zones[3].bounds.x1=185}),/zone forest cannot be reached on foot from the city/);
 has(broken(m=>{m.scenery.forest.clearings.push({x:140,z:-190,rx:30,rz:30})}),/clearing at 140,-190 reaches outside the forest/);
@@ -146,7 +147,7 @@ assert.deepEqual(MAP.world,{x0:-450,x1:1050,z0:-1200,z1:600},'the world is x -45
 assert.deepEqual(MAP.wilds,{x0:-440,x1:1040,z0:-1190,z1:590},'the wilds stop 10 m short of the world edge (the wall)');
 assert(MAP.world.x0<=MAP.ground.x0&&MAP.world.x1>=MAP.ground.x1&&MAP.world.z0<=MAP.ground.z0&&MAP.world.z1>=MAP.ground.z1,'the world holds the old ground');
 assert((MAP.world.x1-MAP.world.x0)%100===0&&(MAP.world.z1-MAP.world.z0)%100===0&&(((MAP.world.x0%100)+100)%100)===50&&MAP.world.z0%100===0,'the world is whole 100 m chunks, with the old block at offset 0');
-assert.equal(MAP.gates.length,1,'one gate through the old rim');assert.deepEqual(MAP.gates[0],{id:'freight-east',x0:290,x1:300,z0:62,z1:74});
+assert.equal(MAP.gates.length,3,'three gates through the old rim (R3b added the west gate and the south gate)');assert.deepEqual(MAP.gates[0],{id:'freight-east',x0:290,x1:300,z0:62,z1:74});assert.deepEqual(MAP.gates.slice(1),[{id:'west-bank',x0:-260,x1:-250,z0:-90,z1:-70},{id:'bay-road',x0:243,x1:257,z0:100,z1:110}]);
 assert(MAP.gates.every(g=>g.x0>=MAP.ground.x0&&g.x1<=MAP.ground.x1&&g.z0>=MAP.ground.z0&&g.z1<=MAP.ground.z1),'every gate lies in the old ground rim');
 has(broken(m=>{m.world={x0:-100,x1:1050,z0:-1200,z1:600}}),/the world must be a rectangle that holds the ground/);
 has(broken(m=>{m.gates[0].x1=999}),/gate freight-east must be a rectangle inside the ground/);
@@ -155,7 +156,7 @@ has(broken(m=>{m.wilds={x0:-9999,x1:1040,z0:-1190,z1:590}}),/the wilds must be a
 has(broken(m=>{m.playable={x0:-999,x1:290,z0:-380,z1:100}}),/the playable area must be a rectangle inside the ground/);
 has(broken(m=>{delete m.reserved[0].facing}),/reserved plot C1 has no facing/);
 has(broken(m=>{m.reserved[0].facing='up'}),/has no facing/);
-for(const edge of MAP.roads.edges.filter(e=>e.surface==='asphalt'&&e.level==='rural'&&e.id!=='county-road'))assert(edge.width>=9||edge.id.startsWith('alder-')&&edge.width>=9||edge.id==='oak-east'&&edge.width>=12,`${edge.id} is wide enough for two lanes of vehicles (${edge.width} m)`);
+for(const edge of MAP.roads.edges.filter(e=>e.surface==='asphalt'&&e.level==='rural'&&e.id!=='county-road'))assert(edge.width>=9||edge.id.startsWith('alder-')&&edge.width>=9||edge.id==='oak-east'&&edge.width>=12||edge.id==='eden-car-link'&&edge.width>=6,`${edge.id} is wide enough for two lanes of vehicles (${edge.width} m)`);
 assert.equal(MAP.roads.edges.find(e=>e.id==='cedar-loop').width,9,'Cedar Heights loop: two 3.5 m lanes and a 1 m shoulder each side');
 // Plots face the street they front: the residential plots sit on the loop's south arc facing south, within 14 m of the loop road's inner edge.
 {const loop=MAP.roads.edges.find(e=>e.id==='cedar-loop');for(const plot of MAP.reserved.filter(p=>['R1','R2','R3'].includes(p.id))){assert.equal(plot.facing,'south');assert(plot.z1<-70&&plot.z0>-100,'inside the loop on its south side: '+plot.id)}

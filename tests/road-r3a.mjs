@@ -49,7 +49,7 @@ assert.ok(!validateMap(withEdges([])).length);
 {const scene=new THREE.Scene(),world=createWorld(scene,{cullRadius:Infinity}),names=[];scene.traverse(o=>{if(o.name)names.push(o.name)});
  for(const id of ['blackstone-access','lake-road']){assert.ok(names.includes('gravel-road-'+id),`mesh gravel-road-${id}`);const m=scene.getObjectByName('gravel-road-'+id);assert.ok(m.geometry.attributes.position.count>=100,'a ribbon with many points');
   const ys=[...m.geometry.attributes.position.array].filter((_,i)=>i%3===1);assert.ok(ys.every(y=>Math.abs(y+.066)<.02),'laid on the flat ground at the dirt-road height')}
- assert.equal(names.filter(n=>n.startsWith('gravel-road-')).length,2,'exactly the gravel edges');
+ assert.equal(names.filter(n=>/^gravel-road-(blackstone-access|lake-road)$/.test(n)).length,2,'both R3a gravel edges are one mesh each'); // R3b added West Bank Lane (two pieces round its bridge) and the P5 spur: see tests/road-r3b.mjs
 }
 
 // 6. grades: every road, chunk by chunk, stays under 10 degrees (the real map has no hills there yet)

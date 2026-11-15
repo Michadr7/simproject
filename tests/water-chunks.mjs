@@ -10,12 +10,13 @@ const river={id:'big-river',bank:2.6,shore:3,points:[{x:-330,z:-100,w:14,depth:.
 const lake={id:'lake',outline:[[520,-660],[800,-660],[800,-440],[520,-440]],y:-.9,depth:2.5,shore:6};
 const sea={shoreline:[[-450,430],[0,440],[1050,440]],y:-2,beach:25,depth:.6};
 const fall={id:'falls',lip:{x:900,z:-300,y:3},drop:6,w:3,dir:[1,0],pool:{r:6}};
-const map={...MAP,water:{...MAP.water,rivers:[...MAP.water.rivers,river],fords:[],lakes:[lake],sea,falls:[fall]}};
+const map={...MAP,water:{...MAP.water,rivers:[river],bridges:[],fords:[],lakes:[lake],sea,falls:[fall]}}; // R3b: the shipped water (a new-form river and the sea) is replaced by the synthetic water: the shipped map is pinned below
 assert.deepEqual(waterProblems(map),[],'the synthetic water is valid');
 const R=worldRange();let tests=0;const ok=(c,m)=>{assert(c,m);tests++};
 
-// The shipped map: its old-form river is not chunked (world.js draws it as before), so no chunk has water.
-for(let j=R.j0;j<=R.j1;j++)for(let i=R.i0;i<=R.i1;i++)ok(waterChunkData(MAP,i,j)===null,'no chunk water on the shipped map '+i+':'+j);
+// The shipped map (R3b): the river and the sea are new-form water, so exactly the chunks the river or the sea touch have water, and none of the others (the old block north of the river, the wilds in the north and east).
+{const wet=[];for(let j=R.j0;j<=R.j1;j++)for(let i=R.i0;i<=R.i1;i++)if(waterChunkData(MAP,i,j)!==null)wet.push(i+':'+j);
+ ok(wet.length===54,'the shipped river and sea touch 54 chunks (R3b): '+wet.length);ok(wet.includes('4:10')&&wet.includes('5:16')&&wet.includes('9:7')&&wet.includes('1:12'),'the old reach, the estuary, the source and the south reach have water');ok(!wet.includes('0:0')&&!wet.includes('14:0')&&!wet.includes('12:7')&&!wet.includes('7:12'),'far corners, the Blackstone side and the old block south of the river stay dry')}
 
 // Every chunk of the synthetic world: attributes present and sane, nothing outside its chunk
 const tri={},kinds=new Set(),total={tri:0,verts:0},per=new Map();let maxTri=0,maxVerts=0,withWater=0,area=new Map();
@@ -61,7 +62,7 @@ ok(Math.abs(area.get('10:6')-1e4)<1,'a lake chunk is one full sheet: '+area.get(
 
 // Minimap: nothing is drawn for the shipped map; the synthetic map draws sea, lake, river and falls
 {const rec=[];const ctx=new Proxy({},{get:(t,k)=>k in t?t[k]:(...a)=>{rec.push([k,a])},set:(t,k,v)=>{t[k]=v;return true}});const px=x=>(x+450)*.1,pz=z=>(z+1200)*.1;
- ok(drawWaterLayer(ctx,MAP,px,pz,.1)===0&&rec.length===0,'the shipped map adds nothing to the minimap');
+ ok(drawWaterLayer(ctx,MAP,px,pz,.1)>100&&rec.some(c=>c[0]==='fill')&&rec.some(c=>c[0]==='stroke'),'the shipped map draws its sea and its river on the minimap (R3b)');rec.length=0;
  const n=drawWaterLayer(ctx,map,px,pz,.1);ok(n>=5&&rec.some(c=>c[0]==='fill')&&rec.some(c=>c[0]==='stroke'),'synthetic water is drawn: '+n+' shapes');
  ok(rec.every(c=>c[1].every(v=>typeof v!=='number'||Number.isFinite(v))),'every minimap coordinate is finite')}
 

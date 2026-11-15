@@ -11,7 +11,7 @@ import {MAP,validateMap} from '../dist/map-definition.js';
 assert.equal(TASKS.load.piece,'shipped');assert.equal(PIECE_PAY.shipped,50);assert(MAP.employers[0].ranks.find(r=>r.id==='hauler').tasks.includes('load'),'a Hauler loads customer trucks');
 assert(inLumberyard(BAY),'the bay is in the timber yard');
 // the exit: off the map at both ends, and the validator catches an exit that ends on the map
-{const x=MAP.exits[0];assert.equal(x.road,'freight-out');assert(x.in[0][0]>MAP.playable.x1&&x.out[x.out.length-1][0]>MAP.playable.x1);
+{const x=MAP.exits[0];assert.equal(x.road,'eden-spine');assert.equal(x.in[0][0],1082,'R3b: the east exit moved to x 1082');assert.equal(x.out.at(-1)[0],1082);assert(x.in[0][0]>MAP.playable.x1&&x.out[x.out.length-1][0]>MAP.playable.x1);
  assert(validateMap({...MAP,exits:[{...x,out:[...x.out.slice(0,-1),[100,71]]}]}).some(p=>/must start and end outside/.test(p)),'an exit that ends inside the map is caught')}
 const at=(p,day,minutes)=>({...p,housing:{...p.housing,day},routine:{...p.routine,minutes}});
 let p=clockIn(at(hire(freshProgress(),'ridgeline').state,3,540),'ridgeline').state;

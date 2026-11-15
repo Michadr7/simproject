@@ -58,5 +58,5 @@ export function sendOff(progress){
 // forward only. Visual only: the order's planks move by the ticket (tickets.js), not by the truck.
 export const DOCK_BAY=Object.freeze({x:161.8,z:23,yaw:Math.PI}); // D3: facing north with its tail (4.4 m behind its middle) to the loading zone (dock.js ZONE) in front of the roller door
 export const dockRoute=exit=>({bay:DOCK_BAY,
- inPath:[...exit.in.slice(0,3),[196,62],[196,12],[192,8],[170,7.6],[162,9],[160,14],[157.8,20],[157.8,26.4],[161.8,27],[DOCK_BAY.x,DOCK_BAY.z]], // down the inbound lane, round the west side of the bay and up into it
+ inPath:[...exit.in.filter(p=>p[0]>=200),[196,62],[196,12],[192,8],[170,7.6],[162,9],[160,14],[157.8,20],[157.8,26.4],[161.8,27],[DOCK_BAY.x,DOCK_BAY.z]], // down the inbound lane, round the west side of the bay and up into it
  outPath:[[DOCK_BAY.x,DOCK_BAY.z],[161.8,19],[166,12.5],[170,9.5],[173,7.8],[190,7.8],[194,9],[194,60],[198,69],...exit.out.slice(1)]});

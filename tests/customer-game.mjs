@@ -18,7 +18,7 @@ try{
  s={...s,shift:{...s.shift,tasks:[{kind:'load',piece:'shipped',target:8,done:0}]}};s=scheduleTruck(s);s={...s,shift:{...s.shift,truck:{...s.shift.truck,due:0}}};GameState.progress=addStock(s,{planks:8});
  assert.equal(truck().visible,false,'no truck before it is due');
  pump(2);assert(truck().visible,'it is on its way');assert(truck().position.x>200,'coming in from the east: x '+truck().position.x.toFixed(0));
- pump(40);assert.equal(p().shift.truck.stage,'waiting','it has parked');assert(Math.abs(truck().position.x-BAY.x)<.5&&Math.abs(truck().position.z-BAY.z)<.5,'in the bay: '+truck().position.x.toFixed(1)+','+truck().position.z.toFixed(1));
+ pump(90);assert.equal(p().shift.truck.stage,'waiting','it has parked'); // R3b: 90 s (was 40): the truck now comes in from x 1082, 750 m more at 22 m/s east of x 330assert(Math.abs(truck().position.x-BAY.x)<.5&&Math.abs(truck().position.z-BAY.z)<.5,'in the bay: '+truck().position.x.toFixed(1)+','+truck().position.z.toFixed(1));
  assert(/customer's truck is waiting/.test(ids.get('jobToast').textContent),ids.get('jobToast').textContent);
  // load from the stock at its back: two stacks of four
  const back=loadPoints('flatbed').find(q=>q.side==='rear');me().x=BAY.x;me().z=BAY.z-back.z;pump(.6);
@@ -27,6 +27,6 @@ try{
  // send it off at the cab
  me().x=BAY.x-2.05;me().z=BAY.z-1.765;pump(.6);assert(/Send the truck off · 8 planks/.test(prompt()),'the cab: '+prompt());press();
  assert.equal(p().shift.truck.stage,'gone');assert.equal(p().shift.pieces.shipped,8);assert.equal(p().shift.tasks[0].done,8,'the task is done');
- pump(60);assert.equal(truck().visible,false,'it drove off the map and is gone');
+ pump(120);assert.equal(truck().visible,false,'it drove off the map and is gone');
  console.log('PASS customer-game.mjs: the customer\'s truck drives in from the east edge when due, parks in the timber yard bay, is loaded from the stock at its back (drawn on its bed), is sent off at the cab (the task done) and drives off the map.');
 }finally{await g.done()}

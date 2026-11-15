@@ -3,19 +3,20 @@ import assert from 'node:assert/strict';
 import {MAP,validateMap,waterAt,waterPoints,waterProblems,distanceAlong,riverLength,riverPath,riverIsLegacy,LEGACY_WATER,seaLineZ,fallPoolCentre,RIVER_PROFILE} from '../dist/map-definition.js';
 
 // â”€â”€ The shipped map: old river through the new contract â”€â”€
-const old=MAP.water.rivers[0];
-assert(riverIsLegacy(old));assert.deepEqual(validateMap(MAP),[]);assert.deepEqual(waterProblems(MAP),[]);
+// R3b: the shipped river is new-form now, so the legacy contract is tested on a fixture: the old river exactly as it was (nine points, 12 m, bank 2.6), alone in a map of its own
+const old={id:'north-river',width:12,bank:2.6,points:[[-270,-58],[-190,-66],[-110,-78],[-30,-90],[40,-101],[110,-117],[190,-135],[270,-154]].map(([x,z])=>[x,z-70]).concat([[318,-233]])},W0={rivers:[],bridges:[]},legacyMap={...MAP,water:{...W0,rivers:[old]}};
+assert(riverIsLegacy(old));assert(!riverIsLegacy(MAP.water.rivers[0]),'the shipped river is new-form');assert.deepEqual(validateMap(MAP),[]);assert.deepEqual(waterProblems(MAP),[]);assert.deepEqual(waterProblems(legacyMap),[]);
 {const P=waterPoints(old);assert.equal(P.length,old.points.length);
  assert.deepEqual([P[0].x,P[0].z,P[0].w,P[0].y,P[0].depth,P[0].speed],[old.points[0][0],old.points[0][1],12,LEGACY_WATER.y,LEGACY_WATER.depth,0]);
  const u=distanceAlong(old);assert.equal(u[0],0);assert(u.every((v,i)=>!i||v>u[i-1]));assert(Math.abs(u.at(-1)-riverLength(old))<1e-6);assert(riverLength(old)>500&&riverLength(old)<700)}
 {const s=riverPath(old,3)[10];assert(s.w===12&&s.y===-.95&&s.speed===0&&Number.isFinite(s.u))}
 // Water on the old river's centreline; dry well away from it. Flow is zero (legacy rivers do not move).
-{const mid=riverPath(old,2)[40],w=waterAt(mid.x,mid.z);
+{const mid=riverPath(old,2)[40],w=waterAt(mid.x,mid.z,legacyMap);
  assert.equal(w.kind,'river');assert.equal(w.y,-.95);assert.equal(w.depth,LEGACY_WATER.depth);assert.deepEqual(w.flow,[0,0]);
- assert.equal(waterAt(mid.x+6.5*mid.tz*-1,mid.z+6.5*mid.tx),null,'the bank (beyond half the width) is dry');
- assert.equal(waterAt(0,0),null);assert.equal(waterAt(500,500),null,'no sea in the shipped map')}
+ assert.equal(waterAt(mid.x+6.5*mid.tz*-1,mid.z+6.5*mid.tx,legacyMap),null,'the bank (beyond half the width) is dry');
+ assert.equal(waterAt(0,0,legacyMap),null);assert.equal(waterAt(500,500,legacyMap),null,'no sea in the legacy fixture')}
 // every point of the old river's centreline is water, and the old and new distance agree on the width
-assert(riverPath(old,2).every(p=>waterAt(p.x,p.z)?.kind==='river'));
+assert(riverPath(old,2).every(p=>waterAt(p.x,p.z,legacyMap)?.kind==='river'));
 
 // â”€â”€ A full synthetic contract: river in flow order with a rapid and a ford, a lake, the sea, a fall â”€â”€
 const river={id:'big-river',bank:2.6,shore:3,points:[
@@ -29,7 +30,7 @@ const lake={id:'blackstone-lake',outline:[[520,-660],[800,-660],[800,-440],[520,
 const sea={shoreline:[[-450,430],[0,440],[1050,440]],y:-2,beach:25,depth:.6,swell:{amp:.12,len:20,dir:0}};
 const fall={id:'blackstone-falls',lip:{x:720,z:-770,y:6},drop:6,w:3,dir:[0,1],pool:{r:6}};
 const ford={river:'big-river',x:-330,z:0,w:6,depth:.3};
-const map={...MAP,water:{...MAP.water,rivers:[...MAP.water.rivers,river],fords:[ford],lakes:[lake],sea,falls:[fall]}};
+const map={...MAP,water:{...W0,rivers:[river],fords:[ford],lakes:[lake],sea,falls:[fall]}};
 assert.deepEqual(waterProblems(map),[]);assert.deepEqual(validateMap(map),[]);
 
 // waterAt: kinds, levels, depth, flow direction
@@ -79,7 +80,7 @@ bust({sea:{...sea,beach:0}},'beach>0');
 bust({lakes:[{...lake,outline:[[520,500],[800,500],[800,560],[520,560]]}]},'reaches into the sea');
 bust({falls:[{...fall,drop:0}]},'drop>0');
 bust({falls:[{...fall,dir:[0,0]}]},'dir');
-bust({bridges:[...MAP.water.bridges,{id:'bad',axis:'q'}]},'axis');
+bust({bridges:[{id:'bad',axis:'q'}]},'axis');
 // an x-axis bridge over the north-south reach is accepted by the bank check, a too-short one is not
 {const zone={id:'bridge-zone',name:'B',label:'B',subtitle:'',color:'#000',grid:false,bounds:{x0:-352,x1:-308,z0:40,z1:60},minimap:{label:{x:-330,z:50}}};
  const ok={id:'west-bridge',river:'big-river',axis:'x',x0:-352,x1:-308,z0:40,z1:60},m3=(b)=>({...map,ground:{...map.ground,x0:-460,x1:300},zones:[...map.zones,zone],water:{...map.water,bridges:[...map.water.bridges,b]}});

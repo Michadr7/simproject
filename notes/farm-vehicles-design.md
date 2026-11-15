@@ -228,3 +228,5 @@ wants to buy tractors early); FV11 when audio.js is free.
 
 ## User decisions (answered in the dialog, new chat)
 1. Shop: Husky Ranch yard (Hal). 2. Reversing assist: on by default, settings switch. 3. Plow/cultivator/seeder models: the user finds or buys them; they go in as slots. 4. Prices ($5,200 / $9,800 / $28,000) OK for now, BUT THE VEHICLE NAMES MUST CHANGE (user wants different names: ask what names, or propose neutral ones, before FV1). 5. Rent per game day plus free job equipment on ranch jobs. 6. Combine header always 6 m, drive carefully. 7. Crop growth 2 game days per stage, 6 days seed to ripe. 8. Owned limit raised to 16, tow units and implements counted.
+## Vehicle names (user, 2026-11-17; replaces the working names)
+Small tractor (JUFF model, $5,200): Hustler Compact. Big tractor (KidBi model, $9,800): Husky R75 Tractor (user typed "Husy"; read as Husky, confirm if it should stay "Husy"). Tank trailer (KidBi tank): Husky Trailer. Combine ($28,000): Ridgeline Reaper 6000. Use these in CLASSES, orders.js, the shop, phone and ASSETS.md at FV1.

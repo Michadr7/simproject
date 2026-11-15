@@ -11,7 +11,7 @@ const river={id:'big-river',bank:2.6,shore:3,points:[
 const lake={id:'lake',outline:[[520,-660],[800,-660],[800,-440],[520,-440]],y:-.9,depth:2.5,shore:6};
 const sea={shoreline:[[-450,430],[0,440],[1050,440]],y:-2,beach:25,depth:.6};
 const ford={river:'big-river',x:-330,z:0,w:6,depth:.3};
-const map={...MAP,water:{...MAP.water,rivers:[...MAP.water.rivers,river],fords:[ford],lakes:[lake],sea}};
+const map={...MAP,water:{rivers:[river],bridges:[],fords:[ford],lakes:[lake],sea}}; // R3b: synthetic water only (the shipped river and sea are pinned in tests/road-r3b.mjs)
 const H=(x,z)=>valleyIn(map,x,z);
 
 // River (north-south reach, so the old by-x search could not do it): bed deepest in the centre, waterline at the edge, then bank, shoulder, ground

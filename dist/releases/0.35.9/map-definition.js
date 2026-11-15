@@ -36,7 +36,13 @@ const roads={
   freightW:{x:72,z:68},freightS:{x:195,z:68},freightE:{x:199.5,z:68},outEast:{x:290,z:68}, // outEast: Freight South carried on to the ground's east edge (0.35): the road customer trucks come and go by (MAP.exits)
 freightN:{x:195,z:n(-180)-3.5},
   worksN:{x:102,z:6},worksS:{x:102,z:68}, // Works Lane (0.33): from Oak Street East's centreline to Freight South's
-  edenJoin:{x:600,z:68},lakeCarPark:{x:620,z:-420},lakeFoothills:{x:830,z:-700} // R3a (map-master 6.1): the Blackstone junction on the spine, the lake car park, and the point where Lake Road meets the foothills
+  edenJoin:{x:600,z:68},lakeCarPark:{x:620,z:-420},lakeFoothills:{x:830,z:-700}, // R3a (map-master 6.1): the Blackstone junction on the spine, the lake car park, and the point where Lake Road meets the foothills
+  // R3b (map-master 6.1): West Bank Lane leaves the west-hill track at westFork and ends at P3's south edge; Bay Road runs from Freight Out south to the harbor front; the harbor front (frontWest..frontEast) has two cross streets and the estuary road to P6;
+  // Coast Link runs from the east cross street (coastStart) to the spine, the P5 spur from the same node to the coast bluff; the spine runs on to the exit (edenExit); the Eden car link and the Eden haul road leave it.
+  westFork:{x:-100,z:5},p3Lane:{x:-390,z:-78},
+  bayJoin:{x:250,z:68},bayFront:{x:250,z:400},frontWest:{x:160,z:400},frontEast:{x:520,z:400},crossWestJoin:{x:350,z:400},crossWestEnd:{x:350,z:280},crossEastEnd:{x:520,z:280},p6Gate:{x:62,z:400},
+  coastStart:{x:520,z:330},coastJoin:{x:640,z:68},p5Gate:{x:700,z:400},
+  edenExit:{x:1040,z:68},carLinkJoin:{x:600,z:-200},edenGate:{x:700,z:-200},haulJoin:{x:960,z:68},haulGate:{x:960,z:-62}
  },
  edges:[
   {id:'oak-street',from:'oakWest',to:'oakEast',width:19,surface:'asphalt',level:'street'},
@@ -67,16 +73,56 @@ freightN:{x:195,z:n(-180)-3.5},
   // then north to z -700, where the foothills start: the climb to the trailhead and P2 waits for relief data.
   {id:'eden-road',from:'outEast',to:'edenJoin',width:12,surface:'asphalt',level:'rural',class:'rural',wild:true},
   {id:'blackstone-access',from:'edenJoin',to:'lakeCarPark',width:7,surface:'gravel',class:'gravel',path:[[600,-200]],wild:true},
-  {id:'lake-road',from:'lakeCarPark',to:'lakeFoothills',width:6,surface:'gravel',class:'gravel',path:[[830,-420]],wild:true}
+  {id:'lake-road',from:'lakeCarPark',to:'lakeFoothills',width:6,surface:'gravel',class:'gravel',path:[[830,-420]],wild:true},
+  // R3b: the Eden spine on to the exit (x 1040 is the wilds' edge; the exit lanes start at x 1082 off the map), its haul road and the car link to the Eden gate; West Bank Lane (gravel, over West Bank Bridge); Bay Road and the Kaspian Bay streets; Coast Link and the P5 spur.
+  {id:'eden-spine',from:'edenJoin',to:'edenExit',width:12,surface:'asphalt',level:'rural',class:'rural',wild:true},
+  {id:'eden-haul',from:'haulJoin',to:'haulGate',width:9,surface:'asphalt',level:'rural',class:'rural',wild:true},
+  {id:'eden-car-link',from:'carLinkJoin',to:'edenGate',width:6,surface:'asphalt',level:'rural',class:'street',wild:true},
+  {id:'west-bank-lane',from:'westFork',to:'p3Lane',width:6,surface:'gravel',class:'gravel',curve:true,wild:true,
+   path:[[-118,-40],[-160,-78],[-215,-86],[-252,-80],[-272,-68],[-290,-40],[-300,-14],[-304,5],[-316,5],[-344,5],[-358,5],[-376,-12],[-388,-45]]}, // around the west hill's 25 m margin, through the west gate, straight over the bridge (z 5)
+  {id:'bay-road',from:'bayJoin',to:'bayFront',width:10,surface:'asphalt',level:'rural',class:'rural',wild:true},
+  {id:'bay-front',from:'frontWest',to:'frontEast',width:12,surface:'asphalt',level:'rural',class:'street',wild:true},
+  {id:'bay-cross-west',from:'crossWestJoin',to:'crossWestEnd',width:10,surface:'asphalt',level:'rural',class:'street',wild:true},
+  {id:'bay-cross-east',from:'frontEast',to:'crossEastEnd',width:10,surface:'asphalt',level:'rural',class:'street',wild:true},
+  {id:'estuary-road',from:'frontWest',to:'p6Gate',width:10,surface:'asphalt',level:'rural',class:'street',wild:true}, // over the Estuary Bridge (x 105..145) to P6
+  {id:'coast-link',from:'coastStart',to:'coastJoin',width:9,surface:'asphalt',level:'rural',class:'rural',path:[],wild:true}, // a straight diagonal (path [] = a ribbon)
+  {id:'p5-spur',from:'coastStart',to:'p5Gate',width:6,surface:'gravel',class:'gravel',path:[],wild:true}
  ]
 };
 
-// The river is a centreline through `points` (smoothed into a gentle curve), `width` across with `bank` metres of mud on each side. It rises from
+// (Old note, still true for the shape of the data) The river is a centreline through `points` (smoothed into a gentle curve) with a width, a bed depth and a water height per point, and `bank` metres of mud on each side. It rises from
 // the south-west to the north-east, north of the south bank's three districts, is flat water and a hard barrier (it lies outside every zone); the only ways across
 // are the two bridges: the County Bridge carries the County Road, the Freight Bridge the Freight Road. A bridge's deck is axis-aligned and exactly as wide as the zone it carries.
+// R3b (user decisions 2026-11-17, notes/water-design.md, map-master 1.4): the old river is now a NEW-FORM river with real flow, listed in FLOW order. It rises at the future lake's outflow (540, -470), runs west through the old block (its old
+// points, reversed: the same centreline, so every bridge, zone and building keeps its place), bends south at x about -330 (the west bend and the south reach, three rapids), then turns south-east below the old block and widens into the
+// estuary that meets Kaspian Bay (the sea) at about (125, 440). The cross-section is deeper in the centre (RIVER_PROFILE). Every number here is a named constant or a row of the table below.
+const RIVER_BANK=2.6,           // mud bank on each side, m (the old river's bank)
+ WATER_Y={outflow:-.9,reach:-.95,rapid1:-1.3,rapid2:-1.65,estuary:-2}, // water height: the outflow, the old reach and the west reach, after each of the three 0.35 m rapids, the estuary and the sea (map-master 1.4)
+ SEA_SHORELINE=[[-440,450],[-250,446],[0,442],[200,440],[500,440],[800,436],[1040,432]], // the waterline (depth 0), west to east: the coast about z 440, a few metres of drift so it is not a ruler line
+ SEA_BEACH=25,SEA_SWELL={amp:.12,len:40,dir:0}; // the bed slopes from 0 to -2.6 m over the beach; the swell is for the water shader (W4)
+const rv=(x,z,w,depth,y,speed,rapid)=>rapid?{x,z,w,depth,y,speed,rapid:true}:{x,z,w,depth,y,speed};
+const NORTH_RIVER=[
+ // outflow (width 12, depth .45, speed .6 m/s), from the lake side down to the old reach's east end
+ rv(540,-470,12,.45,WATER_Y.outflow,.6),rv(470,-380,12,.45,WATER_Y.outflow,.6),rv(400,-260,12,.45,WATER_Y.outflow,.6),rv(318,-233,12,.45,WATER_Y.outflow,.6),
+ // the old reach: the old control points in flow order (east to west), 12 m wide, .45 deep, water -.95
+ ...[[270,-154],[190,-135],[110,-117],[40,-101],[-30,-90],[-110,-78],[-190,-66],[-270,-58]].map(([x,z])=>rv(x,n(z),12,.45,WATER_Y.reach,.6)),
+ // the west bend and the south reach (x about -330, 14 m wide, .5 deep, .8 m/s); three rapids (two points 3 m apart, 0.35 m drop, 2 m/s) at z 56, 122 and 175
+ rv(-312,-108,13,.5,WATER_Y.reach,.65),rv(-332,-70,14,.5,WATER_Y.reach,.7),rv(-334,-20,14,.5,WATER_Y.reach,.8),rv(-333,30,14,.5,WATER_Y.reach,.8),
+ rv(-332,56,14,.5,WATER_Y.reach,2,true),rv(-332,59,14,.5,WATER_Y.rapid1,2),rv(-329,100,14,.5,WATER_Y.rapid1,.8),
+ rv(-326,122,14,.5,WATER_Y.rapid1,2,true),rv(-326,125,14,.5,WATER_Y.rapid2,2),rv(-318,155,14,.5,WATER_Y.rapid2,.8),
+ rv(-306,175,14,.5,WATER_Y.rapid2,2,true),rv(-305,178,14,.5,WATER_Y.estuary,2),
+ // the estuary: south-east below the old block, widening from 15 m to 25 m, 1.0 m deep at the mouth, slowing to .3 m/s; the last point lies 12 m inside the sea
+ rv(-290,195,15,.55,WATER_Y.estuary,.8),rv(-230,215,16,.6,WATER_Y.estuary,.7),rv(-150,262,18,.7,WATER_Y.estuary,.6),rv(-60,300,20,.8,WATER_Y.estuary,.5),rv(20,330,22,.9,WATER_Y.estuary,.4),
+ rv(80,345,24,1,WATER_Y.estuary,.35),rv(118,375,25,1,WATER_Y.estuary,.3),rv(125,415,25,1,WATER_Y.estuary,.3),rv(125,452,25,1,WATER_Y.estuary,.3)
+];
 const water={
- rivers:[{id:'north-river',width:12,bank:2.6,points:[[-270,-58],[-190,-66],[-110,-78],[-30,-90],[40,-101],[110,-117],[190,-135],[270,-154]].map(([x,z])=>[x,n(z)]).concat([[318,-233]])}],
- bridges:[{id:'county-bridge',river:'north-river',x0:-35,x1:-25,z0:n(-104),z1:n(-76)},{id:'freight-bridge',river:'north-river',x0:190,x1:200,z0:-226,z1:-186}]
+ rivers:[{id:'north-river',bank:RIVER_BANK,shore:RIVER_BANK,points:NORTH_RIVER}],
+ // Bridges: the two old ones (north-south decks over the old reach) and, R3b, West Bank Bridge (axis 'x': a 30 m deck along x, x -349..-319, z 2..8, over the south reach at z 5) and the Estuary Bridge (axis 'x': a 40 m deck over the 25 m estuary at z 400).
+ // A `wild` bridge lies in the wilds (inside the world, no zone to match); its deck is as wide as the road it carries. Every deck rises BRIDGE_RISE (1.0 m, height.js) at its crown.
+ bridges:[{id:'county-bridge',river:'north-river',x0:-35,x1:-25,z0:n(-104),z1:n(-76)},{id:'freight-bridge',river:'north-river',x0:190,x1:200,z0:-226,z1:-186},
+  {id:'west-bank-bridge',name:'West Bank Bridge',river:'north-river',axis:'x',x0:-349,x1:-319,z0:2,z1:8,wild:true},
+  {id:'estuary-bridge',name:'Estuary Bridge',river:'north-river',axis:'x',x0:105,x1:145,z0:395,z1:405,wild:true}],
+ sea:{shoreline:SEA_SHORELINE,y:WATER_Y.estuary,beach:SEA_BEACH,swell:SEA_SWELL}
 };
 
 // Willow Fields: three big open rectangles (whole cells) with their own ground, plowed soil, wheat and young crops, and no fences between them, so
@@ -308,7 +354,8 @@ const offices=[
 // Map exits (0.35, DESIGN 4.15 K): where NPC vehicles (customer trucks) come onto the map and leave it. `path` runs from the far end (off the map, where a vehicle appears and is
 // removed) inward; its first point must lie outside the playable rectangle (validateMap), so making the map bigger means moving the exit too. Lanes: Freight South is centred on
 // z 68, 12 m wide; westbound traffic keeps to z 65, eastbound to z 71 (drive on the right).
-const exits=[{id:'east',road:'freight-out',in:[[322,65],[296,65],[200,65],[120,65],[95,65]],out:[[95,71],[200,71],[296,71],[322,71]]}];
+// R3b (user decision 2026-11-17): the east exit moved from x 322 to x 1082, off the east end of the Eden spine (the road ends at x 1040, the wilds' edge). The trucks still use the lanes z 65 (in) and z 71 (out); customers.js keeps the old points x >= 200 for the timber yard.
+const exits=[{id:'east',road:'eden-spine',in:[[1082,65],[1040,65],[600,65],[322,65],[296,65],[200,65],[120,65],[95,65]],out:[[95,71],[200,71],[296,71],[322,71],[600,71],[1040,71],[1082,71]]}];
 // ── The people of the town (0.35.4, DESIGN 4.20) ─────────────────────────────
 // Who lives where and who works where is data: population.js turns it into people, and schedule.js into each person's day. Nothing here is a person placed by hand in the world.
 // Homes are (1) every property owned by an NPC (`owner:{type:'npc',name,body?,outfit?}`: the owner heads the household) and (2) the dwellings below: one street door, several households.
@@ -373,7 +420,7 @@ export const MAP=deepFreeze({
  // The WORLD (F2): the 1500 x 1800 m frame the chunks tile (chunks.js); the old block keeps its coordinates inside it. ground and playable stay the OLD block (the whole-map mask, the tree layout and every pinned test read them); wilds is the open country outside the old ground that streamed chunk tiles make walkable (no zones, roads or trees yet: later stages fill it).
  world:{x0:-450,x1:1050,z0:-1200,z1:600},wilds:{x0:-440,x1:1040,z0:-1190,z1:590},
  // Gates: the only openings through the old ground's 10 m rim (which stays a wall in the whole-map mask and in every pinned test): Freight South runs on east through its rim into the wilds. Only chunk tiles know them.
- gates:[{id:'freight-east',x0:290,x1:300,z0:62,z1:74}],
+ gates:[{id:'freight-east',x0:290,x1:300,z0:62,z1:74},{id:'west-bank',x0:-260,x1:-250,z0:-90,z1:-70},{id:'bay-road',x0:243,x1:257,z0:100,z1:110}], // R3b: the west gate (West Bank Lane) and the south gate (Bay Road)
  openCountry:{id:'open',name:'Open Country',label:'OPEN COUNTRY',subtitle:'Meadows between districts',color:'#6e8a5c'}, // how far the ground is drawn (scenery fades into fog beyond the walkable zones)
  zones,roads,water,fields,mud,buildings,shops,reserved,properties,paving,bayRows,garage,yards,vehicles,relief,employers,offices,exits,dwellings,posts,
  // The marked parking lot behind the south row of shops: bays 2.7 m wide and 5 m deep along its north edge, an aisle to Alder Street, the lot's own asphalt.
@@ -504,8 +551,16 @@ export function riverDistance(x,z,river){
  for(let i=0;i<path.length-1;i++){const a=path[i],b=path[i+1],dx=b.x-a.x,dz=b.z-a.z,t=Math.max(0,Math.min(1,((x-a.x)*dx+(z-a.z)*dz)/(dx*dx+dz*dz||1)));best=Math.min(best,Math.hypot(x-(a.x+dx*t),z-(a.z+dz*t)))}
  return best;
 }
-// The river's centreline height at x (rivers here run mostly west to east).
-export function riverZAt(river,x){const path=riverPath(river,2);for(let i=0;i<path.length-1;i++){const a=path[i],b=path[i+1];if(x>=a.x&&x<=b.x)return a.z+(b.z-a.z)*(x-a.x)/((b.x-a.x)||1)}return null}
+// R3b: where the river's centreline crosses the line x, found by walking the path in FLOW order, so a reach that runs north-south or doubles back works. A river that crosses x more than once (the old reach and the estuary both pass x -60)
+// gives the FIRST crossing in flow order unless `near` (a z) is given: then the crossing closest to it. Null when the river never crosses x. riverXAt is the same for a line z.
+function riverCross(river,k,v,near){const path=riverPath(river,2),o=k==='x'?'z':'x';let best=null;
+ for(let i=0;i<path.length-1;i++){const a=path[i],b=path[i+1];if(!((v>=a[k]&&v<=b[k])||(v<=a[k]&&v>=b[k])))continue;const d=b[k]-a[k],t=d===0?0:(v-a[k])/d,c=a[o]+(b[o]-a[o])*t;if(near===null||near===undefined)return c;if(best===null||Math.abs(c-near)<Math.abs(best-near))best=c}
+ return best}
+export const riverZAt=(river,x,near=null)=>riverCross(river,'x',x,near);
+export const riverXAt=(river,z,near=null)=>riverCross(river,'z',z,near);
+// The river's sample at path distance u (metres from the source): {x,z,tx,tz,w,depth,y,speed,u}, clamped to the ends.
+export function riverAtDistance(river,u){const path=riverPath(river,1);if(u<=0)return path[0];if(u>=path.at(-1).u)return path.at(-1);let lo=0,hi=path.length-1;while(hi-lo>1){const m=(lo+hi)>>1;if(path[m].u<=u)lo=m;else hi=m}
+ const a=path[lo],b=path[hi],t=(u-a.u)/((b.u-a.u)||1),m=k=>a[k]+(b[k]-a[k])*t;return {x:m('x'),z:m('z'),tx:m('tx'),tz:m('tz'),w:m('w'),depth:m('depth'),y:m('y'),speed:m('speed'),u}}
 
 // ── Water contract (W1, notes/water-design.md; data only, nothing draws or digs from it yet) ──
 // MAP.water: rivers[], bridges[], and the optional new keys fords[], lakes[], sea, falls[]. All y values are world heights (ground is y 0; basins are dug later by height.js).
@@ -534,12 +589,22 @@ export const riverLength=river=>riverPath(river,1).at(-1).u;
 const boxCache=new WeakMap();
 function riverBox(river){let b=boxCache.get(river);if(!b){const P=waterPoints(river),m=riverWidth(river)/2+2;b={x0:Math.min(...P.map(p=>p.x))-m,x1:Math.max(...P.map(p=>p.x))+m,z0:Math.min(...P.map(p=>p.z))-m,z1:Math.max(...P.map(p=>p.z))+m};boxCache.set(river,b)}return b}
 // Nearest point on the smoothed centreline with its interpolated attributes: {d, s} (s = the path sample, frozen) or null.
+// R3b: a river as long as the map's (2 km, 1000 samples) cannot be scanned for every height query (trees, roads and the ground mesh ask thousands of times), so the samples are bucketed: a query looks only at the segments whose box touches the
+// square of half-side max(reach, half the widest width) + 1 round the point. The nearest segment inside that distance is the same one the full scan finds; farther away the answer is null (every caller ignores a river that far).
+const NEAR_CELL=32,gridCache=new WeakMap();
+function riverGrid(river){let g=gridCache.get(river);if(g)return g;const path=riverPath(river,2),cells=new Map();
+ for(let i=0;i<path.length-1;i++){const a=path[i],c=path[i+1];for(let cx=Math.floor(Math.min(a.x,c.x)/NEAR_CELL);cx<=Math.floor(Math.max(a.x,c.x)/NEAR_CELL);cx++)for(let cz=Math.floor(Math.min(a.z,c.z)/NEAR_CELL);cz<=Math.floor(Math.max(a.z,c.z)/NEAR_CELL);cz++){const k=cx+','+cz;let l=cells.get(k);if(!l)cells.set(k,l=[]);l.push(i)}}
+ g={path,cells,half:Math.max(...path.map(p=>p.w))/2,mark:new Int32Array(path.length),gen:0};gridCache.set(river,g);return g}
 export function nearestOnRiver(river,x,z,reach=0){
  const b=riverBox(river);if(x<b.x0-reach||x>b.x1+reach||z<b.z0-reach||z>b.z1+reach)return null;
- const path=riverPath(river,2);let best=null;
- for(let i=0;i<path.length-1;i++){const a=path[i],c=path[i+1],dx=c.x-a.x,dz=c.z-a.z,t=Math.max(0,Math.min(1,((x-a.x)*dx+(z-a.z)*dz)/(dx*dx+dz*dz||1))),d=Math.hypot(x-a.x-dx*t,z-a.z-dz*t);
-  if(!best||d<best.d){const m=k=>a[k]+(c[k]-a[k])*t;best={d,s:{w:m('w'),depth:m('depth'),y:m('y'),speed:m('speed'),tx:m('tx'),tz:m('tz'),rapid:a.rapid,u:m('u')}}}}
- return best;
+ const G=riverGrid(river),path=G.path,r=Math.max(reach,G.half)+1,stamp=++G.gen;
+ let best=null,bi=-1,bt=0;
+ for(let cx=Math.floor((x-r)/NEAR_CELL);cx<=Math.floor((x+r)/NEAR_CELL);cx++)for(let cz=Math.floor((z-r)/NEAR_CELL);cz<=Math.floor((z+r)/NEAR_CELL);cz++){const list=G.cells.get(cx+','+cz);if(!list)continue;
+  for(const i of list){if(G.mark[i]===stamp)continue;G.mark[i]=stamp;const a=path[i],c=path[i+1],dx=c.x-a.x,dz=c.z-a.z,t=Math.max(0,Math.min(1,((x-a.x)*dx+(z-a.z)*dz)/(dx*dx+dz*dz||1))),d=Math.hypot(x-a.x-dx*t,z-a.z-dz*t);
+   if(best===null||d<best||(d===best&&i<bi)){best=d;bi=i;bt=t}}}
+ if(bi<0)return null;
+ const a=path[bi],c=path[bi+1],m=k=>a[k]+(c[k]-a[k])*bt;
+ return {d:best,s:{w:m('w'),depth:m('depth'),y:m('y'),speed:m('speed'),tx:m('tx'),tz:m('tz'),rapid:a.rapid,u:m('u')}};
 }
 // The river bed across the width (W2, user 2026-11-17: deeper in the centre): depth at distance d from the centre = the point's depth x RIVER_PROFILE(d / half width), a cosine: 1 at the centre, 0 at the waterline. LEGACY rivers keep their flat bed.
 export const RIVER_PROFILE=t=>(1+Math.cos(Math.PI*(t<=0?0:t>=1?1:t)))/2;
@@ -781,21 +846,19 @@ export function validateMap(map=MAP){
    if(path.some(p=>p.x<outer.x0-20||p.x>outer.x1+20||p.z<outer.z0||p.z>outer.z1))bad(`river ${river.id} leaves the ground`);
    // Both banks and the middle of the river, all along it, must stay out of every zone except under a bridge.
    for(const zone of map.zones){
-    const hit=path.some(p=>[-1,-.5,0,.5,1].some(k=>{const x=p.x-p.tz*k*reach,z=p.z+p.tx*k*reach;
+    const hit=path.some(p=>[-1,-.5,0,.5,1].some(k=>{const rr=p.w/2+riverBank(river),x=p.x-p.tz*k*rr,z=p.z+p.tx*k*rr;
      return x>=zone.bounds.x0&&x<=zone.bounds.x1&&z>=zone.bounds.z0&&z<=zone.bounds.z1&&!bridges.some(b=>b.river===river.id&&x>=b.x0&&x<=b.x1&&z>=b.z0&&z<=b.z1)}));
     if(hit)bad(`zone ${zone.id} walks into river ${river.id} where there is no bridge`)}
   }
   for(const bridge of bridges){
    const river=rivers.find(r=>r.id===bridge.river);
    if(!river){bad(`bridge ${bridge.id} crosses an unknown river`);continue}
-   const reach=riverWidth(river)/2+riverBank(river);
-   if(bridge.axis==='x'){ // an east-west deck over a north-south reach: the banks are measured in x
-    const edges=riverPath(river,1).filter(p=>p.z>=bridge.z0-2&&p.z<=bridge.z1+2).flatMap(p=>[p.x-p.tz*reach,p.x+p.tz*reach]);
-    if(!edges.length||!(bridge.x0<Math.min(...edges)&&bridge.x1>Math.max(...edges)))bad(`bridge ${bridge.id} does not reach both banks`)}
-   else{const edges=riverPath(river,1).filter(p=>p.x>=bridge.x0-2&&p.x<=bridge.x1+2).flatMap(p=>[p.z+p.tx*reach,p.z-p.tx*reach]);
-   if(!edges.length||!(bridge.z0<Math.min(...edges)&&bridge.z1>Math.max(...edges)))bad(`bridge ${bridge.id} does not reach both banks`)}
-   if(!inside(bridge,map.ground))bad(`bridge ${bridge.id} reaches outside the ground`);
-   if(!map.zones.some(z=>z.bounds.x0===bridge.x0&&z.bounds.x1===bridge.x1&&z.bounds.z0<=bridge.z0&&z.bounds.z1>=bridge.z1))bad(`bridge ${bridge.id} is not exactly as wide as a walkable zone that crosses the river`);
+    {const ax=bridge.axis==='x',a0=ax?bridge.x0:bridge.z0,a1=ax?bridge.x1:bridge.z1,c0=ax?bridge.z0:bridge.x0,c1=ax?bridge.z1:bridge.x1,bank=riverBank(river);let lo=Infinity,hi=-Infinity; // R3b: both axes. The deck runs a0..a1 along its axis; every row across it is scanned for the water and its bank, and the deck must reach past the first and the last (an oblique crossing needs a longer deck than a straight one)
+     for(let k=0;k<=4;k++){const c=c0+(c1-c0)*k/4;for(let t=Math.min(a0,a1)-80;t<=Math.max(a0,a1)+80;t+=1){const q=nearestOnRiver(river,ax?t:c,ax?c:t,40);if(q&&q.d<=q.s.w/2+bank){if(t<lo)lo=t;if(t>hi)hi=t}}}
+     if(!(lo<=hi)||!(a0<lo&&a1>hi))bad(`bridge ${bridge.id} does not reach both banks`)}
+    if(bridge.wild){if(!map.world||!inside(bridge,map.world))bad(`bridge ${bridge.id} reaches outside the world`)} // a wild bridge (R3b) lies in the wilds: no zone to match
+    else{if(!inside(bridge,map.ground))bad(`bridge ${bridge.id} reaches outside the ground`);
+    if(!map.zones.some(z=>z.bounds.x0===bridge.x0&&z.bounds.x1===bridge.x1&&z.bounds.z0<=bridge.z0&&z.bounds.z1>=bridge.z1))bad(`bridge ${bridge.id} is not exactly as wide as a walkable zone that crosses the river`)}
   }
   for(const m of waterProblems(map))bad(m)}
  // Landmarks and signs stand inside the zone they name; buildings face one of the four directions.

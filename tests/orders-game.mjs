@@ -43,7 +43,7 @@ try{
  // no more picking or staging for a finished pallet; the rack offers nothing now
  me().x=A1.stand.x;me().z=A1.stand.z;pump(.6);assert(!/Take planks/.test(prompt()),'nothing more to pick: '+prompt());
  // the customer's truck drives in once the order is staged (it takes a while)
- me().x=BAY.x;me().z=BAY.z+2.3;pump(60);assert.equal(truck().visible,true,'the truck is in the yard');assert(Math.hypot(truck().position.x-DOCK_BAY.x,truck().position.z-DOCK_BAY.z)<1.5,'parked in the bay: '+truck().position.x.toFixed(1)+','+truck().position.z.toFixed(1));
+ me().x=BAY.x;me().z=BAY.z+2.3;pump(120);assert.equal(truck().visible,true,'the truck is in the yard');assert(Math.hypot(truck().position.x-DOCK_BAY.x,truck().position.z-DOCK_BAY.z)<1.5,'parked in the bay: '+truck().position.x.toFixed(1)+','+truck().position.z.toFixed(1));
  // D3: the order's pallet goes out through the roller door on the forklift and onto the green loading zone (E at the dock door is gone)
  {const win=g.win,fork=()=>win.__city.fork,place=(x,z,yaw,lift=.3)=>{fork().state={x,z,yaw,speed:0,lift,steer:0,roll:0};pump(.3)},hold=(c,s)=>{send('keydown',c);pump(s);send('keyup',c);pump(.1)};
   me().x=BAY.x;me().z=BAY.z+2.3;pump(.6);await new Promise(r=>setTimeout(r,400));pump(.8);press('KeyE',.6);assert.equal(fork().on,true,'on the forklift');
