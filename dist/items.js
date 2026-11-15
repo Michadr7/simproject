@@ -31,6 +31,7 @@ export const ITEMS=Object.freeze([
  {...tool('logging-chainsaw','Logging Chainsaw','🪚','The professional saw: half the fuel and slow to wear. Sold only by Ridgeline Timber at level 20. Cutting with it arrives with fuel and wear',150000),requires:{skill:'lumberjack',level:20},buyable:false,companyOnly:'ridgeline'},
  {...tool('steel-axe','Steel Axe','🪓','The best axe there is: a pine falls in two swings at level 10',35000),requires:{skill:'lumberjack',level:10}},
  {...tool('gas-can','Gas Can','⛽','Equip it. At a pump hold F to fill it (5 gallons of one fuel); at a vehicle\'s tank cap hold F to pour it in',1500),capacityMgal:5000},
+ {...tool('repair-kit','Repair kit','🧰','Equip it, then press E at a damaged vehicle: it gains 15% condition, up to 40% (a kit never goes further: take it to the Eastbank repair shop)',4000),stackLimit:5},
  material('wood-log','Wood log','🪵','Timber from Pine Ridge · Ridgeline Timber pays for it on shift',100)
 ].map(Object.freeze));
 export const itemById=id=>ITEMS.find(item=>item.id===id);

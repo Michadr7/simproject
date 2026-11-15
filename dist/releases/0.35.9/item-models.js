@@ -27,6 +27,9 @@ export function createHeldItem(item){
  }else if(item.id==='gas-can'){
   // the real can (props.js): held by its handle, so it hangs below the fist; the model's origin is the middle of its base, 0.5 m tall
   const can=createProp('prop.fuel-can',{apply:m=>m});can.position.set(0,-.46,.02);can.castShadow=false;root.add(can);
+ }else if(item.id==='repair-kit'){
+  // a plain red toolbox (two boxes: no model yet; a real one can replace it)
+  mesh(new THREE.BoxGeometry(.1,.12,.26),'#b8352b');mesh(new THREE.BoxGeometry(.04,.03,.2),'#2b2b2b',0,.075);
  }else if(item.id==='wood-log'){
   const log=mesh(new THREE.CylinderGeometry(.08,.08,.36,8),'#7c5b3a');log.rotation.z=Math.PI/2;
  }else if(item.type==='drink'){

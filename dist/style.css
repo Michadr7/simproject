@@ -195,7 +195,13 @@ body:has(#welcome:not([hidden])) :is(#minimap,#vitals,#statusDock,#clockChip),bo
 .vp-stats div{display:grid;gap:3px}
 .vp-stats span{font-size:9px;letter-spacing:1.5px;text-transform:uppercase;color:#b4afa0}
 .vp-stats b{font:600 13px/1 Arial,sans-serif;font-variant-numeric:tabular-nums}
-.vp-keys{display:grid;gap:5px;font-size:11px;color:#e3e1dc}
+/* Damage row (VD2): the vehicle drawn side-on next to its band and percent; the colour class changes only when the band does. The text always names the band, so colour is never the only signal. */
+.vp-damage{display:flex;align-items:center;gap:10px;color:#5fcf80}
+.vp-damage[hidden]{display:none}
+.vp-damage b{font:600 12px/1 Arial,sans-serif;font-variant-numeric:tabular-nums;color:#eceae6}
+.vp-sil{display:none;width:66px;height:25px;flex:none}
+.vp-damage[data-model=shortbed] .vp-sil[data-sil=shortbed],.vp-damage[data-model=worktruck] .vp-sil[data-sil=worktruck],.vp-damage[data-model=offroad] .vp-sil[data-sil=offroad],.vp-damage[data-model=flatbed] .vp-sil[data-sil=flatbed],.vp-damage[data-model=generic] .vp-sil[data-sil=generic]{display:block}
+.vp-damage[data-band=fine]{color:#5fcf80}.vp-damage[data-band=worn]{color:#c4dc5a}.vp-damage[data-band=damaged]{color:#f2b53a}.vp-damage[data-band=limping]{color:#f2743a}.vp-damage[data-band=wrecked]{color:#e8323a}.vp-keys{display:grid;gap:5px;font-size:11px;color:#e3e1dc}
 .vp-key{display:flex;align-items:center;gap:2px}
 .vp-key[data-muted=true]{opacity:.5}
 .vehicle-panel kbd{display:inline-block;min-width:20px;text-align:center;padding:2px 6px;margin-right:6px;border:1px solid #ffffff3a;border-radius:4px;font:600 11px/1.3 Arial,sans-serif;background:#14120f}
@@ -382,3 +388,17 @@ body.thirst-dry::after{opacity:1}
 body:has(#welcome:not([hidden])) :is(header .brand,.location,#objective,#hotbar,#prompt,#workProgress,#jobToast,#fps,body>footer){visibility:hidden!important}
 /* hover and focus for the secondary buttons (pause menu, settings, dialogs): same honey as the main menu buttons */
 .secondary:hover:not(:disabled),.secondary:focus-visible{background:#f5c51822;border-color:var(--honey,#f5c518);color:#fff;box-shadow:inset 0 0 0 1px var(--honey,#f5c518);outline:none;cursor:pointer}
+
+/* VD7a: crash feedback. The red edge flash is ONE fixed element: a radial gradient with its opacity animated once per counted crash (a compositor-only fade, nothing while idle; --flash is set by game.js from the hit). The lamp is an engine icon: steady at Damaged, blinking at Limping and Wrecked, and the band text beside it always says so. */
+#hitFlash{position:fixed;inset:0;pointer-events:none;opacity:0;z-index:4;background:radial-gradient(ellipse at 50% 50%,rgba(0,0,0,0) 48%,rgba(210,18,18,.5) 78%,rgba(150,0,0,.95) 100%)}
+#hitFlash.on{animation:hit-flash .8s cubic-bezier(.1,.7,.3,1)}
+@keyframes hit-flash{0%{opacity:calc(var(--flash,.5)*.75)}100%{opacity:0}}
+.vp-lamp{width:22px;height:22px;flex:none;color:#6a6458;opacity:.5;border-radius:4px}
+.vp-lamp svg{display:block;width:100%;height:100%}
+.vp-lamp[data-lamp=on]{color:#f2b53a;opacity:1;filter:drop-shadow(0 0 3px #f2b53a)}
+.vp-lamp[data-lamp=blink]{color:#ff4a3c;opacity:1;filter:drop-shadow(0 0 4px #ff4a3c);animation:lamp-blink .8s steps(1,end) infinite}
+@keyframes lamp-blink{0%{opacity:1}50%{opacity:.12}}
+.vp-damage{transform-origin:left center}
+.vp-damage.hit{animation:vp-hit .6s ease-out;border-radius:6px}
+@keyframes vp-hit{0%{transform:scale(1.16) translateX(0);background:rgba(232,50,58,.6)}12%{transform:scale(1.16) translateX(-6px)}26%{transform:scale(1.12) translateX(6px)}40%{transform:scale(1.08) translateX(-4px)}55%{transform:scale(1.04) translateX(3px)}100%{transform:none;background:rgba(232,50,58,0)}}
+@media(prefers-reduced-motion:reduce){.vp-lamp[data-lamp=blink]{animation:none;outline:2px solid currentColor;outline-offset:1px}@keyframes vp-hit{0%{background:rgba(232,50,58,.5)}100%{background:rgba(232,50,58,0)}}#hitFlash.on{animation-duration:1.2s}}

@@ -21,12 +21,13 @@ export const SAMPLE_GAP=.5; // metres between hull sample points (a 0.16 m sign 
 // A loaded vehicle (cargo.js loadOf, 0..1): up to 20% slower at the top and 35% slower off the mark when the bed is full. Burn grows by up to 30% (driving.js).
 export const withLoad=(cls,load)=>load>0?{...cls,top:cls.top*(1-.2*load),accel:cls.accel*(1-.35*load)}:cls;
 export const TIERS=Object.freeze(['low','mid','high']);export const ARCADE_MILE_SCALE=8;
-function makeClass(c){const L=c.hz*2;return {...c,gallonsPerMile:+(ARCADE_MILE_SCALE/c.mpg).toFixed(4),door:{x:+(c.hx+.6).toFixed(3),z:c.doorZ},passengerDoor:{x:-+(c.hx+.6).toFixed(3),z:c.doorZ},seat:{x:.45,z:c.doorZ},passengerSeat:{x:-.45,z:c.doorZ},camera:{back:+(3*L/2).toFixed(2),up:+(1.2*L/2).toFixed(2)}}}
+// tough: damage per unit of crash energy (damage.js: points = tough x ...; HIGHER takes more damage; VD7a values explained there). hood: the engine bay's smoke point, local (default: centred, 0.6 m back from the nose).
+function makeClass(c){const L=c.hz*2;return {...c,hood:c.hood||{x:0,y:.9,z:+(c.hz-.6).toFixed(3)},gallonsPerMile:+(ARCADE_MILE_SCALE/c.mpg).toFixed(4),door:{x:+(c.hx+.6).toFixed(3),z:c.doorZ},passengerDoor:{x:-+(c.hx+.6).toFixed(3),z:c.doorZ},seat:{x:.45,z:c.doorZ},passengerSeat:{x:-.45,z:c.doorZ},camera:{back:+(3*L/2).toFixed(2),up:+(1.2*L/2).toFixed(2)}}}
 export const CLASSES=Object.freeze({
- worktruck:makeClass({id:'worktruck',tier:'low',mpg:8,name:'Worktruck',hx:1.09,hz:3,top:17.9,reverse:5,accel:3,brake:8,drag:.9,rMin:7,aLat:10,doorZ:.5,exhaust:{x:-.7,y:.35,z:-3.02}}), // the starter: about 40 mph, thirsty
- flatbed:makeClass({id:'flatbed',tier:'low',mpg:6,name:'Tylan Flatbed',hx:1.45,hz:4.415,top:15.6,reverse:3.5,accel:1.6,brake:6,drag:.7,rMin:9,aLat:7,doorZ:1.765,exhaust:{x:-1.42,y:3.15,z:1,stack:true}}), // the timber truck (0.35): 35 mph, slow to get there, thirsty; the exhaust is the top of the stack
- shortbed:makeClass({id:'shortbed',tier:'low',mpg:5,name:'Kasumuchi S70',hx:1.105,hz:2.757,top:29,reverse:4,accel:1.5,brake:7,drag:.8,rMin:7.5,aLat:9,doorZ:.9,exhaust:{x:-.6,y:.29,z:-2.7}}), // the cheap starter shortbed (0.35.8): 65 mph at the top but 19 s to get there, 5 mpg (1.6 gal/mi), a gas hog; the exhaust is the model's anchor_exhaust
- offroad:makeClass({id:'offroad',tier:'mid',mpg:14.5,name:'Pevrolet Off Road Pickup',hx:1.255,hz:2.8,top:26.8,reverse:6,accel:4.5,brake:9,drag:1,rMin:6.5,aLat:14,doorZ:.5,rough:.35,exhaust:{x:-.75,y:.42,z:-2.95}}) // mid tier: about 60 mph, nearly twice the mileage; grass, fields, paths and dirt cost it 35 points less speed (rough)
+ worktruck:makeClass({id:'worktruck',tough:1.3,tier:'low',mpg:8,name:'Worktruck',hx:1.09,hz:3,top:17.9,reverse:5,accel:3,brake:8,drag:.9,rMin:7,aLat:10,doorZ:.5,exhaust:{x:-.7,y:.35,z:-3.02}}), // the starter: about 40 mph, thirsty
+ flatbed:makeClass({id:'flatbed',tough:1.7,tier:'low',mpg:6,name:'Tylan Flatbed',hx:1.45,hz:4.415,top:15.6,reverse:3.5,accel:1.6,brake:6,drag:.7,rMin:9,aLat:7,doorZ:1.765,exhaust:{x:-1.42,y:3.15,z:1,stack:true}}), // the timber truck (0.35): 35 mph, slow to get there, thirsty; the exhaust is the top of the stack
+ shortbed:makeClass({id:'shortbed',tough:.58,tier:'low',mpg:5,name:'Kasumuchi S70',hx:1.105,hz:2.757,top:29,reverse:4,accel:1.5,brake:7,drag:.8,rMin:7.5,aLat:9,doorZ:.9,exhaust:{x:-.6,y:.29,z:-2.7}}), // the cheap starter shortbed (0.35.8): 65 mph at the top but 19 s to get there, 5 mpg (1.6 gal/mi), a gas hog; the exhaust is the model's anchor_exhaust
+ offroad:makeClass({id:'offroad',tough:.68,tier:'mid',mpg:14.5,name:'Pevrolet Off Road Pickup',hx:1.255,hz:2.8,top:26.8,reverse:6,accel:4.5,brake:9,drag:1,rMin:6.5,aLat:14,doorZ:.5,rough:.35,exhaust:{x:-.75,y:.42,z:-2.95}}) // mid tier: about 60 mph, nearly twice the mileage; grass, fields, paths and dirt cost it 35 points less speed (rough)
 });
 
 // Top speed and acceleration multiplier by terrain surface. Water, banks and everything off the map are never driven on (blocked() refuses them as well).
@@ -96,13 +97,31 @@ export function stepVehicle(s,input,dt,cls,env){
  const radius=Math.max(cls.rMin,v*v/cls.aLat),yawRate=Math.abs(v)<.01?0:steer*v/radius;
  const yaw=s.yaw+yawRate*dt,mid=s.yaw+yawRate*dt/2,nx=s.x+sin(mid)*v*dt,nz=s.z+cos(mid)*v*dt;
  const next={x:nx,z:nz,yaw,speed:v,steer};
- if(poseFree(next,cls,env))return {state:next,hit:false};
- // blocked: slide along the obstacle (x only, then z only), keeping the new heading; then turn on the spot; else stay put and stop (and refuse the yaw change too)
- // (a slide must keep at least a fifth of the intended step, or head-on contact would "slide" a hair sideways for ever and never stop)
- const step=Math.hypot(nx-s.x,nz-s.z);
- for(const [x,z] of [[nx,s.z],[s.x,nz]]){const p={x,z,yaw,speed:v*(1-2.5*dt),steer};if(Math.hypot(x-s.x,z-s.z)>=.2*step&&poseFree(p,cls,env))return {state:p,hit:true}}
- return {state:{x:s.x,z:s.z,yaw:s.yaw,speed:0,steer},hit:true};
+ if(poseFree(next,cls,env))return {state:next,hit:false,impact:0,hitKind:null};
+ // Blocked (C1, collision feel): go as far as the hull can, then slide along whatever is there; never a gap over a few millimetres and no sticking.
+ const L=Math.hypot(nx-s.x,nz-s.z),stop={state:{x:s.x,z:s.z,yaw:s.yaw,speed:0,steer},hit:true,impact:Math.abs(v),hitKind:hitKindOf(next,cls,env)};
+ let from={x:s.x,z:s.z,yaw:s.yaw};
+ if(!poseFree(from,cls,env)){const out=pushOut(from,cls,env,Math.atan2(nx-s.x,nz-s.z));if(!out)return stop;from=out} // already inside something (a prop placed later): ease out of it first
+ const t=reach(from,next,cls,env),cur=lerpPose(from,next,t),rest=(1-t)*L,dir=Math.atan2(nx-s.x,nz-s.z),first=(input.steer||0)>=0?1:-1;
+ const done=(x,z,yy,k)=>({state:{x,z,yaw:yy,speed:v*(1-.5*dt*Math.sin(k*SLIDE_STEP)),steer},hit:true,impact:Math.abs(v)*Math.sin(k*SLIDE_STEP),hitKind:stop.hitKind});
+ // slide: turn the intended direction away from the obstacle (the smallest turn that lets the hull fit, found by halving between 0 and 80 degrees: about 10 hull checks, and 4 when it is a head-on stop); the slide is as long as the part of the step along that direction
+ const tryTurn=(k,sg)=>{const a=dir+sg*k*SLIDE_STEP,len=rest*cos(k*SLIDE_STEP),x=cur.x+sin(a)*len,z=cur.z+cos(a)*len;for(const yy of [yaw,cur.yaw])if(poseFree({x,z,yaw:yy},cls,env))return {x,z,yy,k};return null};
+ let slide=null;
+ if(L>1e-9)for(const sg of [first,-first]){let hi=tryTurn(SLIDE_MAX,sg);if(!hi)continue;let lo=0;while(hi.k-lo>1){const m=(lo+hi.k)>>1,r=tryTurn(m,sg);if(r)hi=r;else lo=m}if(!slide||hi.k<slide.k)slide=hi}
+ if(slide)return done(slide.x,slide.z,slide.yy,slide.k);
+ // nothing to slide along (head on): stop at the contact; if the wheel is turned and the throttle held, the nose may still swing along the obstacle at walking pace
+ const creep=(input.steer||0)&&throttle?cur.yaw+clamp(s.steer,-1,1)*1.5*Math.sign(throttle)/cls.rMin*dt:cur.yaw;
+ const yc=creep!==cur.yaw&&poseFree({x:cur.x,z:cur.z,yaw:creep},cls,env)?creep:cur.yaw;
+ return {state:{x:cur.x,z:cur.z,yaw:yc,speed:0,steer},hit:true,impact:Math.abs(v),hitKind:stop.hitKind};
 }
+const SLIDE_STEP=Math.PI/36,SLIDE_MAX=16; // the slide search: 5 degree turns up to 80 degrees (square on to a flat face, within 10 degrees, is a head-on stop: a steeper turn would drift sideways for ever)
+const lerpPose=(a,b,t)=>({x:a.x+(b.x-a.x)*t,z:a.z+(b.z-a.z)*t,yaw:a.yaw+(b.yaw-a.yaw)*t});
+// The furthest free pose on the way from the free pose `a` to `b` (bisection, 7 rounds: the last gap is under 1 % of the step, a few millimetres). Returns the fraction.
+function reach(a,b,cls,env){let lo=0,hi=1;for(let i=0;i<7;i++){const m=(lo+hi)/2;if(poseFree(lerpPose(a,b,m),cls,env))lo=m;else hi=m}return lo}
+// What the blocked pose ran into: another vehicle, a person, or the world (walls, props, trees, water). For the damage build (notes/vehicle-damage-design.md).
+function hitKindOf(pose,cls,env){if((env.others||[]).some(o=>hullsOverlap(pose,cls,o.state,o.cls)))return 'vehicle';if((env.people||[]).some(c=>circleTouchesHull(pose,cls,c)))return 'person';return 'world'}
+// A pose that is already blocked: the nearest free one within 0.4 m (rings of 16 directions), the way the vehicle was heading last.
+function pushOut(p,cls,env,heading){for(const r of [.03,.06,.1,.16,.25,.4])for(let i=0;i<16;i++){const a=heading+Math.PI+i*Math.PI/8,q={x:p.x+sin(a)*r,z:p.z+cos(a)*r,yaw:p.yaw};if(poseFree(q,cls,env))return q}return null}
 const toward=(v,target,step)=>v<target?Math.min(target,v+step):Math.max(target,v-step);
 
 // The nearest free pose to a pose that has become blocked (a saved game, a rule change, a prop placed later): a spiral outward, the saved yaw first, then a quarter turn at a time.
@@ -123,7 +142,7 @@ export function exitPoint(s,cls,free,side='driver'){
  return null;
 }
 
-// The owned vehicles' saved list (0.34): one entry per vehicle you own, {uid, model, colour, x, z, yaw, fuelMgal}. A uid is "v" and a number, made when you buy or take delivery. Unknown models, bad uids and bad numbers
+// The owned vehicles' saved list (0.34): one entry per vehicle you own, {uid, model, colour, x, z, yaw, fuelMgal, cond?}. A uid is "v" and a number, made when you buy or take delivery. Unknown models, bad uids and bad numbers
 // are dropped; positions must be inside the playable rectangle; a missing or unknown colour is the model's first. `known` is MAP.vehicles (the dealership's display slots): the tank size comes from the slot with the same model.
 // Fuel: normalizeFuelMgal (fuel.js) keeps a saved amount inside the tank; a missing one is a full tank.
 export const MAX_OWNED=12;
@@ -139,6 +158,7 @@ export function normalizeVehicles(value,known,playable){
   const entry={uid:v.uid,model:v.model,colour:validColour(v.model,v.colour)?v.colour:defaultColour(v.model),x:+v.x.toFixed(2),z:+v.z.toFixed(2),yaw:+v.yaw.toFixed(3)};
   if(spec.fuel)entry.fuelMgal=normalizeFuelMgal(v.fuelMgal,spec.fuel.tankMgal);
   {const c=normalizeCargo(v.cargo,v.model);if(c)entry.cargo=c}
+  if(Number.isInteger(v.cond)&&v.cond>=0&&v.cond<1000)entry.cond=v.cond; // damage (0..999); missing or 1000 or junk = a perfect vehicle, so old saves load Fine
   out.push(entry);if(out.length>=MAX_OWNED)break;
  }
  return out;
@@ -149,6 +169,7 @@ export function vehiclesToSave(specs,states){
   const entry={uid:spec.id,model:spec.model,colour:spec.colour,x:+s.x.toFixed(2),z:+s.z.toFixed(2),yaw:+s.yaw.toFixed(3)};
   if(spec.fuel)entry.fuelMgal=normalizeFuelMgal(s.fuelMgal,spec.fuel.tankMgal);
   {const c=normalizeCargo(s.cargo,spec.model);if(c)entry.cargo=c}
+  if(Number.isFinite(s.cond)){const c=Math.round(s.cond);if(c>=0&&c<1000)entry.cond=c}
   out.push(entry)}
  return out;
 }

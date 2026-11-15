@@ -121,6 +121,12 @@ Cart welder v3, 3,372 triangles, one regulator, MIG gun, raised holsters. Anchor
 ### Third-person animation
 A person picks up the gun, walks to the table and welds Plate Join. v5 torch clipping fix: CARRY_Z 1.20 (was 1.08), LEAD_UP 0.14 m above the seam, ROT_DELAY 8. A pure simulation found the old settings clipped in 8 frames and the new ones in 0. That was vertex sampling, not a full swept-mesh or interpolated-animation test. It is not confirmed visually in Blender.
 
+### What nearby players see
+
+Other players in the shop should see the welder in third person, leaning over the table and moving the MIG gun along the actual workpiece seam. Drive the visible torch from the welding player's actual nozzle movement and arc state so spectators see pauses, lifts, repositioning and off-seam movement. At arc strike, show a small flash and sparks at the tip and play the arc sound from the workstation. Show the bead growing behind the nozzle and keep the deposited bead visible when the arc stops.
+
+Helmet dimming, debug readouts and the result panel are local to the welder. Use the saved Blender animation as a reference for pickup, carry and posture. The standalone lab has no spectator view. Multiplayer synchronization and delivery details remain open.
+
 ### Shop props (welding_props.py, polished replacement)
 Collection WeldingProps. Exports prop-<id>.glb plus welding_props_manifest.json. Every prop has `anchor_interact` (where the player stands) and `anchor_prompt` (where the E prompt floats). READ the manifest for the full anchor list.
 - prop-task-board: ticket printer, cabinet, board with tier-coloured tickets, order lamp. Anchors include anchor_ticket_out, anchor_board_look, anchor_order_lamp.
@@ -158,7 +164,7 @@ Treat any detail beyond the owner's explicit choices as a proposal until Opus de
 
 ## 9. Open decisions: Opus owns ALL of these
 
-Shop location; pay rates, tier multipliers and prices; promotion requirements and lower-tier availability; product good-weld threshold and partial payout; consumables and raw materials; order flow, grade requirements, deadlines, acceptance timing, quantities and inventory; stock reservation and avoiding double pay; clock-out behaviour; raw steel sourcing; save schema changes (after inspecting the actual current save); camera transition and supply animations; whether the gas cylinder, supply cart and scrap bin are interactive; multiplayer visibility.
+Shop location; pay rates, tier multipliers and prices; promotion requirements and lower-tier availability; product good-weld threshold and partial payout; consumables and raw materials; order flow, grade requirements, deadlines, acceptance timing, quantities and inventory; stock reservation and avoiding double pay; clock-out behaviour; raw steel sourcing; save schema changes (after inspecting the actual current save); camera transition and supply animations; whether the gas cylinder, supply cart and scrap bin are interactive; multiplayer synchronization and delivery details.
 
 ## 10. Performance budgets (proposed, state final numbers before building)
 
@@ -181,3 +187,7 @@ Verified in pure Python only: geometry, manifests, triangle counts, anchor value
 NOT verified: Blender execution of the polished and add-on scripts, GLB exports of those scripts, any browser or in-game rendering, visual quality of the first-person glove and torch, helmet, Tier 3 and Tier 4 parts, stage transitions, and every proposal above. The owner will send screenshots; revise from them.
 
 Do not claim these documents are merged into DESIGN.md. WELDING_DESIGN_NOTES.md, WELDING_AGENT_BRIEF.md and WELDING_ORDERS_ADDITION.md exist separately and may be out of sync with this file.
+
+## Prototype
+
+The standalone welding lab is at http://localhost:8000/weld-lab.html with npm run dev. It uses the revised first-person GLB and the real weld table and clamp. It includes four sample joints, mouse aim, hold-to-arc, Shift brace, an on-demand result and deterministic browser replays. The lab is separate from the game, jobs, phone and save.

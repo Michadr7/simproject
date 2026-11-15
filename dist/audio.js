@@ -1,4 +1,6 @@
 import './legacy-keys.js';
+import {bandOf,misfiring} from './damage.js';
+import {SOUND_EXT,CRANK_CLIP,STALL_CLIP,VEHICLE_SET,YELL_CLIPS,SCRAPE_CLIPS,engineFor,crashPlan,pickIndex,createYellGate,createVoices,scrapeGain,scrapeRate} from './vehicle-sounds.js'; // SND1: recorded vehicle, crash and yell sounds (optional: the generated sounds stay as the fallback)
 // Sound, generated with the Web Audio API (no sound files). One AudioContext, created on the first click or key (browsers do not allow sound before one); a master volume and a mute that are saved;
 // at most three sounds at once: the blade, the belt and the lever click. Every sound is placed in the world: it is loudest within NEAR metres and silent beyond HEARING metres of the player.
 // Mono on purpose (no panning yet). Nothing here runs unless a source is near enough to hear.
@@ -11,12 +13,13 @@ export const attenuate=d=>d<=NEAR?1:d>=HEARING?0:Math.pow(1-(d-NEAR)/(HEARING-NE
 // (0.35 retry) a truck is low and thumping, not buzzy: the tone is a train of sharp pulses (the firing strokes: the idle is about 22 pulses a second for the old truck), softened by a low-pass that
 // stays low, with a strong lope (the throb) in the rough ones. The pulse rate is `freq`.
 const ENGINE_TIERS={low:{base:22,gain:.34,rough:.8,lowpass:240},mid:{base:24,gain:.3,rough:.6,lowpass:300},high:{base:28,gain:.26,rough:.3,lowpass:380}};
-const GEARS=[0,.2,.42,.68,1.0001];
-export function engineVoice({speed=0,top=10,throttle=0,tier='low',running=true}={}){
+const GEARS=[0,.2,.42,.68,1.0001],SAMPLE_GAIN=3.5; // SAMPLE_GAIN: the recorded loop sits at -20 dBFS rms; voice.gain (about .16 to .33) times this is its level
+// (VD3) cond (0..1000) and time (seconds, a running clock) add the damage: a rougher throb by band (damage.js: +0.1 Worn, +0.25 Damaged, +0.4 Limping) and a misfire, a 0.12 s dip in level and pitch every 1.7 s (Damaged) or 0.8 s (Limping) on a fixed phase of the clock.
+export function engineVoice({speed=0,top=10,throttle=0,tier='low',running=true,cond=1000,time=0}={}){
  const t=ENGINE_TIERS[tier]||ENGINE_TIERS.low;if(!running)return {freq:t.base,gain:0,lowpass:t.lowpass,rough:t.rough,rpm:0,gear:0,road:0};
  const ratio=Math.max(0,Math.min(1,Math.abs(speed)/Math.max(.1,top)));let gear=0;while(gear<3&&ratio>=GEARS[gear+1])gear++;
  const p=(ratio-GEARS[gear])/(GEARS[gear+1]-GEARS[gear]),rpm=gear===0?.12+.88*p:.42+.58*p,load=Math.max(0,Math.min(1,throttle));
- return {freq:t.base*(1+rpm*2.1),gain:t.gain*(.55+.3*load+.25*rpm),lowpass:t.lowpass+rpm*600+load*250,rough:t.rough,rpm,gear,road:Math.min(1,ratio*1.3)};
+ const miss=misfiring(cond,time);return {freq:t.base*(1+rpm*2.1)*(miss?.78:1),gain:t.gain*(.55+.3*load+.25*rpm)*(miss?.15:1),lowpass:t.lowpass+rpm*600+load*250,rough:+(t.rough+bandOf(cond).rough).toFixed(2),rpm,gear,road:Math.min(1,ratio*1.3),misfire:miss};
 }
 export function loadAudioSettings(storage){
  try{const v=JSON.parse(storage.getItem(AUDIO_KEY)||'null');return {volume:Number.isFinite(v?.volume)?Math.max(0,Math.min(1,v.volume)):.6,muted:v?.muted===true}}catch{return {volume:.6,muted:false}}
@@ -24,7 +27,8 @@ export function loadAudioSettings(storage){
 export function saveAudioSettings(storage,settings){try{storage.setItem(AUDIO_KEY,JSON.stringify({volume:+settings.volume.toFixed(2),muted:!!settings.muted}));return true}catch{return false}}
 
 // AudioContextClass: window.AudioContext (or a fake in tests); storage: {getItem,setItem}.
-export function createAudio({AudioContextClass,storage,random=Math.random,sampleUrl=null}){
+// soundBase: the folder URL of the recorded sounds (vehicle-sounds.js), or null for none (tests); fetchFn: fetch, replaceable in tests.
+export function createAudio({AudioContextClass,storage,random=Math.random,sampleUrl=null,soundBase=null,fetchFn=globalThis.fetch?globalThis.fetch.bind(globalThis):null}){
  const settings=loadAudioSettings(storage);
  let ctx=null,master=null,v=null,clicks=0,drinkSample=null;
  // Recorded drink (assets/sounds/water_drink.wav). Fetched once the context exists; until it arrives, or if it fails, drink() uses the synthesized one.
@@ -56,9 +60,41 @@ export function createAudio({AudioContextClass,storage,random=Math.random,sample
   for(const node of [bladeTone,bladeHiss,beltRumble,beltHum,fuelRush,fuelHum,engSaw,engSub,engThrob,road])node.start();
   v={bladeTone,bladeLow,bladeToneGain,bladeBand,bladeHissGain,beltRumbleGain,beltHumGain,fuelBand,fuelRushGain,fuelHumGain,engSaw,engSub,engLow,engGain,engThrob,engThrobDepth,roadBand,roadGain,buffer};
  }
- return {
+ // SND1: the recorded sounds (vehicle-sounds.js). Fetched and decoded one at a time, only after the first gesture and only when a vehicle is used (the engine loop of its class, then one shared set of about 35 short clips);
+ // a file that is missing or will not decode is skipped for good and the generated sound stays. Decoded memory is about 11 MB for everything (4 engines are never loaded together: one per class used).
+ const buffers=new Map(),wanted=new Set(),queue=[],voices=createVoices(),gate=createYellGate(),last={crash:-1,yell:-1,glass:-1,thud:-1,scrape:-1};
+ let busy=false,eng=null,scr=null,scrIdle=0,yellClock=0;
+ function pump(){if(busy||!queue.length||!ctx)return;busy=true;const name=queue.shift();
+  Promise.resolve().then(()=>fetchFn(soundBase+name+SOUND_EXT)).then(r=>r&&r.ok?r.arrayBuffer():null).then(b=>b?ctx.decodeAudioData(b):null).then(buf=>{if(buf)buffers.set(name,buf)}).catch(()=>{}).then(()=>{busy=false;pump()})}
+ function want(names){if(!soundBase||!ctx||typeof fetchFn!=='function')return;for(const n of names)if(n&&!buffers.has(n)&&!wanted.has(n)){wanted.add(n);queue.push(n)}pump()}
+ const live=()=>!!ctx&&ctx.state==='running'&&!settings.muted; // a hidden tab (suspended context) plays nothing
+ // One recorded clip through the master gain, within the voice cap (12 at once, 2 of them yells).
+ function shot(name,level,{rate=1,delay=0,yell=false}={}){
+  const b=buffers.get(name);if(!b||!live()||!voices.take(yell))return false;
+  const s=ctx.createBufferSource(),g=gain(level);s.buffer=b;s.playbackRate.value=rate;s.connect(g);g.connect(master);s.onended=()=>{voices.free(yell);s.disconnect?.();g.disconnect?.()};s.start(ctx.currentTime+delay);return true;
+ }
+ // A generated thump for a crash when no recorded clip is decoded yet (a noise burst under a falling sine).
+ function thump(level,hard){
+  if(!live()||!v||!voices.take())return false;
+  const t=ctx.currentTime,src=ctx.createBufferSource(),low=filtered('lowpass',hard?900:500,.7),env=gain(0),o=ctx.createOscillator();src.buffer=v.buffer;o.type='sine';o.frequency.setValueAtTime(hard?90:70,t);o.frequency.setTargetAtTime(32,t,.06);
+  env.gain.setValueAtTime(0,t);env.gain.linearRampToValueAtTime(level,t+.004);env.gain.setTargetAtTime(.0001,t+.02,hard?.12:.07);src.connect(low);low.connect(env);o.connect(env);env.connect(master);
+  src.start(t,random()*1.5);src.stop(t+.5);o.start(t);o.stop(t+.5);src.onended=()=>voices.free();return true;
+ }
+ function pickShot(pool,slot,level,opts){const n=pool.length,i=pickIndex(n,random,last[slot]);last[slot]=i;for(let k=0;k<n;k++)if(shot(pool[(i+k)%n],level,opts))return true;return false}
+ function yell(vol){if(!(vol>.02)||!live())return false;want(YELL_CLIPS);return pickShot(YELL_CLIPS,'yell',.8*vol,{rate:.95+random()*.12,yell:true})}
+ function startEngine(cls,buf){const s=looping(buf),lp=filtered('lowpass',1500,.5),g=gain(0),d=gain(0);s.connect(lp);lp.connect(g);g.connect(master);v.engThrob.connect(d);d.connect(g.gain);s.start(ctx.currentTime,random()*buf.duration);eng={cls,src:s,lp,g,depth:d}}
+ function stopEngine(){if(!eng)return;try{eng.src.stop()}catch{}try{v.engThrob.disconnect(eng.depth)}catch{}try{eng.g.disconnect()}catch{}eng=null}
+ // Sliding along a wall: a looped scrape (one of three) with a gain and pitch that follow the speed; it fades out a moment after the slide ends.
+ function scrape(speed,dt){
+  const g=scrapeGain(speed);
+  if(g>0&&live()){scrIdle=0;if(!scr){const names=SCRAPE_CLIPS.filter(n=>buffers.has(n));if(!names.length||!voices.take())return;const i=pickIndex(names.length,random,last.scrape),b=buffers.get(names[i]),s=looping(b),sg=gain(0);last.scrape=i;s.connect(sg);sg.connect(master);s.start(ctx.currentTime,random()*b.duration);scr={s,g:sg}}
+   ease(scr.g.gain,g,.05);ease(scr.s.playbackRate,scrapeRate(speed),.1)}
+  else if(scr){scrIdle+=dt;ease(scr.g.gain,0,.04);if(scrIdle>.4){try{scr.s.stop()}catch{}scr.s.disconnect?.();scr.g.disconnect?.();scr=null;voices.free()}}
+ } return {
   settings,
   get ready(){return !!ctx},
+  // SND1 test and tool access: has(name) (decoded), pending (files still to fetch), voices (clips playing).
+  sounds:{has:n=>buffers.has(n),get pending(){return queue.length+(busy?1:0)},get voices(){return voices.total},get yells(){return voices.yells},get engine(){return eng?eng.cls:null}},
   // Call from a click or key press. Safe to call again (it only resumes a suspended context). False when the browser has no Web Audio.
   unlock(){
    if(ctx){if(ctx.state==='suspended')ctx.resume?.();return true}
@@ -84,20 +120,35 @@ export function createAudio({AudioContextClass,storage,random=Math.random,sample
    ease(v.fuelRushGain.gain,.22*a,.04);ease(v.fuelHumGain.gain,.05*a,.04);ease(v.fuelBand.frequency,550+950*Math.max(0,Math.min(1,fullness)));
   },
   // Every frame: the engine of the vehicle you are sitting in. voice: engineVoice(...) (gain 0 when it is off or stalled). It plays at full level for the driver (and a passenger).
-  engine(voice){
+  // cls: the class id of that vehicle ('shortbed', ...): its recorded loop (vehicle-sounds.js) replaces the generated tone as soon as it is decoded; the misfire dip, the roughness by band and the revs are applied on top of it.
+  engine(voice,cls=null){
    if(!ctx)return;
-   ease(v.engSaw.frequency,voice.freq,.05);ease(v.engSub.frequency,voice.freq/2,.05);ease(v.engLow.frequency,voice.lowpass,.08);
-   ease(v.engGain.gain,voice.gain,.08);ease(v.engThrobDepth.gain,voice.gain*.8*voice.rough,.1);ease(v.engThrob.frequency,voice.freq/2.6,.1);
+   const E=cls?engineFor(cls):null,buf=E&&buffers.get(E.file);if(E&&!wanted.has(E.file))want([E.file]);if(eng&&(eng.cls!==cls||!buf))stopEngine();if(buf&&!eng)startEngine(cls,buf);
+   const q=voice.misfire?.2:1;ease(v.engLow.frequency,voice.lowpass,.08);ease(v.engThrob.frequency,voice.freq/2.6,.1);
+   if(eng){const sg=Math.min(1.2,voice.gain*SAMPLE_GAIN);ease(eng.src.playbackRate,(E.rate[0]+(E.rate[1]-E.rate[0])*voice.rpm)*(voice.misfire?.8:1),.06*q);ease(eng.lp.frequency,Math.min(9000,voice.lowpass*6),.08);ease(eng.g.gain,sg,voice.misfire?.02:.08);ease(eng.depth.gain,sg*.4*voice.rough,.1);ease(v.engGain.gain,0,.08);ease(v.engThrobDepth.gain,0,.1)}
+   else{ease(v.engSaw.frequency,voice.freq,.05*q);ease(v.engSub.frequency,voice.freq/2,.05*q);
+   ease(v.engGain.gain,voice.gain,voice.misfire?.02:.08);ease(v.engThrobDepth.gain,voice.gain*.8*voice.rough,.1)}
    ease(v.roadGain.gain,.09*voice.road*(voice.gain>0?1:0),.1);ease(v.roadBand.frequency,300+500*voice.road,.1);
   },
   // Turning the key: a few rough cranks, then the engine catches. `at` and `listener` as for click. Plays through the shared click limit.
-  ignition(at,listener,{tier='low'}={}){
+  ignition(at,listener,{tier='low',seconds=0}={}){ // seconds: how long the starter turns (a damaged engine cranks longer: damage.js CRANK_SECONDS x cranks); 0 = the tier's short start
    if(!ctx||settings.muted)return false;
    const a=attenuate(distance(listener,at));if(a<.02)return false;
-   const t=ctx.currentTime,cranks=tier==='low'?5:tier==='mid'?4:3,src=ctx.createBufferSource();src.buffer=v.buffer;const band=filtered('lowpass',300,.7),env=gain(0);
+   const cb=buffers.get(CRANK_CLIP);if(cb&&live()&&voices.take()){const dur=seconds>0?Math.min(8,seconds):.9,t0=ctx.currentTime,s=looping(cb),g=gain(0); // the recorded starter, looped for as long as it turns
+    g.gain.setValueAtTime(0,t0);g.gain.linearRampToValueAtTime(.7*a,t0+.03);g.gain.setValueAtTime(.7*a,t0+Math.max(.04,dur-.1));g.gain.linearRampToValueAtTime(0,t0+dur);s.connect(g);g.connect(master);s.onended=()=>{voices.free();s.disconnect?.();g.disconnect?.()};s.start(t0);s.stop(t0+dur);return true}
+   const t=ctx.currentTime,cranks=seconds>0?Math.max(2,Math.min(40,Math.round(seconds/.13))):tier==='low'?5:tier==='mid'?4:3,src=ctx.createBufferSource();src.buffer=v.buffer;const band=filtered('lowpass',300,.7),env=gain(0);
    for(let i=0;i<cranks;i++){const s=t+i*.13;env.gain.setValueAtTime(0,s);env.gain.linearRampToValueAtTime(.4*a,s+.02);env.gain.linearRampToValueAtTime(.05*a,s+.1)}
    env.gain.setTargetAtTime(.0001,t+cranks*.13+.05,.05);src.connect(band);band.connect(env);env.connect(master);src.start(t,random()*1.5);src.stop(t+cranks*.13+.4);
    return true;
+  },
+  // The engine dying (a stalling crash): a falling, coughing rumble with two pops, about 0.7 s. Not placed in the world (it is the driver's own engine). Shares the click limit.
+  stall(){
+   if(!ctx||settings.muted||clicks>=MAX_CLICKS)return false;
+   if(shot(STALL_CLIP,.85))return true; // the recorded engine cut-off, else the generated one below
+   const t=ctx.currentTime,o=ctx.createOscillator(),low=filtered('lowpass',220,.8),env=gain(0);clicks++;o.type='sawtooth';o.frequency.setValueAtTime(75,t);o.frequency.linearRampToValueAtTime(24,t+.65);
+   env.gain.setValueAtTime(0,t);env.gain.linearRampToValueAtTime(.3,t+.03);env.gain.setTargetAtTime(.0001,t+.2,.14);o.connect(low);low.connect(env);env.connect(master);o.start(t);o.stop(t+.8);
+   for(const at of [.1,.34]){const src=ctx.createBufferSource();src.buffer=v.buffer;const band=filtered('bandpass',200,1.2),pop=gain(0);pop.gain.setValueAtTime(0,t+at);pop.gain.linearRampToValueAtTime(.35,t+at+.01);pop.gain.setTargetAtTime(.0001,t+at+.02,.04);src.connect(band);band.connect(pop);pop.connect(master);src.start(t+at,random()*1.5);src.stop(t+at+.2)}
+   o.onended=()=>{clicks--};return true;
   },
   // A chime when the tank is full (or you cannot pay): two short notes. `at`: {x,z}. Shares the click limit.
   chime(at,listener,{ok=true}={}){
@@ -136,6 +187,23 @@ export function createAudio({AudioContextClass,storage,random=Math.random,sample
    src.connect(band);band.connect(env);blip.connect(env);env.connect(master);clicks++;
    src.start(t,random()*1.5);blip.start(t);src.stop(t+.14);blip.stop(t+.14);src.onended=()=>{clicks--};
    return true;
+  },
+  // SND1: call when you get into a vehicle: starts loading its engine loop and the shared set (once; a no-op without a sound folder).
+  prepare(cls){if(!ctx)return;const E=engineFor(cls);want([E?.file,...VEHICLE_SET])},
+  // A counted crash (a driving.js 'crash' event): the recorded crunch by tier, glass when it is bad, a soft thud and a yell for a person. Falls back to a generated thump while the clips are not decoded.
+  crash(e){
+   if(!ctx||!live())return false;want(VEHICLE_SET);const plan=crashPlan(e);let ok=false;
+   if(plan.thud)ok=pickShot(plan.thud.pool,'thud',plan.thud.gain)||thump(.5,false);
+   if(plan.crunch)ok=pickShot(plan.crunch.pool,'crash',plan.crunch.gain)||thump(plan.tier==='hard'?.9:plan.tier==='medium'?.6:.35,plan.tier!=='light');
+   if(plan.glass)pickShot(plan.glass.pool,'glass',plan.glass.gain,{delay:plan.glass.delay});
+   if(plan.yell){gate.force(yellClock,'person');yell(1)}
+   return ok;
+  },
+  // Every frame: fx = {on (you are driving), sliding (the hull is touching something), speed (m/s), x, z, dt, people: [{name, group:{position}}]}. Scrape while sliding fast enough; a yell from a walker the vehicle passes closely at speed (8 s each, 2 voices at most).
+  drive(fx){
+   if(!ctx)return;yellClock+=fx.dt;
+   if(fx.on&&live()){const h=gate.scan(yellClock,fx.x,fx.z,fx.speed,fx.people);if(h&&!yell(h.vol))gate.last.delete(h.id)}
+   scrape(fx.on&&fx.sliding?fx.speed:0,fx.dt);
   }
  };
 }

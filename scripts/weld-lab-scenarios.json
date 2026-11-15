@@ -1,0 +1,16 @@
+{
+  "path": "/weld-lab.html?debug",
+  "ready": "Boolean(window.__weld?.ready)",
+  "steps": [
+    {"name":"start","wait":250,"log":"__weld.stats()"},
+    {"name":"good","eval":"__weld.replay('good')","wait":300,"log":"__weld.stats()"},
+    {"name":"slow","eval":"__weld.replay('slow')","wait":300,"log":"__weld.stats()"},
+    {"name":"fast","eval":"__weld.replay('fast')","wait":300,"log":"__weld.stats()"},
+    {"name":"off-seam","eval":"__weld.replay('wander')","wait":300,"log":"__weld.stats()"},
+    {"name":"result","eval":"__weld.replay('slow',true)","wait":300,"log":"__weld.stats()"},
+    {"name":"arc","eval":"__weld.replay('arc')","wait":300,"log":"__weld.stats()"},
+    {"name":"curved","eval":"__weld.reset(1);__weld.replay('good')","wait":300,"log":"__weld.stats()"},
+    {"name":"t-fillet","eval":"__weld.reset(2);__weld.replay('good')","wait":300,"log":"__weld.stats()"},
+    {"name":"lap","eval":"__weld.reset(3);__weld.replay('good')","wait":300,"log":"__weld.stats()"}
+  ]
+}

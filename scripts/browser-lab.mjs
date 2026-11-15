@@ -4,30 +4,45 @@
 // A scenario is {"steps": [...]}; each step may have: x, z (place the player), minutes (time of day 0-1439), yaw, pitch, zoom (camera), eval (JS to run in the page),
 //   log (JS whose result is printed), reload (reload the page first), wait (ms before the next thing, default 2500), name (screenshot <outDir>/<name>.png),
 //   flicker N (take N screenshots and print how many pixels changed between them), measure N + patch [x,y,w,h] (mean colour of a screen patch over N frames with the camera nudged: z-fighting shows as jumps).
+// For a standalone page add "path" (e.g. "/weld-lab.html?debug") and "ready" (a JS expression).
 // Made for the 0.32.0 playtest: the ground-layer flicker was reproduced and fixed with `measure` (see README).
 import {createRequire} from 'node:module';import {writeFile,mkdir,readFile} from 'node:fs/promises';import {spawn} from 'node:child_process';
 const require=createRequire(import.meta.url),WebSocket=require('ws'),BASE=(process.env.LAB_URL||'http://127.0.0.1:8000').replace(/\/$/,'');
 const [,, out,scenarioFile]=process.argv,scenario=JSON.parse((await readFile(scenarioFile,'utf8')).replace(/^\uFEFF/,''));
-const edge=process.env.EDGE||'C:/Program Files (x86)/Microsoft/Edge/Application/msedge.exe',port=9444;
+const edge=process.env.EDGE||'C:/Program Files (x86)/Microsoft/Edge/Application/msedge.exe',port=Number(process.env.LAB_CDP_PORT)||9444;
 await mkdir(out,{recursive:true});
-const proc=spawn(edge,['--headless=new','--disable-gpu','--use-angle=swiftshader','--enable-unsafe-swiftshader','--hide-scrollbars',`--remote-debugging-port=${port}`,`--user-data-dir=${out}/profile`,'--window-size=1400,800','about:blank'],{stdio:'ignore'});
+const proc=spawn(edge,['--headless=new','--disable-gpu','--use-angle=swiftshader','--enable-unsafe-swiftshader','--hide-scrollbars',`--remote-debugging-port=${port}`,`--user-data-dir=${out}/profile`,'--window-size=1400,800','about:blank'],{stdio:process.env.LAB_BROWSER_LOG==='1'?'inherit':'ignore'});
 const sleep=ms=>new Promise(r=>setTimeout(r,ms));
 let targets;for(let i=0;i<50;i++){try{targets=await (await fetch(`http://127.0.0.1:${port}/json`)).json();if(targets.some(t=>t.type==='page'))break}catch{}await sleep(200)}
 const ws=new WebSocket(targets.find(t=>t.type==='page').webSocketDebuggerUrl);await new Promise(r=>ws.on('open',r));
-let id=0;const pending=new Map();ws.on('message',m=>{const d=JSON.parse(m);if(d.id&&pending.has(d.id)){pending.get(d.id)(d);pending.delete(d.id)}});
-const cdp=(method,params={})=>new Promise(r=>{const n=++id;pending.set(n,r);ws.send(JSON.stringify({id:n,method,params}))});
+let id=0;const pending=new Map();ws.on('message',m=>{const d=JSON.parse(m);if(d.id&&pending.has(d.id)){const n=pending.get(d.id);pending.delete(d.id);n.resolve(d)}});
+ws.on('close',()=>{for(const command of pending.values())command.reject(Error('Browser disconnected: '+command.method));pending.clear();});
+const cdp=(method,params={})=>new Promise((resolve,reject)=>{const n=++id;pending.set(n,{resolve,reject,method});ws.send(JSON.stringify({id:n,method,params}));});
 const run=async js=>{const r=await cdp('Runtime.evaluate',{expression:js,awaitPromise:true,returnByValue:true});if(r.result.exceptionDetails)console.log('EVAL ERROR',JSON.stringify(r.result.exceptionDetails.exception?.description||r.result.exceptionDetails.text).slice(0,400));return r.result.result?.value};
 const shotB64=async()=>(await cdp('Page.captureScreenshot',{format:'png'})).result.data;
 await cdp('Page.enable');await cdp('Emulation.setDeviceMetricsOverride',{width:1400,height:800,deviceScaleFactor:1,mobile:false});
+async function openStandalone(){
+ if(!scenario.path.startsWith('/')||scenario.path.startsWith('//'))throw Error('Expected a local scenario path');
+ await cdp('Page.navigate',{url:BASE+scenario.path});
+ for(let i=0;i<120;i++){
+  if(await run(scenario.ready||'document.readyState==="complete"'))return;
+  await sleep(250);
+ }
+ throw Error('Standalone page did not become ready');
+}
+if(scenario.path)await openStandalone();
+else {
 await cdp('Page.navigate',{url:BASE+'/'});await sleep(1500);
 await run(`localStorage.setItem('citylife.character.v1',JSON.stringify({version:1,appearance:{name:'Tester'}}));localStorage.removeItem('citylife.progress.v1');true`);
 await cdp('Page.navigate',{url:BASE+'/?debug'});
 for(let i=0;i<160;i++){if(await run(`!!window.__city&&!!document.getElementById('start')`))break;await sleep(500)}
 await run(`document.getElementById('start').click();document.body.dataset.lab='1';true`);await sleep(1500);
+}
 // a page-side helper that counts pixels that differ between two screenshots
 await run(`window.__diff=async(a,b)=>{const load=s=>new Promise(r=>{const i=new Image();i.onload=()=>r(i);i.src='data:image/png;base64,'+s});const [ia,ib]=await Promise.all([load(a),load(b)]);const c=document.createElement('canvas');c.width=ia.width;c.height=ia.height;const x=c.getContext('2d');x.drawImage(ia,0,0);const da=x.getImageData(0,0,c.width,c.height).data;x.drawImage(ib,0,0);const db=x.getImageData(0,0,c.width,c.height).data;let n=0,bright=0,far=0;const cx=c.width/2,cy=c.height/2,grid={};for(let i=0;i<da.length;i+=4){const d=Math.abs(da[i]-db[i])+Math.abs(da[i+1]-db[i+1])+Math.abs(da[i+2]-db[i+2]);if(d>60){n++;const px=(i/4)%c.width,py=Math.floor(i/4/c.width);if(Math.abs(px-cx)>140||Math.abs(py-cy)>220){far++;const k=Math.floor(px/175)+','+Math.floor(py/160);grid[k]=(grid[k]||0)+1}if(db[i]>200&&db[i+1]>200&&db[i+2]>200)bright++}}return {changed:n,farFromCharacter:far,brightNow:bright,cells:Object.entries(grid).sort((a,b)=>b[1]-a[1]).slice(0,4)}};true`);
 for(const s of scenario.steps){
- if(s.reload){await cdp('Page.navigate',{url:BASE+'/?debug'});for(let i=0;i<160;i++){if(await run(`!!window.__city&&!!document.getElementById('menuDev')`))break;await sleep(500)}await run(`document.getElementById('start').click();true`);await sleep(1500)}
+ if(s.reload&&scenario.path)await openStandalone();
+ else if(s.reload){await cdp('Page.navigate',{url:BASE+'/?debug'});for(let i=0;i<160;i++){if(await run(`!!window.__city&&!!document.getElementById('menuDev')`))break;await sleep(500)}await run(`document.getElementById('start').click();true`);await sleep(1500)}
  if(s.eval)await run(s.eval);
  if(s.log)console.log(s.name||'log',JSON.stringify(await run(s.log)));
  if(s.minutes!==undefined)await run(`__city.GameState.progress.routine.minutes=${s.minutes};true`);

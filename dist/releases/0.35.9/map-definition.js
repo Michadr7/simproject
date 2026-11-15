@@ -162,7 +162,7 @@ const paving=[
 ];
 // Painted parking bays: `count` bays `width` wide and `depth` deep from (x0, z0); lines between them and along the back (the side away from the way in).
 const bayRows=[
- {id:'supply-bays',x0:76.4,z0:22,count:6,width:2.7,depth:5,back:'south'},{id:'workshop-bays',x0:113,z0:21,count:2,width:2.7,depth:5,back:'south'},
+ {id:'supply-bays',x0:76.4,z0:22,count:6,width:2.7,depth:5,back:'south'},{id:'workshop-bays',x0:113,z0:21,count:2,width:2.7,depth:5,back:'south'},{id:'service-bay',x0:121,z0:21,count:1,width:10,depth:5.5,back:'south'},
  {id:'depot-car-bays',x0:95.5,z0:-18,count:6,width:2.7,depth:5,back:'north'},{id:'depot-truck-bays',x0:82,z0:-18,count:3,width:4.5,depth:10,back:'north'} // the Riden Deals lot: 10 display slots (2 truck bays, where the worktruck (84.25) and the pickup (88.75) stand, and 8 car bays, 2 of them spare); the showroom stands behind the bays' back line
 ];
 // Yards: each is one chunk of props (one InstancedMesh per model, eastbank.js), drawn only within `cull` metres (80) of the yard's rectangle, with caps checked by validateMap (at most YARD_CAPS.perModel of one model
@@ -345,6 +345,8 @@ const employers=[ {id:'ridgeline',name:'Ridgeline Timber Co.',skill:'lumberjack'
    {id:'foreman',name:'Foreman',needs:{level:15,shifts:25,rep:75},wage:1800,grants:[],tasks:[]}
   ]}
 ];
+// The repair shop (VD4, garage.js): a marked service bay on the workshop's apron, in front of the Eastbank Vehicle Workshop (I4). A vehicle whose centre is inside the box is in the bay; pose is where a towed or collected vehicle stands (nose east). The painted box is the bayRow 'service-bay'.
+const garage={id:'eastbank-garage',name:'Eastbank repair shop',x0:121,x1:131,z0:21,z1:26.5,pose:{x:126,z:23.75,yaw:Math.PI/2},counter:{x:122.2,z:22.2}}; // counter: where the prompt stands (the north-west end of the box, clear of the doors and the fuel cap of a vehicle parked in it)
 export const MAP=deepFreeze({
  id:'oak-and-alder',version:1,
  seed:7301, // changing it moves every generated tree and orphans saved forest plots
@@ -358,7 +360,7 @@ export const MAP=deepFreeze({
  // Gates: the only openings through the old ground's 10 m rim (which stays a wall in the whole-map mask and in every pinned test): Freight South runs on east through its rim into the wilds. Only chunk tiles know them.
  gates:[{id:'freight-east',x0:290,x1:300,z0:62,z1:74}],
  openCountry:{id:'open',name:'Open Country',label:'OPEN COUNTRY',subtitle:'Meadows between districts',color:'#6e8a5c'}, // how far the ground is drawn (scenery fades into fog beyond the walkable zones)
- zones,roads,water,fields,buildings,shops,reserved,properties,paving,bayRows,yards,vehicles,relief,employers,offices,exits,dwellings,posts,
+ zones,roads,water,fields,buildings,shops,reserved,properties,paving,bayRows,garage,yards,vehicles,relief,employers,offices,exits,dwellings,posts,
  // The marked parking lot behind the south row of shops: bays 2.7 m wide and 5 m deep along its north edge, an aisle to Alder Street, the lot's own asphalt.
  lots:[{id:'alder-lot',x0:-14,x1:45,z0:-63,z1:-52,bays:{x0:-13.5,z0:-63,count:20,width:2.7,depth:5}}],
  // Parking lanes on the cross street (6 m bays, nose in the direction of traffic: eastbound on the south side, westbound on the north), and the lane edge lines.

@@ -2,7 +2,7 @@ import {levelOf,perkText,perksText} from './skills.js';
 import {isAxe,hitsFor,bestAxe} from './tools.js';
 import {CONTRACTS,availableContracts} from './gig-bridge.js';
 import {money} from './jobs.js';
-import {clockText} from './routine.js';
+import {clockText,formatClock} from './routine.js';
 import {weekday} from './housing.js';
 import {LISTED} from './ownership.js';
 import {MAP} from './map-definition.js';
@@ -13,9 +13,10 @@ import {createPhoneStore} from './phone-store.js';
 import {createPhoneJobs} from './phone-jobs.js';
 import {vehicleCapacity,vehicleCount,vehicleLabel} from './orders.js';
 import {messagesOf,unreadByApp,unreadTotal,APP_NAMES,timeText} from './messages.js';
+import {statusOf,hoursNow} from './garage.js'; // VD4: the garage line and Call a tow on each vehicle card
 
 // UI only: transactions and movement/cursor ownership stay in game.js.
-export function createPhone({document:doc,getState,canOpen,onOpen,onClose,onAccept,onRefresh,onHomeAction,onOrder,onOrderVehicle,onSetMain,isOnSite,onClockIn,onClockOut,onQuit,onCollect,onRead}){
+export function createPhone({document:doc,getState,canOpen,onOpen,onClose,onAccept,onRefresh,onHomeAction,onOrder,onOrderVehicle,onSetMain,isOnSite,onClockIn,onClockOut,onQuit,onCollect,onRead,onTow}){
   const $=id=>doc.getElementById(id);
   let opened=false,screen='home',previousFocus=null;
   // unread counts come from the saved messages (messages.js): the phone button shows the total, each app icon its own, Messages the total again
@@ -57,7 +58,7 @@ export function createPhone({document:doc,getState,canOpen,onOpen,onClose,onAcce
   });
   // The Player screen's Vehicles list (built once, updated in place): name, tier, mileage, top speed and how much fuel is in the tank. A vehicle with no saved fuel entry is full.
   const TIER_NAME={low:'Starter',mid:'Mid-range',high:'High-end'};
-  let garageKey='';const garageLevels=new Map();
+  let garageKey='';const garageLevels=new Map(),garageExtra=new Map();
   const noVehicles=doc.createElement('p');noVehicles.className='phone-home-status';noVehicles.textContent='You do not own a vehicle yet. Buy one at the Eastbank lot, or order it in the Store.';$('phoneGarage').append(noVehicles);
   function refresh(){
     onRefresh?.();const state=getState(),progress=state.progress;
@@ -68,15 +69,16 @@ export function createPhone({document:doc,getState,canOpen,onOpen,onClose,onAcce
     $('phoneBalance').textContent=money(progress.cash);
     $('phoneFuelPrices').textContent=`Eastbank gas station: gas ${priceLabel('gas')} · diesel ${priceLabel('diesel')}.`;
     {const owned=progress.vehicles||[],key=owned.map(v=>v.uid+v.colour).join();
-     if(key!==garageKey){garageKey=key;garageLevels.clear();const cards=[];
+     if(key!==garageKey){garageKey=key;garageLevels.clear();garageExtra.clear();const cards=[];
       for(const v of owned){const slot=MAP.vehicles.find(s=>s.model===v.model),cls=CLASSES[v.model];if(!slot||!cls)continue;
        const card=doc.createElement('article');card.className='phone-contract';
        const title=doc.createElement('h3');title.textContent=vehicleLabel(v.model,v.colour);
        const specs=doc.createElement('p');specs.textContent=`${TIER_NAME[cls.tier]||cls.tier} · ${cls.mpg} mpg · top ${mph(cls.top)} mph · ${(slot.fuel.tankMgal/GALLON).toFixed(0)} gal ${fuelName(slot.fuel.type)} tank`;
        const level=doc.createElement('p');level.className='phone-home-status';garageLevels.set(v.uid,level);
-       card.append(title,specs,level);cards.push(card)}
+       const shopLine=doc.createElement('p');shopLine.className='phone-home-status';const tow=doc.createElement('button');tow.id='tow-'+v.uid;tow.className='phone-accept';tow.onclick=()=>{const r=onTow?.(v.uid)||{error:'Not available.'};$('phoneMessage').textContent=r.error||r.message||'';refresh()};garageExtra.set(v.uid,{shopLine,tow});
+       card.append(title,specs,level,shopLine,tow);cards.push(card)}
       $('phoneGarage').replaceChildren(...cards,noVehicles)}
-     for(const v of owned){const slot=MAP.vehicles.find(s=>s.model===v.model),level=garageLevels.get(v.uid);if(slot&&level)level.textContent=`Fuel: ${fuelText(v.fuelMgal??slot.fuel.tankMgal,slot.fuel.tankMgal)}`}
+     for(const v of owned){const slot=MAP.vehicles.find(s=>s.model===v.model),level=garageLevels.get(v.uid);if(slot&&level)level.textContent=`Fuel: ${fuelText(v.fuelMgal??slot.fuel.tankMgal,slot.fuel.tankMgal)}`;const ex=garageExtra.get(v.uid),st=ex&&statusOf(progress,v.uid,hoursNow(progress));if(st){const at=st.readyAt!==null?` · ready ${weekday(Math.floor(st.readyAt/24)+1)} ${formatClock((st.readyAt%24)*60)}`:'';ex.shopLine.textContent=st.line+(st.inShop&&!st.ready?at:'');ex.tow.hidden=st.inShop;ex.tow.textContent=st.tow===0?'Call a tow · free this time':`Call a tow to the repair shop · $${(st.tow/100).toFixed(2)}`}}
      noVehicles.hidden=owned.length>0;$('phoneVehicleSpace').textContent=`Vehicle space: ${vehicleCount(progress)} of ${vehicleCapacity(progress)} used (apartment 1, small house 1, medium 2, large 3).`}
     {const can=canOf(progress);$('phoneCan').textContent=can?`Gas can: ${canText(can)}.`:'No gas can. Buy one ($15) from the store.'}
     $('phonePlayerName').textContent=state.me.name||'New neighbor';
