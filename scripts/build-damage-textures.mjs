@@ -11,6 +11,6 @@ const r=spawnSync(blender,['--background','--python','scripts/make-damage-textur
 if(r.status!==0){console.error('Blender failed');process.exit(1)}
 const uri=name=>'data:image/png;base64,'+readFileSync(join(out,name+'.png')).toString('base64');
 const wear=uri('wear'),crack=uri('crack');
-writeFileSync('dist/damage-textures.js',`// WRITTEN by scripts/build-damage-textures.mjs (headless Blender 5.2, scripts/make-damage-textures.py). Do not edit by hand. Own work.\n// WEAR: 256 px, tileable, R scratches, G grime, B paint chips. CRACK: 512 px grey spider-web.\nexport const WEAR_PNG='${wear}';\nexport const CRACK_PNG='${crack}';\n`);
+writeFileSync('dist/damage-textures.js',`// WRITTEN by scripts/build-damage-textures.mjs (headless Blender 5.2, scripts/make-damage-textures.py). Do not edit by hand. Own work.\n// WEAR: 256 px, tileable, R bare-metal scratches, G scuff/primer patches, B paint flakes (VD7b). CRACK: 512 px grey spider-web.\nexport const WEAR_PNG='${wear}';\nexport const CRACK_PNG='${crack}';\n`);
 console.log(`wear.png ${readFileSync(join(out,'wear.png')).length} bytes, crack.png ${readFileSync(join(out,'crack.png')).length} bytes -> dist/damage-textures.js`);
 rmSync(out,{recursive:true,force:true});

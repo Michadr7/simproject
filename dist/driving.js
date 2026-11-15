@@ -14,7 +14,7 @@ import {applyPaint,applyLook} from './paint-shader.js';
 import {normalizeCargo,loadOf,loadPoints,LOAD_REACH,hasBed,BEDS} from './cargo.js';
 import {createCargoView} from './cargo-view.js';
 import {withLoad} from './vehicle.js';
-import {lookOf,withDamage,crashPoints,registerCrash,freshCrashState,applyPoints,bandOf,pullSide,pulledSteer,freshEngine,engineStep,percent} from './damage.js';
+import {lookOf,withDamage,crashPoints,registerCrash,freshCrashState,applyPoints,addHit,sidesOf,hitLook,noHit,HIT_PROBE,bandOf,pullSide,pulledSteer,freshEngine,engineStep,percent} from './damage.js';
 import {TAILGATE_OPEN} from './flatbed.js';
 import {SHORTBED_DOOR_OPEN,SHORTBED_DOOR_SECONDS} from './shortbed.js';
 
@@ -39,7 +39,7 @@ export function createDriving({scene,surface,footing,baseBlocked,saved=[]}){
  const build=(spec,colour,display)=>{
   const cls=CLASSES[spec.model],mesh=createProp(spec.model,SOLID);mesh.name='vehicle-'+spec.id;mesh.rotation.order='YXZ';scene.add(mesh);
   const marker=spec.fuel?fillerMarker(spec.fuel):null;if(marker)mesh.add(marker);
-  const f={spec,cls,mesh,marker,wheels:mesh.userData.wheels||[],state:freshVehicle(spec.home),y:footing(spec.home.x,spec.home.z),pitch:0,roll:0,spin:0,lastSpeed:0,present:true,display:!!display,colour:null,fuelMgal:spec.fuel?spec.fuel.tankMgal:0,burn:0,cond:1000,crash:freshCrashState(),engine:freshEngine(1000,0),pullSide:pullSide(spec.id)}; // cond: 0..1000 (damage.js, saved when below 1000); crash: the debounce window; engine: run / crank / off
+  const f={spec,cls,mesh,marker,wheels:mesh.userData.wheels||[],state:freshVehicle(spec.home),y:footing(spec.home.x,spec.home.z),pitch:0,roll:0,spin:0,lastSpeed:0,present:true,display:!!display,colour:null,fuelMgal:spec.fuel?spec.fuel.tankMgal:0,burn:0,cond:1000,hit:noHit(),crash:freshCrashState(),engine:freshEngine(1000,0),pullSide:pullSide(spec.id)}; // cond: 0..1000 (damage.js, saved when below 1000); crash: the debounce window; engine: run / crank / off
   f.colour=colour||defaultColour(spec.model);applyPaint(mesh,spec.model,f.colour);
   f.cargo=null;f.gate=0;f.view=createCargoView(spec.model);mesh.add(f.view.group); // cargo (cargo.js): what lies on the bed, drawn on it
   return f;
@@ -58,7 +58,7 @@ export function createDriving({scene,surface,footing,baseBlocked,saved=[]}){
   for(const d of fleet)if(d.display&&Math.hypot(d.state.x-entry.x,d.state.z-entry.z)<3.2)d.present=false;
   fleet.push(f);byId.set(spec.id,f);
   const pose={x:entry.x,z:entry.z,yaw:entry.yaw},env=envFor(f),ok=poseFree(pose,f.cls,env)?pose:findSafePose(pose,f.cls,env);
-  if(spec.fuel)f.fuelMgal=normalizeFuelMgal(entry.fuelMgal,spec.fuel.tankMgal);f.cond=Number.isInteger(entry.cond)?entry.cond:1000;
+  if(spec.fuel)f.fuelMgal=normalizeFuelMgal(entry.fuelMgal,spec.fuel.tankMgal);f.cond=Number.isInteger(entry.cond)?entry.cond:1000;f.hit=Array.isArray(entry.hit)&&f.cond<1000?entry.hit.map(v=>Number.isFinite(v)?Math.max(0,Math.min(1,v)):0):noHit();
   f.cargo=normalizeCargo(entry.cargo,spec.model);f.view.set(f.cargo);
   if(ok){f.state=freshVehicle(ok);f.y=footing(ok.x,ok.z)}
   f.mesh.visible=f.present;return f;
@@ -69,8 +69,9 @@ const tilt=f=>{const s=f.state,sy=Math.sin(s.yaw),cy=Math.cos(s.yaw),at=(lx,lz)=
  // A hit while driving: points from the impact (damage.js), the debounce, the new condition; one event per counted hit. A stall (250 points or more) or a Wrecked vehicle stops the engine.
  const crash=(f,r,was0=0)=>{const pts=crashPoints(r.impact,f.cls.tough,r.hitKind);if(!(pts>0))return;const c=registerCrash(f.crash,clock,pts);f.crash=c.state;if(c.points<=0&&!c.stall)return;
   const from=bandOf(f.cond).id,was=f.cond;f.cond=applyPoints(f.cond,c.points);const to=bandOf(f.cond).id;
+  {const s=f.state,sy=Math.sin(s.yaw),cy=Math.cos(s.yaw),env=envFor(f,[]),probe=(lx,lz)=>!poseFree({...s,x:s.x+(lx*cy+lz*sy)*HIT_PROBE,z:s.z+(lz*cy-lx*sy)*HIT_PROBE},f.cls,env),sides=sidesOf([probe(0,1),probe(0,-1),probe(1,0),probe(-1,0)],was0);f.hit=addHit(f.hit,sides,c.points);var hitSides=sides} // VD7b: which sides touch (the hull moved 0.3 m each way), added to the mask
   if(c.stall||f.cond<=0)f.engine=engineStep(f.engine,{cond:f.cond,now:clock,stall:true}).engine;
-  const dz=was0<0?-1:1,hit=toWorld(f.state,0,f.cls.hz*dz);events.push({type:'crash',id:f.spec.id,at:{x:hit.x,y:f.y+.55,z:hit.z},dir:{dx:Math.sin(f.state.yaw)*dz,dz:Math.cos(f.state.yaw)*dz},points:c.points,total:f.crash.best,impact:r.impact,kind:r.hitKind,was,cond:f.cond,pct:percent(f.cond),changed:from!==to,bandTo:to,stall:c.stall,first:f.crash.at===clock})};
+  const dz=was0<0?-1:1,hit=toWorld(f.state,0,f.cls.hz*dz);events.push({type:'crash',id:f.spec.id,at:{x:hit.x,y:f.y+.55,z:hit.z},dir:{dx:Math.sin(f.state.yaw)*dz,dz:Math.cos(f.state.yaw)*dz},points:c.points,sides:hitSides,total:f.crash.best,impact:r.impact,kind:r.hitKind,was,cond:f.cond,pct:percent(f.cond),changed:from!==to,bandTo:to,stall:c.stall,first:f.crash.at===clock})};
  fleet.forEach(place);
  return {
   fleet,byId,
@@ -94,6 +95,8 @@ const tilt=f=>{const s=f.state,sy=Math.sin(s.yaw),cy=Math.cos(s.yaw),at=(lx,lz)=
   doorThen(id,seat,then){const f=id?byId.get(id):driven;if(!f||!f.mesh.userData.doors)return false;if(pending)return true;(f.doorHold=f.doorHold||{driver:0,passenger:0})[seat]=SHORTBED_DOOR_SECONDS+.5;pending={t:SHORTBED_DOOR_SECONDS+.1,then};return true},
   // Where the occupant's hips are (world x, y, z) and the heading, for a vehicle that shows you seated (the shortbed: its seats anchor); null otherwise.
   seatedAt(){const s=driven?.mesh.userData.seats?.[side];if(!s)return null;driven.mesh.updateMatrixWorld();seatVec.set(s[0],s[1],s[2]+(driven.mesh.userData.grip?.hips??.2)).applyMatrix4(driven.mesh.matrixWorld);return {x:seatVec.x,y:seatVec.y,z:seatVec.z,yaw:driven.state.yaw,driver:side==='driver'}},
+  // DR1: where the seated occupant's feet go and how they are turned (the whole body tilts with the cab's pitch and roll, hips on the seat anchor; hipsDrop: hips to feet in metres): {x, y, z, rx, ry, rz} or null.
+  seatPose(hipsDrop){const s=this.seatedAt();if(!s)return null;const m=driven.mesh;seatVec.set(0,-1,0).applyQuaternion(m.quaternion);return {x:s.x+seatVec.x*hipsDrop,y:s.y+seatVec.y*hipsDrop,z:s.z+seatVec.z*hipsDrop,rx:m.rotation.x,ry:m.rotation.y,rz:m.rotation.z}},
   // Get out: your own door, else the other side, behind, in front (`free(x, z)` is the game's blocked() inverted). Returns the point, or null (the caller then uses its safe-spot search).
   leave(free){if(!driven)return null;const f=driven,p=exitPoint(f.state,f.cls,free,side);(f.doorHold=f.doorHold||{driver:0,passenger:0})[side]=.9;driven=null;f.state.speed=0;f.state.steer=0;return p},
   // One slice of driving (dt <= 1/30 s). input: {throttle, steer, brake}; people: [{x, z, r}] pedestrians. A passenger does not steer: the vehicle stands still.
@@ -111,10 +114,11 @@ const tilt=f=>{const s=f.state,sy=Math.sin(s.yaw),cy=Math.cos(s.yaw),at=(lx,lz)=
   hood(f=driven){if(!f||!f.cls.hood)return null;const w=toWorld(f.state,f.cls.hood.x,f.cls.hood.z);return {x:w.x,y:f.y+f.cls.hood.y+.25,z:w.z,dx:0,dz:0,boost:1}},
   condOf(id){return byId.get(id)?.cond??null},
   setCond(id,cond){const f=byId.get(id);if(f)f.cond=Math.max(0,Math.min(1000,Math.round(cond)))},
+  hitOf(id){return byId.get(id)?.hit??null}, setHit(id,hit){const f=byId.get(id);if(f)f.hit=Array.isArray(hit)?hit.map(v=>Number.isFinite(v)?Math.max(0,Math.min(1,v)):0).slice(0,4):noHit()}, // VD7b: where it was hit [front, rear, left, right] 0..1 (a dev and test setter)
   // Meshes follow the states (every frame; a parked vehicle just stays where it is).
   // Shows the filler markers (while a nozzle is in your hand): every present vehicle's cap pulses in its own fuel colour, bright if the nozzle in hand is the right fuel and dim if it is not.
   showFillers(show,nozzleFuel=null){for(const f of fleet){if(!f.marker)continue;f.marker.visible=!!show&&f.present&&f!==driven;f.markerBright=nozzleFuel===null||nozzleFuel===f.spec.fuel.type}},
-  update(dt){pulse+=dt;if(pending){pending.t-=dt;if(pending.t<=0){const run=pending.then;pending=null;run()}}for(const f of fleet){f.mesh.visible=f.present;if(f.present&&(f.lookCond??1000)!==f.cond){f.lookCond=f.cond;applyLook(f.mesh,lookOf(f.cond),f.spec.model)} /* VD3: wear and cracks follow the condition (uniforms only, on change) */ if(f.marker&&f.marker.visible){const k=(f.markerBright?.8:.3)*(.6+.4*Math.sin(pulse*6));for(const part of f.marker.children)part.material.opacity=k}
+  update(dt){pulse+=dt;if(pending){pending.t-=dt;if(pending.t<=0){const run=pending.then;pending=null;run()}}for(const f of fleet){f.mesh.visible=f.present;if(f.cond>=1000&&f.hit.some(v=>v>0))f.hit=noHit();if(f.present&&((f.lookCond??1000)!==f.cond||f.lookHit!==f.hit)){f.lookCond=f.cond;f.lookHit=f.hit;applyLook(f.mesh,{...lookOf(f.cond),hit:hitLook(f.hit,f.cond)},f.spec.model,[f.cls.hx,f.cls.hz])} /* VD3: wear and cracks follow the condition (uniforms only, on change) */ if(f.marker&&f.marker.visible){const k=(f.markerBright?.8:.3)*(.6+.4*Math.sin(pulse*6));for(const part of f.marker.children)part.material.opacity=k}
    const s=f.state,accel=dt>0?(s.speed-f.lastSpeed)/dt:0,lateral=s.speed*(Math.abs(s.speed)<.01?0:s.steer*s.speed/Math.max(f.cls.rMin,s.speed*s.speed/f.cls.aLat));f.lastSpeed=s.speed;
    const k=1-Math.exp(-dt*8);const g=tilt(f);f.pitch+=(clamp(-.01*accel,-.04,.04)+g.pitch-f.pitch)*k;f.roll+=(clamp(.012*lateral,-.05,.05)+g.roll-f.roll)*k;f.dynPitch=f.pitch-g.pitch;f.dynRoll=f.roll-g.roll;
    f.y+=(footing(s.x,s.z)-f.y)*(1-Math.exp(-dt*10));place(f);
@@ -136,7 +140,7 @@ const tilt=f=>{const s=f.state,sy=Math.sin(s.yaw),cy=Math.cos(s.yaw),at=(lx,lz)=
   // Can a walker stand here? false inside any vehicle's hull inflated by the player radius (blocked() adds this).
   blocksWalker(x,z){for(const f of fleet){if(!f.present)continue;if(Math.abs(x-f.state.x)>f.cls.hz+PLAYER_RADIUS+.1||Math.abs(z-f.state.z)>f.cls.hz+PLAYER_RADIUS+.1)continue;if(insideHull(f.state,f.cls,x,z,PLAYER_RADIUS))return true}return false},
   // The vehicles you own (progress.vehicles): where each stands, its paint and its tank. Display vehicles are never saved.
-  save(){const owned=fleet.filter(f=>!f.display&&!f.dev);return vehiclesToSave(owned.map(f=>({...f.spec,colour:f.colour})),Object.fromEntries(owned.map(f=>[f.spec.id,{...f.state,fuelMgal:f.fuelMgal,cargo:f.cargo,cond:f.cond}])))},
+  save(){const owned=fleet.filter(f=>!f.display&&!f.dev);return vehiclesToSave(owned.map(f=>({...f.spec,colour:f.colour})),Object.fromEntries(owned.map(f=>[f.spec.id,{...f.state,fuelMgal:f.fuelMgal,cargo:f.cargo,cond:f.cond,hit:f.hit}])))},
   // Bring every owned vehicle in the list into the world (the game calls this after a purchase or a delivery); ones already here are left alone.
   sync(list){for(const e of list)add(e)},
   // Dev panel vehicles: a free copy that ignores ownership, room at home, stock, price and skill locks, and is never saved. Null if no clear spot.

@@ -159,17 +159,20 @@ export function normalizeVehicles(value,known,playable){
   if(spec.fuel)entry.fuelMgal=normalizeFuelMgal(v.fuelMgal,spec.fuel.tankMgal);
   {const c=normalizeCargo(v.cargo,v.model);if(c)entry.cargo=c}
   if(Number.isInteger(v.cond)&&v.cond>=0&&v.cond<1000)entry.cond=v.cond; // damage (0..999); missing or 1000 or junk = a perfect vehicle, so old saves load Fine
+  if(entry.cond!==undefined){const h=cleanHit(v.hit);if(h)entry.hit=h} // VD7b: where it was hit (front, rear, left, right 0..1), optional: old saves have none
   out.push(entry);if(out.length>=MAX_OWNED)break;
  }
  return out;
 }
 // What to save: every owned vehicle, where it stands. specs = [{id: uid, model, colour, fuel?}]; states[uid] = {x, z, yaw, fuelMgal?}.
+// VD7b: the hit mask, four numbers 0..1 (front, rear, left, right); null when missing, junk or all zero.
+const cleanHit=h=>Array.isArray(h)&&h.length===4&&h.every(Number.isFinite)&&h.some(v=>v>0)?h.map(v=>+Math.max(0,Math.min(1,v)).toFixed(2)):null;
 export function vehiclesToSave(specs,states){
  const out=[];for(const spec of specs){const s=states[spec.id];if(!s)continue;
   const entry={uid:spec.id,model:spec.model,colour:spec.colour,x:+s.x.toFixed(2),z:+s.z.toFixed(2),yaw:+s.yaw.toFixed(3)};
   if(spec.fuel)entry.fuelMgal=normalizeFuelMgal(s.fuelMgal,spec.fuel.tankMgal);
   {const c=normalizeCargo(s.cargo,spec.model);if(c)entry.cargo=c}
-  if(Number.isFinite(s.cond)){const c=Math.round(s.cond);if(c>=0&&c<1000)entry.cond=c}
+  if(Number.isFinite(s.cond)){const c=Math.round(s.cond);if(c>=0&&c<1000){entry.cond=c;const h=cleanHit(s.hit);if(h)entry.hit=h}}
   out.push(entry)}
  return out;
 }

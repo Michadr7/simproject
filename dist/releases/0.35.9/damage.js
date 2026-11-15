@@ -13,7 +13,7 @@ export const PERFECT=1000;
 // Bands (cond >= min). VD7a edges: Fine 800, Worn 650, Damaged 250, Limping 1 (was 700 / 400 / 150 / 1) so a top-speed wall hit (about 50% left) reads Damaged, and a bump or two stays Fine or Worn. pull: a steering bias (fraction of full lock) towards one side; brake: braking strength; burn: gas use; rough: engine voice; cranks: extra cranks before it starts; smoke: the smoke tier (0 grey, 1 dark, 2 black).
 export const BANDS=Object.freeze([
  {id:'fine',label:'Fine',min:800,top:1,accel:1,brake:1,pull:0,burn:1,rough:0,cranks:0,smoke:0},
- {id:'worn',label:'Worn',min:650,top:.95,accel:1,brake:.95,pull:.02,burn:1.05,rough:.1,cranks:0,smoke:0},
+ {id:'worn',label:'Scuffed',min:650,top:.95,accel:1,brake:.95,pull:.02,burn:1.05,rough:.1,cranks:0,smoke:0},
  {id:'damaged',label:'Damaged',min:250,top:.85,accel:.85,brake:.8,pull:.06,burn:1.15,rough:.25,cranks:2,smoke:1},
  {id:'limping',label:'Limping',min:1,top:.5,accel:.6,brake:.6,pull:.12,burn:1.3,rough:.4,cranks:4,smoke:2},
  {id:'wrecked',label:'Wrecked',min:0,top:0,accel:0,brake:.3,pull:.2,burn:0,rough:0,cranks:0,smoke:2}
@@ -77,7 +77,7 @@ export function bandToast(name,cond){const b=bandOf(cond),pct=percent(cond);
  if(b.id==='wrecked')return `Your ${name} is Wrecked (0%). It will not start.`;
  if(b.id==='limping')return `Your ${name} is Limping (${pct}%). It is at half speed and drinks fuel: get it repaired.`;
  if(b.id==='damaged')return `Your ${name} is Damaged (${pct}%). It is slower and uses more gas.`;
- if(b.id==='worn')return `Your ${name} is Worn (${pct}%). It pulls a little and uses a bit more gas.`;
+ if(b.id==='worn')return `Your ${name} is Scuffed (${pct}%). It pulls a little and uses a bit more gas.`;
  return `Your ${name} is in good shape (${pct}%).`}
 // The engine: {mode: 'run'|'crank'|'off', since, readyAt, nag}. Fresh when you sit down: a Fine or Worn vehicle runs at once; a damaged one cranks first (extraCranks).
 export function freshEngine(cond,now){const n=extraCranks(cond);return !canStart(cond)?{mode:'off',since:-Infinity,readyAt:0,nag:-Infinity}:n>0?{mode:'crank',since:now,readyAt:now+CRANK_SECONDS*n,nag:-Infinity}:{mode:'run',since:now,readyAt:0,nag:-Infinity}}
@@ -96,6 +96,15 @@ export function engineStep(e,{cond,throttle=0,now=0,stall=false}){
 // wear: grime, scratches and chips on the paint (uWear.y, 0..1). Nothing from WEAR_START (900) up, then it grows on a curve (VD7a): Worn (799 to 650) about .27 to .46, 400 about .70, Damaged (250) about .82, 0 = 1. crack: the glass (uCrack, 0..1): none at Fine and Worn, light at Damaged, heavy at Limping, full at Wrecked.
 export const WEAR_START=900,WEAR_CURVE=.6; // VD7a: wear = ((WEAR_START - cond) / WEAR_START)^WEAR_CURVE, so the first scuffs show early (Worn about .3 to .45) instead of growing in a straight line (was start 850, straight)
 export const CRACK_BY_BAND=Object.freeze({fine:0,worn:0,damaged:.45,limping:.8,wrecked:1});
+// ---- VD7b: where it was hit. A mask of four weights 0..1: front, rear, left, right. A crash adds to the sides that were touching (sidesOf), scaled by its points; a repair clears it (the caller). Saved with cond (vehicle.js), optional.
+export const HIT_PROBE=.3,HIT_FULL_POINTS=200,HIT_MIN_ADD=.2,HIT_LEGACY=.45; // HIT_PROBE: metres the hull is moved to see what it touches; HIT_LEGACY: the even weight shown for a damaged vehicle from an old save (no mask)
+export const noHit=()=>[0,0,0,0];
+export const cleanMask=h=>Array.isArray(h)&&h.length===4?h.map(v=>Number.isFinite(v)?Math.max(0,Math.min(1,v)):0):noHit();
+// blocked: [front, rear, left, right] true where the hull moved HIT_PROBE that way touches something; was0: the signed speed before (front or rear when nothing is found: a flat stop).
+export function sidesOf(blocked,was0=0){const s=[0,1,2,3].map(i=>blocked&&blocked[i]?1:0);if(s.some(Boolean)){if((s[2]||s[3])&&(s[0]||s[1])){s[0]*=.5;s[1]*=.5}return s} // a scrape that also touches a corner marks the side fully and the end half
+ return was0<0?[0,1,0,0]:[1,0,0,0]}
+export const addHit=(hit,sides,points)=>{const k=Math.max(HIT_MIN_ADD,Math.min(1,(points||0)/HIT_FULL_POINTS));return cleanMask(hit).map((v,i)=>Math.min(1,+(v+(sides[i]||0)*k).toFixed(2)))}
+export const hitLook=(hit,cond)=>{const h=cleanMask(hit);return h.some(v=>v>0)||cleanCond(cond)>=WEAR_START?h:[HIT_LEGACY,HIT_LEGACY,HIT_LEGACY,HIT_LEGACY]}
 export function lookOf(cond){const c=cleanCond(cond),b=bandOf(c);return {wear:+Math.pow(Math.max(0,Math.min(1,(WEAR_START-c)/WEAR_START)),WEAR_CURVE).toFixed(3),crack:CRACK_BY_BAND[b.id],smoke:b.smoke,band:b.id}}
 // Smoke: the exhaust puffs come in `exhaustMul` x the usual rate and in the band's tier (0 grey, 1 dark, 2 black); the hood smokes from Damaged down (puffs a second), a Wrecked one for HOOD_WRECKED_SECONDS after the crash and then no more.
 export const EXHAUST_MUL=Object.freeze({fine:1,worn:1.3,damaged:1.6,limping:2.2,wrecked:1});

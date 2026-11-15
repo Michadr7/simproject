@@ -20,20 +20,23 @@ const VERT=s=>s.replace('#include <common>',`#include <common>\n${VARYINGS}`).re
 const PLANE='vec2 vPlane(vec3 p,vec3 n){vec3 a=abs(n);return a.x>=a.y&&a.x>=a.z?p.zy:(a.y>=a.z?p.xz:p.xy);}';
 function patchPaint(material){
  if(material.userData.paint)return material.userData.paint;
- const u={uPaint:{value:new THREE.Vector4(-1,1,1,0)},uBand:{value:0},uWear:{value:new THREE.Vector2(0,0)}};material.userData.paint=u;
+ const u={uPaint:{value:new THREE.Vector4(-1,1,1,0)},uBand:{value:0},uWear:{value:new THREE.Vector2(0,0)},uHit:{value:new THREE.Vector4(0,0,0,0)},uExt:{value:new THREE.Vector2(1,2.2)}};material.userData.paint=u;
  material.onBeforeCompile=shader=>{Object.assign(shader.uniforms,u,{uWearTex:{value:wearTexture()}});shader.vertexShader=VERT(shader.vertexShader);
   shader.fragmentShader=shader.fragmentShader.replace('#include <common>',`#include <common>
-${VARYINGS}uniform vec4 uPaint;uniform float uBand;uniform vec2 uWear;uniform sampler2D uWearTex;${PLANE}
+${VARYINGS}uniform vec4 uPaint;uniform float uBand;uniform vec2 uWear;uniform vec4 uHit;uniform vec2 uExt;uniform sampler2D uWearTex;${PLANE}
 vec3 pRgb2hsv(vec3 c){vec4 K=vec4(0.,-1./3.,2./3.,-1.);vec4 p=mix(vec4(c.bg,K.wz),vec4(c.gb,K.xy),step(c.b,c.g));vec4 q=mix(vec4(p.xyw,c.r),vec4(c.r,p.yzx),step(p.x,c.r));float d=q.x-min(q.w,q.y);float e=1e-10;return vec3(abs(q.z+(q.w-q.y)/(6.*d+e)),d/(q.x+e),q.x);}
 vec3 pHsv2rgb(vec3 c){vec3 p=abs(fract(c.xxx+vec3(1.,2./3.,1./3.))*6.-3.);return c.z*mix(vec3(1.),clamp(p-1.,0.,1.),c.y);}`).replace('#include <map_fragment>',`#include <map_fragment>
 if(uBand>0.){vec3 h=pRgb2hsv(diffuseColor.rgb);float dh=abs(fract(h.x-uPaint.w+.5)-.5);float m=(1.-smoothstep(uBand*.6,uBand,dh))*smoothstep(.12,.25,h.y);
 if(m>0.){float nh=uPaint.x>=0.?fract(uPaint.x+(h.x-uPaint.w)*.4):h.x;diffuseColor.rgb=mix(diffuseColor.rgb,pHsv2rgb(vec3(nh,clamp(h.y*uPaint.y,0.,1.),h.z*uPaint.z)),m);}}
-if(uWear.y>0.){float w=uWear.y;vec3 t=texture2D(uWearTex,vPlane(vWPos,vWNrm)/${WEAR_TILE.toFixed(2)}).rgb;float low=.45+.55*smoothstep(1.6,.2,vWPos.y);
-float lum=dot(diffuseColor.rgb,vec3(.3,.59,.11));diffuseColor.rgb=mix(diffuseColor.rgb,vec3(lum),w*.35)*(1.-w*.22);
-diffuseColor.rgb=mix(diffuseColor.rgb,vec3(.55,.5,.42),smoothstep(0.,.4,w)*.55*low*(.7+.6*t.g));
-diffuseColor.rgb=mix(diffuseColor.rgb,vec3(.14,.11,.08),t.g*smoothstep(.04,.6,w)*low*.8);
-float sc=smoothstep(.35,.85,t.r)*smoothstep(.02,.3,w);diffuseColor.rgb=mix(diffuseColor.rgb,vec3(.7,.68,.64),sc*.8);
-float ch=step(.5,t.b)*smoothstep(.5,.9,w);diffuseColor.rgb=mix(diffuseColor.rgb,vec3(.36,.2,.11),ch*.7);}`)};
+if(uWear.y>0.){float w=uWear.y;vec3 n=normalize(vWNrm);vec2 pp=vPlane(vWPos,vWNrm)/${WEAR_TILE.toFixed(2)};vec3 t=texture2D(uWearTex,pp).rgb;vec3 t2=texture2D(uWearTex,pp.yx*1.35+vec2(.31,.17)).rgb;
+float lum=dot(diffuseColor.rgb,vec3(.3,.59,.11));diffuseColor.rgb=mix(diffuseColor.rgb,vec3(lum),w*.1)*(1.-w*.06); // VD7b: only a light age tint: the damage below is what you read
+float zf=max(smoothstep(.4,.85,n.z),.6*smoothstep(.45,.8,vWPos.z/uExt.y)),zr=max(smoothstep(.4,.85,-n.z),.6*smoothstep(.45,.8,-vWPos.z/uExt.y)),zl=smoothstep(.4,.85,n.x),zt=smoothstep(.4,.85,-n.x); // sides by the normal (a door is a part with its own origin), ends by the normal and the hull length
+float loc=max(max(uHit.x*zf,uHit.y*zr),max(uHit.z*zl,uHit.w*zt));float s=clamp(loc*(.5+.5*w)*(.4+.6*smoothstep(1.8,.5,vWPos.y)),0.,1.);float cr=smoothstep(.05,.3,1.-max(max(abs(n.x),abs(n.y)),abs(n.z)));
+float thr=.74-s*.46;float pat=smoothstep(thr,thr+.04,t2.g);float rim=pat*(1.-smoothstep(thr+.04,thr+.12,t2.g));
+float scorch=smoothstep(.3,.6,t.g)*smoothstep(.15,.6,s);diffuseColor.rgb*=1.-scorch*.55*(1.-pat); // dark rub marks
+diffuseColor.rgb=mix(diffuseColor.rgb,vec3(.24,.25,.29)*(.8+.5*t.r),pat*.95);diffuseColor.rgb=mix(diffuseColor.rgb,vec3(.12,.12,.14),rim*.6); // grey primer patches with a dark torn rim
+float fk=smoothstep(.95-.6*s-.3*cr*s,1.-.6*s-.3*cr*s,t.b)*smoothstep(.1,.45,s);diffuseColor.rgb=mix(diffuseColor.rgb,vec3(.26,.27,.3),fk*.9); // paint flaked off, more at creases
+float sa=smoothstep(.03,.3,s),halo=smoothstep(.08,.3,max(t.r,t2.r*.8))*(1.-smoothstep(.3,.6,t.r))*sa,sc=smoothstep(.5,.8,max(t.r,t2.r*smoothstep(.4,.9,s)))*sa;diffuseColor.rgb=mix(diffuseColor.rgb,diffuseColor.rgb*.45,halo*.7);diffuseColor.rgb=mix(diffuseColor.rgb,vec3(.9,.91,.94),sc);}`)};
  material.customProgramCacheKey=()=>'vehicle-paint';material.needsUpdate=true;return u;
 }
 // The glass: one crack texture over the pane, shown by uCrack 0..1 (nothing at 0). uCrackMap: x, y offset and the size in metres of the picture.
@@ -62,8 +65,8 @@ export function applyPaint(mesh,model,colourId){
  const n=paintUniforms(model,colourId),u=patchPaint(m);u.uPaint.value.set(n.hue,n.sat,n.val,n.src);u.uBand.value=n.band;
 }
 // The damage look (damage.js lookOf): wear 0..1 on the paint, crack 0..1 on the glass. Only touches a uniform that changed. Returns how many glass materials took the crack (0: this model has no separate glass: no crack, nothing faked).
-export function applyLook(mesh,look,model='default'){
- const parts=lookParts(mesh);for(const m of parts.paints){const u=patchPaint(m);if(u.uWear.value.y!==look.wear)u.uWear.value.y=look.wear}
+export function applyLook(mesh,look,model='default',ext=null){
+ const parts=lookParts(mesh);for(const m of parts.paints){const u=patchPaint(m);if(u.uWear.value.y!==look.wear)u.uWear.value.y=look.wear;const h=look.hit||[0,0,0,0];if(u.uHit.value.x!==h[0]||u.uHit.value.y!==h[1]||u.uHit.value.z!==h[2]||u.uHit.value.w!==h[3])u.uHit.value.set(h[0],h[1],h[2],h[3]);if(ext&&(u.uExt.value.x!==ext[0]||u.uExt.value.y!==ext[1]))u.uExt.value.set(ext[0],ext[1])} // VD7b: hit = [front, rear, left, right] 0..1, ext = [half width, half length] of the hull
  const place=CRACK_PLACE[model]||CRACK_PLACE.default;
  for(const m of parts.glass){const u=patchGlass(m);if(u.uCrack.value!==look.crack)u.uCrack.value=look.crack;if(u.uCrackMap.value.z!==place[2]||u.uCrackMap.value.x!==place[0]||u.uCrackMap.value.y!==place[1])u.uCrackMap.value.set(place[0],place[1],place[2])}
  return parts.glass.length;

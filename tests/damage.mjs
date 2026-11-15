@@ -32,7 +32,7 @@ assert.equal(applyPoints(1000,461),539);assert.equal(applyPoints(100,600),0,'nev
 
 // 4. Bands at every edge, and what withDamage does.
 for(const [c,id] of [[0,'wrecked'],[1,'limping'],[249,'limping'],[250,'damaged'],[649,'damaged'],[650,'worn'],[799,'worn'],[800,'fine'],[1000,'fine']])assert.equal(bandOf(c).id,id,`cond ${c} is ${id}`);
-assert.deepEqual(BANDS.map(b=>b.label),['Fine','Worn','Damaged','Limping','Wrecked']);assert.equal(bandOf(undefined).id,'fine');assert.equal(bandOf(NaN).id,'fine');
+assert.deepEqual(BANDS.map(b=>b.label),['Fine','Scuffed','Damaged','Limping','Wrecked']);assert.equal(bandOf(undefined).id,'fine');assert.equal(bandOf(NaN).id,'fine');
 assert.equal(withDamage(S70,1000),S70,'Fine is the class itself');
 {const near=(a,b)=>Math.abs(a-b)<1e-9,w=withDamage(S70,700),d=withDamage(S70,300),l=withDamage(S70,50),x=withDamage(S70,0);
  assert(near(w.top,S70.top*.95)&&near(w.burnMul,1.05)&&w.accel===S70.accel);assert(near(d.top,S70.top*.85)&&near(d.accel,S70.accel*.85)&&near(d.burnMul,1.15)&&d.cranks===2);

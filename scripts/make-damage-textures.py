@@ -1,6 +1,6 @@
 # Makes the two small vehicle damage textures with headless Blender (VD3). Run by scripts/build-damage-textures.mjs:
 #   blender --background --python scripts/make-damage-textures.py -- <outDir>
-# wear.png  128x128 RGB, TILEABLE: R = scratches (thin bright streaks), G = grime (soft blotches, 32 levels), B = paint chips (sparse specks).
+# wear.png  256x256 RGB, TILEABLE (VD7b): R = bare-metal scratch lines, G = scuff / primer patches, B = paint flakes.
 # crack.png 256x256 grey (drawn at 512, averaged down): a spider-web impact (radial cracks, branches, broken rings) on black; not tiled. Seeded: the same files every run. Own work (no credit line).
 import sys, os
 import numpy as np
@@ -50,34 +50,36 @@ def blobs(n, cutoff, sx=1.0, sy=1.0):  # periodic noise (so it tiles): white noi
     g = (g - g.min()) / (g.max() - g.min())
     return g
 
-# ---- wear: 128, tileable
-N = 128
+# ---- wear (VD7b): 256, tileable. R = bare-metal scratch lines, G = scuff / primer patches (ragged blobs), B = paint flakes (small ragged chips). No grime channel: damage must not read as dirt.
+N = 256
 scr = np.zeros((N, N), np.float32)
-for _ in range(80):  # long thin streaks, mostly one way (a door being dragged along a wall) with a few across
+for _ in range(50):  # long thin streaks, mostly one way (a door dragged along a wall) with some across and a few short curved gouges
     cx, cy = rng.uniform(0, N, 2)
-    ang = rng.normal(0.15, 0.25) if rng.random() < .8 else rng.uniform(0, np.pi)
-    ln = rng.uniform(8, 48)
+    ang = rng.normal(0.1, 0.2) if rng.random() < .75 else rng.uniform(0, np.pi)
+    ln = rng.uniform(16, 110)
     d = np.array([np.cos(ang), np.sin(ang)])
     p = np.array([cx, cy]) - d * ln / 2
     q = np.array([cx, cy]) + d * ln / 2
-    v = rng.uniform(.5, 1.0)
-    line(scr, p, q, v, True)
-    if rng.random() < .6:  # a second pass beside it makes the streak two pixels wide
+    v = rng.uniform(.55, 1.0)
+    bend = rng.normal(0, ln * .05)
+    m = (p + q) / 2 + np.array([-d[1], d[0]]) * bend
+    line(scr, p, m, v, True); line(scr, m, q, v, True)
+    if rng.random() < .5:  # a second pass beside it: a two pixel streak
         line(scr, p + np.array([0, 1.0]), q + np.array([0, 1.0]), v * .8, True)
-# VD7a: grime is FINER and DIRECTIONAL (long vertical streaks plus a fine speckle), and LOW contrast (it ranges about .15 to .75, not 0 to 1), so it reads as road film, not camouflage blotches
-g = blobs(N, .16, 1.0, .22) * .65 + blobs(N, .42, 1.0, .5) * .35
+# G: ragged patches: a smooth noise thresholded with a finer noise added, so the edges are torn, not round
+g = blobs(N, .075, 1.0, .7) * .75 + blobs(N, .4) * .25
 g = (g - g.min()) / (g.max() - g.min())
-g = np.clip(.15 + (g - .25) * .9, 0, .75)
-g = np.round(g * 15) / 15  # 16 levels: PNG packs it much smaller
-chips = np.zeros((N, N), np.float32)
-for _ in range(6):  # VD7a: 6 small chips (was 16 larger ones that looked like pepper)
+g = np.round(np.clip((g - .15) / .85, 0, 1) ** 2.4 * 15) / 15  # a long tail: few high peaks, so the shader's threshold picks sparse ragged patches (about 8% above .7)
+# B: flakes: many small clusters of ragged specks (paint lifting off), plus a few larger ones
+fl = np.zeros((N, N), np.float32)
+for _ in range(70):
     x, y = rng.uniform(0, N, 2)
-    r = rng.uniform(.5, 1.3)
-    for _k in range(int(r * 5)):
-        splat(chips, np.array([x + rng.normal(0, r)]), np.array([y + rng.normal(0, r * .7)]), .6 + rng.random() * .4, True)
-rgb = np.stack([scr, g, chips], axis=-1)
+    r = rng.uniform(1.0, 3.8)
+    for _k in range(int(r * 6)):
+        splat(fl, np.array([x + rng.normal(0, r)]), np.array([y + rng.normal(0, r * .8)]), .55 + rng.random() * .45, True)
+fl = np.round(np.minimum(fl * 1.3, 1) * 3) / 3
+rgb = np.stack([np.round(scr * 4) / 4, g, fl], axis=-1)
 save('wear', rgb)
-
 # ---- crack: 512, one impact
 M = 512
 c = np.zeros((M, M), np.float32)

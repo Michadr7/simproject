@@ -8,7 +8,7 @@ import {createDriving} from '../dist/driving.js';
 import {CLASSES} from '../dist/vehicle.js';
 import {SURFACE} from '../dist/terrain.js';
 import {defaultColour} from '../dist/paint.js';
-import {pullSide,crashPoints,bandOf,BANDS,pulledSteer,shakeAmplitude,shakeOffset,bandToast,percent,engineStep,freshEngine,PULL_SPEED,SHAKE_SECONDS,STALL_POINTS,ENERGY_COST} from '../dist/damage.js';
+import {sidesOf,addHit,hitLook,pullSide,crashPoints,bandOf,BANDS,pulledSteer,shakeAmplitude,shakeOffset,bandToast,percent,engineStep,freshEngine,PULL_SPEED,SHAKE_SECONDS,STALL_POINTS,ENERGY_COST} from '../dist/damage.js';
 import {vehicleHudModel,createVehicleHud,damageRow,SILHOUETTES} from '../dist/vehicle-hud.js';
 
 const DT=1/60,col=defaultColour('shortbed');
@@ -67,7 +67,7 @@ const run=(d,seconds,input,events)=>{for(let t=0;t<seconds;t+=DT){d.step(DT,inpu
  const c2=engineStep(e,{cond:300,now:2.1,throttle:1});assert.equal(c2.engine.readyAt,2.1+.5*3,'Damaged: two extra cranks');assert.equal(freshEngine(0,5).mode,'off');
  assert.deepEqual(shakeOffset(0,.1),{x:0,y:0,z:0});assert.deepEqual(shakeOffset(.2,.1),shakeOffset(.2,.1));assert(shakeAmplitude(600)>shakeAmplitude(100)&&shakeAmplitude(1)>=.02&&shakeAmplitude(9999)===shakeAmplitude(600),'scaled by the hit, capped');
  assert.equal(SHAKE_SECONDS,.4,'VD7a: was .25');assert.equal(ENERGY_COST,5);
- for(const [c,w] of [[300,/Damaged \(30%\).*slower.*more gas/],[100,/Limping \(10%\)/],[0,/Wrecked.*will not start/],[700,/Worn \(70%\)/]])assert.match(bandToast('Kasumuchi S70',c),w);assert.equal(percent(749),75);
+ for(const [c,w] of [[300,/Damaged \(30%\).*slower.*more gas/],[100,/Limping \(10%\)/],[0,/Wrecked.*will not start/],[700,/Scuffed \(70%\)/]])assert.match(bandToast('Kasumuchi S70',c),w);assert.equal(percent(749),75);
 }
 // 8. Saving: cond is saved below 1000 and omitted at 1000; a save without it loads Fine; the panel's number comes back after a reload.
 {const d=make(1e9,owned(2));d.setCond('v1',312);const s=d.save();assert.equal(s.find(v=>v.uid==='v1').cond,312);assert.equal(s.find(v=>v.uid==='v2').cond,undefined,'a perfect vehicle saves no cond');
@@ -99,4 +99,11 @@ const run=(d,seconds,input,events)=>{for(let t=0;t<seconds;t+=DT){d.step(DT,inpu
  for(const b of BANDS)assert(css.includes(`.vp-damage[data-band=${b.id}]`),'a colour for '+b.id);assert(html.includes('id="vpDamage"')&&html.includes('id="vpDmgText"'));
  for(const hook of ['driving.takeEvents()','driveEvent(e)','damage:driving.active?driving.damageOf():null','applyShake(view)','shake.off'])assert(game.includes(hook),'game.js hook: '+hook);
 }
+// 10. VD7b: the hit mask. A head-on hit marks the front, a scrape along a wall on the left marks the left, a reverse hit marks the rear; it saves with cond, old saves have none, a repair clears it.
+{const ev=[];let d=make(40);d.enter('v1');run(d,10,{throttle:1,steer:0},ev);const hf=d.hitOf('v1');assert(hf[0]>0&&hf[1]===0&&hf[2]===0&&hf[3]===0,'a head-on hit marks only the front: '+hf);
+ const ev2=[];d=createDriving({scene:new THREE.Scene(),surface:()=>SURFACE.ROAD,footing:()=>0,baseBlocked:(x,z)=>x>6,saved:[{uid:'v1',model:'shortbed',colour:col,x:0,z:0,yaw:0}]});for(const f of d.fleet)if(f.spec.fuel)d.setFuel(f.spec.id,1e9);d.enter('v1');run(d,12,{throttle:1,steer:0},ev2);run(d,4,{throttle:1,steer:.2},ev2);const hs=d.hitOf('v1');assert(hs[2]>0,'a scrape along a wall on the left marks the left: '+hs+' cond '+d.condOf('v1'));assert(hs[3]===0&&hs[1]===0,'and not the right or the rear');
+ assert.deepEqual(sidesOf([0,0,0,0],-1),[0,1,0,0],'a flat reverse stop marks the rear');assert.deepEqual(sidesOf([0,0,0,0],5),[1,0,0,0]);assert.deepEqual(sidesOf([1,0,1,0]),[.5,0,1,0],'a scrape that touches the corner: the side full, the end half');assert.deepEqual(addHit([0,0,0,0],[1,0,0,0],50),[.25,0,0,0]);assert.deepEqual(addHit([.9,0,0,0],[1,0,0,0],600),[1,0,0,0],'capped at 1');assert.deepEqual(hitLook([0,0,0,0],500),[.45,.45,.45,.45],'a damaged vehicle with no mask (an old save) shows an even light one');assert.deepEqual(hitLook([0,0,0,0],1000),[0,0,0,0])
+ d=make(40);d.enter('v1');run(d,10,{throttle:1,steer:0},[]);const saved=d.save();assert.equal(saved[0].hit[0]>0,true,'saved with cond');assert.equal(saved[0].hit.length,4);
+ const d2=createDriving({...world(),saved:saved});assert.deepEqual(d2.hitOf('v1'),saved[0].hit,'loads back');const old=createDriving({...world(),saved:[{uid:'v1',model:'shortbed',colour:col,x:0,z:0,yaw:0,cond:500}]});assert.deepEqual(old.hitOf('v1'),[0,0,0,0],'an old save has no mask');assert.equal(old.condOf('v1'),500);
+ d2.setCond('v1',1000);d2.update(.016);assert.deepEqual(d2.hitOf('v1'),[0,0,0,0],'repaired: the mask is cleared');assert.equal('hit' in d2.save()[0],false,'a perfect vehicle saves no mask')}
 console.log('Damage wiring: a crash at 24 m/s takes 600 points once (Fine to Worn) and stalls; a 3 m/s bump costs nothing; a 15 m/s crash is 251 points and stalls (restart after 1 s); the pull has the right side and grows by band; burn 1.05/1.15/1.3x; a wreck never starts but can be left; cond saves and old saves load Fine; the panel row changes the band class only when the band changes; one silhouette per drivable model.');

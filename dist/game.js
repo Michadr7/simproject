@@ -395,7 +395,7 @@ function syncSawmill(){
 function syncPlayerMesh(){
  player.position.set(me.position.x,me.position.y,me.position.z);
  player.rotation.y=me.rotation.y;player.visible=!driving.active||!!driving.seatedAt(); // the shortbed shows you seated in its cab (hips on the seat anchor); the other vehicles have no seat model: the avatar is hidden there
- {const s=driving.seatedAt();if(s)player.position.set(s.x,s.y-forkHips,s.z)} if(fork.on){const p=forklift.seatOf(fork.state);player.position.set(p.x,forklift.SEAT_TOP+FORK_SIT-forkHips,p.z)} // on the forklift (an open cab) you are seen sitting on its seat: hips on the cushion
+ {const s=driving.seatPose(forkHips);player.rotation.order='YXZ';if(s){player.rotation.set(s.rx,s.ry,s.rz);player.position.set(s.x,s.y,s.z)}else{player.rotation.x=0;player.rotation.z=0}} if(fork.on){const p=forklift.seatOf(fork.state);player.position.set(p.x,forklift.SEAT_TOP+FORK_SIT-forkHips,p.z)} // on the forklift (an open cab) you are seen sitting on its seat: hips on the cushion
 }
 function getMeWorldPosition(target){
  target.set(me.position.x,me.position.y,me.position.z);
