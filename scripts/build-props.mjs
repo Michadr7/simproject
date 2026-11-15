@@ -25,7 +25,7 @@ const DOOR=x=>({x,width:1.4,height:2.05});
 const WALLS={cell:.5,band:[.5,2.1],walls:true,despeckle:false},SOLID={cell:.5,band:[.3,1.9],walls:false,despeckle:false};
 const house=(file,doorX)=>({file:`kenney-suburban/GLB format/building-type-${file}.glb`,scale:S,door:DOOR(doorX),cut:null,triangles:null,texture:[128,'png'],collide:WALLS});
 const shop=file=>({file:`kenney-commercial/GLB format/building-${file}.glb`,scale:S,cut:null,triangles:null,texture:[128,'png'],collide:WALLS});
-const farm=(file,scale,triangles=null)=>({file:`quaternius-farm/${file}.glb`,scale,cut:null,triangles,collide:WALLS});
+const farm=(file,scale,triangles=null)=>({file:`Farm/Farm Buildings Bundle-glb/${file}.glb`,scale,cut:null,triangles,collide:WALLS});
 const car=(file,longest,triangles=1200)=>({file:`quaternius-cars/${file}.glb`,longest,cut:null,triangles,wheels:.25,collide:SOLID}); // wheels: kept, at a quarter of their triangles
 const PROPS={
  // (the Tripo sawmill was replaced by the rigged 'sawmill-v4' below in RIGGED)
@@ -38,6 +38,12 @@ const PROPS={
   recolour:[[[32,32,32],[92,99,106],70],[[32,0,96],[44,122,124],70],[[176,176,176],[222,214,198],45],[[144,144,144],[188,180,164],45]]},
  // Quaternius farm buildings (CC0), enlarged 1.55 times to feel like working farm buildings.
  barn:farm('Barn',1.55),'small-barn':farm('Small Barn',1.55),'open-barn':farm('Open Barn',1.55),'silo-house':farm('Silo House',1.55),coop:farm('ChickenCoop',1.5),windmill:farm('Tower Windmill',1.25,3000),
+ // Quaternius Farm Buildings Bundle and Farm Animal Pack (CC0), the rest of the set (the six above are the same bundle). Buildings at the same 1.55 as the barns, fences at 1 (a 5.9 m rail segment, 1.1 to 1.2 m tall); flat colours baked to vertex colours, one mesh each.
+ // Animals: skinned in the file, imported in the bind (rest) pose as static props, sized by `height` (m, head or back top), facing +z; the clip names and lengths are kept as record.clips. Footprint box = one exact box (collide.fit).
+ 'farm.big-barn':farm('Big Barn',1.55),'farm.silo':{file:'Farm/Farm Buildings Bundle-glb/Silo.glb',scale:1.55,cut:null,triangles:null,collide:{cell:.5,band:[.5,2.1],walls:false,despeckle:false}},
+ 'farm.fence-a':{file:'Farm/Farm Buildings Bundle-glb/Fence-e02PFKKhbr.glb',scale:1,cut:null,triangles:null,collide:{cell:.1,band:[.05,1.1],walls:false,despeckle:false,fit:true}},
+ 'farm.fence-b':{file:'Farm/Farm Buildings Bundle-glb/Fence.glb',scale:1,cut:null,triangles:null,collide:{cell:.1,band:[.05,1.1],walls:false,despeckle:false,fit:true}},
+ ...Object.fromEntries(Object.entries({cow:['Cow',1.4],horse:['Horse',1.7],llama:['Llama',1.7],pig:['Pig',.85],pug:['Pug',.35],sheep:['Sheep',.9],zebra:['Zebra',1.45]}).map(([id,[file,height]])=>['farm.'+id,{file:`Farm/Farm Animal Pack-glb/${file}.glb`,height,cut:null,triangles:null,collide:{cell:.1,band:[.05,3],walls:false,despeckle:false,fit:true}}])),
  // Timber yard.
  hut:{file:'polypizza/Hut_by_Quaternius.glb',width:6.5,cut:null,triangles:null,collide:{cell:.5,band:[.5,2.1],walls:true,despeckle:false}},
  log:{file:'polypizza/Wood_Log.glb',longest:2.8,cut:null,triangles:null,collide:{cell:.5,band:[.1,.8],walls:false,despeckle:false}},
@@ -105,7 +111,8 @@ function readGltf(path){
  const anchors={};
  for(const r of json.scenes[json.scene||0].nodes)walk(r,[1,0,0,0,0,1,0,0,0,0,1,0,0,0,0,1]);
  const imageOf=i=>{const im=json.images[i];if(im.uri)return readFileSync(join(dirname(path),decodeURIComponent(im.uri)));const v=json.bufferViews[im.bufferView];return Buffer.from(bin.subarray(v.byteOffset||0,(v.byteOffset||0)+v.byteLength))};
- return {parts,imageOf,anchors};
+ const clips=(json.animations||[]).map(a=>({name:(a.name||'').replace(/^.*\|/,''),seconds:+Math.max(...a.samplers.map(s=>json.accessors[s.input].max?.[0]||0)).toFixed(2)}));
+ return {parts,imageOf,anchors,clips};
 }
 let fbxLoader=null;
 async function readFbx(path,spec={}){
@@ -207,7 +214,7 @@ for(const [id,spec] of Object.entries(PROPS)){
  const used=new Map(),P=[],N=[],U=[],C=[],I=new Uint32Array(idx.length);let count=0;
  for(let i=0;i<idx.length;i++){const o=idx[i];if(!used.has(o)){used.set(o,count++);P.push(pos[o*3],pos[o*3+1],pos[o*3+2]);N.push(nor[o*3],nor[o*3+1],nor[o*3+2]);if(textured)U.push(uv[o*2],uv[o*2+1]);else C.push(col[o*3],col[o*3+1],col[o*3+2])}I[i]=used.get(o)}
  const lo=[1e9,1e9,1e9],hi=[-1e9,-1e9,-1e9];for(let i=0;i<P.length;i+=3)for(let c=0;c<3;c++){lo[c]=Math.min(lo[c],P[i+c]);hi[c]=Math.max(hi[c],P[i+c])}
- let k;if(spec.scale)k=spec.scale;else if(spec.width)k=spec.width/(hi[0]-lo[0]);else if(spec.length)k=spec.length/(hi[2]-lo[2]);else k=spec.longest/Math.max(hi[0]-lo[0],hi[2]-lo[2]);
+ let k;if(spec.scale)k=spec.scale;else if(spec.width)k=spec.width/(hi[0]-lo[0]);else if(spec.length)k=spec.length/(hi[2]-lo[2]);else if(spec.height)k=spec.height/(hi[1]-lo[1]);else k=spec.longest/Math.max(hi[0]-lo[0],hi[2]-lo[2]);
  if(spec.keepOrigin&&!spec.collide.fit)throw new Error(id+': keepOrigin needs collide.fit (the grid boxes assume a centred prop)');
  const cx=spec.keepOrigin?0:(lo[0]+hi[0])/2,cz=spec.keepOrigin?0:(lo[2]+hi[2])/2,baseY=spec.keepOrigin==='xyz'?0:spec._ground??lo[1]; // keepOrigin: x and z stay where the file put its origin (the footprint is then off centre); 'xyz' keeps y too (a held nozzle: its origin is the grip, not the ground)
  for(let i=0;i<P.length;i+=3){P[i]=(P[i]-cx)*k;P[i+1]=(P[i+1]-baseY)*k;P[i+2]=(P[i+2]-cz)*k}
@@ -255,7 +262,7 @@ for(const [id,spec] of Object.entries(PROPS)){
  const norQ=Int8Array.from(N.map(v=>Math.max(-127,Math.min(127,Math.round(v*127))))),posA=Float32Array.from(P),idxA=Uint16Array.from(I);
  let wx0=1e9,wx1=-1e9,wz0=1e9,wz1=-1e9;for(let i=0;i<P.length;i+=3){wx0=Math.min(wx0,P[i]);wx1=Math.max(wx1,P[i]);wz0=Math.min(wz0,P[i+2]);wz1=Math.max(wz1,P[i+2])}
  const record={source:spec.file,width:+(wx1-wx0).toFixed(2),depth:+(wz1-wz0).toFixed(2),height:+sy.toFixed(2),triangles:I.length/3,footprint:{x0:+wx0.toFixed(2),x1:+wx1.toFixed(2),z0:+wz0.toFixed(2),z1:+wz1.toFixed(2)},colliders:boxes,floor,
-  door:spec.door?{x:spec.door.x,z:+wz1.toFixed(2),width:spec.door.width,height:spec.door.height}:null,...(glow?{glow}:{}),
+  door:spec.door?{x:spec.door.x,z:+wz1.toFixed(2),width:spec.door.width,height:spec.door.height}:null,...(glow?{glow}:{}),...(model.clips?.length?{clips:model.clips}:{}),
   ...(Object.keys(model.anchors||{}).length?{anchors:Object.fromEntries(Object.entries(model.anchors).map(([name,[x,y,z]])=>[name,[+((x-cx)*k).toFixed(4),+((y-baseY)*k).toFixed(4),+((z-cz)*k).toFixed(4)]]))}:{}),pos:b64(posA),nor:b64(norQ),norQ:true,idx:b64(idxA),vertices:count};
  if(textured){record.texture=texture;record.uv=b64(Float32Array.from(U))}else record.col=b64(Uint8Array.from(C));
  if(spec.splitWheels)Object.assign(record,splitWheels(record,{id})); // the wheels become separate meshes (scripts/split-wheels.mjs), centred on their axles

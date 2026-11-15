@@ -21,7 +21,7 @@ const drive=(cls,start,env,speed,seconds,input={throttle:1})=>{let s={...freshVe
 assert.equal(crashPoints(4,1),0);assert.equal(crashPoints(3.9,1),0);assert.equal(crashPoints(10,1),84);assert.equal(crashPoints(6,1),20);assert.equal(crashPoints(15,1),209);assert.equal(crashPoints(20,1),384);
 assert.equal(crashPoints(30,1),POINT_CAP);assert.equal(POINT_CAP,600);assert.equal(crashPoints(26,1),600);assert.equal(crashPoints(10,.6),Math.round(.6*84));
 assert(Number.isInteger(crashPoints(11.37,.85)));assert.equal(crashPoints(100,1.3),600,'the cap holds for the toughest');assert.equal(crashPoints(4.01,1,'person'),20);assert.equal(crashPoints(3,1,'person'),0,'a slow brush on a person costs nothing');
-assert.deepEqual(Object.fromEntries(Object.entries(CLASSES).map(([k,c])=>[k,c.tough])),{worktruck:1.3,flatbed:1.7,shortbed:.58,offroad:.68},'tough per class (VD7a: damage per unit of energy; see damage.js)');
+assert.deepEqual(Object.fromEntries(Object.entries(CLASSES).map(([k,c])=>[k,c.tough])),{worktruck:.5,flatbed:.4,shortbed:.58,offroad:.68},'tough per class (VD7a: damage per unit of energy; see damage.js)');
 for(const c of Object.values(CLASSES))assert(c.hood&&c.hood.y>0&&c.hood.z>0&&c.hood.z<c.hz,`${c.id} has a hood point inside the nose`);
 assert.equal(applyPoints(1000,461),539);assert.equal(applyPoints(100,600),0,'never below 0');assert.equal(applyPoints(1000,600),400,'one crash never wrecks a Fine vehicle');
 

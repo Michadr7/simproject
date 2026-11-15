@@ -4,7 +4,7 @@
 export const IMPACT_MIN=4; // m/s: a bump slower than this costs nothing
 export const CRASH_K=1; // points per (m/s)^2 above IMPACT_MIN^2, before the class's `tough` (1 = the S70's scale). points = tough x CRASH_K x (impact^2 - IMPACT_MIN^2)
 export const POINT_CAP=600; // one crash never takes more (VD7a: the curve below no longer reaches it at any class's top speed; it only guards a future fast vehicle)
-// vehicle.js `tough` is the damage a class takes per unit of crash energy (higher = takes MORE; the old comment said the reverse). VD7a: the S70 .58 and the off-road .68 hit a wall at full speed for about 480 points (about 50% left); the slow classes (worktruck 1.3, flatbed 1.7) are scaled up so a top-speed hit costs them about 40% too.
+// vehicle.js `tough` is the damage a class takes per unit of crash energy (higher = takes MORE; the old comment said the reverse). VD7a: the S70 .58 and the off-road .68 hit a wall at full speed for about 480 points (about 50% left); the heavy trucks take LESS than the S70 at the same speed (worktruck .5, flatbed .4: more mass and a stronger frame), so they lose less in every crash; their top speed is low, so a top-speed hit costs the worktruck about 15% and the flatbed about 9%, and they are wrecked by repeated hard hits (7 and 11 at top speed) or a long run of them, not by one.
 export const PERSON_POINTS=20; // a hit on a person is this, not the wall formula (today a person stops the hull like a wall)
 export const STALL_POINTS=250; // a crash of this many points or more stalls the engine
 export const STALL_SECONDS=1; // the engine can be restarted this long after it stalled

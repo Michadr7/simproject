@@ -197,7 +197,7 @@ body:has(#welcome:not([hidden])) :is(#minimap,#vitals,#statusDock,#clockChip),bo
 .vp-stats b{font:600 13px/1 Arial,sans-serif;font-variant-numeric:tabular-nums}
 /* Damage row (VD2): the vehicle drawn side-on next to its band and percent; the colour class changes only when the band does. The text always names the band, so colour is never the only signal. */
 .vp-damage{display:flex;align-items:center;gap:10px;color:#5fcf80}
-.vp-damage[hidden]{display:none}
+.vp-damage[hidden]{display:none}.vp-stuck{margin:0;font:600 12px/1.3 Arial,sans-serif;color:#f2743a}.vp-stuck[hidden]{display:none}.vp-stuck[data-level=warn]{color:#f2b53a}
 .vp-damage b{font:600 12px/1 Arial,sans-serif;font-variant-numeric:tabular-nums;color:#eceae6}
 .vp-sil{display:none;width:66px;height:25px;flex:none}
 .vp-damage[data-model=shortbed] .vp-sil[data-sil=shortbed],.vp-damage[data-model=worktruck] .vp-sil[data-sil=worktruck],.vp-damage[data-model=offroad] .vp-sil[data-sil=offroad],.vp-damage[data-model=flatbed] .vp-sil[data-sil=flatbed],.vp-damage[data-model=generic] .vp-sil[data-sil=generic]{display:block}
@@ -402,3 +402,4 @@ body:has(#welcome:not([hidden])) :is(header .brand,.location,#objective,#hotbar,
 .vp-damage.hit{animation:vp-hit .6s ease-out;border-radius:6px}
 @keyframes vp-hit{0%{transform:scale(1.16) translateX(0);background:rgba(232,50,58,.6)}12%{transform:scale(1.16) translateX(-6px)}26%{transform:scale(1.12) translateX(6px)}40%{transform:scale(1.08) translateX(-4px)}55%{transform:scale(1.04) translateX(3px)}100%{transform:none;background:rgba(232,50,58,0)}}
 @media(prefers-reduced-motion:reduce){.vp-lamp[data-lamp=blink]{animation:none;outline:2px solid currentColor;outline-offset:1px}@keyframes vp-hit{0%{background:rgba(232,50,58,.5)}100%{background:rgba(232,50,58,0)}}#hitFlash.on{animation-duration:1.2s}}
+.call-icon{background:var(--honey);color:var(--ink)}.phone-call-line{margin:10px 0;font-size:14px;line-height:1.4}.phone-call-line[data-state=ringing]{color:#c9c5ba;font-style:italic}.phone-call-line[data-state=busy]{color:#f08080;font-weight:bold}.phone-hangup{background:#b3261e;color:#fff;margin-top:10px}#phoneCall .phone-accept{display:block;width:100%;margin:6px 0;text-align:left}

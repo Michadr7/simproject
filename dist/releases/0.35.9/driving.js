@@ -7,13 +7,15 @@ import {heightAt,deckAt} from './height.js';
 import * as THREE from './vendor/three.module.js';
 import {MAP} from './map-definition.js';
 import {createProp} from './props.js';
-import {CLASSES,freshVehicle,stepVehicle,poseFree,findSafePose,exitPoint,doorPoint,seatPoint,insideHull,vehiclesToSave,toWorld,PLAYER_RADIUS} from './vehicle.js';
+import {CLASSES,freshVehicle,stepVehicle,poseFree,findSafePose,findFirmPose,exitPoint,doorPoint,seatPoint,insideHull,vehiclesToSave,toWorld,PLAYER_RADIUS} from './vehicle.js';
 import {normalizeFuelMgal,burnMgal} from './fuel.js';
 import {defaultColour} from './paint.js';
 import {applyPaint,applyLook} from './paint-shader.js';
 import {normalizeCargo,loadOf,loadPoints,LOAD_REACH,hasBed,BEDS} from './cargo.js';
 import {createCargoView} from './cargo-view.js';
 import {withLoad} from './vehicle.js';
+import {stepBog,freshBog,topFactor,sinkOf,gripOf,BOG_WARN,FIRM_BELOW} from './surface-table.js';import {sprayOf,SPIN_SPEED,SPIN_THROTTLE} from './debris.js';import {slipOf} from './vehicle-sounds.js'; // TR6: wheel spray and tyre sounds
+import {createTracks} from './tracks.js';import {widthOf,trackAt,carryAfter,stepWheel,freshWheel,TRACK_MIN_SPEED,TRACK_LIFT} from './tracks-rules.js';import {SURFACE} from './terrain.js'; // TR5: tyre tracks
 import {lookOf,withDamage,crashPoints,registerCrash,freshCrashState,applyPoints,addHit,sidesOf,hitLook,noHit,HIT_PROBE,bandOf,pullSide,pulledSteer,freshEngine,engineStep,percent} from './damage.js';
 import {TAILGATE_OPEN} from './flatbed.js';
 import {SHORTBED_DOOR_OPEN,SHORTBED_DOOR_SECONDS} from './shortbed.js';
@@ -39,7 +41,7 @@ export function createDriving({scene,surface,footing,baseBlocked,saved=[]}){
  const build=(spec,colour,display)=>{
   const cls=CLASSES[spec.model],mesh=createProp(spec.model,SOLID);mesh.name='vehicle-'+spec.id;mesh.rotation.order='YXZ';scene.add(mesh);
   const marker=spec.fuel?fillerMarker(spec.fuel):null;if(marker)mesh.add(marker);
-  const f={spec,cls,mesh,marker,wheels:mesh.userData.wheels||[],state:freshVehicle(spec.home),y:footing(spec.home.x,spec.home.z),pitch:0,roll:0,spin:0,lastSpeed:0,present:true,display:!!display,colour:null,fuelMgal:spec.fuel?spec.fuel.tankMgal:0,burn:0,cond:1000,hit:noHit(),crash:freshCrashState(),engine:freshEngine(1000,0),pullSide:pullSide(spec.id)}; // cond: 0..1000 (damage.js, saved when below 1000); crash: the debounce window; engine: run / crank / off
+  const f={spec,cls,mesh,marker,wheels:mesh.userData.wheels||[],state:freshVehicle(spec.home),y:footing(spec.home.x,spec.home.z),pitch:0,roll:0,spin:0,lastSpeed:0,present:true,display:!!display,colour:null,fuelMgal:spec.fuel?spec.fuel.tankMgal:0,burn:0,cond:1000,hit:noHit(),crash:freshCrashState(),engine:freshEngine(1000,0),pullSide:pullSide(spec.id),bog:freshBog()}; // cond: 0..1000 (damage.js, saved when below 1000); crash: the debounce window; engine: run / crank / off
   f.colour=colour||defaultColour(spec.model);applyPaint(mesh,spec.model,f.colour);
   f.cargo=null;f.gate=0;f.view=createCargoView(spec.model);mesh.add(f.view.group); // cargo (cargo.js): what lies on the bed, drawn on it
   return f;
@@ -73,7 +75,20 @@ const tilt=f=>{const s=f.state,sy=Math.sin(s.yaw),cy=Math.cos(s.yaw),at=(lx,lz)=
   if(c.stall||f.cond<=0)f.engine=engineStep(f.engine,{cond:f.cond,now:clock,stall:true}).engine;
   const dz=was0<0?-1:1,hit=toWorld(f.state,0,f.cls.hz*dz);events.push({type:'crash',id:f.spec.id,at:{x:hit.x,y:f.y+.55,z:hit.z},dir:{dx:Math.sin(f.state.yaw)*dz,dz:Math.cos(f.state.yaw)*dz},points:c.points,sides:hitSides,total:f.crash.best,impact:r.impact,kind:r.hitKind,was,cond:f.cond,pct:percent(f.cond),changed:from!==to,bandTo:to,stall:c.stall,first:f.crash.at===clock})};
  fleet.forEach(place);
+ // TR5 tyre tracks: the rear wheels of a vehicle that moves faster than TRACK_MIN_SPEED lay a segment every TRACK_STEP metres of path (tracks-rules.js), into the one pooled mesh (tracks.js); f.carry is the mud carried on the tyres (metres left).
+ const tracks=createTracks(scene),layTracks=f=>{if(f.display||!f.present)return;const s=f.state,width=widthOf(f.cls.id);if(!width)return;
+  if(f.carry===undefined){f.carry=0;f.lastX=s.x;f.lastZ=s.z;f.lay=[]}
+  const dist=Math.hypot(s.x-f.lastX,s.z-f.lastZ);f.lastX=s.x;f.lastZ=s.z;f.carry=carryAfter(f.carry,surface(s.x,s.z),dist);const moving=Math.abs(s.speed)>TRACK_MIN_SPEED;
+  f.wheels.forEach((w,i)=>{if(w.front)return;const lw=f.lay[i]||(f.lay[i]=freshWheel()),p=toWorld(s,w.pivot.position.x,w.pivot.position.z),sf=surface(p.x,p.z);
+   for(const g of stepWheel(lw,p.x,p.z,moving&&sf!==SURFACE.WATER&&sf!==SURFACE.BANK)){const t=trackAt(surface(g.x1,g.z1),f.carry);if(t)tracks.lay({x0:g.x0,y0:footing(g.x0,g.z0)+TRACK_LIFT,z0:g.z0,x1:g.x1,y1:footing(g.x1,g.z1)+TRACK_LIFT,z1:g.z1,width,colour:t.colour,alpha:t.alpha,life:t.life})}})};
  return {
+  tracks,carryOf(id){const f=byId.get(id);return f?.carry??0},
+  // TR6: dust and mud thrown from the rear wheels of the vehicle you drive (sink: a createDebris object; opts {throttle 0..1, quality 'high'|'low', calm}). Each wheel reads the ground under it (debris.js sprayOf); a dual-wheel rear shares the rate of one pair. Returns the pieces thrown.
+  sprayWheels(sink,dt,{throttle=0,quality='high',calm=false}={}){const f=driven;if(!f||side!=='driver'||f.display||f.cls.group==='fork')return 0;const s=f.state,rear=f.wheels.filter(w=>!w.front);if(!rear.length)return 0;const k=2/rear.length,heading={dx:Math.sin(s.yaw),dz:Math.cos(s.yaw)};let n=0;
+   rear.forEach((w,i)=>{const p=toWorld(s,w.pivot.position.x,w.pivot.position.z),sp=sprayOf({surface:surface(p.x,p.z),speed:s.speed,top:f.cls.top,throttle,stuck:f.bog.stuck,quality,calm});if(sp.dust>0||sp.mud>0)n+=sink.spray(f.spec.id+':'+i,dt,{x:p.x,y:footing(p.x,p.z)+.12,z:p.z},heading,s.speed,{dust:sp.dust*k,mud:sp.mud*k,drop:sp.drop*k,colour:sp.colour})});return n},
+  // TR6: what the tyre sound needs, written into the reused object fx: surface under the vehicle, top speed, slip 0..1 and spin (the wheels turn on the spot: Stuck, or throttle held below 3 m/s).
+  tyreFx(fx,throttle=0){const f=driven;if(!f||side!=='driver'||f.display||f.cls.group==='fork'){fx.surface=0;fx.slip=0;fx.spin=false;return fx}const s=f.state,sf=surface(s.x,s.z),gr=gripOf(sf,f.cls.group),spin=f.bog.stuck||(throttle>=SPIN_THROTTLE&&Math.abs(s.speed)<SPIN_SPEED&&gr<.8); // spin on the spot only on loose ground
+   fx.surface=sf;fx.top=f.cls.top;fx.spin=spin;fx.slip=slipOf({speed:s.speed,top:f.cls.top,steer:s.steer,grip:gr,spin});return fx},
   fleet,byId,
   get active(){return driven},
   get seatSide(){return driven?side:null},
@@ -102,8 +117,8 @@ const tilt=f=>{const s=f.state,sy=Math.sin(s.yaw),cy=Math.cos(s.yaw),at=(lx,lz)=
   // One slice of driving (dt <= 1/30 s). input: {throttle, steer, brake}; people: [{x, z, r}] pedestrians. A passenger does not steer: the vehicle stands still.
   step(dt,input,people=[]){if(!driven||side!=='driver')return null;const f=driven,fuelled=!!f.spec.fuel;clock+=dt;
    const eng=engineStep(f.engine,{cond:f.cond,throttle:input.throttle||0,now:clock});f.engine=eng.engine;if(eng.event)events.push({type:eng.event,id:f.spec.id,seconds:eng.event==='crank'?+(f.engine.readyAt-clock).toFixed(2):0}); // stalled, cranking or wrecked: no throttle (the vehicle coasts to a stop; E always gets you out)
-   const run=f.engine.mode==='run',load=loadOf(f.spec.model,f.cargo),dmg=withDamage(withLoad(f.cls,load),f.cond),cut=!run||(fuelled&&f.fuelMgal<=0), // an empty tank: no throttle too
-    inp={...input,throttle:cut?0:input.throttle,steer:pulledSteer(input.steer,dmg.pull,f.pullSide,f.state.speed)},before=f.state,r=stepVehicle(f.state,inp,dt,dmg,envFor(f,people));f.state=r.state;lastHit=r.hit;
+   const run=f.engine.mode==='run',load=loadOf(f.spec.model,f.cargo),hurt=withDamage(withLoad(f.cls,load),f.cond),k=topFactor(f.bog),dmg=k<1?{...hurt,top:hurt.top*k,reverse:hurt.reverse*k}:hurt,cut=!run||(fuelled&&f.fuelMgal<=0), // an empty tank: no throttle too
+    inp={...input,throttle:cut?0:input.throttle,steer:pulledSteer(input.steer,dmg.pull,f.pullSide,f.state.speed)},before=f.state,b=stepBog(f.bog,{throttle:inp.throttle,speed:f.state.speed,surface:surface(f.state.x,f.state.z),group:f.cls.group,load,dt}),r=stepVehicle(f.state,inp,dt,dmg,envFor(f,people));f.bog=b;if(b.event)events.push({type:b.event==='stuck'?'bog':'unbog',id:f.spec.id});f.state=r.state;lastHit=r.hit; // TR4: the bog meter (surface-table.js) reads the state before the step; Stuck scales the top speed (eased) inside the step
    if(r.hit)crash(f,r,before.speed);
    if(fuelled){f.burn+=burnMgal(Math.hypot(r.state.x-before.x,r.state.z-before.z),f.cls.gallonsPerMile*(1+.3*load)*(run?dmg.burnMul??1:0));const whole=Math.floor(f.burn);f.burn-=whole;f.fuelMgal=Math.max(0,f.fuelMgal-whole)}
    return r},
@@ -112,16 +127,21 @@ const tilt=f=>{const s=f.state,sy=Math.sin(s.yaw),cy=Math.cos(s.yaw),at=(lx,lz)=
   damageOf(f=driven){return f?{model:f.spec.model,cond:f.cond,engine:f.engine.mode,crank:f.engine.mode==='crank'?+Math.max(0,f.engine.readyAt-clock).toFixed(2):0,sinceCrash:+(clock-f.crash.at).toFixed(2)}:null}, // crank: seconds of starter still to turn; sinceCrash: seconds since the last counted crash (Infinity: none)
   // The engine bay's smoke point in the world (hood of the class, local): {x, y, z, dx: 0, dz: 0} (the smoke just rises).
   hood(f=driven){if(!f||!f.cls.hood)return null;const w=toWorld(f.state,f.cls.hood.x,f.cls.hood.z);return {x:w.x,y:f.y+f.cls.hood.y+.25,z:w.z,dx:0,dz:0,boost:1}},
+  // TR4: the bog meter of a vehicle: {bog 0..1, stuck, warn (sinking, not yet stuck), soft (the ground under it is mud or a field: SINK .1 or more; plain grass is firm)}, and 'Pull me out': the nearest firm free pose (null if none) and the move itself (driven vehicle only; speed 0, the meter cleared).
+  bogOf(f=driven){return f?{bog:+f.bog.bog.toFixed(3),stuck:f.bog.stuck,warn:!f.bog.stuck&&f.bog.bog>=BOG_WARN,soft:sinkOf(surface(f.state.x,f.state.z))>=FIRM_BELOW}:null},
+  firmSpot(f=driven){return f?findFirmPose({x:f.state.x,z:f.state.z,yaw:f.state.yaw},f.cls,envFor(f)):null},
+  relocate(pose){const f=driven;if(!f||!pose)return false;f.state=freshVehicle(pose);f.y=footing(pose.x,pose.z);f.lastSpeed=0;f.spin=0;f.bog=freshBog();return true},
+  setBog(id,value){const f=byId.get(id);if(!f)return false;f.bog={...freshBog(),bog:Math.max(0,Math.min(1,value)),stuck:value>=1,mix:value>=1?1:0};return true}, // dev and test setter
   condOf(id){return byId.get(id)?.cond??null},
   setCond(id,cond){const f=byId.get(id);if(f)f.cond=Math.max(0,Math.min(1000,Math.round(cond)))},
   hitOf(id){return byId.get(id)?.hit??null}, setHit(id,hit){const f=byId.get(id);if(f)f.hit=Array.isArray(hit)?hit.map(v=>Number.isFinite(v)?Math.max(0,Math.min(1,v)):0).slice(0,4):noHit()}, // VD7b: where it was hit [front, rear, left, right] 0..1 (a dev and test setter)
   // Meshes follow the states (every frame; a parked vehicle just stays where it is).
   // Shows the filler markers (while a nozzle is in your hand): every present vehicle's cap pulses in its own fuel colour, bright if the nozzle in hand is the right fuel and dim if it is not.
   showFillers(show,nozzleFuel=null){for(const f of fleet){if(!f.marker)continue;f.marker.visible=!!show&&f.present&&f!==driven;f.markerBright=nozzleFuel===null||nozzleFuel===f.spec.fuel.type}},
-  update(dt){pulse+=dt;if(pending){pending.t-=dt;if(pending.t<=0){const run=pending.then;pending=null;run()}}for(const f of fleet){f.mesh.visible=f.present;if(f.cond>=1000&&f.hit.some(v=>v>0))f.hit=noHit();if(f.present&&((f.lookCond??1000)!==f.cond||f.lookHit!==f.hit)){f.lookCond=f.cond;f.lookHit=f.hit;applyLook(f.mesh,{...lookOf(f.cond),hit:hitLook(f.hit,f.cond)},f.spec.model,[f.cls.hx,f.cls.hz])} /* VD3: wear and cracks follow the condition (uniforms only, on change) */ if(f.marker&&f.marker.visible){const k=(f.markerBright?.8:.3)*(.6+.4*Math.sin(pulse*6));for(const part of f.marker.children)part.material.opacity=k}
+  update(dt){pulse+=dt;tracks.update(dt);if(pending){pending.t-=dt;if(pending.t<=0){const run=pending.then;pending=null;run()}}for(const f of fleet){f.mesh.visible=f.present;if(f.cond>=1000&&f.hit.some(v=>v>0))f.hit=noHit();if(f.present&&((f.lookCond??1000)!==f.cond||f.lookHit!==f.hit)){f.lookCond=f.cond;f.lookHit=f.hit;applyLook(f.mesh,{...lookOf(f.cond),hit:hitLook(f.hit,f.cond)},f.spec.model,[f.cls.hx,f.cls.hz])} /* VD3: wear and cracks follow the condition (uniforms only, on change) */ if(f.marker&&f.marker.visible){const k=(f.markerBright?.8:.3)*(.6+.4*Math.sin(pulse*6));for(const part of f.marker.children)part.material.opacity=k}
    const s=f.state,accel=dt>0?(s.speed-f.lastSpeed)/dt:0,lateral=s.speed*(Math.abs(s.speed)<.01?0:s.steer*s.speed/Math.max(f.cls.rMin,s.speed*s.speed/f.cls.aLat));f.lastSpeed=s.speed;
    const k=1-Math.exp(-dt*8);const g=tilt(f);f.pitch+=(clamp(-.01*accel,-.04,.04)+g.pitch-f.pitch)*k;f.roll+=(clamp(.012*lateral,-.05,.05)+g.roll-f.roll)*k;f.dynPitch=f.pitch-g.pitch;f.dynRoll=f.roll-g.roll;
-   f.y+=(footing(s.x,s.z)-f.y)*(1-Math.exp(-dt*10));place(f);
+   f.y+=(footing(s.x,s.z)-f.y)*(1-Math.exp(-dt*10));place(f);layTracks(f);
    // wheels: roll with the distance travelled (angle = distance / radius, forward is +z so a positive turn about x), the front pair steers
    f.spin+=s.speed*dt;for(const w of f.wheels){w.spin.rotation.x=f.spin/w.radius;if(w.front)w.pivot.rotation.y=s.steer*(w.max||STEER_ANGLE);if(w.rest!==undefined)w.pivot.position.y=w.rest+clamp(-(w.x*Math.sin(f.dynRoll||0)-w.z*Math.sin(f.dynPitch||0)),-.06,.1)} // a model with suspension (the shortbed): the wheel stays on the ground while the body pitches and rolls, up to the spec's 0.1 m of compression, from its rest height
    const sw=f.mesh.userData.steeringWheel;if(sw)sw.rotation.z=-s.steer*1.6; // the steering wheel turns with the steering (left is counter-clockwise for the driver)

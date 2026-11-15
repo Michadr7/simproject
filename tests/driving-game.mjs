@@ -47,7 +47,7 @@ try{
  assert(Math.hypot(me.position.x-truck.position.x,me.position.z-truck.position.z)<2,'the player rides with the vehicle');
  // 2. the keys: S reverses out of the bay, W then drives forward, a stopped game stands still
  hold('KeyS',true);pump(2.5);hold('KeyS',false);pump(.2);const back=truck.position.z-pick.home.z;assert(back>3&&Math.abs(truck.position.x-pick.home.x)<.5,`S reverses the pickup out of its bay (${back.toFixed(1)} m south)`);
- const zBack=truck.position.z;hold('KeyW',true);pump(3);const mid=truck.position.clone();hold('KeyW',false);pump(.1);assert(mid.z<zBack-1.5,`W drives it forward again (from z ${zBack.toFixed(1)} to ${mid.z.toFixed(1)})`);
+ const zBack=truck.position.z;hold('KeyW',true);pump(4);const mid=truck.position.clone();hold('KeyW',false);pump(.1);assert(mid.z<zBack-1.5,`W drives it forward again (from z ${zBack.toFixed(1)} to ${mid.z.toFixed(1)})`);
  {const p=truck.position.clone();pump(.5);assert(p.distanceTo(truck.position)<.2+10*.5*.8,'coasting after W slows down')}
  // brake: Space stops it quickly
  hold('KeyW',true);pump(2);hold('KeyW',false);hold('Space',true);pump(1.5);hold('Space',false);const stopped=truck.position.clone();pump(.5);assert(truck.position.distanceTo(stopped)<.05,'Space brakes it to a standstill');

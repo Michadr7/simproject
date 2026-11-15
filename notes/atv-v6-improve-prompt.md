@@ -1,0 +1,19 @@
+# Prompt: improve ATV V5 into V6 (for the modelling agent, in Blender)
+
+You are improving ONE existing vehicle model: the game's utility ATV, version V5 (the user's .glb / .blend, olive-green body, black racks, knobby tyres). Output V6. Do not start over: keep the overall design, proportions and colours. First read notes/atv-model-prompt.md in full; it is the CONTRACT (size, axes, node names, materials, anchors, hard rules). V6 must meet it exactly. This list comes from looking at one Blender screenshot of V5 (front 3/4 view), so VERIFY each point yourself in the file before changing anything, and report any point that turns out to be wrong.
+
+## What to improve (priority order)
+1. Contract structure (most important; the game cannot use the file without it): nose to Blender -Y; origin on the ground between the four contact patches; transforms applied; the four wheels as separate objects `wheel_FL/FR/RL/RR` with the origin at the hub centre (spin about local X), each one mesh (tyre + rim + tread blocks joined); `steer_FL/FR` empties as parents of the front wheels; `handlebar` pivot with bars, grips, levers and cluster as children; the body meshes split by material (`Body_Paint`, `Body_Frame`, `Body_Trim`, `Body_Metal`, `Body_Headlights`, `Body_Taillights`) under the root `ATV_Default_Source`; all anchors from the contract.
+2. Materials: at most 8 flat-colour materials with the contract names. `Paint` is ONLY the body plastics (cowl, tank cover, seat cowl, four fenders) so the game can recolour it and apply mud and damage; the racks, bumper and frame are `ATV_Frame`; seat, foot platforms, grips, levers, gauge pod are `ATV_Trim`. Nothing emissive.
+3. Tread blocks: the tyre tread lugs look like separate boxes standing proud of the tyre. Make each lug sit flush on the tread (overlap the tyre by 1 to 2 cm, slightly bevelled), no gaps, no floating blocks, and keep the lug count moderate so the tyre stays readable at 10 to 30 m. Join them into the tyre mesh.
+4. Fenders: the front and rear fenders read as flat slabs with sharp edges. Give them thickness and a bevel (rounded edge, 2 to 3 cm), a slight curve over the tyre, and make sure the front fenders clear the front tyres when steered 35 degrees. No poking sharp corners.
+5. Headlights and tail lights: the two nose lights look like plain light-grey boxes. Make them a housing (dark trim) with a bright lens (`ATV_Headlight`) set slightly into it, never black. Add the two tail lights (`ATV_Taillight`, red) on the tail if missing.
+6. Handlebar area: check the gauge pod and the handlebar are attached (no gap to the column), the grips are a believable thickness (about 3 cm radius), and the handlebar is not too close to the seat for a rider's thighs. Rack posts must stand on the body, not float.
+7. Rider-contact points: grips at the `anchor_hands_L/_R` positions, seat top at `anchor_driver_seat`, foot platforms at `anchor_foot_L/_R`. If V5 puts them elsewhere by more than 3 cm, move the PART (or tell me the difference), not the anchor.
+8. Cleanliness: merge vertices by distance (0.1 mm), recalculate normals outward, remove interior or hidden faces under the fenders where cheap, no spikes. Triangle count is a soft cap (flag, do not fight it); flag the draw-call count (materials x meshes).
+
+## Verify before handing in
+Re-import the exported .glb and list node names, triangle count, materials, mesh count, bounds in glTF axes (x about +/-0.58, y 0 to 1.14, z about -1.04 to +1.01), lowest point y = 0 within 5 mm, all four tyres on the ground. Render front 3/4, side, rear 3/4, top, a close-up of the front with the front wheels turned 35 degrees, and a close-up of the tyre tread, and LOOK at each. Report honestly what you did not check.
+
+## Deliver
+`ATV <your name> - V6 Game.glb`, the generating script if any, 4 to 6 preview PNGs, and a short list: what you changed per point above, what you left alone and why. Do not change any game files.

@@ -18,9 +18,12 @@ for(const c of Object.values(CLASSES)){const p=crashPoints(c.top,c.tough),seq=[]
 console.log(lines.join('\n'));
 
 // The target (the user, 2026-11-17): a full-speed wall hit leaves the vehicle Damaged with about 40 to 60% left; Wrecked needs two or three hard hits; a bump under 4 m/s costs nothing; a scrape costs little.
-for(const [id,r] of Object.entries(rows)){assert(r.left>=370&&r.left<=640,id+': a full-speed hit leaves about 40 to 60% ('+r.left+')');assert.equal(bandOf(r.left).id,'damaged',id+': and reads Damaged');assert(r.hits>=2&&r.hits<=3,id+': Wrecked after 2 or 3 full-speed hits ('+r.hits+')')}
+for(const [id,r] of Object.entries(rows).filter(([k])=>k==="shortbed"||k==="offroad")){assert(r.left>=370&&r.left<=640,id+': a full-speed hit leaves about 40 to 60% ('+r.left+')');assert.equal(bandOf(r.left).id,'damaged',id+': and reads Damaged');assert(r.hits>=2&&r.hits<=3,id+': Wrecked after 2 or 3 full-speed hits ('+r.hits+')')}
+// Heavy trucks (2026-11-17 fix): at the same speed they lose LESS than the S70, but a long run of top-speed hits still wrecks them.
+for(const id of ['worktruck','flatbed']){const t=CLASSES[id].tough;assert(t<CLASSES.shortbed.tough,id+' tough is below the S70 (heavier = takes less)');for(const v of [6,10,15,20])assert(crashPoints(v,t)<crashPoints(v,CLASSES.shortbed.tough),id+' loses less than the S70 at '+v+' m/s');assert(rows[id].hits>=3&&rows[id].hits<=12,id+': Wrecked within 12 top-speed hits ('+rows[id].hits+')');assert(crashPoints(30,t)>0&&crashPoints(30,t)<=600)}
+assert(CLASSES.flatbed.tough<=CLASSES.worktruck.tough,'the flatbed is the heaviest');
 assert(rows.shortbed.left>=450&&rows.shortbed.left<=550,'the S70: about 50% left');
 for(const t of toughs){assert.equal(crashPoints(3.9,t),0,'under 4 m/s is free');assert.equal(crashPoints(4,t),0);assert(crashPoints(6,t)<=25,'a scrape (6 m/s) costs little: '+crashPoints(6,t));assert(applyPoints(1000,crashPoints(8,t))>=bandMin('fine'),'8 m/s (a clumsy tap) leaves a Fine vehicle')}
 function bandMin(id){return id==='fine'?800:0}
 for(const t of toughs){assert(crashPoints(20,t)<crashPoints(25,t)&&crashPoints(25,t)<=600,'harder hits cost more, inside the 600 cap')}
-console.log('PASS damage-table.mjs: the crash table (printed above): every class loses about half at full speed and is Wrecked on the 2nd or 3rd hit, bumps under 4 m/s are free, a 6 m/s scrape costs 25 points or less.');
+console.log('PASS damage-table.mjs: the crash table (printed above): the S70 and off-road lose about half at full speed and are Wrecked on the 2nd or 3rd hit, the heavy trucks lose less at the same speed (Wrecked after many hits), bumps under 4 m/s are free, a 6 m/s scrape costs 25 points or less.');

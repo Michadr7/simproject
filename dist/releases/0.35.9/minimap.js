@@ -3,6 +3,7 @@ import {MAP,riverPath} from './map-definition.js';
 import {terrain,MINIMAP_COLOUR} from './terrain.js';
 import {propInfo} from './props.js';
 import {heightAt} from './height.js';
+import {drawWaterLayer} from './water-chunks.js';
 
 // Whole-world map, north (-z) up: the city in the south, the river and bridge across the middle, Willow Fields (west) and Pine Ridge (east) north of it.
 // The static layer is drawn once (and again when a tree is felled); the
@@ -47,6 +48,7 @@ export function createMinimap(doc,{canvas,cityRoads=[],buildings=[],trees=()=>[]
     if(c>=0){const s=t.surface[c];if(surfaceRgb[s])col=surfaceRgb[s];else if(t.walk[c]&&t.zone[c])col=zoneRgb[t.zone[c]-1]}
     const o=(y*w+x)*4,s=shadeAt(wx,wz);img.data[o]=Math.max(0,Math.min(255,col[0]*s));img.data[o+1]=Math.max(0,Math.min(255,col[1]*s));img.data[o+2]=Math.max(0,Math.min(255,col[2]*s));img.data[o+3]=255}
    if(img?.data)ctx.putImageData(img,0,0)}
+  drawWaterLayer(ctx,MAP,px,pz,k); // lakes, sea, falls and new-form rivers (W3); the old river is already in the terrain mask
   for(const b of buildings)rect(ctx,{x0:b.x-b.hx,x1:b.x+b.hx,z0:b.z-b.hz,z1:b.z+b.hz},'#33383a');
   // Buildings placed from models (houses, shops, barns, the sawmill): their footprints, turned to face the way they stand. Vehicles and yard props are left off.
   ctx.fillStyle='#3f4548';for(const l of MAP.landmarks){if(l.decor)continue;const f=propInfo(l.prop).footprint,s=Math.round(Math.sin(l.yaw)),c=Math.round(Math.cos(l.yaw)),xs=[f.x0,f.x1].flatMap(x=>[f.z0,f.z1].map(z=>l.x+x*c+z*s)),zs=[f.x0,f.x1].flatMap(x=>[f.z0,f.z1].map(z=>l.z-x*s+z*c));

@@ -1,5 +1,6 @@
 import * as THREE from './vendor/three.module.js';
 import {junctionPatches} from './junctions.js';
+import {patchGround,setGroundQuality} from './ground-shader.js';import {GROUND_KINDS} from './ground-rules.js';export {setGroundQuality}; // GD1: the ground shader patch (ground-shader.js); setGroundQuality is re-exported for game.js applyQuality
 import {heightAt,valleyAt,deckAt,bridgeRise,RIVER_PATHS,RIVER_WATER_Y} from './height.js';
 import {MAP,zoneById,zoneAtPoint,roadRects,riverPath,riverDistance} from './map-definition.js';
 import {PINES,BROADLEAVES,modelInfo,modelGeometry,createNatureMaterials} from './nature.js';
@@ -7,7 +8,7 @@ import {terrain,SURFACE,roadCenterline} from './terrain.js';
 import {lampSpots} from './streetfurniture.js';
 import {markingBars,townSpots,FOUNTAIN,BUS_STOP} from './town.js';
 import {propInfo,createProp} from './props.js';
-import {chunkKey,chunkIndex,chunkRange,worldRange,createChunkIndex,maskTile} from './chunks.js';import {createChunkView} from './chunks-view.js';import {createEastbank} from './eastbank.js';import {createSceneOverlay} from './scene-overlay.js';
+import {chunkKey,chunkIndex,chunkRange,worldRange,createChunkIndex,maskTile} from './chunks.js';import {createChunkView} from './chunks-view.js';import {waterChunkMesh} from './water-chunks.js';import {createEastbank} from './eastbank.js';import {createSceneOverlay} from './scene-overlay.js';
 
 // ─── Layout (pure data, safe to import from rules and tests) ──────────────────
 // The city keeps its original footprint. Oak Farms lies west of it, Alder Woods east.
@@ -92,7 +93,7 @@ const blockSeed=(a,b,salt)=>(Math.imul(a,73856093)^Math.imul(b,19349663)^Math.im
 let cachedLayout=null;
 // Generates every tree once. Cuttable trees sit on cell centres and are keyed by cell.
 // Ground that belongs to something other than open country: a zone, a road, a pavement, a field, the river or a bridge. Scenery belts keep off it.
-const CLAIMED=new Set([SURFACE.STREET,SURFACE.ROAD,SURFACE.DIRT,SURFACE.PAVEMENT,SURFACE.WATER,SURFACE.BANK,SURFACE.BRIDGE,SURFACE.WHEAT,SURFACE.PLOWED,SURFACE.GREEN,SURFACE.DRIVEWAY,SURFACE.PATH]);
+const CLAIMED=new Set([SURFACE.STREET,SURFACE.ROAD,SURFACE.DIRT,SURFACE.PAVEMENT,SURFACE.WATER,SURFACE.BANK,SURFACE.BRIDGE,SURFACE.WHEAT,SURFACE.PLOWED,SURFACE.GREEN,SURFACE.DRIVEWAY,SURFACE.PATH,SURFACE.MUD,SURFACE.GRAVEL]);
 function claimed(x,z){const t=terrain(),c=t.index(x,z);return c<0||t.zone[c]!==0||CLAIMED.has(t.surface[c])}
 export function worldLayout(){
  if(cachedLayout)return cachedLayout;
@@ -158,13 +159,14 @@ export function createColliders(){
 function groundTexture(kind){
  const c=document.createElement('canvas');c.width=c.height=256;const ctx=c.getContext('2d');
  const r=random(kind.length*977);
- const base={farm:'#7d9a52',forest:'#4b663c',dirt:'#8a7152',field:'#86a057',plowed:'#5d4532',wheat:'#c7a249',green:'#6f9a45',paving:'#b9b7a8',plaza:'#c9c4b2'}[kind];
+ const base={farm:'#7d9a52',forest:'#4b663c',dirt:'#8a7152',mud:'#4a3826',field:'#86a057',plowed:'#5d4532',wheat:'#c7a249',green:'#6f9a45',paving:'#b9b7a8',plaza:'#c9c4b2'}[kind];
  ctx.fillStyle=base;ctx.fillRect(0,0,256,256);
  const specks=kind==='dirt'?['#00000014','#ffffff12','#5f4a3322']:kind==='forest'?['#00000016','#6d7d3a22','#7a5c3a24','#ffffff08']:['#00000010','#ffffff10','#9fb86522'];
  for(let i=0;i<7000;i++){ctx.fillStyle=specks[i%specks.length];const s=kind==='dirt'?1+r()*2.5:1+r()*1.5;ctx.fillRect(r()*256,r()*256,s,kind==='dirt'?s:s*2.2)}
  // Pavements: 2 m slabs with grout lines; the town square adds a darker chequer of 1 m squares.
  if(kind==='paving'||kind==='plaza'){if(kind==='plaza')for(let y=0;y<256;y+=64)for(let x=0;x<256;x+=64)if((x+y)/64%2===0){ctx.fillStyle='#00000014';ctx.fillRect(x,y,64,64)}ctx.strokeStyle='#8d9186b0';ctx.lineWidth=2;for(let n=0;n<256;n+=128){ctx.strokeRect(n,0,128,128);ctx.strokeRect(n,128,128,128)}}
  // Field rows: furrows of plowed soil, standing wheat, and rows of young crops.
+ if(kind==='mud')for(let i=0;i<60;i++){ctx.fillStyle=i%3?'#2e211655':'#7a5f4440';ctx.fillRect(r()*256,r()*256,8+r()*22,3+r()*7)} // TR3: wet blotches
  if(kind==='plowed')for(let y=0;y<256;y+=16){ctx.fillStyle='#3f2c1d88';ctx.fillRect(0,y,256,5);ctx.fillStyle='#7d5d4440';ctx.fillRect(0,y+6,256,3)}
  if(kind==='wheat')for(let x=0;x<256;x+=6){ctx.fillStyle=x%12?'#e2c46a55':'#a9873a55';ctx.fillRect(x,0,3,256)}
  if(kind==='green')for(let y=0;y<256;y+=12){ctx.fillStyle='#5a8a3a99';ctx.fillRect(0,y,256,4);ctx.fillStyle='#8db25c55';ctx.fillRect(0,y+5,256,3)}
@@ -212,12 +214,13 @@ export function createWorld(scene,{label,cullRadius,streaming=false}={}){
 
 
  // Ground: one base plane for the whole map, the farm's and forest's own ground over their zones, then dirt roads, field interiors, the river and the bridge.
- const textures={paving:groundTexture('paving'),plaza:groundTexture('plaza'),farm:groundTexture('farm'),forest:groundTexture('forest'),dirt:groundTexture('dirt'),field:groundTexture('field'),plowed:groundTexture('plowed'),wheat:groundTexture('wheat'),green:groundTexture('green')};
+ const grassKind=m=>{m.userData.groundKind='grass';return m};const softEdge=(m,x0,x1,z0,z1)=>{m.userData.groundEdge={x0,x1,z0,z1};return m}; // GD2: marks a ground plane's rectangle so its edge goes soft inside it (High; ground-shader.js)
+ const textures={paving:groundTexture('paving'),plaza:groundTexture('plaza'),farm:groundTexture('farm'),forest:groundTexture('forest'),dirt:groundTexture('dirt'),mud:groundTexture('mud'),field:groundTexture('field'),plowed:groundTexture('plowed'),wheat:groundTexture('wheat'),green:groundTexture('green')};
  // Ground layers lie millimetres apart, and a depth buffer cannot tell planes 1-2 mm apart at a distance: the far ground, the base ground and the forest's own ground (all within
   // 3 mm) flickered pale and dark when you looked down. Every flat ground mesh gets a depth bias by its rank in this list (a clone of its material), so the order of the layers
   // never depends on how far away they are. The gaps in the list are also real centimetres now.
   const GROUND_LAYERS=[-.09,-.082,-.074,-.069,-.068,-.066,-.058,-.05,-.049,-.045];
-  function groundLayer(material,y){const rank=GROUND_LAYERS.filter(l=>l<y-1e-9).length,m=material.clone();m.polygonOffset=true;m.polygonOffsetFactor=-rank;m.polygonOffsetUnits=-rank*2;return m}
+  function groundLayer(material,y){const rank=GROUND_LAYERS.filter(l=>l<y-1e-9).length,m=material.clone();if(m.userData.groundKind)patchGround(m,m.userData.groundKind);m.polygonOffset=true;m.polygonOffsetFactor=-rank;m.polygonOffsetUnits=-rank*2;return m}
   function plane(x0,x1,z0,z1,y,material,name){
   const mesh=new THREE.Mesh(new THREE.PlaneGeometry(x1-x0,z1-z0),groundLayer(material,y));mesh.rotation.x=-Math.PI/2;
   mesh.position.set((x0+x1)/2,y,(z0+z1)/2);mesh.receiveShadow=true;mesh.name=name;group.add(mesh);return mesh;
@@ -236,11 +239,11 @@ export function createWorld(scene,{label,cullRadius,streaming=false}={}){
    const mesh=new THREE.Mesh(g,groundLayer(material,y));mesh.rotation.x=-Math.PI/2;mesh.position.y=y;mesh.receiveShadow=true;mesh.name=name+(north?'-north':'-south');group.add(mesh);return mesh};
   if(!lips){return plane(x0,x1,z0,z1,y,material,name)}
   make(true);make(false);
- } function textured(tex,w,h,scale,color='#ffffff'){const map=tex.clone();map.needsUpdate=true;map.repeat.set(w/scale,h/scale);return new THREE.MeshStandardMaterial({map,color,roughness:1})}
+ } function textured(tex,w,h,scale,color='#ffffff',kind=null){const map=tex.clone();map.needsUpdate=true;map.repeat.set(w/scale,h/scale);const m=new THREE.MeshStandardMaterial({map,color,roughness:1});if(kind)m.userData.groundKind=kind;return m}
  const farmZone=zoneById('farm').bounds,forestZone=zoneById('forest').bounds;
  const WORLD_RECT=MAP.world||GROUND; // F2: the flat ground is two big planes for the whole 1500 x 1800 m world (an empty chunk costs no draw call of its own); the chunks add only what is authored on them
- groundSplit(WORLD_RECT.x0-700,WORLD_RECT.x1+700,WORLD_RECT.z0-700,WORLD_RECT.z1+700,-.09,new THREE.MeshStandardMaterial({color:'#8a9a7c',roughness:.95}),'ground-far'); // far beyond the fog, so the world never seems to end at the map's edge
- groundSplit(WORLD_RECT.x0,WORLD_RECT.x1,WORLD_RECT.z0,WORLD_RECT.z1,-.082,new THREE.MeshStandardMaterial({color:'#8a9a7c',roughness:.95}),'ground-base');
+ groundSplit(WORLD_RECT.x0-700,WORLD_RECT.x1+700,WORLD_RECT.z0-700,WORLD_RECT.z1+700,-.09,grassKind(new THREE.MeshStandardMaterial({color:'#8a9a7c',roughness:.95})),'ground-far'); // far beyond the fog, so the world never seems to end at the map's edge
+ groundSplit(WORLD_RECT.x0,WORLD_RECT.x1,WORLD_RECT.z0,WORLD_RECT.z1,-.082,grassKind(new THREE.MeshStandardMaterial({color:'#8a9a7c',roughness:.95})),'ground-base');
  // The river valley (0.34): one mesh from the lip on one side across the bank, the bed and the other bank to the lip on the other; its height is valleyAt and its colour goes from grass at the lip to
  // mud at the bed. The ground planes are cut along its lips (groundSplit), so it is the ground there.
  if(RIVER_PATHS[0]){const R=RIVER_PATHS[0],O=[],half=R.half,bank=R.bank;for(const o of [R.lip,R.lip-1.3,R.lip-2.6,half+bank+3,half+bank+1.5,half+bank+.7,half+bank,half+bank*.75,half+bank*.5,half+bank*.25,half,half*.5,0])O.push(o);
@@ -248,9 +251,9 @@ export function createWorld(scene,{label,cullRadius,streaming=false}={}){
   R.path.forEach((p,i)=>{for(const o of offsets){const x=p.x-p.tz*o,z=p.z+p.tx*o,dy=valleyAt(x,z);pos.push(x,-.079+dy,z);c.copy(grass).lerp(mud,Math.min(1,-dy/.7));col.push(c.r,c.g,c.b)}
    if(i){const a=(i-1)*cols;for(let k=0;k<cols-1;k++)idx.push(a+k,a+k+1,a+k+cols,a+k+1,a+k+cols+1,a+k+cols)}});
   const g=new THREE.BufferGeometry();g.setAttribute('position',new THREE.Float32BufferAttribute(pos,3));g.setAttribute('color',new THREE.Float32BufferAttribute(col,3));g.setIndex(idx);g.computeVertexNormals();g.computeBoundingSphere();
-  const mesh=new THREE.Mesh(g,groundLayer(new THREE.MeshStandardMaterial({vertexColors:true,roughness:1}),-.078));mesh.receiveShadow=true;mesh.name='river-valley';group.add(mesh)} // Hills (0.34): each hill is its own grid of 2 m cells over the flat base ground (one mesh, one draw call, culled by the camera like any mesh); its height is heightAt, which is 0 at its edge,
+  const mesh=new THREE.Mesh(g,groundLayer(Object.assign(new THREE.MeshStandardMaterial({vertexColors:true,roughness:1}),{userData:{groundKind:'valley'}}),-.078));mesh.receiveShadow=true;mesh.name='river-valley';group.add(mesh)} // Hills (0.34): each hill is its own grid of 2 m cells over the flat base ground (one mesh, one draw call, culled by the camera like any mesh); its height is heightAt, which is 0 at its edge,
  // so it meets the base ground without a seam. Only open country has hills (terrain.js validateTerrain), so nothing built stands on a slope.
- const hillMaterial=new THREE.MeshStandardMaterial({color:'#8a9a7c',roughness:.95});
+ const hillMaterial=grassKind(new THREE.MeshStandardMaterial({color:'#8a9a7c',roughness:.95}));
  for(const h of MAP.relief?.hills||[]){
   const cell=2,nx=Math.ceil(h.rx*2/cell),nz=Math.ceil(h.rz*2/cell),pos=[],idx=[];
   for(let j=0;j<=nz;j++)for(let i=0;i<=nx;i++){const x=h.x-h.rx+i*h.rx*2/nx,z=h.z-h.rz+j*h.rz*2/nz;pos.push(x,-.079+heightAt(x,z),z)}
@@ -258,11 +261,13 @@ export function createWorld(scene,{label,cullRadius,streaming=false}={}){
   const g=new THREE.BufferGeometry();g.setAttribute('position',new THREE.Float32BufferAttribute(pos,3));g.setIndex(idx);g.computeVertexNormals();g.computeBoundingSphere();
   const mesh=new THREE.Mesh(g,groundLayer(hillMaterial,-.078));mesh.receiveShadow=true;mesh.name='hill-'+h.id;group.add(mesh);
  }
- {const f={x0:farmZone.x0-14,x1:farmZone.x1,z0:farmZone.z0-14,z1:farmZone.z1+7};groundSplit(f.x0,f.x1,f.z0,f.z1,-.074,textured(textures.farm,f.x1-f.x0,f.z1-f.z0,7),'ground-farm')}
- {const f={x0:forestZone.x0,x1:forestZone.x1+14,z0:forestZone.z0-14,z1:forestZone.z1+7};groundSplit(f.x0,f.x1,f.z0,f.z1,-.074,textured(textures.forest,f.x1-f.x0,f.z1-f.z0,6),'ground-forest')}
- for(const r of DIRT_ROADS)plane(r.x0,r.x1,r.z0,r.z1,-.066,textured(textures.dirt,r.x1-r.x0,r.z1-r.z0,5),'dirt-road');
+ {const f={x0:farmZone.x0-14,x1:farmZone.x1,z0:farmZone.z0-14,z1:farmZone.z1+7};groundSplit(f.x0,f.x1,f.z0,f.z1,-.074,softEdge(textured(textures.farm,f.x1-f.x0,f.z1-f.z0,7,'#ffffff','farm'),f.x0,f.x1,f.z0,f.z1),'ground-farm')}
+ {const f={x0:forestZone.x0,x1:forestZone.x1+14,z0:forestZone.z0-14,z1:forestZone.z1+7};groundSplit(f.x0,f.x1,f.z0,f.z1,-.074,softEdge(textured(textures.forest,f.x1-f.x0,f.z1-f.z0,6,'#ffffff','forest'),f.x0,f.x1,f.z0,f.z1),'ground-forest')}
+ for(const r of DIRT_ROADS)plane(r.x0,r.x1,r.z0,r.z1,-.066,textured(textures.dirt,r.x1-r.x0,r.z1-r.z0,5,'#ffffff','dirt'),'dirt-road');
  // Fields: plowed soil, wheat and young crops, each its own ground, open to vehicles.
- for(const f of FIELDS)plane(f.x0,f.x1,f.z0,f.z1,-.069,textured(textures[f.surface],f.x1-f.x0,f.z1-f.z0,6),'field-'+f.id);
+ for(const f of FIELDS)plane(f.x0,f.x1,f.z0,f.z1,-.069,softEdge(textured(textures[f.surface],f.x1-f.x0,f.z1-f.z0,6,'#ffffff',GROUND_KINDS.includes(f.surface)?f.surface:'field'),f.x0,f.x1,f.z0,f.z1),'field-'+f.id);
+ // TR3: mud patches lie just over the fields and dirt tracks (-.064; terrain FOOTING 14 is the same number).
+ for(const m of MAP.mud||[])plane(m.x0,m.x1,m.z0,m.z1,-.064,softEdge(textured(textures.mud,m.x1-m.x0,m.z1-m.z0,4,'#ffffff','mud'),m.x0,m.x1,m.z0,m.z1),'mud-'+m.id);
 
  // Every rural asphalt road (the County Road, Alder Center's streets, Oak Street East, Cedar Heights' loop, the Freight Road) is a ribbon along its centreline with a dashed
  // line down the middle. The city's own streets are built in game.js.
@@ -306,7 +311,9 @@ export function createWorld(scene,{label,cullRadius,streaming=false}={}){
   const mesh=new THREE.Mesh(geometry,groundLayer(material,y));mesh.name=name;mesh.receiveShadow=true;group.add(mesh);return mesh;
  }
  // dirt tracks up the hills (0.34): a ribbon laid on the ground (every edge point lifted by heightAt), the dirt layer, one draw call each
- {const dirtTrack=new THREE.MeshStandardMaterial({color:'#8a7152',roughness:1});for(const t of MAP.relief?.tracks||[])ribbon(toPath(densify(t.points,2)),t.half,-.066,dirtTrack,'track-'+t.id,true)}
+ {const dirtTrack=patchGround(new THREE.MeshStandardMaterial({color:'#8a7152',roughness:1}),'dirt');for(const t of MAP.relief?.tracks||[])ribbon(toPath(densify(t.points,2)),t.half,-.066,dirtTrack,'track-'+t.id,true)
+  // R3a: gravel roads (surface 'gravel') are laid like the tracks: a ribbon along the centreline lifted by heightAt, the dirt ground kind (no new program), a paler colour, one draw call each.
+  const gravel=patchGround(new THREE.MeshStandardMaterial({color:'#a39d8c',roughness:1}),'dirt');gravel.userData.groundGravel=true;for(const e of MAP.roads.edges)if(e.surface==='gravel')ribbon(toPath(densify(roadCenterline(e),2)),e.width/2,-.066,gravel,'gravel-road-'+e.id,true)}
  for(const r of MAP.water.rivers){const path=riverPath(r,3);ribbon(path,r.width/2+r.bank,RIVER_WATER_Y,water,'river')}
  const stone=new THREE.MeshStandardMaterial({color:'#8b8f8c',roughness:1}),timber=new THREE.MeshStandardMaterial({color:'#6f5b43',roughness:1});
  // Bridges (0.34): the deck is an arch, rising BRIDGE_RISE m above the ground at its crown and level where it meets the road (bridgeRise, height.js). Each part is one extrusion along the deck
@@ -466,7 +473,7 @@ export function createWorld(scene,{label,cullRadius,streaming=false}={}){
   const T=terrain(),m4=new THREE.Matrix4(),quat=new THREE.Quaternion(),yAxis=new THREE.Vector3(0,1,0),at=new THREE.Vector3(),one=new THREE.Vector3(1,1,1),flat=new THREE.Vector3();
   const lit=(c,r=.85,extra={})=>new THREE.MeshStandardMaterial({color:c,roughness:r,...extra}),PAVED=.165;
   // pavements that world.js draws (the city's own are built in game.js): slabs 0.3 m thick whose top is the pavement's footing height
-  for(const p of MAP.pavements)if(p.draw){const w=p.x1-p.x0,d=p.z1-p.z0,slab=new THREE.Mesh(new THREE.BoxGeometry(w,.3,d),textured(textures[p.plaza?'plaza':'paving'],w,d,4));slab.position.set((p.x0+p.x1)/2,PAVED-.15,(p.z0+p.z1)/2);slab.receiveShadow=true;slab.name=p.plaza?'town-square':'pavement';group.add(slab)}
+  for(const p of MAP.pavements)if(p.draw){const w=p.x1-p.x0,d=p.z1-p.z0,slab=new THREE.Mesh(new THREE.BoxGeometry(w,.3,d),textured(textures[p.plaza?'plaza':'paving'],w,d,4,'#ffffff','paving'));patchGround(slab.material,'paving');slab.position.set((p.x0+p.x1)/2,PAVED-.15,(p.z0+p.z1)/2);slab.receiveShadow=true;slab.name=p.plaza?'town-square':'pavement';group.add(slab)}
   for(const lot of MAP.lots)streaming?quadInto('asphalt',lot.x0,lot.x1,lot.z0,lot.z1):plane(lot.x0,lot.x1,lot.z0,lot.z1,-.045,asphalt,'lot-'+lot.id);
   // painted markings: one instanced mesh of thin white bars (on the city's raised street they sit a little higher)
   {const bars=markingBars(),paint=new THREE.InstancedMesh(new THREE.BoxGeometry(1,.012,1),lit('#ecebe0',.9),bars.length);
@@ -555,7 +562,7 @@ export function createWorld(scene,{label,cullRadius,streaming=false}={}){
    for(const kind of ['asphalt','driveway','path']){const d=b[kind];if(!d.idx.length)continue;const g=new THREE.BufferGeometry();g.setAttribute('position',new THREE.Float32BufferAttribute(d.pos,3));g.setIndex(d.idx);g.computeVertexNormals();g.computeBoundingSphere();const mesh=new THREE.Mesh(g,gmat[kind]);mesh.receiveShadow=true;mesh.name='ground-'+kind+'-'+slice.key;set.add(mesh)}
    if(b.dashes.length){const marks=new THREE.InstancedMesh(new THREE.BoxGeometry(.18,.02,2.2),lineMaterial,b.dashes.length);b.dashes.forEach((d,i)=>marks.setMatrixAt(i,m4.compose(v.set(d.x,d.y,d.z),q.setFromAxisAngle(yAxis,d.yaw),s.set(1,1,1))));marks.computeBoundingSphere();marks.name='road-lines-'+slice.key;set.add(marks)}
    return set.children.length?set:null};
-  chunkView=createChunkView({index:createChunkIndex({layout,fences:segments,range:worldRange()}),colliders,scene:group,map:MAP,build:{fences:slice=>slice.fences.length?fenceSet(slice.fences.map(e=>e.item)):null,ground:groundChunk},onFade:screenFade});
+  chunkView=createChunkView({index:createChunkIndex({layout,fences:segments,range:worldRange()}),colliders,scene:group,map:MAP,build:{water:slice=>waterChunkMesh(THREE,water,MAP,slice.i,slice.j),fences:slice=>slice.fences.length?fenceSet(slice.fences.map(e=>e.item)):null,ground:groundChunk},onFade:screenFade});
   chunkView.ensure(MAP.spawn.x,MAP.spawn.z,2);walkSource=chunkView;
  }
  return {

@@ -1,6 +1,9 @@
 import './legacy-keys.js';
 import {bandOf,misfiring} from './damage.js';
-import {SOUND_EXT,CRANK_CLIP,STALL_CLIP,VEHICLE_SET,YELL_CLIPS,SCRAPE_CLIPS,engineFor,crashPlan,pickIndex,createYellGate,createVoices,scrapeGain,scrapeRate} from './vehicle-sounds.js'; // SND1: recorded vehicle, crash and yell sounds (optional: the generated sounds stay as the fallback)
+import {PHONE_CLIPS} from './phone-calls.js'; // PH1: the Call app's sounds (lazy, fallback tones)
+import {SOUND_EXT,CRANK_CLIP,STALL_CLIP,VEHICLE_SET,YELL_CLIPS,SCRAPE_CLIPS,engineFor,crashPlan,pickIndex,createYellGate,createVoices,scrapeGain,scrapeRate,TYRE,TYRE_CLIPS,tyreMix,stepTyreBlend,freshTyreBlend} from './vehicle-sounds.js'; // SND1: recorded vehicle, crash and yell sounds (optional: the generated sounds stay as the fallback)
+const PHONE_LEVEL={key:.45,pickup:.7,ring:.5,busy:.5,hangup:.7}; // PH1: levels of the recorded phone clips
+const PHONE_TONES={key:{f:[697,1209],on:.09,per:.09,n:1,lv:.12},ring:{f:[440,480],on:1.8,per:2,n:1,lv:.1},busy:{f:[480,620],on:.5,per:1,n:6,lv:.1},pickup:{click:1800},hangup:{click:900}}; // the generated fallbacks (Hz)
 // Sound, generated with the Web Audio API (no sound files). One AudioContext, created on the first click or key (browsers do not allow sound before one); a master volume and a mute that are saved;
 // at most three sounds at once: the blade, the belt and the lever click. Every sound is placed in the world: it is loudest within NEAR metres and silent beyond HEARING metres of the player.
 // Mono on purpose (no panning yet). Nothing here runs unless a source is near enough to hear.
@@ -90,11 +93,26 @@ export function createAudio({AudioContextClass,storage,random=Math.random,sample
   if(g>0&&live()){scrIdle=0;if(!scr){const names=SCRAPE_CLIPS.filter(n=>buffers.has(n));if(!names.length||!voices.take())return;const i=pickIndex(names.length,random,last.scrape),b=buffers.get(names[i]),s=looping(b),sg=gain(0);last.scrape=i;s.connect(sg);sg.connect(master);s.start(ctx.currentTime,random()*b.duration);scr={s,g:sg}}
    ease(scr.g.gain,g,.05);ease(scr.s.playbackRate,scrapeRate(speed),.1)}
   else if(scr){scrIdle+=dt;ease(scr.g.gain,0,.04);if(scrIdle>.4){try{scr.s.stop()}catch{}scr.s.disconnect?.();scr.g.disconnect?.();scr=null;voices.free()}}
+ }
+ // TR6: tyre sounds. One loop per kind of ground (asphalt, gravel, grass, mud), loaded the first time that ground is driven on, played while you drive faster than 0.5 m/s: gain and pitch from speed and slip (vehicle-sounds.js tyreMix),
+ // cross-faded over .3 s when the ground changes (stepTyreBlend). Until a loop is decoded (or if it never loads) a filtered generated noise stands in (asphalt keeps the engine's own road noise). Mute and a hidden tab silence it.
+ const TYRE_QUIET={loop:null,gain:0,rate:1},TYRE_LOOPS=Object.keys(TYRE_CLIPS),tyreW=freshTyreBlend(),tyreV=new Map(),TYRE_FALLBACK={gravel:{type:'bandpass',f:2200,q:.5,k:.16},grass:{type:'lowpass',f:900,q:.5,k:.25},mud:{type:'lowpass',f:350,q:.7,k:.4}};let tyreIdle=0;
+ function tyreStop(r){try{r.s.stop()}catch{}r.s.disconnect?.();r.g.disconnect?.();if(r.rec)voices.free()}
+ function tyres(fx){
+  const m=fx.on&&live()?tyreMix(fx):TYRE_QUIET;if(m.loop&&m.gain>0)want([TYRE_CLIPS[m.loop]]);stepTyreBlend(tyreW,m.gain>0?m.loop:null,fx.dt||0);let any=false;
+  for(const loop of TYRE_LOOPS){const w=tyreW[loop],buf=buffers.get(TYRE_CLIPS[loop]);let r=tyreV.get(loop);
+   if(r&&!r.rec&&buf){tyreStop(r);tyreV.delete(loop);r=null} // the recording arrived: swap the stand-in for it
+   if(w>0&&!r){
+    if(buf){if(voices.take()){const s=looping(buf),g=gain(0);s.connect(g);g.connect(master);s.start(ctx.currentTime,random()*buf.duration);r={s,g,rec:true,k:1}}}
+    else if(TYRE_FALLBACK[loop]&&v){const c=TYRE_FALLBACK[loop],s=looping(v.buffer),fl=filtered(c.type,c.f,c.q),g=gain(0);s.connect(fl);fl.connect(g);g.connect(master);s.start(ctx.currentTime,random()*1.5);r={s,g,rec:false,k:c.k}}
+    if(r)tyreV.set(loop,r)}
+   if(r){ease(r.g.gain,w*m.gain*r.k,.05);if(r.rec)ease(r.s.playbackRate,m.rate,.1);if(w>0)any=true}}
+  tyreIdle=any?0:tyreIdle+(fx.dt||0);if(!any&&tyreIdle>TYRE.idleStopS&&tyreV.size){for(const r of tyreV.values())tyreStop(r);tyreV.clear()}
  } return {
   settings,
   get ready(){return !!ctx},
   // SND1 test and tool access: has(name) (decoded), pending (files still to fetch), voices (clips playing).
-  sounds:{has:n=>buffers.has(n),get pending(){return queue.length+(busy?1:0)},get voices(){return voices.total},get yells(){return voices.yells},get engine(){return eng?eng.cls:null}},
+  sounds:{get tyres(){return TYRE_LOOPS.filter(l=>tyreV.has(l)&&tyreW[l]>0)},tyreWeights:tyreW,has:n=>buffers.has(n),get pending(){return queue.length+(busy?1:0)},get voices(){return voices.total},get yells(){return voices.yells},get engine(){return eng?eng.cls:null}},
   // Call from a click or key press. Safe to call again (it only resumes a suspended context). False when the browser has no Web Audio.
   unlock(){
    if(ctx){if(ctx.state==='suspended')ctx.resume?.();return true}
@@ -203,7 +221,19 @@ export function createAudio({AudioContextClass,storage,random=Math.random,sample
   drive(fx){
    if(!ctx)return;yellClock+=fx.dt;
    if(fx.on&&live()){const h=gate.scan(yellClock,fx.x,fx.z,fx.speed,fx.people);if(h&&!yell(h.vol))gate.last.delete(h.id)}
-   scrape(fx.on&&fx.sliding?fx.speed:0,fx.dt);
+   scrape(fx.on&&fx.sliding?fx.speed:0,fx.dt);tyres(fx);
+  },
+  // PH1: a phone sound (phone-calls.js PHONE_CLIPS: key, pickup, ring, busy, hangup) through the master gain, so mute and volume apply. loop repeats the recorded clip until the returned stop() is called. The clips load on the first call; until they are decoded (or if they never load) a generated tone plays instead. Returns stop().
+  phone(name,{loop=false}={}){
+   const none=()=>{};if(!ctx||!v||!live())return none;want(PHONE_CLIPS);
+   const b=buffers.get('phone-'+name),t=ctx.currentTime,g=gain(0),parts=[];let done=false;g.connect(master);
+   if(b){const s=loop?looping(b):ctx.createBufferSource();s.buffer=b;s.connect(g);g.gain.value=PHONE_LEVEL[name]||.5;s.start(t);parts.push(s)}
+   else{const p=PHONE_TONES[name];if(!p)return none;
+    if(p.click){const s=ctx.createBufferSource(),bp=filtered('bandpass',p.click,1.2);s.buffer=v.buffer;s.connect(bp);bp.connect(g);g.gain.setValueAtTime(.5,t);g.gain.setTargetAtTime(.0001,t+.01,.02);s.start(t,random()*1.5);s.stop(t+.12);parts.push(s)}
+    else{for(const f of p.f){const o=ctx.createOscillator();o.type='sine';o.frequency.value=f;o.connect(g);o.start(t);o.stop(t+p.per*p.n+.05);parts.push(o)}
+     for(let i=0;i<p.n;i++){g.gain.setValueAtTime(p.lv,t+i*p.per);g.gain.setValueAtTime(0,t+i*p.per+p.on)}}}
+   const stop=()=>{if(done)return;done=true;try{g.gain.cancelScheduledValues?.(ctx.currentTime);ease(g.gain,0,.02)}catch{}setTimeout(()=>{for(const s of parts){try{s.stop()}catch{}}try{g.disconnect()}catch{}},120)};
+   return stop;
   }
  };
 }

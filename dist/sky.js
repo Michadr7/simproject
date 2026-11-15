@@ -7,6 +7,7 @@ import {skyAt,gradeGLSL,NIGHT_FLOOR,clampNightFloor,clampExposureScale,wrapMinut
 
 export const INDOOR_EXPOSURE=1.12; // interiors, the character preview and the menu keep the exposure the game always had (they stay day-bright for now)
 export const STAR_COUNT=600,SUN_DISTANCE=60;
+export const SKY_HORIZON={value:new THREE.Color(.62,.74,.86)}; // GD3: the horizon colour as ONE shared uniform ({value:Color}); update() keeps it equal to the fog colour, the ground shader's puddles read it (day value until the first update)
 const EMPTY=/vec3 CustomToneMapping\( vec3 color \) \{[^}]*\}/;
 
 // Puts the grade into three.js's tone-mapping chunk. Call before the first frame; calling again changes nothing. False if this three.js has no CustomToneMapping to replace.
@@ -68,6 +69,7 @@ export function createSky({scene,renderer,sun,hemi}){
   if(scene.fog){scene.fog.color.setRGB(s.horizon[0],s.horizon[1],s.horizon[2]);scene.fog.near=s.fogNear;scene.fog.far=s.fogFar}
   if(scene.background?.isColor)scene.background.setRGB(s.horizon[0],s.horizon[1],s.horizon[2]); // only seen if the dome fails to draw: then the sky is flat, as it was
   renderer.toneMappingExposure=indoors?INDOOR_EXPOSURE:s.exposure;
+  SKY_HORIZON.value.setRGB(s.horizon[0],s.horizon[1],s.horizon[2]);
   U.uTop.value.setRGB(s.top[0],s.top[1],s.top[2]);U.uHorizon.value.setRGB(s.horizon[0],s.horizon[1],s.horizon[2]);U.uSunDir.value.set(s.sunDir[0],s.sunDir[1],s.sunDir[2]);U.uMoonDir.value.set(s.moonDir[0],s.moonDir[1],s.moonDir[2]);
   {const k=1+(s.weights.dawn+s.weights.dusk)*.6,w=s.weights.day,a=DAY.lightColor,b=s.sunHeight>=0?s.lightColor:a;U.uSunColor.value.setRGB((a[0]*w+b[0]*(1-w))*k,(a[1]*w+b[1]*(1-w))*k*(1-.25*s.sunGlow),(a[2]*w+b[2]*(1-w))*k*(1-.55*s.sunGlow))} // the disc and its lobe go orange at dawn and dusk
   U.uSunDisc.value=s.sunDisc;U.uMoonDisc.value=s.moonDisc;U.uSunGlow.value=s.sunGlow;

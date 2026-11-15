@@ -1,5 +1,7 @@
 // SND1: the real recorded sounds for driving (pure rules, tested; audio.js plays them). Files live in dist/assets/sounds/ (Ogg Vorbis, mono) and are recorded in ASSETS.md (all CC0).
 // Nothing here touches Web Audio. If a file is missing or will not decode, audio.js keeps the generated sound.
+import {PHONE_CLIPS} from './phone-calls.js';
+import {SURFACE} from './terrain.js';
 export const SOUND_EXT='.ogg';
 // One engine loop per vehicle class (a steady idle, 5 to 6 s, cross-faded to loop). The rpm moves its playbackRate between [idle-ish, top]; the load opens a low-pass.
 export const ENGINES=Object.freeze({
@@ -20,7 +22,10 @@ export const YELL_CLIPS=Object.freeze(['yell-m1','yell-m2','yell-m3','yell-m4','
 export const CRANK_CLIP='start-crank',STALL_CLIP='stall'; // the crank is a loop (played for as long as the starter turns)
 // Everything the game can load, with the one-time "vehicle" set (loaded when you first get into a vehicle; the engine loop of the class is loaded on its own).
 export const VEHICLE_SET=Object.freeze([CRANK_CLIP,STALL_CLIP,...CRASH_CLIPS.medium,...CRASH_CLIPS.hard,...CRASH_CLIPS.light,...GLASS_CLIPS,...PERSON_CLIPS,...SCRAPE_CLIPS,...YELL_CLIPS]);
-export const ALL_FILES=Object.freeze([...Object.values(ENGINES).map(e=>e.file),...VEHICLE_SET]);
+// TR6: one tyre loop per kind of ground (mono Ogg, CC0, see ASSETS.md). NOT in VEHICLE_SET: audio.drive() loads only the loop of the ground you are on, the first time you need it.
+export const TYRE_CLIPS=Object.freeze({asphalt:'tyres-asphalt',gravel:'tyres-gravel',grass:'tyres-grass',mud:'tyres-mud'});
+export const TYRE_FILES=Object.freeze(Object.values(TYRE_CLIPS));
+export const ALL_FILES=Object.freeze([...Object.values(ENGINES).map(e=>e.file),...VEHICLE_SET,...PHONE_CLIPS,...TYRE_FILES]); // PH1: the phone clips are registered here too (loaded by audio.phone(), not on entering a vehicle)
 // Budgets (tests check the files against them).
 export const MAX_FILE_BYTES=60000,MAX_PAYLOAD_BYTES=2000000,MAX_VOICES=12,MAX_YELLS=2,YELL_MAX_SECONDS=1.2;
 const ENG_BY_CLASS=new Map(Object.entries(ENGINES).map(([k,v])=>[k,v]));
@@ -73,3 +78,21 @@ export function createVoices(max=MAX_VOICES,maxYells=MAX_YELLS){
 export const SCRAPE={minSpeed:2.5,fullSpeed:14,maxGain:.55};
 export const scrapeGain=speed=>{const v=Math.abs(speed);return v<SCRAPE.minSpeed?0:SCRAPE.maxGain*Math.min(1,(v-SCRAPE.minSpeed)/(SCRAPE.fullSpeed-SCRAPE.minSpeed)+.25)};
 export const scrapeRate=speed=>.85+.35*Math.min(1,Math.abs(speed)/SCRAPE.fullSpeed);
+
+// TR6 tyre sounds (pure rules; audio.js plays them). The loop for a ground, how loud and how fast it plays by speed and slip, and the cross-fade when the ground changes.
+const T=SURFACE;
+export const TYRE_SURFACE=Object.freeze({[T.STREET]:'asphalt',[T.ROAD]:'asphalt',[T.BRIDGE]:'asphalt',[T.DRIVEWAY]:'asphalt',[T.PAVEMENT]:'asphalt',[T.DIRT]:'gravel',[T.PATH]:'gravel',[T.GRAVEL]:'gravel',[T.GRASS]:'grass',[T.GREEN]:'grass',[T.WHEAT]:'grass',[T.PLOWED]:'grass',[T.MUD]:'mud'});
+export const tyreLoopOf=surface=>TYRE_SURFACE[surface]||null; // water, banks and unknown ground: silent
+export const TYRE={minSpeed:.5,fullSpeed:16,fadeS:.3,spinSpeed:6,level:{asphalt:.5,gravel:.6,grass:.45,mud:.65},slipGain:.3,rate:[.8,1.3],slipRate:.1,idleStopS:.6};
+// How loud and how fast one loop plays. speed m/s (signed); slip 0..1 (sliding sideways or spinning); spin: the wheels turn on the spot (Stuck, or throttle held below 3 m/s), which sounds like driving at TYRE.spinSpeed. Returns {loop, gain, rate}; gain 0 below TYRE.minSpeed.
+export function tyreMix({surface,speed=0,slip=0,spin=false}={}){
+ const loop=tyreLoopOf(surface);if(!loop)return {loop:null,gain:0,rate:1};
+ const v=Math.max(Math.abs(speed),spin?TYRE.spinSpeed:0),s=Math.max(0,Math.min(1,slip));if(v<TYRE.minSpeed)return {loop,gain:0,rate:1};
+ const k=Math.min(1,(v-TYRE.minSpeed)/(TYRE.fullSpeed-TYRE.minSpeed));
+ return {loop,gain:TYRE.level[loop]*Math.sqrt(k)*(1+TYRE.slipGain*s),rate:TYRE.rate[0]+(TYRE.rate[1]-TYRE.rate[0])*k+TYRE.slipRate*s};
+}
+// Slip 0..1 from the steering and the grip of the ground: turning hard at speed on loose ground slips, turning on a road does not; wheelspin counts as .8.
+export const slipOf=({speed=0,top=10,steer=0,grip=1,spin=false}={})=>Math.min(1,(spin?.8:0)+Math.abs(steer)*Math.min(1,Math.abs(speed)/Math.max(.1,top))*Math.max(0,1.2-grip));
+export const freshTyreBlend=()=>({asphalt:0,gravel:0,grass:0,mud:0});
+// One step of the cross-fade: the weight of the wanted loop rises, every other falls, each by dt / TYRE.fadeS (so a change of ground takes .3 s and the weights of two loops add up to about 1 in between). loop null: all fall. Returns the same object.
+export function stepTyreBlend(w,loop,dt){const d=dt/TYRE.fadeS;for(const k of Object.keys(w))w[k]=Math.max(0,Math.min(1,w[k]+(k===loop?d:-d)));return w}

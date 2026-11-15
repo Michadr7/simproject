@@ -13,10 +13,11 @@ import {createPhoneStore} from './phone-store.js';
 import {createPhoneJobs} from './phone-jobs.js';
 import {vehicleCapacity,vehicleCount,vehicleLabel} from './orders.js';
 import {messagesOf,unreadByApp,unreadTotal,APP_NAMES,timeText} from './messages.js';
-import {statusOf,hoursNow} from './garage.js'; // VD4: the garage line and Call a tow on each vehicle card
+import {statusOf,hoursNow} from './garage.js'; // VD4: the garage line on each vehicle card (PH1: Call a tow moved to the Call app)
+import {createPhoneCall} from './phone-call.js';
 
 // UI only: transactions and movement/cursor ownership stay in game.js.
-export function createPhone({document:doc,getState,canOpen,onOpen,onClose,onAccept,onRefresh,onHomeAction,onOrder,onOrderVehicle,onSetMain,isOnSite,onClockIn,onClockOut,onQuit,onCollect,onRead,onTow}){
+export function createPhone({document:doc,getState,canOpen,onOpen,onClose,onAccept,onRefresh,onHomeAction,onOrder,onOrderVehicle,onSetMain,isOnSite,onClockIn,onClockOut,onQuit,onCollect,onRead,onTow,pullInfo,onPull,inVehicle,audio}){
   const $=id=>doc.getElementById(id);
   let opened=false,screen='home',previousFocus=null;
   // unread counts come from the saved messages (messages.js): the phone button shows the total, each app icon its own, Messages the total again
@@ -26,6 +27,7 @@ export function createPhone({document:doc,getState,canOpen,onOpen,onClose,onAcce
   $('phoneOverlay').hidden=true;
   const store=createPhoneStore({document:doc,getState,onOrderVehicle:(model,colour,home)=>onOrderVehicle?.(model,colour,home)||{error:'Ordering is not available.'},onOrder:(cart,home)=>onOrder?.(cart,home)||{error:'Ordering is not available.'},onSetMain:id=>onSetMain?.(id)||{error:'Not available.'},say:text=>{$('phoneMessage').textContent=text}});
   const jobs=createPhoneJobs({document:doc,getState,isOnSite:id=>isOnSite?.(id)??false,onClockIn:id=>onClockIn?.(id)||{error:'Not available.'},onClockOut:()=>onClockOut?.()||{error:'Not available.'},onQuit:id=>onQuit?.(id)||{error:'Not available.'},onCollect:id=>onCollect?.(id)||{error:'Not available.'},say:text=>{$('phoneMessage').textContent=text}});
+  const call=createPhoneCall({document:doc,getState,inVehicle:()=>inVehicle?.()??false,onTow:uid=>{const r=onTow?.(uid)||{error:'Not available.'};refresh();return r},pullInfo:()=>pullInfo?.()||null,onPull:()=>{const r=onPull?.()||{error:'Not available.'};refresh();return r},audio}); // PH1: the Call app (a tow is called from here)
   const cards=CONTRACTS.map(job=>{
     const card=doc.createElement('article');card.className='phone-contract';
     const title=doc.createElement('h3');title.textContent=job.title;
@@ -75,10 +77,10 @@ export function createPhone({document:doc,getState,canOpen,onOpen,onClose,onAcce
        const title=doc.createElement('h3');title.textContent=vehicleLabel(v.model,v.colour);
        const specs=doc.createElement('p');specs.textContent=`${TIER_NAME[cls.tier]||cls.tier} · ${cls.mpg} mpg · top ${mph(cls.top)} mph · ${(slot.fuel.tankMgal/GALLON).toFixed(0)} gal ${fuelName(slot.fuel.type)} tank`;
        const level=doc.createElement('p');level.className='phone-home-status';garageLevels.set(v.uid,level);
-       const shopLine=doc.createElement('p');shopLine.className='phone-home-status';const tow=doc.createElement('button');tow.id='tow-'+v.uid;tow.className='phone-accept';tow.onclick=()=>{const r=onTow?.(v.uid)||{error:'Not available.'};$('phoneMessage').textContent=r.error||r.message||'';refresh()};garageExtra.set(v.uid,{shopLine,tow});
-       card.append(title,specs,level,shopLine,tow);cards.push(card)}
+       const shopLine=doc.createElement('p');shopLine.className='phone-home-status';garageExtra.set(v.uid,{shopLine});
+       card.append(title,specs,level,shopLine);cards.push(card)}
       $('phoneGarage').replaceChildren(...cards,noVehicles)}
-     for(const v of owned){const slot=MAP.vehicles.find(s=>s.model===v.model),level=garageLevels.get(v.uid);if(slot&&level)level.textContent=`Fuel: ${fuelText(v.fuelMgal??slot.fuel.tankMgal,slot.fuel.tankMgal)}`;const ex=garageExtra.get(v.uid),st=ex&&statusOf(progress,v.uid,hoursNow(progress));if(st){const at=st.readyAt!==null?` · ready ${weekday(Math.floor(st.readyAt/24)+1)} ${formatClock((st.readyAt%24)*60)}`:'';ex.shopLine.textContent=st.line+(st.inShop&&!st.ready?at:'');ex.tow.hidden=st.inShop;ex.tow.textContent=st.tow===0?'Call a tow · free this time':`Call a tow to the repair shop · $${(st.tow/100).toFixed(2)}`}}
+     for(const v of owned){const slot=MAP.vehicles.find(s=>s.model===v.model),level=garageLevels.get(v.uid);if(slot&&level)level.textContent=`Fuel: ${fuelText(v.fuelMgal??slot.fuel.tankMgal,slot.fuel.tankMgal)}`;const ex=garageExtra.get(v.uid),st=ex&&statusOf(progress,v.uid,hoursNow(progress));if(st){const at=st.readyAt!==null?` · ready ${weekday(Math.floor(st.readyAt/24)+1)} ${formatClock((st.readyAt%24)*60)}`:'';ex.shopLine.textContent=st.line+(st.inShop&&!st.ready?at:'')}}
      noVehicles.hidden=owned.length>0;$('phoneVehicleSpace').textContent=`Vehicle space: ${vehicleCount(progress)} of ${vehicleCapacity(progress)} used (apartment 1, small house 1, medium 2, large 3).`}
     {const can=canOf(progress);$('phoneCan').textContent=can?`Gas can: ${canText(can)}.`:'No gas can. Buy one ($15) from the store.'}
     $('phonePlayerName').textContent=state.me.name||'New neighbor';
@@ -116,9 +118,9 @@ export function createPhone({document:doc,getState,canOpen,onOpen,onClose,onAcce
   }
   function showScreen(next){
     screen=next;
-    for(const name of ['home','messages','gigs','bank','homes','player','store','jobs'])$('phoneScreen-'+name).hidden=name!==screen;
+    for(const name of ['home','messages','gigs','bank','homes','player','store','jobs','call'])$('phoneScreen-'+name).hidden=name!==screen;
     $('phoneTitle').textContent=screen==='home'?'Your phone':({homes:'Housing'})[screen]||screen[0].toUpperCase()+screen.slice(1);
-    if(screen!=='store')store.reset();if(screen!=='jobs')jobs.reset();$('phoneHome').disabled=screen==='home';$('phoneBack').disabled=screen==='home';$('phoneMessage').textContent='';refresh();
+    if(screen!=='store')store.reset();if(screen!=='jobs')jobs.reset();if(screen!=='call')call.reset();$('phoneHome').disabled=screen==='home';$('phoneBack').disabled=screen==='home';$('phoneMessage').textContent='';refresh();
     // opening an app reads its messages; Messages reads them all (the list was drawn first, so the unread ones still show as unread this once)
     if(screen==='messages'){renderMessages();onRead?.(null)}else if(screen!=='home')onRead?.(screen);
     badgeNow();
@@ -129,11 +131,11 @@ export function createPhone({document:doc,getState,canOpen,onOpen,onClose,onAcce
     $('phoneOverlay').hidden=false;showScreen('home');$('phoneApp-gigs').focus();
   }
   function close(){
-    if(!opened)return;
+    if(!opened)return;call.reset();
     opened=false;$('phoneOverlay').hidden=true;onClose();
     previousFocus?.focus?.();
   }
-  for(const name of ['messages','gigs','bank','homes','player','store','jobs'])$('phoneApp-'+name).onclick=()=>showScreen(name);
+  for(const name of ['messages','gigs','bank','homes','player','store','jobs','call'])$('phoneApp-'+name).onclick=()=>showScreen(name);
   $('phoneHome').onclick=()=>showScreen('home');$('phoneBack').onclick=()=>{if(screen==='store'&&store.back())return;showScreen('home')};$('phoneClose').onclick=close;
   $('phoneButton').onclick=()=>opened?close():open();
   // A notification (the message itself is already saved: game.js notifyPhone): the button shakes (the class is taken off and put back so a second one shakes again) and the badges are redrawn. With the phone open, a message for the screen you are on is read at once.

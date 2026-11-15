@@ -8,10 +8,10 @@
 import {junctionPatches,cornerRegion,inPolygon} from './junctions.js';
 import {MAP,roadRect,riverPath} from './map-definition.js';
 
-export const SURFACE=Object.freeze({GRASS:1,STREET:2,ROAD:3,DIRT:4,PAVEMENT:5,WATER:6,BANK:7,BRIDGE:8,WHEAT:9,PLOWED:10,GREEN:11,DRIVEWAY:12,PATH:13});
+export const SURFACE=Object.freeze({GRASS:1,STREET:2,ROAD:3,DIRT:4,PAVEMENT:5,WATER:6,BANK:7,BRIDGE:8,WHEAT:9,PLOWED:10,GREEN:11,DRIVEWAY:12,PATH:13,MUD:14,GRAVEL:15}); // MUD (TR3): painted from map.mud after the fields; GRAVEL (TR3): the ground of a 'gravel' road (no road uses it until R3)
 // How high the player's feet sit on each surface (the city's streets and pavements are raised meshes; the County Road is a plane on the grass).
-export const FOOTING=Object.freeze({1:-.095,2:.01,3:-.045,4:-.066,5:.165,6:-.095,7:-.095,8:-.01,9:-.069,10:-.069,11:-.069,12:-.04,13:-.04}); // 0.32.1: each is the top of the mesh drawn there (rural asphalt -0.045, dirt road -0.066, fields -0.069), so feet and wheels no longer sink 3-5 cm into them; grass stays (the city is pinned to it)
-export const MINIMAP_COLOUR=Object.freeze({2:'#45494b',3:'#45494b',4:'#9c8462',5:'#8d9294',6:'#3f7ea3',7:'#5b6448',8:'#6f5b43',9:'#d4b45a',10:'#6b4f3a',11:'#82a653',12:'#8f9396',13:'#b9b3a4'});
+export const FOOTING=Object.freeze({1:-.095,2:.01,3:-.045,4:-.066,5:.165,6:-.095,7:-.095,8:-.01,9:-.069,10:-.069,11:-.069,12:-.04,13:-.04,14:-.064,15:-.066}); // MUD is the top of its ground mesh (-.064, just over a dirt track); GRAVEL is a dirt-road mesh (-.066) // 0.32.1: each is the top of the mesh drawn there (rural asphalt -0.045, dirt road -0.066, fields -0.069), so feet and wheels no longer sink 3-5 cm into them; grass stays (the city is pinned to it)
+export const MINIMAP_COLOUR=Object.freeze({2:'#45494b',3:'#45494b',4:'#9c8462',5:'#8d9294',6:'#3f7ea3',7:'#5b6448',8:'#6f5b43',9:'#d4b45a',10:'#6b4f3a',11:'#82a653',12:'#8f9396',13:'#b9b3a4',14:'#5b4630',15:'#a8a08e'});
 const FIELD_SURFACE={wheat:SURFACE.WHEAT,plowed:SURFACE.PLOWED,green:SURFACE.GREEN};
 
 // The centreline of a road edge: its two nodes with any `path` points between them, smoothed into a curve when `curve` is set.
@@ -59,7 +59,7 @@ export function buildTerrain(map=MAP,{cell=.5,window=null}={}){
  for(const plot of map.reserved||[]){if(plot.driveway)rect(plot.driveway,c=>{surface[c]=SURFACE.DRIVEWAY});if(plot.path)rect(plot.path,c=>{surface[c]=SURFACE.PATH})}
  // 2. roads: straight axis-aligned edges are their rectangle; edges with a path are ribbons. `walkable` roads also make their ground walkable.
  for(const edge of map.roads.edges){
-  const kind=edge.surface==='dirt'?SURFACE.DIRT:edge.level==='rural'?SURFACE.ROAD:SURFACE.STREET,named=edge.zone?map.zones.findIndex(z=>z.id===edge.zone)+1:0,
+  const kind=edge.surface==='dirt'?SURFACE.DIRT:edge.surface==='gravel'?SURFACE.GRAVEL:edge.level==='rural'?SURFACE.ROAD:SURFACE.STREET,named=edge.zone?map.zones.findIndex(z=>z.id===edge.zone)+1:0,
    paint=c=>{surface[c]=kind;if(edge.walkable){walk[c]=1;if(named)zone[c]=named}};
   if(edge.path)ribbon(S.line(edge),edge.width/2,paint);else rect(roadRect(edge,map),paint);
  }
@@ -73,6 +73,7 @@ export function buildTerrain(map=MAP,{cell=.5,window=null}={}){
  for(const t of map.relief?.tracks||[])ribbon(t.points,t.half,c=>{surface[c]=SURFACE.DIRT});
  // 3. fields and 4. pavements
  for(const f of map.fields)rect(f,c=>{surface[c]=FIELD_SURFACE[f.surface]||SURFACE.GRASS});
+ for(const m of map.mud||[])rect(m,c=>{surface[c]=SURFACE.MUD}); // TR3: after the fields (a muddy gate), before the pavements, the river and the bridges
  for(const p of map.pavements||[])rect(p,c=>{surface[c]=SURFACE.PAVEMENT});
  // 4b. rounded kerbs inside the towns (MAP.roundedCorners): the corner patch is street, walkable and drivable, even where the pavement rectangle used to cover it
  for(const c of map.roundedCorners||[]){const P=cornerRegion(c);rect({x0:Math.min(...P.map(p=>p[0])),x1:Math.max(...P.map(p=>p[0])),z0:Math.min(...P.map(p=>p[1])),z1:Math.max(...P.map(p=>p[1]))},k=>{if(inPolygon(P,centreX(k%cols),centreZ((k-k%cols)/cols))){surface[k]=SURFACE.STREET;walk[k]=1}})}

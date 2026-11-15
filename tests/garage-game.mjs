@@ -5,17 +5,19 @@ import {bootGame} from './support/boot-game.mjs';
 import {MAP} from '../dist/map-definition.js';
 import {normalizeProgress} from '../dist/jobs.js';
 import {towFee,bayPose,hoursNow} from '../dist/garage.js';
+import {CLASSES,doorPoint} from '../dist/vehicle.js';
+const sleep=ms=>new Promise(r=>setTimeout(r,ms)),V3={x:60,z:35,yaw:0};
 
 const B=bayPose();
 const g=await bootGame({position:{x:122.2,z:20.4},progress:{cash:30000,completed:5,routine:{minutes:480},
- vehicles:[{uid:'v1',model:'shortbed',colour:'#c23b2e',x:B.x,z:B.z,yaw:B.yaw,fuelMgal:10000,cond:0},{uid:'v2',model:'offroad',colour:'#2e5f9a',x:60,z:15,yaw:0,fuelMgal:10000,cond:0}],orders:{nextVehicle:3}}});
+ vehicles:[{uid:'v1',model:'shortbed',colour:'#c23b2e',x:B.x,z:B.z,yaw:B.yaw,fuelMgal:10000,cond:0},{uid:'v2',model:'offroad',colour:'#2e5f9a',x:60,z:15,yaw:0,fuelMgal:10000,cond:0},{uid:'v3',model:'shortbed',colour:'#c23b2e',x:V3.x,z:V3.z,yaw:V3.yaw,fuelMgal:10000}],orders:{nextVehicle:4}}});
 try{
  const {GameState,pump,send,ids,find,scene,store}=g,press=code=>{send('keydown',code);send('keyup',code)};
  const prompt=()=>({text:ids.get('prompt').querySelector('span').textContent,key:ids.get('prompt').querySelector('kbd').textContent,hidden:ids.get('prompt').hidden}),toast=()=>ids.get('jobToast').textContent;
  const profile=()=>JSON.parse(store.get('edenridge.profile.v1')).progress,saved=uid=>profile().vehicles.find(v=>v.uid===uid),mesh=uid=>scene().getObjectByName('vehicle-'+uid);
  const advance=hours=>{const r=GameState.progress.routine,m=r.minutes+hours*60;assert(m<1439,'the test clock stays inside the day');GameState.progress={...GameState.progress,routine:{...r,minutes:m}}};
  const dialog=()=>({open:!ids.get('dialog').hidden,text:ids.get('dialogText').textContent,first:ids.get('jobAction').hidden?null:ids.get('jobAction').textContent,second:ids.get('extraAction').hidden?null:ids.get('extraAction').textContent,third:ids.get('thirdAction').hidden?null:ids.get('thirdAction').textContent});
- pump(1.5);
+ const last=id=>g.created.filter(e=>e.id===id).at(-1);pump(1.5);
  assert(mesh('v1').visible&&mesh('v2').visible,'both wrecks are in the world at the start');
  assert(Math.abs(mesh('v1').position.x-B.x)<.5&&Math.abs(mesh('v1').position.z-B.z)<.5,'v1 stands in the service bay');
 
@@ -33,16 +35,21 @@ try{
  assert(!/Drive the|Ride in/.test(prompt().text),'there is no door to drive it from: '+prompt().text);
  {const p=prompt();assert(/Repair shop · Kasumuchi S70 ready in/.test(p.text),'the counter says when: '+p.text)}
 
- // 3. Towing the far wreck from the phone: the fee from the straight-line distance, the vehicle appears at the bay, its condition is kept.
+ // 3. Towing the far wreck from the Call app (PH1: moved out of the Player screen's vehicle cards). On foot the line is busy; in a vehicle (v3, the spare S70) the tow service answers and the fee, the bay and the kept condition are as before.
  ids.get('phoneButton').click();ids.get('phoneApp-player').click();
- const tow=find('tow-v2');assert(tow,'the Player screen has a Call a tow button on the pickup card');assert(/Call a tow to the repair shop · \$\d+\.\d\d/.test(tow.textContent),'it shows the fee: '+tow.textContent);
- {const card=ids.get('phoneGarage').children.find(c=>c.children.includes(tow)),lines=card.children.map(c=>c.textContent).join(' | ');assert(/Condition 0% \(Wrecked\)/.test(lines),'the card shows the condition: '+lines);
-  const c1=ids.get('phoneGarage').children.find(c=>c.children.some(x=>x.id==='tow-v1')),l1=c1.children.map(c=>c.textContent).join(' | ');assert(/In the shop: ready in 6 h · ready \w+day \d+:\d\d (AM|PM)/.test(l1)||/In the shop: ready in 5\.9\d h/.test(l1)||/In the shop: ready in/.test(l1),'the S70 card shows the shop line: '+l1);assert(c1.children.find(x=>x.id==='tow-v1').hidden,'no tow button for a vehicle in the shop')}
- const cash1=GameState.progress.cash,fee=towFee({x:60,z:15},B);assert(fee>7500&&fee<25000);
- tow.onclick();pump(.3);
- assert.equal(cash1-GameState.progress.cash,fee,'the tow fee was paid: $'+(fee/100).toFixed(2));assert(/tow truck brought your .* to the shop/.test(ids.get('phoneMessage').textContent),ids.get('phoneMessage').textContent);
- assert(mesh('v2').visible&&Math.hypot(mesh('v2').position.x-B.x,mesh('v2').position.z-B.z)<1.5,'the pickup now stands in the bay');assert.equal(saved('v2').cond??1000,0,'its condition is kept (still a wreck)');
+ assert(!find('tow-v2')&&!find('tow-v1'),'the Player screen no longer has Call a tow buttons');
+ {const card=ids.get('phoneGarage').children.find(c=>c.children.some(x=>/Condition 0% \(Wrecked\)/.test(x.textContent||''))),lines=card.children.map(c=>c.textContent).join(' | ');assert(/Condition 0% \(Wrecked\)/.test(lines),'the card still shows the condition: '+lines);
+  const c1=ids.get('phoneGarage').children.find(c=>c.children.some(x=>/In the shop/.test(x.textContent||'')));assert(c1,'and the S70 card still shows the shop line')}
+ ids.get('phoneApp-call').click();last('call-tow').click();await sleep(700);assert.equal(last('callLine').textContent,'Line busy','on foot the tow line is busy');assert.equal(last('callLine').dataset.state,'busy');assert(!last('call-tow-v2'),'no vehicle list on a busy line');last('callHangup').click();assert(last('call-tow'),'hanging up returns to the contact list');
  ids.get('phoneClose').click();
+ const vehicleDoor=doorPoint(V3,CLASSES.shortbed);Object.assign(GameState.me.position,{x:vehicleDoor.x,z:vehicleDoor.z});pump(1);press('KeyE');pump(3);assert(/Driving the/.test(toast()),'got into the spare S70: '+toast()+' '+JSON.stringify(prompt())+' '+JSON.stringify(GameState.me.position)+' door '+JSON.stringify(vehicleDoor));
+ ids.get('phoneButton').click();ids.get('phoneApp-call').click();last('call-tow').click();await sleep(2300);
+ const cash1=GameState.progress.cash,fee=towFee({x:60,z:15},B);assert(fee>7500&&fee<25000);
+ {const tow=last('call-tow-v2');assert(tow,'the tow service answered in a vehicle and lists the wreck: '+last('callLine').textContent);assert(/Wrecked|\$\d+\.\d\d/.test(tow.textContent)&&/\$\d+\.\d\d/.test(tow.textContent),'it shows the fee: '+tow.textContent);tow.onclick()}
+ pump(.3);assert.equal(cash1-GameState.progress.cash,fee,'the tow fee was paid: $'+(fee/100).toFixed(2));assert(/tow truck brought your .* to the shop/.test(last('callLine').textContent),last('callLine').textContent);
+ assert(mesh('v2').visible&&Math.hypot(mesh('v2').position.x-B.x,mesh('v2').position.z-B.z)<1.5,'the pickup now stands in the bay');assert.equal(saved('v2').cond??1000,0,'its condition is kept (still a wreck)');
+ last('callHangup').click();ids.get('phoneClose').click();press('KeyE');pump(3);assert(!/Stop first/.test(toast()),'got out of the spare S70');
+ Object.assign(GameState.me.position,{x:122.2,z:20.4});GameState.me.rotation.y=0;pump(.5);
 
  // 4. The repair kit: bought at the counter ($40), equipped, used on the wreck (+15%), one consumed.
  press('KeyE');pump(.3);{const d=dialog();assert(d.open&&/Repair fully · \$2,750\.00 · 6 h/.test(d.first),'now the pickup is the one at the counter: '+JSON.stringify(d));assert(/Buy a repair kit · \$40\.00/.test(d.third||d.second))}
@@ -63,5 +70,5 @@ try{
  assert(/Your Kasumuchi S70 is ready: 100%/.test(toast()),toast());assert(mesh('v1').visible,'it is back in the world');assert(Math.hypot(mesh('v1').position.x-B.x,mesh('v1').position.z-B.z)<8,'next to the bay');
  assert.equal(saved('v1').cond,undefined,'saved as a perfect vehicle (no cond)');assert.deepEqual(GameState.progress.garage.shop,{},'the shop is empty');assert.equal(GameState.progress.cash,30000-12500-fee-4000,'the cash total is the quote + tow + kit, nothing else');
  console.log('  repaired: $125.00 and 6 game hours; tow fee $'+(fee/100).toFixed(2)+'; kit $40.00');
- console.log('Garage in the game (packaged): E at the Eastbank service bay quotes $125 for a wrecked S70, the vehicle leaves the world and cannot be driven, the phone announces it after 6 game hours, E collects it Fine; a far wreck is towed from the phone for the fee with its condition kept; a repair kit is bought, equipped and used (+15%); the shop state is saved.');
+ console.log('Garage in the game (packaged): E at the Eastbank service bay quotes $125 for a wrecked S70, the vehicle leaves the world and cannot be driven, the phone announces it after 6 game hours, E collects it Fine; the Call app on the phone has the tow line (busy on foot, answered in a vehicle) and a far wreck is towed from it for the fee with its condition kept; a repair kit is bought, equipped and used (+15%); the shop state is saved.');
 }finally{await g.done()}

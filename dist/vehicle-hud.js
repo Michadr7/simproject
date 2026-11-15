@@ -18,7 +18,10 @@ export function forkliftHudModel({speed=0,lift=0,load=0,hint='',goal=''}){
 // lights: the headlight row's text while you drive (night-lights-rules.js lightsLabel: "Lights: auto (on)"), or null for no row. Key L cycles auto, on, off.
 // damage: {model, cond, engine} of the vehicle you are in (driving.damageOf), or null. The row carries the band id and the text, so the DOM changes only when they do.
 export function damageRow(d){if(!d)return null;const b=bandOf(d.cond);return {model:SILHOUETTES.includes(d.model)?d.model:'generic',band:b.id,lamp:lampOf(d.cond),text:b.id==='wrecked'?'Wrecked · 0%':`${b.label} · ${percent(d.cond)}%`}}
-export function vehicleHudModel({driving=null,seat=null,name=null,speed=0,fuel=null,ground=null,forklift=null,lights=null,damage=null}={}){
+// TR4: the bog row (same idea as the damage row): bog is driving.bogOf() ({stuck, warn}) or null. Stuck says how to get out; the warning shows while the wheels sink.
+export const STUCK_TEXT='Stuck: rock it with W and S',SINK_TEXT='Sinking: ease off the throttle';
+export const stuckRow=b=>!b?null:b.stuck?{level:'stuck',text:STUCK_TEXT}:b.warn?{level:'warn',text:SINK_TEXT}:null;
+export function vehicleHudModel({driving=null,seat=null,name=null,speed=0,fuel=null,ground=null,forklift=null,lights=null,damage=null,bog=null}={}){
  if(forklift)return forkliftHudModel(forklift);
  const fuelShown=fuel?`${fuelTitle(fuel.type)} · ${fuelText(fuel.mgal,fuel.capacityMgal)}`:'—',empty=!!fuel&&fuel.mgal<=0;
  if(!driving)return {state:'off',name:'Not in a vehicle',speed:'—',fuel:'—',
@@ -29,7 +32,8 @@ export function vehicleHudModel({driving=null,seat=null,name=null,speed=0,fuel=n
   keys:[{kbd:'E',text:'Get out'}],note:'You are riding as a passenger. Nobody is driving.'};
  const stopped=Math.abs(speed)<STOP_SPEED;
  const wrecked=!!damage&&damage.cond<=0,engineNote=wrecked?'Wrecked: it will not start. E gets you out.':damage&&damage.engine==='off'?'The engine stalled. Press W to restart.':damage&&damage.engine==='crank'?'Starting the engine…':null;
- return {state:'driving',name:name||'Vehicle',speed:speedShown,fuel:fuelShown,damage:dmg,
+ const stuck=stuckRow(bog);
+ return {state:'driving',name:name||'Vehicle',speed:speedShown,fuel:fuelShown,damage:dmg,...(stuck?{stuck}:{}),
   keys:[{kbd:'E',text:stopped?'Get out':'Stop to get out',muted:!stopped},...(lights?[{kbd:'L',text:lights}]:[])],
   note:engineNote?engineNote:empty?`Out of fuel. Fill up at the Eastbank gas station: this one takes ${fuel.type}.`:ground&&ground.factor<.95?`Off road · ${ground.label} · top speed ${Math.round(ground.factor*100)}%. Get back on the road to go faster.`:'W S accelerate and brake · A D steer · Space brakes'};
 }
@@ -43,6 +47,7 @@ export function createVehicleHud($){
   const panel=$('vehiclePanel');if(!panel)return;
   panel.dataset.state=model.state;
   {const d=$('vpDamage');if(d){d.hidden=!model.damage;if(model.damage){if(d.dataset.model!==model.damage.model)d.dataset.model=model.damage.model;if(d.dataset.band!==model.damage.band)d.dataset.band=model.damage.band;const t=$('vpDmgText');if(t)t.textContent=model.damage.text;const l=$('vpLamp');if(l&&l.dataset.lamp!==model.damage.lamp)l.dataset.lamp=model.damage.lamp}}} // the band class changes only when the band does
+  {const s=$('vpStuck');if(s){s.hidden=!model.stuck;if(model.stuck){s.dataset.level=model.stuck.level;s.textContent=model.stuck.text}}}
   $('vpName').textContent=model.name;$('vpSpeed').textContent=model.speed;$('vpFuel').textContent=model.fuel;{const l=$('vpFuelLabel');if(l)l.textContent=model.fuelLabel||'Fuel'}
   const keys=$('vpKeys');keys.replaceChildren();
   for(const k of model.keys){

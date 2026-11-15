@@ -101,3 +101,7 @@ ribbon per river at `RIVER_WATER_Y` (-0.95, `height.js:10`); `riverZAt` (map-def
 
 ## Decisions (user, 2026-11-14)
 - Q2: yes, the bed shows through shallow water. Q3: swimming later (deep water still pushes back). Q1, 4 to 8: Claude's leanings accepted (slightly stylised; lake and sea longer view later; mist and roar always on; moon glints; boats later so the sea grid reaches far; Water: Simple chosen from the quality preset with a manual override).
+## Decisions after W1 (user, 2026-11-17)
+- Sea: the waterline is the shoreline (depth 0); the bed slopes from 0 to -2.6 m offshore (W1 contract: sea depth default 0.6 below y -2.0).
+- River bed: deeper in the centre (a cross-section profile, not a flat bed). W1 built a flat constant depth: W2 and W3 must add the centre profile (contract change to river depth across width).
+- The old river gets real flow toward the south coast when the real map data is written (R1/W2 data work).

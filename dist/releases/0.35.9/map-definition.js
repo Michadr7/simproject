@@ -35,7 +35,8 @@ const roads={
   oakEastEnd:{x:195,z:6},cedarLinkS:{x:120,z:6},cedarLoopStart:{x:120,z:-57},
   freightW:{x:72,z:68},freightS:{x:195,z:68},freightE:{x:199.5,z:68},outEast:{x:290,z:68}, // outEast: Freight South carried on to the ground's east edge (0.35): the road customer trucks come and go by (MAP.exits)
 freightN:{x:195,z:n(-180)-3.5},
-  worksN:{x:102,z:6},worksS:{x:102,z:68} // Works Lane (0.33): from Oak Street East's centreline to Freight South's
+  worksN:{x:102,z:6},worksS:{x:102,z:68}, // Works Lane (0.33): from Oak Street East's centreline to Freight South's
+  edenJoin:{x:600,z:68},lakeCarPark:{x:620,z:-420},lakeFoothills:{x:830,z:-700} // R3a (map-master 6.1): the Blackstone junction on the spine, the lake car park, and the point where Lake Road meets the foothills
  },
  edges:[
   {id:'oak-street',from:'oakWest',to:'oakEast',width:19,surface:'asphalt',level:'street'},
@@ -46,8 +47,8 @@ freightN:{x:195,z:n(-180)-3.5},
   {id:'woods-lane',from:'woodsLaneNorth',to:'woodsLaneSouth',width:5,surface:'dirt'},
   // Alder Center: Alder Street runs north from Oak Street's pavement (between the cafe and the city's east edge) to the cross street, which joins the County Road in the west and meets
   // Cedar Heights' loop at a T in the east (the loop's west side is vertical there, so the join is square).
-  {id:'alder-street',from:'alderStreetS',to:'alderStreetN',width:10,surface:'asphalt',level:'rural',walkable:true},
-  {id:'alder-cross',from:'alderCrossW',to:'alderCrossE',width:12,surface:'asphalt',level:'rural',walkable:true},
+  {id:'alder-street',from:'alderStreetS',to:'alderStreetN',width:10,surface:'asphalt',level:'rural',walkable:true,class:'street'},
+  {id:'alder-cross',from:'alderCrossW',to:'alderCrossE',width:12,surface:'asphalt',level:'rural',walkable:true,class:'street'},
   // Oak Street continues east through Eastbank Works to the Freight Road; Cedar Heights hangs off it to the north and off Alder Center's cross street.
   {id:'oak-east',from:'oakEast',to:'oakEastEnd',width:12,surface:'asphalt',level:'rural',walkable:true,zone:'eastbank'},
   {id:'cedar-link',from:'cedarLinkS',to:'cedarLoopStart',width:9,surface:'asphalt',level:'rural',walkable:true},
@@ -60,7 +61,13 @@ freightN:{x:195,z:n(-180)-3.5},
   {id:'freight-out',from:'freightE',to:'outEast',width:12,surface:'asphalt',level:'rural',walkable:true}, // 0.35: Freight South continued east to the playable edge (x 290; walkable ground stops there): trucks leave the map along it
   {id:'freight-road',from:'freightS',to:'freightN',width:9,surface:'asphalt',level:'rural',walkable:true,zone:'freight'},
   // Works Lane (0.33): Eastbank's own connector, a straight 12 m road closing the loop Oak Street East -> Works Lane -> Freight South -> Freight Road.
-  {id:'works-lane',from:'worksN',to:'worksS',width:12,surface:'asphalt',level:'rural',walkable:true,zone:'eastbank'}
+  {id:'works-lane',from:'worksN',to:'worksS',width:12,surface:'asphalt',level:'rural',walkable:true,zone:'eastbank',class:'street'},
+  // R3a: the first real roads of the wilds (map-master 6.1) on flat ground east of the old block. `wild:true` = inside the world frame, no zone needed (the wilds are open country, so no `walkable` flag either).
+  // Eden Road runs on from Freight Out to the Blackstone junction; Blackstone Access (gravel, 7 m) runs north to the lake car park through (600, -200), where the Eden car link will join; Lake Road (gravel, 6 m) runs east
+  // then north to z -700, where the foothills start: the climb to the trailhead and P2 waits for relief data.
+  {id:'eden-road',from:'outEast',to:'edenJoin',width:12,surface:'asphalt',level:'rural',class:'rural',wild:true},
+  {id:'blackstone-access',from:'edenJoin',to:'lakeCarPark',width:7,surface:'gravel',class:'gravel',path:[[600,-200]],wild:true},
+  {id:'lake-road',from:'lakeCarPark',to:'lakeFoothills',width:6,surface:'gravel',class:'gravel',path:[[830,-420]],wild:true}
  ]
 };
 
@@ -81,6 +88,14 @@ const fields=[
  {id:'field-green',surface:'green',x0:-108,x1:-52,z0:n(-150),z1:n(-114)}
 ];
 
+// Mud patches (TR3, notes/terrain-vehicle-design.md 1f): small whole-metre rectangles of MUD ground, painted after the fields (so a field gate can be muddy) and before the river (the bank stays blocked).
+// They stay off every road's centre line and off buildings and water (validateMap). Two at the farm's field gates, one in the lane of the forest track, one puddle in open ground north of the Eastbank depot.
+const mud=[
+ {id:'mud-gate-west',x0:-160,x1:-148,z0:-225.5,z1:-219.5}, // Willow Fields: the gate strip between the farm road and the plowed field (road edge z -226.5)
+ {id:'mud-gate-east',x0:-80,x1:-70,z0:-225.5,z1:-219.5}, // the same strip beside the young-crop field
+ {id:'mud-woods-dip',x0:60,x1:72,z0:-253.4,z1:-250.8}, // the dip in the Pine Ridge track: its north lane only (centre line z -250 stays dry)
+ {id:'mud-yard-puddle',x0:130,x1:140,z0:-26,z1:-20} // Eastbank: open ground between the depot lot and the gas station
+];
 // Buildings: footprint centre (x, z), width (x), depth (z), height, colour. `shop` ties a building to an entry in `shops`.
 const buildings=[
  {x:1,z:-15,w:17,d:13,h:17,color:'#b08b74',name:'OAK STREET APARTMENTS'},
@@ -360,7 +375,7 @@ export const MAP=deepFreeze({
  // Gates: the only openings through the old ground's 10 m rim (which stays a wall in the whole-map mask and in every pinned test): Freight South runs on east through its rim into the wilds. Only chunk tiles know them.
  gates:[{id:'freight-east',x0:290,x1:300,z0:62,z1:74}],
  openCountry:{id:'open',name:'Open Country',label:'OPEN COUNTRY',subtitle:'Meadows between districts',color:'#6e8a5c'}, // how far the ground is drawn (scenery fades into fog beyond the walkable zones)
- zones,roads,water,fields,buildings,shops,reserved,properties,paving,bayRows,garage,yards,vehicles,relief,employers,offices,exits,dwellings,posts,
+ zones,roads,water,fields,mud,buildings,shops,reserved,properties,paving,bayRows,garage,yards,vehicles,relief,employers,offices,exits,dwellings,posts,
  // The marked parking lot behind the south row of shops: bays 2.7 m wide and 5 m deep along its north edge, an aisle to Alder Street, the lot's own asphalt.
  lots:[{id:'alder-lot',x0:-14,x1:45,z0:-63,z1:-52,bays:{x0:-13.5,z0:-63,count:20,width:2.7,depth:5}}],
  // Parking lanes on the cross street (6 m bays, nose in the direction of traffic: eastbound on the south side, westbound on the north), and the lane edge lines.
@@ -472,13 +487,15 @@ export const MAP=deepFreeze({
 const pathCache=new WeakMap();
 export function riverPath(river,step=3){
  const key=pathCache.get(river)||new Map();pathCache.set(river,key);if(key.has(step))return key.get(step);
- const p=river.points,at=i=>p[Math.max(0,Math.min(p.length-1,i))],out=[];
+ const np=waterPoints(river),p=np.map(q=>[q.x,q.z]),at=i=>p[Math.max(0,Math.min(p.length-1,i))],out=[],mix=(a,b,t)=>a+(b-a)*t;
  for(let i=0;i<p.length-1;i++){
-  const [p0,p1,p2,p3]=[at(i-1),at(i),at(i+1),at(i+2)],len=Math.hypot(p2[0]-p1[0],p2[1]-p1[1]),n=Math.max(1,Math.ceil(len/step));
-  for(let k=0;k<n;k++){const t=k/n,t2=t*t,t3=t2*t,c=j=>.5*((2*p1[j])+(-p0[j]+p2[j])*t+(2*p0[j]-5*p1[j]+4*p2[j]-p3[j])*t2+(-p0[j]+3*p1[j]-3*p2[j]+p3[j])*t3);out.push({x:c(0),z:c(1)})}
+  const [p0,p1,p2,p3]=[at(i-1),at(i),at(i+1),at(i+2)],len=Math.hypot(p2[0]-p1[0],p2[1]-p1[1]),n=Math.max(1,Math.ceil(len/step)),A=np[i],B=np[i+1];
+  // New-form rivers: tangents scaled by segment length, so a rapid's two points 3 m apart beside 100 m reaches do not overshoot into a loop (legacy rivers keep the plain Catmull-Rom, byte for byte).
+  const hermite=!riverIsLegacy(river),l01=Math.hypot(p1[0]-p0[0],p1[1]-p0[1]),l23=Math.hypot(p3[0]-p2[0],p3[1]-p2[1]),k1=len/((l01+len)||1),k2=len/((l23+len)||1);
+  for(let k=0;k<n;k++){const t=k/n,t2=t*t,t3=t2*t,c=hermite?j=>{const m1=(p2[j]-p0[j])*k1,m2=(p3[j]-p1[j])*k2;return(2*t3-3*t2+1)*p1[j]+(t3-2*t2+t)*m1+(-2*t3+3*t2)*p2[j]+(t3-t2)*m2}:j=>.5*((2*p1[j])+(-p0[j]+p2[j])*t+(2*p0[j]-5*p1[j]+4*p2[j]-p3[j])*t2+(-p0[j]+3*p1[j]-3*p2[j]+p3[j])*t3);out.push({x:c(0),z:c(1),seg:i,t,w:mix(A.w,B.w,t),depth:mix(A.depth,B.depth,t),y:mix(A.y,B.y,t),speed:mix(A.speed,B.speed,t),rapid:A.rapid})}
  }
- out.push({x:p.at(-1)[0],z:p.at(-1)[1]});
- for(let i=0;i<out.length;i++){const a=out[Math.max(0,i-1)],b=out[Math.min(out.length-1,i+1)],l=Math.hypot(b.x-a.x,b.z-a.z)||1;out[i].tx=(b.x-a.x)/l;out[i].tz=(b.z-a.z)/l}
+ {const A=np.at(-1);out.push({x:A.x,z:A.z,seg:np.length-1,t:0,w:A.w,depth:A.depth,y:A.y,speed:A.speed,rapid:false})}
+ for(let i=0;i<out.length;i++){const a=out[Math.max(0,i-1)],b=out[Math.min(out.length-1,i+1)],l=Math.hypot(b.x-a.x,b.z-a.z)||1;out[i].tx=(b.x-a.x)/l;out[i].tz=(b.z-a.z)/l;out[i].u=i?out[i-1].u+Math.hypot(out[i].x-out[i-1].x,out[i].z-out[i-1].z):0}
  key.set(step,Object.freeze(out.map(Object.freeze)));return key.get(step);
 }
 // Distance from a point to the river's centreline.
@@ -490,6 +507,125 @@ export function riverDistance(x,z,river){
 // The river's centreline height at x (rivers here run mostly west to east).
 export function riverZAt(river,x){const path=riverPath(river,2);for(let i=0;i<path.length-1;i++){const a=path[i],b=path[i+1];if(x>=a.x&&x<=b.x)return a.z+(b.z-a.z)*(x-a.x)/((b.x-a.x)||1)}return null}
 
+// ── Water contract (W1, notes/water-design.md; data only, nothing draws or digs from it yet) ──
+// MAP.water: rivers[], bridges[], and the optional new keys fords[], lakes[], sea, falls[]. All y values are world heights (ground is y 0; basins are dug later by height.js).
+//  river  {id, bank, shore, points:[{x,z,w,depth,y,speed,rapid?}]}  in FLOW order (direction = tangent to the next point). w = width (m), depth = bed below the water (m), y = water height, speed in m/s.
+//         A rapid = two points 2..6 m apart, y dropping 0.2 or more, `rapid:true` on the upper one. LEGACY rivers ({width, bank, points:[[x,z]...]}) still work: every point reads as w=width, depth .45,
+//         y -.95, speed 0 (the old flat channel: bed 1.4 below ground, water at -.95; they run west to east, which is their flow).
+//  ford   {river, x, z, w, depth:.3}: within w/2 of (x,z) the water is only `depth` deep (bed raised), walkable and drivable.
+//  lake   {id, outline:[[x,z]...], y, depth, shore, inflow?:[x,z], outflow?:[x,z]}: the outline is the waterline (depth 0); depth grows in a cosine over `shore` metres to the full depth.
+//  sea    {shoreline:[[x,z]...] west to east (x strictly rising), y, beach, depth?:.6, swell?:{amp,len,dir}}: south of the shoreline (greater z, along z) is sea, depth 0 at the line, `depth` m after `beach` m.
+//  fall   {id, lip:{x,z,y}, drop, w, dir:[dx,dz], pool:{r, depth?:1.5, x?, z?}}: the pool (centre lip + dir x r unless given) is water at lip.y - drop; the falling curtain is a mesh only (no waterAt).
+export const LEGACY_WATER=Object.freeze({y:-.95,depth:.45,speed:0,bank:2.6});
+const waterCache=new WeakMap();
+export const riverIsLegacy=river=>!!river?.points?.length&&Array.isArray(river.points[0]);
+// Every river's points in one shape {x,z,w,depth,y,speed,rapid}, whichever form the data uses.
+export function waterPoints(river){
+ let c=waterCache.get(river);if(c)return c;
+ c=Object.freeze((river.points||[]).map(p=>Object.freeze(Array.isArray(p)?{x:p[0],z:p[1],w:river.width,depth:LEGACY_WATER.depth,y:LEGACY_WATER.y,speed:LEGACY_WATER.speed,rapid:false}:{x:p.x,z:p.z,w:p.w,depth:p.depth,y:p.y,speed:p.speed??0,rapid:!!p.rapid})));
+ waterCache.set(river,c);return c;
+}
+// The river's widest width and its bank (mud) width, for either form.
+export const riverWidth=river=>river.width??Math.max(0,...waterPoints(river).map(p=>p.w));
+export const riverBank=river=>river.bank??LEGACY_WATER.bank;
+// Metres along the river (the shader's u): each control point's distance from the source, and the total length.
+export function distanceAlong(river){const path=riverPath(river,1);return waterPoints(river).map((_,i)=>path.find(s=>s.seg===i&&s.t===0)?.u??0)}
+export const riverLength=river=>riverPath(river,1).at(-1).u;
+const boxCache=new WeakMap();
+function riverBox(river){let b=boxCache.get(river);if(!b){const P=waterPoints(river),m=riverWidth(river)/2+2;b={x0:Math.min(...P.map(p=>p.x))-m,x1:Math.max(...P.map(p=>p.x))+m,z0:Math.min(...P.map(p=>p.z))-m,z1:Math.max(...P.map(p=>p.z))+m};boxCache.set(river,b)}return b}
+// Nearest point on the smoothed centreline with its interpolated attributes: {d, s} (s = the path sample, frozen) or null.
+export function nearestOnRiver(river,x,z,reach=0){
+ const b=riverBox(river);if(x<b.x0-reach||x>b.x1+reach||z<b.z0-reach||z>b.z1+reach)return null;
+ const path=riverPath(river,2);let best=null;
+ for(let i=0;i<path.length-1;i++){const a=path[i],c=path[i+1],dx=c.x-a.x,dz=c.z-a.z,t=Math.max(0,Math.min(1,((x-a.x)*dx+(z-a.z)*dz)/(dx*dx+dz*dz||1))),d=Math.hypot(x-a.x-dx*t,z-a.z-dz*t);
+  if(!best||d<best.d){const m=k=>a[k]+(c[k]-a[k])*t;best={d,s:{w:m('w'),depth:m('depth'),y:m('y'),speed:m('speed'),tx:m('tx'),tz:m('tz'),rapid:a.rapid,u:m('u')}}}}
+ return best;
+}
+// The river bed across the width (W2, user 2026-11-17: deeper in the centre): depth at distance d from the centre = the point's depth x RIVER_PROFILE(d / half width), a cosine: 1 at the centre, 0 at the waterline. LEGACY rivers keep their flat bed.
+export const RIVER_PROFILE=t=>(1+Math.cos(Math.PI*(t<=0?0:t>=1?1:t)))/2;
+export const FORD_RAMP=3; // a ford's raised bed eases back to the river bed over this many metres beyond its radius
+export const fordBlend=(f,x,z)=>{const d=Math.hypot(x-f.x,z-f.z),r=f.w/2;return d<=r?1:d>=r+FORD_RAMP?0:(1+Math.cos(Math.PI*(d-r)/FORD_RAMP))/2};
+// The water depth of a river at (x, z), given the nearest sample q from nearestOnRiver: the cross-section profile (flat for legacy rivers), raised by any ford.
+export function riverDepthAt(map,river,q,x,z){
+ const base=riverIsLegacy(river)?q.s.depth:q.s.depth*RIVER_PROFILE(q.d/(q.s.w/2));let f=0,fd=base;
+ for(const o of map.water?.fords||[])if(o.river===river.id){const b=fordBlend(o,x,z);if(b>f){f=b;fd=Math.min(base,o.depth??.3)}}
+ return base+(fd-base)*f;
+}
+export const cosEase=t=>t<=0?0:t>=1?1:(1-Math.cos(Math.PI*t))/2;
+export const polyDistance=(poly,x,z)=>{let best=Infinity;for(let i=0;i<poly.length;i++){const [ax,az]=poly[i],[bx,bz]=poly[(i+1)%poly.length],dx=bx-ax,dz=bz-az,t=Math.max(0,Math.min(1,((x-ax)*dx+(z-az)*dz)/(dx*dx+dz*dz||1)));best=Math.min(best,Math.hypot(x-ax-dx*t,z-az-dz*t))}return best};
+export const inPolygon=(poly,x,z)=>{let ins=false;for(let i=0,j=poly.length-1;i<poly.length;j=i++){const [xi,zi]=poly[i],[xj,zj]=poly[j];if((zi>z)!==(zj>z)&&x<(xj-xi)*(z-zi)/(zj-zi)+xi)ins=!ins}return ins};
+export function seaLineZ(sea,x){const L=sea.shoreline;if(x<=L[0][0])return L[0][1];for(let i=0;i<L.length-1;i++)if(x<=L[i+1][0])return L[i][1]+(L[i+1][1]-L[i][1])*(x-L[i][0])/((L[i+1][0]-L[i][0])||1);return L.at(-1)[1]}
+export const fallPoolCentre=f=>{const l=Math.hypot(f.dir[0],f.dir[1])||1;return {x:f.pool.x??f.lip.x+f.dir[0]/l*f.pool.r,z:f.pool.z??f.lip.z+f.dir[1]/l*f.pool.r}};
+// What water is at (x, z), or null on dry ground: {y, depth, flow:[vx,vz], kind:'river'|'ford'|'lake'|'sea'|'fall', id, rapid}. depth is the water over the bed at that point (0 on the waterline).
+// Priority: fall pool, river (ford where one applies), lake, sea. Pure and cheap enough to call per frame for the player and a few vehicles.
+export function waterAt(x,z,map=MAP){
+ const W=map.water;if(!W)return null;
+ for(const f of W.falls||[]){const c=fallPoolCentre(f),d=Math.hypot(x-c.x,z-c.z);if(d<=f.pool.r)return {y:f.lip.y-f.drop,depth:(f.pool.depth??1.5)*Math.min(1,(f.pool.r-d)/(f.pool.r*.4)),flow:[0,0],kind:'fall',id:f.id,rapid:false}}
+ for(const river of W.rivers||[]){
+  const q=nearestOnRiver(river,x,z);if(!q||q.d>q.s.w/2)continue;
+  const ford=(W.fords||[]).find(f=>f.river===river.id&&Math.hypot(x-f.x,z-f.z)<=f.w/2);
+  return {y:q.s.y,depth:riverDepthAt(map,river,q,x,z),flow:[q.s.tx*q.s.speed+0,q.s.tz*q.s.speed+0],kind:ford?'ford':'river',id:river.id,rapid:q.s.rapid};
+ }
+ for(const lake of W.lakes||[]){if(!inPolygon(lake.outline,x,z))continue;return {y:lake.y,depth:lake.depth*cosEase(polyDistance(lake.outline,x,z)/lake.shore),flow:[0,0],kind:'lake',id:lake.id,rapid:false}}
+ const sea=W.sea;if(sea?.shoreline?.length>=2){const dz=z-seaLineZ(sea,x);if(dz>0)return {y:sea.y,depth:(sea.depth??.6)*cosEase(dz/sea.beach),flow:[0,0],kind:'sea',id:'sea',rapid:false}}
+ return null;
+}
+// Problems with the water data (empty when sound); validateMap includes them. New-form rivers are checked point by point, legacy ones by the older rules in validateMap.
+export function waterProblems(map=MAP){
+ const out=[],bad=m=>out.push(m),W=map.water||{},fin=(...v)=>v.every(Number.isFinite),pt=p=>Array.isArray(p)&&p.length===2&&fin(p[0],p[1]);
+ const world=map.world||map.ground,inW=(x,z)=>x>=world.x0&&x<=world.x1&&z>=world.z0&&z<=world.z1,ids=new Set();
+ const crosses=(a,b,c,d)=>{const o=(p,q,r)=>(q[0]-p[0])*(r[1]-p[1])-(q[1]-p[1])*(r[0]-p[0]);return o(a,b,c)*o(a,b,d)<0&&o(c,d,a)*o(c,d,b)<0};
+ for(const r of W.rivers||[]){
+  if(ids.has(r.id))bad(`duplicate water id ${r.id}`);ids.add(r.id);
+  if(!Array.isArray(r.points)||r.points.length<2){continue}
+  const legacy=Array.isArray(r.points[0]);
+  if(legacy){if(!r.points.every(pt))bad(`river ${r.id} mixes point forms or has a bad point`);continue}
+  if(r.points.some(p=>!p||Array.isArray(p)||!fin(p.x,p.z,p.w,p.depth,p.y,p.speed??0)||!(p.w>0)||!(p.depth>0)||(p.speed??0)<0)){bad(`river ${r.id} has a point without finite x, z, w>0, depth>0, y and speed>=0`);continue}
+  if(!(riverBank(r)>=0))bad(`river ${r.id} has a bad bank`);
+  r.points.forEach((p,i)=>{
+   if(!inW(p.x,p.z))bad(`river ${r.id} point ${i} is outside the world`);
+   const n=r.points[i+1];if(!n)return;
+   const gap=Math.hypot(n.x-p.x,n.z-p.z);
+   if(gap<.5)bad(`river ${r.id} points ${i} and ${i+1} are the same place`);
+   if(n.y>p.y+1e-9)bad(`river ${r.id} flows uphill between points ${i} and ${i+1}`);
+   if(p.rapid&&(gap<2||gap>6||p.y-n.y<.2))bad(`river ${r.id} rapid at point ${i} needs the next point 2..6 m away and 0.2 m lower`)});
+  if(r.points.at(-1).rapid)bad(`river ${r.id} ends on a rapid point`);
+ }
+ const rivers=W.rivers||[];
+ for(const f of W.fords||[]){const r=rivers.find(x=>x.id===f.river);
+  if(!r){bad(`ford at (${f.x}, ${f.z}) names an unknown river ${f.river}`);continue}
+  if(!fin(f.x,f.z,f.w)||!(f.w>0)||!(f.depth===undefined||f.depth>0&&f.depth<=.5))bad(`ford on ${f.river} needs x, z, w>0 and a depth up to 0.5`);
+  else{const q=nearestOnRiver(r,f.x,f.z);if(!q||q.d>q.s.w/2)bad(`ford on ${f.river} at (${f.x}, ${f.z}) is not on the water`)}}
+ for(const b of W.bridges||[])if(b.axis!==undefined&&b.axis!=='x'&&b.axis!=='z')bad(`bridge ${b.id} has axis ${b.axis} (use 'x' or 'z')`);
+ const sea=W.sea;
+ if(sea){
+  if(!Array.isArray(sea.shoreline)||sea.shoreline.length<2||!sea.shoreline.every(pt))bad('the sea needs a shoreline of at least two [x,z] points');
+  else{if(sea.shoreline.some((p,i)=>i&&p[0]<=sea.shoreline[i-1][0]))bad('the sea shoreline must run west to east (x strictly rising)');
+   if(sea.shoreline.some(p=>!inW(p[0],p[1])))bad('the sea shoreline leaves the world')}
+  if(!fin(sea.y,sea.beach)||!(sea.beach>0)||!(sea.depth===undefined||sea.depth>0))bad('the sea needs y, beach>0 and (optionally) depth>0');
+  if(sea.swell&&!(sea.swell.amp>=0&&sea.swell.len>0))bad('the sea swell needs amp>=0 and len>0');
+ }
+ const lakes=W.lakes||[];
+ for(const [li,l] of lakes.entries()){
+  if(ids.has(l.id))bad(`duplicate water id ${l.id}`);ids.add(l.id);
+  if(!Array.isArray(l.outline)||l.outline.length<3||!l.outline.every(pt)){bad(`lake ${l.id} needs an outline of at least three [x,z] points`);continue}
+  if(!fin(l.y,l.depth,l.shore)||!(l.depth>0)||!(l.shore>0))bad(`lake ${l.id} needs y, depth>0 and shore>0`);
+  const O=l.outline,n=O.length;
+  for(let i=0;i<n;i++)for(let j=i+2;j<n;j++)if(!(i===0&&j===n-1)&&crosses(O[i],O[(i+1)%n],O[j],O[(j+1)%n])){bad(`lake ${l.id} outline crosses itself`);i=n;break}
+  if(O.some(p=>!inW(p[0],p[1])))bad(`lake ${l.id} leaves the world`);
+  for(const k of ['inflow','outflow'])if(l[k]!==undefined&&(!pt(l[k])||polyDistance(O,l[k][0],l[k][1])>15))bad(`lake ${l.id} ${k} must be an [x,z] within 15 m of the outline`);
+  if(sea?.shoreline?.length>=2&&O.some(p=>p[1]>seaLineZ(sea,p[0])))bad(`lake ${l.id} reaches into the sea`);
+  for(const o of lakes.slice(li+1))if(o.outline?.length>=3&&(O.some(p=>inPolygon(o.outline,p[0],p[1]))||o.outline.some(p=>inPolygon(O,p[0],p[1]))))bad(`lakes ${l.id} and ${o.id} overlap`);
+  for(const zone of map.zones||[])if(O.some(p=>p[0]>=zone.bounds.x0&&p[0]<=zone.bounds.x1&&p[1]>=zone.bounds.z0&&p[1]<=zone.bounds.z1))bad(`zone ${zone.id} walks into lake ${l.id}`);
+ }
+ for(const f of W.falls||[]){
+  if(ids.has(f.id))bad(`duplicate water id ${f.id}`);ids.add(f.id);
+  if(!f.lip||!fin(f.lip.x,f.lip.z,f.lip.y)||!(f.drop>0)||!(f.w>0)||!pt(f.dir)||!(Math.hypot(f.dir[0],f.dir[1])>0)||!(f.pool?.r>0)){bad(`fall ${f.id} needs lip {x,z,y}, drop>0, w>0, dir [dx,dz] and pool {r>0}`);continue}
+  if(!inW(f.lip.x,f.lip.z))bad(`fall ${f.id} is outside the world`);
+ }
+ return out;
+}
+
 // ── Derived data ──────────────────────────────────────────────────────────────
 export const zoneById=(id,map=MAP)=>map.zones.find(z=>z.id===id)||null;
 // The zone whose walkable rectangle contains the point (edges belong to the zone on their west/north side first).
@@ -500,6 +636,114 @@ export function roadRect(edge,map=MAP){
 }
 // The rectangles of the straight, axis-aligned road edges (a road with a `path` is a ribbon: see roadCenterline in terrain.js).
 export const roadRects=(surface,map=MAP)=>map.roads.edges.filter(e=>(!surface||e.surface===surface)&&!e.path).map(e=>({id:e.id,...roadRect(e,map)}));
+// ── R1: the road graph (pure data and functions; no meshes, no mask changes) ──
+// MAP.roads keeps its shape {nodes, edges}. An edge may now also carry `class` ('street'|'rural'|'gravel'|'dirt'; default from surface/level), `path` (points between its nodes), `curve`, `closed`.
+// roadGraph(map) turns it into a routing graph: ROAD_CLASSES speeds, polyline lengths, and T joins (an edge END that lies on another edge splits that edge there, so the old network is connected where it looks connected).
+// Edges of the real map may not cross mid-edge without a shared end node (that is a problem, see roadProblems); a bridge or overpass would be a separate edge pair.
+export const ROAD_CLASSES=Object.freeze({street:13.4,rural:22.4,gravel:13.4,dirt:8.9}); // top speeds in m/s (30, 50, 30, 20 mph), map-master 6
+export const ROAD_JOIN_SLACK=.75; // an end within half the other road's width plus this counts as joined
+export const roadClassOf=edge=>edge.class||(edge.surface==='dirt'?'dirt':edge.level==='street'?'street':'rural');
+export const roadSpeed=edge=>ROAD_CLASSES[roadClassOf(edge)];
+const roadCache=new WeakMap();
+// The centreline of one edge as [[x,z],...] (nodes plus path; a closed edge returns to its start; curve:true is a Catmull-Rom through the points, about as terrain.js lays it).
+export function roadPolyline(edge,map=MAP){
+ const a=map.roads.nodes[edge.from],b=map.roads.nodes[edge.to];
+ let P=[[a.x,a.z],...(edge.path||[]).map(p=>[p[0],p[1]])];
+ if(edge.closed)P=edge.path?.length?[...P,[a.x,a.z]]:[[a.x,a.z],[a.x,a.z]];else P.push([b.x,b.z]);
+ if(!edge.curve||P.length<3)return P;
+ const closed=!!edge.closed,Q=closed?P.slice(0,-1):P,n=Q.length,at=i=>closed?Q[(i+n)%n]:Q[Math.max(0,Math.min(n-1,i))],out=[],segs=closed?n:n-1;
+ for(let i=0;i<segs;i++)for(let k=0;k<6;k++){const t=k/6,t2=t*t,t3=t2*t,p0=at(i-1),p1=at(i),p2=at(i+1),p3=at(i+2);
+  out.push([0,1].map(c=>.5*(2*p1[c]+(-p0[c]+p2[c])*t+(2*p0[c]-5*p1[c]+4*p2[c]-p3[c])*t2+(-p0[c]+3*p1[c]-3*p2[c]+p3[c])*t3)))}
+ out.push(closed?out[0]:[Q[n-1][0],Q[n-1][1]]);
+ return out;
+}
+export const polylineLength=P=>{let s=0;for(let i=0;i<P.length-1;i++)s+=Math.hypot(P[i+1][0]-P[i][0],P[i+1][1]-P[i][1]);return s};
+export const roadLength=(edge,map=MAP)=>polylineLength(roadPolyline(edge,map));
+// Nearest point on a polyline: {d, s (metres from the start), x, z, seg}.
+function nearestOnPolyline(P,x,z){let best=null,run=0;for(let i=0;i<P.length-1;i++){const [ax,az]=P[i],[bx,bz]=P[i+1],dx=bx-ax,dz=bz-az,l=Math.hypot(dx,dz),t=l?Math.max(0,Math.min(1,((x-ax)*dx+(z-az)*dz)/(l*l))):0,px=ax+dx*t,pz=az+dz*t,d=Math.hypot(x-px,z-pz);
+ if(!best||d<best.d)best={d,s:run+l*t,x:px,z:pz,seg:i};run+=l}return best}
+// Cut a polyline at distance s (metres) -> the part between s0 and s1 as points.
+function polylineSlice(P,s0,s1){const out=[];let run=0;const pt=(i,s)=>{const [ax,az]=P[i],[bx,bz]=P[i+1],l=Math.hypot(bx-ax,bz-az)||1,t=(s-run)/l;return [ax+(bx-ax)*t,az+(bz-az)*t]};
+ for(let i=0;i<P.length-1;i++){const l=Math.hypot(P[i+1][0]-P[i][0],P[i+1][1]-P[i][1]),a=run,b=run+l;
+  if(b>s0&&a<s1){if(!out.length)out.push(pt(i,Math.max(s0,a)));out.push(b<=s1?P[i+1].slice():pt(i,s1))}run=b}
+ return out.length>1?out:[...out,...out]}
+// {nodes:{id:{x,z,edges:[ids]}}, edges:{id:{id,from,to,class,speed,width,surface,length,closed,poly,legs:[{from,to,s0,s1,length}]}}, links:{nodeId:[{to,edge,leg,length,time}]}, components:[[nodeId...]]}
+export function roadGraph(map=MAP){
+ let g=roadCache.get(map);if(g)return g;
+ const nodes={},edges={},R=map.roads;
+ for(const e of R.edges){if(!R.nodes[e.from]||!R.nodes[e.to])continue;const poly=roadPolyline(e,map);edges[e.id]={id:e.id,from:e.from,to:e.to,class:roadClassOf(e),speed:roadSpeed(e),width:e.width,surface:e.surface,closed:!!e.closed,poly,length:polylineLength(poly),splits:[]}}
+ for(const [id,p] of Object.entries(R.nodes))nodes[id]={id,x:p.x,z:p.z,edges:[]};
+ // T joins: an end node of A on the body of B (not at B's own ends) splits B there.
+ for(const A of Object.values(edges)){const own=new Set([A.from,A.to]);
+  for(const B of Object.values(edges)){if(B===A)continue;
+   for(const nid of own){const n=nodes[nid],q=nearestOnPolyline(B.poly,n.x,n.z);if(q.d>B.width/2+ROAD_JOIN_SLACK)continue;
+    if(nid===B.from||nid===B.to)continue;
+    if(q.s>1&&q.s<B.length-1&&!B.splits.some(s=>s.node===nid))B.splits.push({node:nid,s:q.s})}}}
+ // Crossings: two edges that cross mid-edge (no shared end) get a virtual junction node 'A+B' at the crossing.
+ {const L=Object.values(edges);for(let i=0;i<L.length;i++)for(let j=i+1;j<L.length;j++){const A=L[i],B=L[j];
+  for(let a=0;a<A.poly.length-1;a++)for(let b=0;b<B.poly.length-1;b++){const p=segCross(A.poly[a],A.poly[a+1],B.poly[b],B.poly[b+1]);if(!p)continue;
+   let id=`${A.id}+${B.id}`,k=1;while(nodes[id])id=`${A.id}+${B.id}#${++k}`;nodes[id]={id,x:p[0],z:p[1],edges:[],virtual:true};
+   A.splits.push({node:id,s:nearestOnPolyline(A.poly,p[0],p[1]).s});B.splits.push({node:id,s:nearestOnPolyline(B.poly,p[0],p[1]).s})}}}
+ const links={};for(const id in nodes)links[id]=[];
+ for(const E of Object.values(edges)){
+  E.splits.sort((a,b)=>a.s-b.s);
+  const stops=[{node:E.from,s:0},...E.splits,{node:E.closed?E.from:E.to,s:E.length}];
+  E.legs=[];for(let i=0;i<stops.length-1;i++){const a=stops[i],b=stops[i+1],len=b.s-a.s;if(len<=0)continue;
+   const leg={from:a.node,to:b.node,s0:a.s,s1:b.s,length:len};E.legs.push(leg);
+   const time=len/E.speed;links[a.node].push({to:b.node,edge:E.id,leg:E.legs.length-1,length:len,time});if(a.node!==b.node)links[b.node].push({to:a.node,edge:E.id,leg:E.legs.length-1,length:len,time})}
+  for(const nid of new Set([E.from,E.to,...E.splits.map(s=>s.node)]))nodes[nid].edges.push(E.id)}
+ // connected pieces (nodes with no road at all are left out)
+ const seen=new Set(),components=[];
+ for(const id in nodes){if(seen.has(id)||!nodes[id].edges.length)continue;const comp=[],stack=[id];seen.add(id);while(stack.length){const c=stack.pop();comp.push(c);for(const l of links[c])if(!seen.has(l.to)){seen.add(l.to);stack.push(l.to)}}components.push(comp.sort())}
+ g={nodes,edges,links,components};roadCache.set(map,g);return g;
+}
+// Nearest road to a point: {edge, d (distance to the centreline), s (metres along the edge), x, z, onRoad (d within half the width)} or null.
+export function nearestRoad(x,z,map=MAP){const g=roadGraph(map);let best=null;
+ for(const E of Object.values(g.edges)){const q=nearestOnPolyline(E.poly,x,z);if(!best||q.d<best.d)best={edge:E.id,d:q.d,s:q.s,x:q.x,z:q.z,onRoad:q.d<=E.width/2}}
+ return best}
+// The graph node closest to a point (straight line), or a node id passed through.
+export function nearestRoadNode(p,map=MAP){const g=roadGraph(map);if(typeof p==='string')return g.nodes[p]?p:null;let best=null,bd=Infinity;for(const n of Object.values(g.nodes)){if(!n.edges.length)continue;const d=Math.hypot(n.x-p.x,n.z-p.z);if(d<bd){bd=d;best=n.id}}return best}
+// Fastest route (Dijkstra on length / class speed) between two node ids or {x,z} points: {nodes:[ids], edges:[ids], length, time, legs:[{edge,from,to,length}]} or null if not connected.
+export function roadRoute(a,b,map=MAP){
+ const g=roadGraph(map),from=nearestRoadNode(a,map),to=nearestRoadNode(b,map);if(!from||!to)return null;
+ const dist={[from]:0},prev={},done=new Set();
+ for(;;){let cur=null,cd=Infinity;for(const id in dist)if(!done.has(id)&&dist[id]<cd){cd=dist[id];cur=id}
+  if(cur===null||cur===to)break;done.add(cur);
+  for(const l of g.links[cur]){const nd=cd+l.time;if(dist[l.to]===undefined||nd<dist[l.to]-1e-12){dist[l.to]=nd;prev[l.to]={from:cur,link:l}}}}
+ if(dist[to]===undefined)return null;
+ const legs=[],nodesOut=[to];let c=to;while(c!==from){const p=prev[c];legs.unshift({edge:p.link.edge,from:p.from,to:c,length:p.link.length});c=p.from;nodesOut.unshift(c)}
+ return {nodes:nodesOut,edges:[...new Set(legs.map(l=>l.edge))],length:legs.reduce((s,l)=>s+l.length,0),time:dist[to],legs};
+}
+// Cut every road polyline at chunk borders (the build-time split of map-master 6.7): [{edge, chunk:'i:j', i, j, points}] in order along each edge. Defaults match chunks.js (CHUNK 100, FRAME origin -450,-1200).
+export function roadChunkPieces(map=MAP,{size=100,x0=-450,z0=-1200}={}){
+ const g=roadGraph(map),out=[],key=(x,z)=>[Math.floor((x-x0)/size),Math.floor((z-z0)/size)];
+ for(const E of Object.values(g.edges)){let cur=null;
+  const push=(pt)=>cur.points.push(pt);
+  for(let i=0;i<E.poly.length-1;i++){let [ax,az]=E.poly[i];const [bx,bz]=E.poly[i+1],dx=bx-ax,dz=bz-az;
+   const ts=[0,1];for(let k=Math.ceil(Math.min(ax,bx)/size-x0/size);k<=Math.floor(Math.max(ax,bx)/size-x0/size);k++){const t=dx?(x0+k*size-ax)/dx:-1;if(t>1e-9&&t<1-1e-9)ts.push(t)}
+   for(let k=Math.ceil(Math.min(az,bz)/size-z0/size);k<=Math.floor(Math.max(az,bz)/size-z0/size);k++){const t=dz?(z0+k*size-az)/dz:-1;if(t>1e-9&&t<1-1e-9)ts.push(t)}
+   ts.sort((p,q)=>p-q);
+   for(let k=0;k<ts.length-1;k++){if(ts[k+1]-ts[k]<1e-9)continue;const t0=ts[k],t1=ts[k+1],tm=(t0+t1)/2,[ci,cj]=key(ax+dx*tm,az+dz*tm),ck=ci+':'+cj;
+    if(!cur||cur.chunk!==ck){cur={edge:E.id,chunk:ck,i:ci,j:cj,points:[[ax+dx*t0,az+dz*t0]]};out.push(cur)}
+    push([ax+dx*t1,az+dz*t1])}}}
+ return out;
+}
+// Problems with the road data (empty when sound; validateMap includes them). Old edges stay valid with no new fields.
+export function roadProblems(map=MAP){
+ const out=[],bad=m=>out.push(m),R=map.roads;if(!R)return out;
+ for(const e of R.edges){
+  if(e.class!==undefined&&!(e.class in ROAD_CLASSES))bad(`road ${e.id} has an unknown class ${e.class}`);
+  if(!R.nodes[e.from]||!R.nodes[e.to])continue;
+  if(e.path&&(!Array.isArray(e.path)||e.path.some(p=>!Array.isArray(p)||p.length!==2||!p.every(Number.isFinite))))bad(`road ${e.id} has a bad path point`);
+  if(e.closed&&e.from!==e.to)bad(`road ${e.id} is closed but its ends are different nodes`);
+  if(!e.closed&&e.from===e.to)bad(`road ${e.id} starts and ends at the same node but is not closed`);
+  if(!(roadLength(e,map)>0))bad(`road ${e.id} has no length`);
+ }
+ return out;
+}
+// Where two segments properly cross: [x, z] or null.
+function segCross(a,b,c,d){const o=(p,q,r)=>(q[0]-p[0])*(r[1]-p[1])-(q[1]-p[1])*(r[0]-p[0]);
+ if(!(o(a,b,c)*o(a,b,d)<0&&o(c,d,a)*o(c,d,b)<0))return null;const t=o(c,d,a)/(o(c,d,a)-o(c,d,b));return [a[0]+(b[0]-a[0])*t,a[1]+(b[1]-a[1])*t]}
 export const hoursOf=(kind,map=MAP)=>map.shops[kind].hours;
 
 // ── Validation ────────────────────────────────────────────────────────────────
@@ -532,9 +776,9 @@ export function validateMap(map=MAP){
  // Water: rivers are flat hard barriers (outside every zone); the only way across is a bridge whose deck is exactly the width of the zone it carries.
  {const rivers=map.water?.rivers||[],bridges=map.water?.bridges||[];
   for(const river of rivers){
-   if(!(river.points?.length>=2)||!(river.width>0)){bad(`river ${river.id} needs at least two points and a width`);continue}
-   const path=riverPath(river,2),reach=river.width/2+river.bank;
-   if(path.some(p=>p.x<map.ground.x0-20||p.x>map.ground.x1+20||p.z<map.ground.z0||p.z>map.ground.z1))bad(`river ${river.id} leaves the ground`);
+   if(!(river.points?.length>=2)||!(riverIsLegacy(river)?river.width>0:river.points.every(p=>p&&p.w>0&&Number.isFinite(p.x+p.z)))){bad(`river ${river.id} needs at least two points and a width`);continue}
+   const path=riverPath(river,2),reach=riverWidth(river)/2+riverBank(river),outer=riverIsLegacy(river)?map.ground:(map.world||map.ground);
+   if(path.some(p=>p.x<outer.x0-20||p.x>outer.x1+20||p.z<outer.z0||p.z>outer.z1))bad(`river ${river.id} leaves the ground`);
    // Both banks and the middle of the river, all along it, must stay out of every zone except under a bridge.
    for(const zone of map.zones){
     const hit=path.some(p=>[-1,-.5,0,.5,1].some(k=>{const x=p.x-p.tz*k*reach,z=p.z+p.tx*k*reach;
@@ -544,11 +788,16 @@ export function validateMap(map=MAP){
   for(const bridge of bridges){
    const river=rivers.find(r=>r.id===bridge.river);
    if(!river){bad(`bridge ${bridge.id} crosses an unknown river`);continue}
-   const reach=river.width/2+river.bank,edges=riverPath(river,1).filter(p=>p.x>=bridge.x0-2&&p.x<=bridge.x1+2).flatMap(p=>[p.z+p.tx*reach,p.z-p.tx*reach]);
-   if(!edges.length||!(bridge.z0<Math.min(...edges)&&bridge.z1>Math.max(...edges)))bad(`bridge ${bridge.id} does not reach both banks`);
+   const reach=riverWidth(river)/2+riverBank(river);
+   if(bridge.axis==='x'){ // an east-west deck over a north-south reach: the banks are measured in x
+    const edges=riverPath(river,1).filter(p=>p.z>=bridge.z0-2&&p.z<=bridge.z1+2).flatMap(p=>[p.x-p.tz*reach,p.x+p.tz*reach]);
+    if(!edges.length||!(bridge.x0<Math.min(...edges)&&bridge.x1>Math.max(...edges)))bad(`bridge ${bridge.id} does not reach both banks`)}
+   else{const edges=riverPath(river,1).filter(p=>p.x>=bridge.x0-2&&p.x<=bridge.x1+2).flatMap(p=>[p.z+p.tx*reach,p.z-p.tx*reach]);
+   if(!edges.length||!(bridge.z0<Math.min(...edges)&&bridge.z1>Math.max(...edges)))bad(`bridge ${bridge.id} does not reach both banks`)}
    if(!inside(bridge,map.ground))bad(`bridge ${bridge.id} reaches outside the ground`);
    if(!map.zones.some(z=>z.bounds.x0===bridge.x0&&z.bounds.x1===bridge.x1&&z.bounds.z0<=bridge.z0&&z.bounds.z1>=bridge.z1))bad(`bridge ${bridge.id} is not exactly as wide as a walkable zone that crosses the river`);
-  }}
+  }
+  for(const m of waterProblems(map))bad(m)}
  // Landmarks and signs stand inside the zone they name; buildings face one of the four directions.
  {const ids=new Set();for(const item of [...(map.landmarks||[]),...(map.signs||[])]){
   if(ids.has(item.id))bad(`duplicate landmark or sign ${item.id}`);ids.add(item.id);
@@ -591,9 +840,13 @@ export function validateMap(map=MAP){
   if(!a||!b){bad(`road ${edge.id} uses an unknown node`);continue}
   if(!edge.path&&a.x!==b.x&&a.z!==b.z)bad(`road ${edge.id} is not axis-aligned`);
   if(!(edge.width>0))bad(`road ${edge.id} has no width`);
-  if(!['asphalt','dirt'].includes(edge.surface))bad(`road ${edge.id} has an unknown surface`);
+  if(!['asphalt','dirt','gravel'].includes(edge.surface))bad(`road ${edge.id} has an unknown surface`);
   if(edge.zone&&!map.zones.some(z=>z.id===edge.zone))bad(`road ${edge.id} names an unknown zone ${edge.zone}`);
-  if(edge.path){
+  if(edge.wild){ // R3a: a road of the wilds lies inside the world frame and needs no zone; every point must be in the world (and the old ground has no wild road in it)
+   const W=map.world;if(!W)bad(`road ${edge.id} is wild but the map has no world frame`);
+   else{if(roadPoints(edge).some(([x,z])=>x<W.x0||x>W.x1||z<W.z0||z>W.z1))bad(`road ${edge.id} reaches outside the world`);
+    if(!roadPoints(edge).some(([x,z])=>x<map.ground.x0||x>map.ground.x1||z<map.ground.z0||z>map.ground.z1))bad(`road ${edge.id} is wild but lies inside the old ground`)}
+  }else if(edge.path){
    if(roadPoints(edge).some(([x,z])=>x<map.ground.x0||x>map.ground.x1||z<map.ground.z0||z>map.ground.z1))bad(`road ${edge.id} reaches outside the ground`);
    if(!roadPoints(edge).some(([x,z])=>zoneAtPoint(x,z,map)))bad(`road ${edge.id} does not touch any zone`);
   }else{
@@ -611,7 +864,17 @@ export function validateMap(map=MAP){
   if(!['plowed','wheat','green'].includes(field.surface))bad(`field ${field.id} has an unknown surface`);
  }
  for(const [i,a] of map.fields.entries())for(const b of map.fields.slice(i+1))if(overlaps(a,b))bad(`fields ${a.id} and ${b.id} overlap`);
- // Buildings do not overlap each other; shops point at a real building and have sane hours.
+ // Mud patches (TR3): whole-metre-or-better rectangles of 2 to 16 m inside the ground, off buildings, water and every road's centre line, and apart from each other.
+ for(const [i,m] of (map.mud||[]).entries()){
+  if(!rectOk(m)||!inside(m,map.ground)){bad(`mud patch ${m.id} is not a rectangle inside the ground`);continue}
+  if(m.x1-m.x0>16||m.z1-m.z0>16||m.x1-m.x0<2||m.z1-m.z0<2)bad(`mud patch ${m.id} is not 2 to 16 m across`);
+  if(map.buildings.some(b=>overlaps(m,footprint(b))))bad(`mud patch ${m.id} touches a building`);
+  for(const [x,z] of [[m.x0,m.z0],[m.x1,m.z0],[m.x0,m.z1],[m.x1,m.z1],[(m.x0+m.x1)/2,(m.z0+m.z1)/2]])if(waterAt(x,z,map))bad(`mud patch ${m.id} reaches water`);
+  for(const edge of map.roads.edges){const a=map.roads.nodes[edge.from],b=map.roads.nodes[edge.to];if(!a||!b)continue;
+   if(edge.path){if(roadPoints(edge).some(([x,z])=>x>=m.x0&&x<=m.x1&&z>=m.z0&&z<=m.z1))bad(`mud patch ${m.id} lies on the centre line of ${edge.id}`)}
+   else{const r=roadRect(edge,map);if(a.z===b.z?(m.x0<r.x1&&m.x1>r.x0&&a.z>=m.z0&&a.z<=m.z1):(m.z0<r.z1&&m.z1>r.z0&&a.x>=m.x0&&a.x<=m.x1))bad(`mud patch ${m.id} lies on the centre line of ${edge.id}`)}}
+  for(const o of map.mud.slice(i+1))if(overlaps(m,o))bad(`mud patch ${o.id} overlaps ${m.id}`);
+ } // Buildings do not overlap each other; shops point at a real building and have sane hours.
  for(const [i,a] of map.buildings.entries()){if(!(a.w>0&&a.d>0&&a.h>0))bad(`building ${i} has no size`);for(const b of map.buildings.slice(i+1))if(overlaps(footprint(a),footprint(b)))bad(`buildings ${a.name||i} and ${b.name||map.buildings.indexOf(b)} overlap`)}
  for(const [kind,shop] of Object.entries(map.shops)){
   const building=map.buildings.find(b=>b.shop===kind);
@@ -731,5 +994,6 @@ export function validateMap(map=MAP){
    if(p.person){if(!p.person.name)bad(`post ${p.id} names nobody`);else if(names.has(p.person.name))bad(`${p.person.name} holds two posts`);names.add(p.person.name);
     if(p.person.body!==undefined&&!bodies.includes(p.person.body))bad(`post ${p.id}'s person has an unknown body`)}}
   if((map.posts||[]).length&&!(map.exits||[]).length)bad('posts need a map exit for commuters')}
+ for(const m of roadProblems(map))bad(m);
  return problems;
 }

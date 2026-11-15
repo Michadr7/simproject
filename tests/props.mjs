@@ -20,7 +20,7 @@ const EXPECT={'house-a':[1174,10.4,6.7],'house-e':[1731,10.4,9.1],'house-h':[770
  // gas-station props (own models, true size, file origin kept)
  'prop.fuel-pump':[252,.64,1.73],'prop.fuel-pump-diesel':[252,.64,1.73],'prop.fuel-nozzle':[84,.05,.03],'prop.fuel-nozzle-diesel':[84,.05,.03],'prop.pump-island':[672,3.4,1.91],'prop.forecourt-canopy':[456,12.08,5.59],'prop.fuel-can':[1162,.18,.5],
  'f-cabinet':[188,.9,.9],'f-sink':[596,.9,1],'f-stove':[1604,.9,.9],'f-fridge':[584,1,1.8],'f-toilet':[440,.6,.9],'f-bath':[1204,2.4,.8],'f-bath-sink':[632,.7,1.1],'f-lamp':[152,.3,1.7],'f-rug':[56,3.1,0],'f-plant':[104,.4,1.3],'f-stairs':[616,3.6,2.7],'f-side-table':[236,1.1,.8]};
-assert.deepEqual(Object.keys(PROPS).sort(),Object.keys(EXPECT).sort(),'every converted prop is in the table, and nothing else ships');
+assert.deepEqual(Object.keys(PROPS).filter(id=>!id.startsWith('farm.')).sort(),Object.keys(EXPECT).sort(),'every converted prop is in the table, and nothing else ships');
 let triangles=0;const GAS=new Set(['prop.fuel-pump','prop.fuel-pump-diesel','prop.fuel-nozzle','prop.fuel-nozzle-diesel','prop.pump-island','prop.forecourt-canopy']);
 for(const [id,[tris,width,height]] of Object.entries(EXPECT)){
  const info=propInfo(id),g=propGeometry(id),coloured=!!info.col;

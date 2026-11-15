@@ -258,3 +258,47 @@ Freesound downloads need a login, so the **high-quality Ogg preview** of each Fr
 | `yell-f4.ogg` | Freesound 740310 "Female Gasp" | kanyonwyvern (https://freesound.org/people/kanyonwyvern/sounds/740310/) | 0.7 to 1.7 s, peak -4 dBFS |
 
 Not found as real recordings: a separate high-rpm engine loop per class (only steady idles were free, so the loop is pitched up with the revs), and a 'person hit' thud made for a body (the thuds are generic CC0 impacts, low-passed). The generated engine, crank and stall still run until a class's loop is decoded.
+
+## Phone call sounds (PH1, recorded, all CC0)
+Found 2026-11-17 for the phone's Call app. Every file is **CC0 1.0** (Freesound page shows 'Creative Commons 0', checked on 2026-11-17; rejected on purpose: a pick-up click by joedeshon, which is CC-BY). As with SND1, Freesound needs a login, so the high-quality Ogg preview of each sound was used, trimmed and converted with Blender 5.2's aud module and numpy: mono Ogg Vorbis about 48 kbps, 32 kHz, DC removed, short fades, normalised. Loaded lazily by `audio.phone()` (dist/audio.js) the first time the Call app dials; generated tones play until they are decoded or if they fail. Registered in dist/phone-calls.js (PHONE_CLIPS) and vehicle-sounds.js ALL_FILES.
+
+| File | Source | Author | Edit |
+|---|---|---|---|
+| `phone-key.ogg` | Freesound 178817 "DTMF_dial.mp3" | Felfa (https://freesound.org/people/Felfa/sounds/178817/) | 0.58 to 0.93 s (one key tone), peak -12 dBFS |
+| `phone-pickup.ogg` | Freesound 218083 "Phone pick up / hang up" | deraj (https://freesound.org/people/deraj/sounds/218083/) | 0.95 to 1.7 s (the handset lifted), peak -6 dBFS |
+| `phone-hangup.ogg` | Freesound 218083 "Phone pick up / hang up" | deraj (https://freesound.org/people/deraj/sounds/218083/) | 3.2 to 4.3 s (the handset put down), peak -6 dBFS |
+| `phone-ring.ogg` | Freesound 337655 "Current US/Can. Ringback tone" | tt_runscript (https://freesound.org/people/tt_runscript/sounds/337655/) | 0 to 2.0 s (one ring burst), peak -14 dBFS |
+| `phone-busy.ogg` | Freesound 158428 "Busy Signal" | ramicio (https://freesound.org/people/ramicio/sounds/158428/) | 0 to 2.0 s (two beeps and two gaps, loops), peak -14 dBFS |
+
+## Tyre sounds (TR6, recorded, all CC0)
+Found 2026-11-17 for the wheel sounds per ground (mono Ogg Vorbis about 48 kbps, 32 kHz, 5.75 s loops, -18 dBFS rms, DC removed, 0.25 s tail-to-head cross-fade so the loop is seamless, band-limited as listed). Every source page shows 'Creative Commons 0' (checked 2026-11-17; rejected: a puddle pass by tim.kahn, CC-BY-NC). Freesound needs a login, so the public high-quality MP3 preview of each sound was used, trimmed and filtered with Blender 5.2's aud module and numpy (windows picked by measurement: steadiest 6 s stretch, not by ear; nobody has listened yet). Loaded lazily by `audio.drive()` (dist/audio.js) the first time that ground is driven on. NOTE: no CC0 recording of a vehicle on grass or in mud was found, so grass and mud are different stretches of the one dirt-road drive (grass: a quiet, soft stretch; mud: the lowest-pitched steady stretch, filtered down to 3 kHz). Replace them when a better CC0 recording turns up.
+
+| File | Source | Author | Edit |
+|---|---|---|---|
+| `tyres-asphalt.ogg` | Freesound 397115 "Car Driving Interior Perspective" | Kinoton (https://freesound.org/people/Kinoton/sounds/397115/) | 224 to 230 s of the steady 40 to 60 km/h cruise, band 200 Hz to 5 kHz |
+| `tyres-gravel.ogg` | Freesound 685230 "Car driving on gravel dirt road, close recording from outside" | felix.blume (https://freesound.org/people/felix.blume/sounds/685230/) | 150 to 156 s, band 300 Hz to 9 kHz (engine rumble cut) |
+| `tyres-grass.ogg` | Freesound 668552 "Car driving in exterior, Toyota Landcruiser 4x4, motor, dirt road, gravel, puddle mud" | felix.blume (https://freesound.org/people/felix.blume/sounds/668552/) | 198 to 204 s (the quietest steady stretch), band 150 Hz to 4.5 kHz |
+| `tyres-mud.ogg` | Freesound 668552 (same recording) | felix.blume (https://freesound.org/people/felix.blume/sounds/668552/) | 108 to 114 s (lowest-pitched steady stretch), band 120 Hz to 3 kHz |
+
+## Quaternius Farm Buildings Bundle and Farm Animal Pack (farm stage F-import, 2026-11-17, all CC0 1.0)
+Sources: https://poly.pizza/bundle/Farm-Buildings-Bundle-ppbnhEfNEt and https://poly.pizza/bundle/Farm-Animal-Pack-1kUvRTPLzT (Quaternius, CC0). Originals in `assets-src/Farm/Farm Buildings Bundle-glb/` and `assets-src/Farm/Farm Animal Pack-glb/` (not committed). Converted by `scripts/build-props.mjs` into `dist/props-assets.js`: `TOOL_DIR=<tools> node scripts/build-props.mjs assets-src farm.big-barn,farm.silo,...` (a list of ids rebuilds just those). Every model is ONE mesh with flat material colours baked to vertex colours: one material, one draw call each; origin on the ground at the footprint centre, facing +z. NOTHING is placed in the map yet: the game's current farm zone still uses the old six barn ids; replacing them is a later stage. `tests/farm-props.mjs` checks size, ground, footprint, boxes, colours and draw calls for all 17.
+| Prop id | Source file | Size w x d x h (m) | Triangles | Colours | Collision |
+|---|---|---|---|---|---|
+| `barn` (0.29) | Barn.glb | 12.0 x 12.7 x 9.3 (1.55 x) | 2,910 | 4 | 8 wall boxes |
+| `small-barn` (0.29) | Small Barn.glb | 9.4 x 9.7 x 7.7 (1.55 x) | 2,176 | 4 | 9 |
+| `open-barn` (0.29) | Open Barn.glb | 8.9 x 9.6 x 7.3 (1.55 x) | 1,612 | 5 | 5 |
+| `silo-house` (0.29) | Silo House.glb | 8.3 x 5.4 x 14.1 (1.55 x) | 2,880 | 7 | 14 |
+| `coop` (0.29) | ChickenCoop.glb | 3.6 x 3.2 x 2.8 (1.5 x) | 948 | 5 | 7 |
+| `windmill` (0.29) | Tower Windmill.glb | 9.9 x 6.2 x 14.3 (1.25 x, simplified from 7,827; blades are fixed) | 4,070 | 3 after simplifying | 8 |
+| `farm.big-barn` | Big Barn.glb | 12.0 x 12.7 x 12.2 (1.55 x) | 4,220 | 4 | 9 wall boxes |
+| `farm.silo` | Silo.glb | 5.7 x 5.4 x 14.1 (1.55 x) | 1,592 | 5 | 4 solid boxes |
+| `farm.fence-a` | Fence-e02PFKKhbr.glb | 5.9 x 0.2 x 1.1 (1 x) | 188 | 1 | 1 exact box |
+| `farm.fence-b` | Fence.glb | 5.9 x 0.2 x 1.2 (1 x) | 324 | 1 | 1 exact box |
+| `farm.cow` | Cow.glb | 0.6 x 2.5 x 1.4 | 796 | 3 | 1 footprint box |
+| `farm.horse` | Horse.glb | 0.6 x 2.3 x 1.7 | 690 | 2 | 1 |
+| `farm.llama` | Llama.glb | 0.5 x 1.4 x 1.7 | 661 | 3 | 1 |
+| `farm.pig` | Pig.glb | 0.6 x 1.8 x 0.85 | 562 | 2 | 1 |
+| `farm.pug` | Pug.glb | 0.2 x 0.5 x 0.35 | 644 | 2 | 1 |
+| `farm.sheep` | Sheep.glb | 0.5 x 1.2 x 0.9 | 610 | 2 | 1 |
+| `farm.zebra` | Zebra.glb | 0.5 x 1.9 x 1.45 | 1,354 | 2 | 1 |
+The animals are skinned in the file (28 bones, FBX2glTF, units 100 times too big): they are imported in the bind (rest) pose as static props, sized by `height`, with the clip names and lengths kept as `record.clips` (Cow, Horse, Zebra: Death, Idle, Jump, Run, Walk, WalkSlow; Llama, Pig, Pug, Sheep: Idle, Jump; Idle 6.25 s). The skin, weights and keyframes are NOT kept: playing them needs the RIGGED pipeline (`scripts/rigged-glb.mjs`, whole GLB embedded, about 1.6 MB for the seven). The two fence files are named a and b by file; the bundle does not say which is which (`fence-a` is the plainer 188-triangle one).

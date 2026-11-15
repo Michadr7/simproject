@@ -4,6 +4,7 @@
 // A vehicle's state is {x, z, yaw, speed, steer} (y is never stored). Forward is the model's +z: (sin yaw, cos yaw). Yaw grows toward +x, which is the vehicle's LEFT when it faces +z,
 // so steer > 0 turns left. The hull is an oriented box from the converted model's footprint; a pose is free when every hull sample point passes the game's own `blocked()`.
 import {SURFACE} from './terrain.js';
+import {speedFactor,gripOf,rollDragOf,sinkOf,FIRM_BELOW} from './surface-table.js';
 import {normalizeFuelMgal} from './fuel.js';
 import {validColour,defaultColour} from './paint.js';
 import {normalizeCargo} from './cargo.js';
@@ -24,18 +25,19 @@ export const TIERS=Object.freeze(['low','mid','high']);export const ARCADE_MILE_
 // tough: damage per unit of crash energy (damage.js: points = tough x ...; HIGHER takes more damage; VD7a values explained there). hood: the engine bay's smoke point, local (default: centred, 0.6 m back from the nose).
 function makeClass(c){const L=c.hz*2;return {...c,hood:c.hood||{x:0,y:.9,z:+(c.hz-.6).toFixed(3)},gallonsPerMile:+(ARCADE_MILE_SCALE/c.mpg).toFixed(4),door:{x:+(c.hx+.6).toFixed(3),z:c.doorZ},passengerDoor:{x:-+(c.hx+.6).toFixed(3),z:c.doorZ},seat:{x:.45,z:c.doorZ},passengerSeat:{x:-.45,z:c.doorZ},camera:{back:+(3*L/2).toFixed(2),up:+(1.2*L/2).toFixed(2)}}}
 export const CLASSES=Object.freeze({
- worktruck:makeClass({id:'worktruck',tough:1.3,tier:'low',mpg:8,name:'Worktruck',hx:1.09,hz:3,top:17.9,reverse:5,accel:3,brake:8,drag:.9,rMin:7,aLat:10,doorZ:.5,exhaust:{x:-.7,y:.35,z:-3.02}}), // the starter: about 40 mph, thirsty
- flatbed:makeClass({id:'flatbed',tough:1.7,tier:'low',mpg:6,name:'Tylan Flatbed',hx:1.45,hz:4.415,top:15.6,reverse:3.5,accel:1.6,brake:6,drag:.7,rMin:9,aLat:7,doorZ:1.765,exhaust:{x:-1.42,y:3.15,z:1,stack:true}}), // the timber truck (0.35): 35 mph, slow to get there, thirsty; the exhaust is the top of the stack
- shortbed:makeClass({id:'shortbed',tough:.58,tier:'low',mpg:5,name:'Kasumuchi S70',hx:1.105,hz:2.757,top:29,reverse:4,accel:1.5,brake:7,drag:.8,rMin:7.5,aLat:9,doorZ:.9,exhaust:{x:-.6,y:.29,z:-2.7}}), // the cheap starter shortbed (0.35.8): 65 mph at the top but 19 s to get there, 5 mpg (1.6 gal/mi), a gas hog; the exhaust is the model's anchor_exhaust
- offroad:makeClass({id:'offroad',tough:.68,tier:'mid',mpg:14.5,name:'Pevrolet Off Road Pickup',hx:1.255,hz:2.8,top:26.8,reverse:6,accel:4.5,brake:9,drag:1,rMin:6.5,aLat:14,doorZ:.5,rough:.35,exhaust:{x:-.75,y:.42,z:-2.95}}) // mid tier: about 60 mph, nearly twice the mileage; grass, fields, paths and dirt cost it 35 points less speed (rough)
+ worktruck:makeClass({id:'worktruck',group:'road',tough:.5,tier:'low',mpg:8,name:'Worktruck',hx:1.09,hz:3,top:17.9,reverse:5,accel:3,brake:8,drag:.9,rMin:7,aLat:10,doorZ:.5,exhaust:{x:-.7,y:.35,z:-3.02}}), // the starter: about 40 mph, thirsty
+ flatbed:makeClass({id:'flatbed',group:'heavy',tough:.4,tier:'low',mpg:6,name:'Tylan Flatbed',hx:1.45,hz:4.415,top:15.6,reverse:3.5,accel:1.6,brake:6,drag:.7,rMin:9,aLat:7,doorZ:1.765,exhaust:{x:-1.42,y:3.15,z:1,stack:true}}), // the timber truck (0.35): 35 mph, slow to get there, thirsty; the exhaust is the top of the stack
+ shortbed:makeClass({id:'shortbed',group:'road',tough:.58,tier:'low',mpg:5,name:'Kasumuchi S70',hx:1.105,hz:2.757,top:29,reverse:4,accel:1.5,brake:7,drag:.8,rMin:7.5,aLat:9,doorZ:.9,exhaust:{x:-.6,y:.29,z:-2.7}}), // the cheap starter shortbed (0.35.8): 65 mph at the top but 19 s to get there, 5 mpg (1.6 gal/mi), a gas hog; the exhaust is the model's anchor_exhaust
+ offroad:makeClass({id:'offroad',group:'offroad',tough:.68,tier:'mid',mpg:14.5,name:'Pevrolet Off Road Pickup',hx:1.255,hz:2.8,top:26.8,reverse:6,accel:3.5,brake:9,drag:1,rMin:6.5,aLat:14,doorZ:.5,rough:.35,exhaust:{x:-.75,y:.42,z:-2.95}}) // mid tier: about 60 mph, nearly twice the mileage; grass, fields, paths and dirt cost it 35 points less speed (rough)
 });
 
 // Top speed and acceleration multiplier by terrain surface. Water, banks and everything off the map are never driven on (blocked() refuses them as well).
-export const SURFACE_SPEED=Object.freeze({[SURFACE.GRASS]:.5,[SURFACE.STREET]:1,[SURFACE.ROAD]:1,[SURFACE.DIRT]:.8,[SURFACE.PAVEMENT]:.5,[SURFACE.WATER]:0,[SURFACE.BANK]:0,[SURFACE.BRIDGE]:1,[SURFACE.WHEAT]:.5,[SURFACE.PLOWED]:.5,[SURFACE.GREEN]:.5,[SURFACE.DRIVEWAY]:1,[SURFACE.PATH]:.5});
+export const SURFACE_SPEED=Object.freeze({[SURFACE.GRASS]:.5,[SURFACE.STREET]:1,[SURFACE.ROAD]:1,[SURFACE.DIRT]:.8,[SURFACE.PAVEMENT]:.5,[SURFACE.WATER]:0,[SURFACE.BANK]:0,[SURFACE.BRIDGE]:1,[SURFACE.WHEAT]:.5,[SURFACE.PLOWED]:.5,[SURFACE.GREEN]:.5,[SURFACE.DRIVEWAY]:1,[SURFACE.PATH]:.5,[SURFACE.MUD]:.3,[SURFACE.GRAVEL]:.9});
 // cls.rough (an off-road vehicle) lifts the rough-ground multipliers (grass 0.5, dirt 0.8 ...) by that much, never above 1; water and banks stay 0.
 // What the ground is called on the vehicle panel (grouped: a road, a track, rough ground, a pavement)
-export const SURFACE_LABEL=Object.freeze({[SURFACE.STREET]:'Road',[SURFACE.ROAD]:'Road',[SURFACE.BRIDGE]:'Road',[SURFACE.DRIVEWAY]:'Road',[SURFACE.DIRT]:'Dirt track',[SURFACE.PAVEMENT]:'Pavement',[SURFACE.PATH]:'Path',[SURFACE.GRASS]:'Grass',[SURFACE.WHEAT]:'Crop field',[SURFACE.PLOWED]:'Crop field',[SURFACE.GREEN]:'Crop field',[SURFACE.WATER]:'Water',[SURFACE.BANK]:'Mud bank'});
-export const surfaceSpeed=(surface,cls)=>{const base=SURFACE_SPEED[surface]??0;return base>0&&base<1&&cls?.rough?Math.min(1,base+cls.rough):base};
+export const SURFACE_LABEL=Object.freeze({[SURFACE.STREET]:'Road',[SURFACE.ROAD]:'Road',[SURFACE.BRIDGE]:'Road',[SURFACE.DRIVEWAY]:'Road',[SURFACE.DIRT]:'Dirt track',[SURFACE.PAVEMENT]:'Pavement',[SURFACE.PATH]:'Path',[SURFACE.GRASS]:'Grass',[SURFACE.WHEAT]:'Crop field',[SURFACE.PLOWED]:'Crop field',[SURFACE.GREEN]:'Crop field',[SURFACE.WATER]:'Water',[SURFACE.BANK]:'Mud bank',[SURFACE.MUD]:'Mud',[SURFACE.GRAVEL]:'Gravel'});
+// TR2: a class with a `group` reads the per-group table (surface-table.js); a bare or custom class keeps the old road numbers (+ cls.rough lift).
+export const surfaceSpeed=(surface,cls)=>{if(cls?.group)return speedFactor(surface,cls.group);const base=SURFACE_SPEED[surface]??0;return base>0&&base<1&&cls?.rough?Math.min(1,base+cls.rough):base};
 
 export const freshVehicle=(home)=>({x:home.x,z:home.z,yaw:home.yaw,speed:0,steer:0});
 const clamp=(v,lo,hi)=>Math.max(lo,Math.min(hi,v));
@@ -81,20 +83,20 @@ export function poseFree(pose,cls,env){
 // Returns {state, hit} (a new state; hit is true when the hull met something and the pose was refused or slid).
 export const OFFROAD_DECEL=6; // m/s squared: how hard rough ground drags a vehicle that is faster than the ground allows
 export function stepVehicle(s,input,dt,cls,env){
- const surface=surfaceSpeed(env.surface(s.x,s.z),cls);
- const top=cls.top*surface,rev=cls.reverse*surface,accel=cls.accel*Math.max(.35,surface);
+ const ground=env.surface(s.x,s.z),surface=surfaceSpeed(ground,cls),group=cls.group||'road',grip=gripOf(ground,group,env.wet||0); // grip: 1 on tarmac; loose ground widens turns, lengthens braking and softens the launch (never a slide)
+ const top=cls.top*surface,rev=cls.reverse*surface,accel=cls.accel*Math.max(.35,surface)*grip,brake=cls.brake*grip;
  let v=s.speed;
  const throttle=clamp(input.throttle||0,-1,1);
- if(input.brake)v=toward(v,0,cls.brake*1.5*dt);
- else if(throttle>0){v=v<-.3?toward(v,0,cls.brake*dt):toward(v,top,accel*dt*(v<top?1:3))}
- else if(throttle<0){v=v>.3?toward(v,0,cls.brake*dt):toward(v,-rev,accel*dt*(v>-rev?1:3))}
- else v=toward(v,0,cls.drag*dt);
+ if(input.brake)v=toward(v,0,brake*1.5*dt);
+ else if(throttle>0){v=v<-.3?toward(v,0,brake*dt):toward(v,top,accel*dt*(v<top?1:3))}
+ else if(throttle<0){v=v>.3?toward(v,0,brake*dt):toward(v,-rev,accel*dt*(v>-rev?1:3))}
+ else v=toward(v,0,(cls.drag+rollDragOf(ground,group))*dt); // coasting: rolling drag of the ground on top of the vehicle's own
  if(v>top)v=toward(v,top,OFFROAD_DECEL*dt); // leaving the road: rougher ground slows you down, firmly, to its own top speed
  if(v<-rev)v=toward(v,-rev,OFFROAD_DECEL*dt);
  // steering ramps to full in 0.4 s and back to centre in 0.3 s
  const want=clamp(input.steer||0,-1,1),rate=(want===0?1/.3:1/.4)*dt;let steer=toward(s.steer,want,rate);
  // R(v) = max(Rmin, v^2 / aLat): fast corners are wider; yaw rate = steer x v / R (the sign of v makes reversing steer the right way round)
- const radius=Math.max(cls.rMin,v*v/cls.aLat),yawRate=Math.abs(v)<.01?0:steer*v/radius;
+ const radius=Math.max(cls.rMin,v*v/(cls.aLat*grip)),yawRate=Math.abs(v)<.01?0:steer*v/radius;
  const yaw=s.yaw+yawRate*dt,mid=s.yaw+yawRate*dt/2,nx=s.x+sin(mid)*v*dt,nz=s.z+cos(mid)*v*dt;
  const next={x:nx,z:nz,yaw,speed:v,steer};
  if(poseFree(next,cls,env))return {state:next,hit:false,impact:0,hitKind:null};
@@ -131,6 +133,17 @@ export function findSafePose(pose,cls,env,{maxRadius=40,step=1}={}){
  for(let r=0;r<=maxRadius;r+=step){
   const n=r===0?1:Math.max(8,Math.ceil(2*Math.PI*r/step));
   for(let i=0;i<n;i++){const a=i/n*Math.PI*2,x=pose.x+Math.cos(a)*r,z=pose.z+Math.sin(a)*r;for(const yaw of yaws)if(poseFree({x,z,yaw},cls,env))return {x,z,yaw}}}
+ return null;
+}
+
+// TR4 'Pull me out': the nearest FIRM free pose (every hull point, and a 1 m margin around it, on ground that does not sink: sinkOf < FIRM_BELOW, and drivable), never a blocked one. A spiral outward from the pose; the vehicle faces the way it was moved (away
+// from the soft ground), else its own yaw, else a quarter turn. Event-driven, never per frame. env.surface(x, z) is the terrain surface id. Returns {x, z, yaw} or null.
+export function findFirmPose(pose,cls,env,{maxRadius=40,step=1}={}){
+ const wide={...cls,id:cls.id+'+firm',hx:cls.hx+1,hz:cls.hz+1},firm=(x,z,yaw)=>hullSamples(wide).every(p=>{const w=toWorld({x,z,yaw},p.x,p.z),g=env.surface(w.x,w.z);return sinkOf(g)<FIRM_BELOW&&speedFactor(g,cls.group||'road')>0});
+ for(const turned of [false,true])for(let r=1;r<=maxRadius;r+=step){ // first pass: never turn the vehicle on the spot (the way it was moved, else its own heading); only if that fails anywhere, a quarter or half turn
+  const n=Math.max(8,Math.ceil(2*Math.PI*r/step));
+  for(let i=0;i<n;i++){const a=i/n*Math.PI*2,x=pose.x+Math.cos(a)*r,z=pose.z+Math.sin(a)*r,heading=Math.atan2(x-pose.x,z-pose.z);
+   for(const yaw of turned?[pose.yaw+Math.PI/2,pose.yaw-Math.PI/2,pose.yaw+Math.PI]:[heading,pose.yaw])if(poseFree({x,z,yaw},cls,env)&&firm(x,z,yaw))return {x,z,yaw}}}
  return null;
 }
 

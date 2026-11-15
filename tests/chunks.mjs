@@ -113,6 +113,7 @@ ok(WRANGE.cols===15&&WRANGE.rows===18&&WRANGE.cols*WRANGE.rows===270,'the world 
 // ── F2: the merged ground of the chunks is exactly the loose ground of the plain world (same triangles, same area, same layer, same dashes) ──
 {const looseScene=new THREE.Scene(),loose=createWorld(looseScene,{cullRadius:Infinity});
  for(let j=range.j0;j<=range.j1;j++)for(let i=range.i0;i<=range.i1;i++){const b=chunkBounds(i,j);world.ensure((b.x0+b.x1)/2,(b.z0+b.z1)/2,0)}
+ for(let x=350;x<=600;x+=50)world.ensure(x,68,0); // R3a: Eden Road runs out into the wilds (x 290 to 600): its chunks hold the rest of the asphalt
  scene.updateMatrixWorld(true);looseScene.updateMatrixWorld(true);
  const A=new THREE.Vector3(),B=new THREE.Vector3(),C=new THREE.Vector3(),tally=(root,test)=>{const r={meshes:0,tri:0,area:0,up:0,factors:new Set(),inst:0,sum:0};root.traverse(o=>{if(!o.isMesh||!test(o.name))return;
    if(o.isInstancedMesh){r.meshes++;r.inst+=o.count;const m=new THREE.Matrix4();for(let k=0;k<o.count;k++){o.getMatrixAt(k,m);r.sum+=m.elements[12]+m.elements[13]*7+m.elements[14]*13}return}

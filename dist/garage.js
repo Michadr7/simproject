@@ -5,6 +5,9 @@ import {repairCents,repairHours,bandOf,percent,PERFECT} from './damage.js';
 import {VEHICLE_PRICE} from './orders.js';
 import {MAP} from './map-definition.js';
 import {countItem} from './inventory.js';
+import {advanceTime} from './routine.js';
+import {BOG_PULL_CENTS,BOG_PULL_HOURS} from './surface-table.js';
+export {BOG_PULL_CENTS,BOG_PULL_HOURS};
 export const HARD_LUCK_DAYS=7; // a broke player gets one free tow and repair this often
 export const HARD_LUCK_TO=400; // ...up to this condition (Worn: it drives, at 95% speed)
 export const LIMPING_BELOW=150; // "nothing runs" means every vehicle is under this (Limping or Wrecked)
@@ -19,13 +22,15 @@ const bay=()=>MAP.garage;
 export const bayPose=()=>({x:bay().pose.x,z:bay().pose.z,yaw:+bay().pose.yaw.toFixed(3)}); // rounded like a saved pose
 export const condOf=v=>Number.isInteger(v?.cond)&&v.cond>=0&&v.cond<PERFECT?v.cond:PERFECT; // missing = a perfect vehicle
 export const priceOf=model=>VEHICLE_PRICE[model]||0;
-export const freshGarage=()=>({hardLuckDay:null,shop:{}});
+export const PULL_FREE_DAYS=7; // TR4b: a player short of the pull-out fee gets one free pull-out this often (game days)
+export const freshGarage=()=>({hardLuckDay:null,shop:{}}); // optional pullFreeAt (game hours of the last free pull-out) is added when used
 export const hoursNow=p=>((p.housing?.day||1)-1)*24+(p.routine?.minutes||0)/60; // game hours since day 1, 0:00
 export const dayOf=p=>Math.max(1,Math.floor(p.housing?.day||1));
-// The save: {hardLuckDay: int|null, shop: {uid: {readyAt: game hours, to: the condition it leaves at}}}. Additive: an old save has none and loads empty. Unknown uids and nonsense are dropped.
+// The save: {hardLuckDay: int|null, pullFreeAt?: game hours, shop: {uid: {readyAt: game hours, to: the condition it leaves at}}}. Additive: an old save has none and loads empty. Unknown uids and nonsense are dropped.
 export function normalizeGarage(value,vehicles=[]){
  const out=freshGarage(),g=value&&typeof value==='object'?value:{};
  if(Number.isSafeInteger(g.hardLuckDay)&&g.hardLuckDay>=0&&g.hardLuckDay<=1e7)out.hardLuckDay=g.hardLuckDay;
+ if(Number.isFinite(g.pullFreeAt)&&g.pullFreeAt>=0&&g.pullFreeAt<=1e9)out.pullFreeAt=fixed3(g.pullFreeAt);
  const shop=g.shop&&typeof g.shop==='object'&&!Array.isArray(g.shop)?g.shop:{};
  for(const v of Array.isArray(vehicles)?vehicles:[]){const e=Object.prototype.hasOwnProperty.call(shop,v.uid)?shop[v.uid]:null;
   if(e&&typeof e==='object'&&Number.isFinite(e.readyAt)&&e.readyAt>=0&&e.readyAt<=1e9&&Number.isInteger(e.to)&&e.to>condOf(v)&&e.to<=PERFECT)out.shop[v.uid]={readyAt:fixed3(e.readyAt),to:e.to}}
@@ -79,7 +84,7 @@ export function startRepair(p,uid,now,{to=PERFECT,free=false}={}){
  const cents=free?0:q.cents;
  if(!free&&(p.cash||0)<cents)return fail(`You need ${cash(cents)} to repair the ${nameOf(v)}.`);
  const shop={...g.shop,[uid]:{readyAt:fixed3(now+q.hours),to:target}};
- const state={...p,cash:p.cash-cents,garage:{hardLuckDay:free?dayOf(p):g.hardLuckDay,shop}};
+ const state={...p,cash:p.cash-cents,garage:{...g,hardLuckDay:free?dayOf(p):g.hardLuckDay,shop}};
  return {state,quote:q,readyAt:shop[uid].readyAt,free,message:free?`The shop will fix the ${nameOf(v)} for free this time (to ${q.toPct}%, ${hoursText(q.hours)}). Next time it costs.`:`The ${nameOf(v)} is in the shop: ${cash(cents)}, ready in ${hoursText(q.hours)}.`};
 }
 // Is the repair finished at `now`? (false if it is not in the shop)
@@ -126,6 +131,26 @@ export function towTo(p,uid,dest,{drivenUid=null,now=hoursNow(p)}={}){
  if(free){const r=startRepair(state,uid,now,{free:true});if(r.error)return fail(r.error);
   return {state:r.state,fee:0,free:true,appear:{uid,x:moved.x,z:moved.z,yaw:moved.yaw},readyAt:r.readyAt,message:`The tow truck brought your ${nameOf(v)} to the shop. The shop fixed it for free this time. Next time it costs.`}}
  return {state,fee,free:false,appear:{uid,x:moved.x,z:moved.z,yaw:moved.yaw},message:`The tow truck brought your ${nameOf(v)} to ${toShop?'the shop':'where you asked'} for ${cash(fee)}.`};
+}
+// ---- pull me out (TR4, notes/terrain-vehicle-design.md section 2) ----
+// The Call app's 'Pull me out': only for the vehicle you are driving while it is Stuck or on soft ground (vailable, from driving.bogOf). Costs BOG_PULL_CENTS and BOG_PULL_HOURS of game time (the clock moves on half an hour), puts the vehicle on dest (the nearest firm free pose, found by the game: never a blocked spot). A broke player in hard luck (hardLuck) gets it free and the weekly hard-luck day is NOT used up.
+// TR4b: a broke player (cash under the fee) gets ONE free pull-out per PULL_FREE_DAYS game days, even in a healthy truck. It is independent of hardLuck: that path stays free and uses up neither; this one is recorded as garage.pullFreeAt (game hours).
+export const pullFreeLeft=(p,now=hoursNow(p))=>{const at=garageOf(p).pullFreeAt;return at===undefined?0:Math.max(0,+(at+PULL_FREE_DAYS*24-now).toFixed(3))}; // game hours until the next free one (0 = ready)
+export const pullFreeWeekly=(p,now=hoursNow(p))=>(p.cash||0)<BOG_PULL_CENTS&&pullFreeLeft(p,now)===0;
+export const pullFee=(p,now=hoursNow(p))=>hardLuck(p)||pullFreeWeekly(p,now)?0:BOG_PULL_CENTS;
+export function pullOut(p,uid,dest,{drivenUid=null,available=false,now=hoursNow(p)}={}){
+ const fail=error=>({state:p,error}),v=find(p,uid);
+ if(!v||drivenUid!==uid)return fail('A pull-out only works for the vehicle you are driving.');
+ if(!available)return fail('You are not stuck: there is nothing to pull you out of.');
+ if(![dest?.x,dest?.z,dest?.yaw].every(Number.isFinite))return fail('There is no firm ground nearby to pull you to.');
+ const hl=hardLuck(p),weekly=!hl&&pullFreeWeekly(p,now),free=hl||weekly,fee=free?0:BOG_PULL_CENTS;
+ if((p.cash||0)<fee)return fail(`A pull-out costs ${cash(fee)}: you have ${cash(p.cash||0)}. Rock it with W and S, or wait a few seconds.`);
+ const moved={...v,x:+dest.x.toFixed(2),z:+dest.z.toFixed(2),yaw:+dest.yaw.toFixed(3)};
+ let base={...p,cash:p.cash-fee,vehicles:owned(p).map(x=>x.uid===uid?moved:x)};
+ if(weekly)base.garage={...garageOf(p),pullFreeAt:fixed3(now)};
+ const state=advanceTime(base,BOG_PULL_HOURS*60);
+ const next=weekly?` You are broke, so this one was free. The next free pull-out is in ${PULL_FREE_DAYS} game days.`:'';
+ return {state,fee,free,weekly,hours:BOG_PULL_HOURS,appear:{uid,x:moved.x,z:moved.z,yaw:moved.yaw},message:free?`The tow truck pulled your ${nameOf(v)} out for free this time (half an hour lost).${next}`:`The tow truck pulled your ${nameOf(v)} out for ${cash(fee)} (half an hour lost).`};
 }
 // What the phone shows for one vehicle: the condition and the shop state, as {line, tow}: tow is the quote for "Call a tow" to the shop.
 export function statusOf(p,uid,now=hoursNow(p)){

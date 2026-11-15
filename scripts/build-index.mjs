@@ -13,7 +13,7 @@ const HERE=path.dirname(fileURLToPath(import.meta.url));
 export const ROOT=path.resolve(HERE,'..');
 // Estimated tokens. The brief is read by every agent, so it keeps its 3,000 target. The index is searched with Grep (a question costs a few hundred tokens), so its budget
 // is only a guard against bloat for the rare whole read; it was 12,000 in the plan, which assumed 3.6 characters a token and was wrong by half (see CHARS_PER_TOKEN).
-export const BUDGET={brief:3000,index:28000}; // index 27750 -> 28000 (SND1: vehicle-sounds.js and a test pushed it to 27,814); 27500 -> 27750 (VD7a: debris.js and two tests); 27000 -> 27500 (VD3: one new module, one test and two scripts pushed it to 27,097)
+export const BUDGET={brief:3000,index:30000}; /* 29400 -> 30000 (GD1 ground shader, 29,503; headroom for TR6 and GD2 to GD5; user approved) */ // index 28800 -> 29400 (TR3, TR4, W3: three more modules and tests, 28,926; user approved); 28500 -> 28800 (R2: road-geometry.js and a test, 28,648; user approved); 28250 -> 28500 (R1: the road graph in map-definition.js and a test, 28,409 incl. other work); 28000 -> 28250 (W1: the water contract in map-definition.js and a test, 28,194); 27750 -> 28000 (SND1: vehicle-sounds.js and a test pushed it to 27,814); 27500 -> 27750 (VD7a: debris.js and two tests); 27000 -> 27500 (VD3: one new module, one test and two scripts pushed it to 27,097)
 // Measured, not guessed: on 2026-11-10 a Haiku run that read both files cost about 26,000 tokens for 48,300 characters, so about 1.9 characters a token for this dense, symbol-heavy
 // text (the Read tool's line numbers are included in that figure). Prose is nearer 4. Re-measure after a big format change; a run's usage is the real count.
 export const CHARS_PER_TOKEN=1.9;
