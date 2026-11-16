@@ -1,0 +1,647 @@
+import * as THREE from './vendor/three.module.js';
+import {junctionPatches} from './junctions.js';
+import {patchGround,setGroundQuality} from './ground-shader.js';import {GROUND_KINDS} from './ground-rules.js';export {setGroundQuality}; // GD1: the ground shader patch (ground-shader.js); setGroundQuality is re-exported for game.js applyQuality
+import {heightAt,valleyAt,deckAt,bridgeRise,RIVER_PATHS,RIVER_WATER_Y} from './height.js';
+import {MAP,zoneById,zoneAtPoint,roadRects,riverPath,riverDistance,riverIsLegacy,nearestOnRiver} from './map-definition.js';
+import {PINES,BROADLEAVES,modelInfo,modelGeometry,createNatureMaterials} from './nature.js';
+import {terrain,SURFACE,FOOTING,roadCenterline} from './terrain.js';
+import {lampSpots} from './streetfurniture.js';
+import {markingBars,townSpots,FOUNTAIN,BUS_STOP} from './town.js';
+import {propInfo,createProp} from './props.js';
+import {chunkKey,chunkIndex,chunkRange,worldRange,createChunkIndex,maskTile,chunkBounds} from './chunks.js';import {digGrid,groundRects,dugMeshData} from './dug-ground.js';import {createChunkView} from './chunks-view.js';import {waterChunkMesh} from './water-chunks.js';import {createEastbank} from './eastbank.js';import {createSceneOverlay} from './scene-overlay.js';import {createCoverView} from './ground-cover-view.js';import {footprintRects} from './cover-sampler.js';
+
+// ─── Layout (pure data, safe to import from rules and tests) ──────────────────
+// The city keeps its original footprint. Oak Farms lies west of it, Alder Woods east.
+// +x is east and -z is north (the default camera looks north up Oak Street).
+
+// Everything here is derived from map-definition.js (zones, roads, fields, scenery parameters).
+export const WORLD_SEED=MAP.seed;
+export const ZONES=Object.fromEntries(MAP.zones.map(z=>[z.id,Object.freeze({id:z.id,name:z.name,label:z.label,subtitle:z.subtitle,color:z.color})]));
+ZONES.open=Object.freeze({...MAP.openCountry}); // the name for ground outside every zone
+const cityZone=zoneById('city');
+export const CITY_WEST=cityZone.bounds.x0,CITY_EAST=cityZone.bounds.x1;
+export const WALKABLE=Object.freeze(MAP.zones.map(z=>Object.freeze({zone:z.id,grid:z.grid,...z.bounds})));
+// Visual extent of the ground (beyond the walkable area, scenery fades into fog).
+export const GROUND=MAP.ground;
+
+// The zone a point is in. Edges belong to the first zone that claims them; outside every zone it is the open country.
+export function zoneAt(x,z){
+ const zone=zoneAtPoint(x,z??0);
+ return ZONES[zone?zone.id:'open'];
+}
+// Walking and footing come from the terrain mask (terrain.js), built from the map at first use.
+// Streaming (createWorld with streaming:true): isWalkableLive answers from the loaded chunk tiles and an unloaded chunk is a wall. Without streaming (tests, menu scenes) it is the whole-map mask.
+let walkSource=null;
+function screenFade(){if(typeof document==="undefined"||!document.body?.appendChild)return;const d=document.createElement("div");d.style.cssText="position:fixed;inset:0;background:#000;opacity:1;pointer-events:none;z-index:9999";document.body.appendChild(d);requestAnimationFrame(()=>requestAnimationFrame(()=>{d.style.transition="opacity .3s";d.style.opacity="0"}));setTimeout(()=>d.remove(),800)} // 0.3 s fade, only when a teleport lands outside the loaded ring
+export function isWalkable(x,z){return terrain().walkable(x,z)} // the whole-map mask: data checks (a saved position, a log, a plank stack) keep using it
+export function isWalkableLive(x,z){return walkSource?walkSource.walkable(x,z):terrain().walkable(x,z)} // what the player and vehicles bump into: the loaded chunk tiles, an unloaded chunk is a wall
+export function footingAt(x,z){const s=walkSource?.surfaceAt?.(x,z)||0;return s?FOOTING[s]:terrain().footingAt(x,z)} // PB2: the loaded chunk tile first, like the vehicles' surface (PB1): the whole-map mask has no cell outside the old ground (x over 300, the R3b roads there), where it said grass (-.095) under a road mesh drawn at -.045: feet and wheels stood 5 cm inside it
+export {heightAt};
+// what feet, a put-down plank stack or a log stand on: the terrain elevation plus the deck (the sawmill's floors, measured from the ground) or the surface footing
+export const standHeight=(x,z,deck=null)=>{const b=deckAt(x,z);return b!==null?b+footingAt(x,z):heightAt(x,z)+(deck??footingAt(x,z))}; // on a bridge: the deck's arch; elsewhere the ground
+
+// ─── Grid: 1 world unit = 1 plot. Cell (ix,iz) covers [ix,ix+1) × [iz,iz+1). ──
+export const cellOf=(x,z)=>({ix:Math.floor(x),iz:Math.floor(z)});
+export const cellKey=(ix,iz)=>ix+','+iz;
+export const cellCenter=(ix,iz)=>({x:ix+.5,z:iz+.5});
+export function parseCellKey(key){
+ const m=typeof key==='string'&&/^(-?\d{1,4}),(-?\d{1,4})$/.exec(key);
+ return m?{ix:Number(m[1]),iz:Number(m[2])}:null;
+}
+// Only whole cells inside the farm or forest walkable areas belong to the grid.
+export function gridZoneAt(ix,iz){
+ const r=WALKABLE.find(r=>r.grid&&ix>=r.x0&&ix+1<=r.x1&&iz>=r.z0&&iz+1<=r.z1);
+ return r?r.zone:null;
+}
+
+// Dirt roads: the dirt edges of the map's road graph, each tagged with the zone it mostly lies in.
+export const DIRT_ROADS=Object.freeze(roadRects('dirt').map(r=>Object.freeze({zone:zoneAtPoint((r.x0+r.x1)/2,(r.z0+r.z1)/2).id,x0:r.x0,x1:r.x1,z0:r.z0,z1:r.z1})));
+const distanceToRect=(x,z,r)=>Math.hypot(Math.max(r.x0-x,0,x-r.x1),Math.max(r.z0-z,0,z-r.z1));
+export const nearDirtRoad=(x,z,margin=0)=>DIRT_ROADS.some(r=>distanceToRect(x,z,r)<=margin);
+// Near any street, road or bridge (straight or curved): the terrain mask is searched in a ring of `margin` metres.
+export const nearAsphalt=(x,z,margin=0)=>{const t=terrain(),step=Math.max(.75,margin/4);
+ for(let dx=-margin;dx<=margin+1e-9;dx+=step)for(let dz=-margin;dz<=margin+1e-9;dz+=step){if(dx*dx+dz*dz>margin*margin+1e-9)continue;const k=t.surfaceAt(x+dx,z+dz);if(k===SURFACE.STREET||k===SURFACE.ROAD||k===SURFACE.BRIDGE)return true}return false};
+// Within `margin` metres of the water itself (not counting its muddy banks).
+export const inRiver=(x,z,margin=0)=>MAP.water.rivers.some(r=>{if(riverIsLegacy(r))return riverDistance(x,z,r)<=r.width/2+margin;const q=nearestOnRiver(r,x,z,margin+20);return !!q&&q.d<=q.s.w/2+margin}); // R3b: a new-form river changes width along its length: the nearest centreline sample's own width
+const nearBuilding=(x,z,margin=0)=>MAP.buildings.some(b=>Math.abs(x-b.x)<b.w/2+margin&&Math.abs(z-b.z)<b.d/2+margin);
+// Props placed from the map (barns, the sawmill, the yard's truck, the houses): nothing grows within margin metres of their footprint, so no tree stands in a truck or a barn wall.
+const nearProp=(x,z,margin=0)=>MAP.landmarks.some(l=>{const f=propInfo(l.prop).footprint,c=Math.round(Math.cos(l.yaw)),s=Math.round(Math.sin(l.yaw)),dx=x-l.x,dz=z-l.z,lx=dx*c-dz*s,lz=dx*s+dz*c;return lx>f.x0-margin&&lx<f.x1+margin&&lz>f.z0-margin&&lz<f.z1+margin});
+const PROP_CLEARANCE=2.5;
+// Pine Ridge's side of the world: decor trees here are pines, everywhere else broadleaf.
+export const forestSide=(x,z)=>x>-24&&z<-200;
+
+// Fenced farm plots (from the map), in whole cells, each with a 3-cell gate facing the main farm road.
+export const FIELDS=Object.freeze(MAP.fields.map(f=>Object.freeze({...f})));
+export const fieldAt=(ix,iz)=>FIELDS.find(f=>ix>=f.x0&&ix<f.x1&&iz>=f.z0&&iz<f.z1)||null;
+export function fenceSegments(){
+ // Only the farm's outer edge is fenced (to mark the zone); the fields inside are open for vehicles. A dirt road that crosses the edge opens a
+ // gap as wide as the road plus a metre on each side.
+ const farm=zoneById('farm').bounds,segments=[];
+ const edges=[{fixed:farm.z0,a:farm.x0,b:farm.x1,along:'x'},{fixed:farm.z1,a:farm.x0,b:farm.x1,along:'x'},{fixed:farm.x0,a:farm.z0,b:farm.z1,along:'z'},{fixed:farm.x1,a:farm.z0,b:farm.z1,along:'z'}];
+ for(const e of edges){
+  const gaps=DIRT_ROADS.filter(r=>e.along==='x'?(r.z0<=e.fixed&&r.z1>=e.fixed&&r.x1>e.a&&r.x0<e.b):(r.x0<=e.fixed&&r.x1>=e.fixed&&r.z1>e.a&&r.z0<e.b))
+   .map(r=>e.along==='x'?[r.x0-1,r.x1+1]:[r.z0-1,r.z1+1]).sort((p,q)=>p[0]-q[0]);
+  const run=(from,to)=>{for(let t=from;t<to-1e-6;t+=2){const end=Math.min(t+2,to);segments.push(e.along==='x'?{x0:t,z0:e.fixed,x1:end,z1:e.fixed}:{x0:e.fixed,z0:t,x1:e.fixed,z1:end})}};
+  let at=e.a;for(const [g0,g1] of gaps){run(at,Math.max(at,g0));at=Math.max(at,g1)}run(at,e.b);
+ }
+ return segments;
+}
+
+function random(seed){return ()=>{seed=seed+0x6D2B79F5|0;let t=Math.imul(seed^seed>>>15,1|seed);t=t+Math.imul(t^t>>>7,61|t)^t;return((t^t>>>14)>>>0)/4294967296}}
+const blockSeed=(a,b,salt)=>(Math.imul(a,73856093)^Math.imul(b,19349663)^Math.imul(salt,83492791))|0;
+
+let cachedLayout=null;
+// Generates every tree once. Cuttable trees sit on cell centres and are keyed by cell.
+// Ground that belongs to something other than open country: a zone, a road, a pavement, a field, the river or a bridge. Scenery belts keep off it.
+const CLAIMED=new Set([SURFACE.STREET,SURFACE.ROAD,SURFACE.DIRT,SURFACE.PAVEMENT,SURFACE.WATER,SURFACE.BANK,SURFACE.BRIDGE,SURFACE.WHEAT,SURFACE.PLOWED,SURFACE.GREEN,SURFACE.DRIVEWAY,SURFACE.PATH,SURFACE.MUD,SURFACE.GRAVEL]);
+function claimed(x,z){const t=terrain(),c=t.index(x,z);return c<0||t.zone[c]!==0||CLAIMED.has(t.surface[c])}
+export function worldLayout(){
+ if(cachedLayout)return cachedLayout;
+ const cuttable=[],decor=[],scenery=MAP.scenery,forestRules=scenery.forest;
+ const forest=zoneById('forest').bounds,farm=zoneById('farm').bounds;
+ const inClearing=(x,z)=>forestRules.clearings.some(c=>((x-c.x)/c.rx)**2+((z-c.z)/c.rz)**2<1);
+ // Pine Ridge: 4×4-cell blocks, at most one cuttable pine per block (no touching trunks), thinned by `density`, with wide clearings.
+ for(let bx=Math.ceil((forest.x0+2)/4);bx*4+4<=forest.x1-1;bx++)for(let bz=Math.ceil((forest.z0+1)/4);bz*4+4<=forest.z1-1;bz++){
+  const r=random(blockSeed(bx,bz,WORLD_SEED));
+  const density=forestRules.density+forestRules.wobble*Math.sin(bx*.71)*Math.cos(bz*.93);
+  const ix=bx*4+1+Math.floor(r()*2),iz=bz*4+1+Math.floor(r()*2),c=cellCenter(ix,iz);
+  const open=inClearing(c.x,c.z)||nearProp(c.x,c.z,PROP_CLEARANCE)||nearDirtRoad(c.x,c.z,forestRules.roadMargin)||nearAsphalt(c.x,c.z,forestRules.roadMargin);
+  if(!open&&r()<density){cuttable.push(Object.freeze({key:cellKey(ix,iz),ix,iz,x:c.x,z:c.z,kind:'pine',scale:.85+r()*.35,rot:r()*Math.PI*2}));continue}
+  // Blocks without a pine sometimes get a decor pine between cell centres.
+  const x=bx*4+.5+r()*3,z=bz*4+.5+r()*3;
+  if(!inClearing(x,z)&&!nearProp(x,z,PROP_CLEARANCE)&&!nearDirtRoad(x,z,forestRules.roadMargin+.2)&&!nearAsphalt(x,z,forestRules.roadMargin+.2)&&r()<forestRules.decorChance)decor.push({x,z,scale:.8+r()*.45,rot:r()*Math.PI*2,tone:Math.floor(r()*4)});
+ }
+ // Dense scenery outside the walkable zones hides the end of the world (never on roads, in the river or on a building).
+ const belt=(x0,x1,z0,z1,spacing,chance,salt)=>{for(let x=x0;x<x1;x+=spacing)for(let z=z0;z<z1;z+=spacing){
+  const r=random(blockSeed(Math.round(x*10),Math.round(z*10),salt));if(r()>chance)continue;
+  const tx=x+r()*spacing*.8,tz=z+r()*spacing*.8;if(claimed(tx,tz)||nearDirtRoad(tx,tz,1.5)||nearAsphalt(tx,tz,3.5)||inRiver(tx,tz,4)||nearBuilding(tx,tz,3)||nearProp(tx,tz,PROP_CLEARANCE))continue;
+  decor.push({x:tx,z:tz,scale:.9+r()*.5,rot:r()*Math.PI*2,tone:Math.floor(r()*4)})}};
+ for(const spec of scenery.belts)belt(...spec);
+ for(const spec of scenery.edgeBands||[])belt(...spec); // RU2: the 30 m band inside the wilds' north, west and east edges
+ // A few shade trees between the farm fields.
+ for(let i=0;i<scenery.farmShade.count;i++){const r=random(blockSeed(i,7,WORLD_SEED+1)),x=farm.x0+4+r()*(farm.x1-farm.x0-10),z=farm.z0+3+r()*(farm.z1-farm.z0-6),c=cellOf(x,z);
+  if(nearDirtRoad(x,z,2.5)||nearProp(x,z,PROP_CLEARANCE)||FIELDS.some(f=>x>f.x0-2&&x<f.x1+2&&z>f.z0-2&&z<f.z1+2)||x>farm.x1-scenery.farmShade.clearOfRoad)continue;
+  decor.push({x:c.ix+.5,z:c.iz+.5,scale:.9+r()*.4,rot:r()*Math.PI*2,tone:Math.floor(r()*4)})}
+ cachedLayout=Object.freeze({cuttable:Object.freeze(cuttable),decor:Object.freeze(decor.map(Object.freeze)),
+  cuttableByKey:new Map(cuttable.map(t=>[t.key,t]))});
+ return cachedLayout;
+}
+export const cuttableTreeAt=key=>worldLayout().cuttableByKey.get(key)||null;
+
+// ─── Collisions: spatial hash of trunks and fence rails ───────────────────────
+const BUCKET=4,PLAYER_RADIUS=.33;
+// Every collider belongs to the chunk its centre is in (`c.chunk`). With streaming on (`stream()`), only colliders of LIVE chunks count: the rest have `off` set (kept in the buckets, skipped by blocked(),
+// so a chunk coming back is one flag per collider). `active` stays the tree-felling flag. remove(c) takes a collider out for good.
+export function createColliders(){
+ const buckets=new Map(),keyOf=(bx,bz)=>bx+':'+bz,byChunk=new Map();let live=null;
+ const own=c=>{const {i,j}=chunkIndex(c.x,c.z),k=chunkKey(i,j);c.chunk=k;c.off=live?!live.has(k):false;if(!byChunk.has(k))byChunk.set(k,new Set());byChunk.get(k).add(c);return c};
+ function insert(c,x0,z0,x1,z1){for(let bx=Math.floor(x0/BUCKET);bx<=Math.floor(x1/BUCKET);bx++)for(let bz=Math.floor(z0/BUCKET);bz<=Math.floor(z1/BUCKET);bz++){const k=keyOf(bx,bz);if(!buckets.has(k))buckets.set(k,[]);buckets.get(k).push(c)}c.box4=[x0,z0,x1,z1]}
+ return {
+  circle(x,z,r,id=null){const c=own({circle:true,x,z,r,id,active:true});insert(c,x-r,z-r,x+r,z+r);return c},
+  box(x,z,hx,hz){const c=own({circle:false,x,z,hx,hz,active:true});insert(c,x-hx,z-hz,x+hx,z+hz);return c},
+  remove(c){const [x0,z0,x1,z1]=c.box4||[];for(let bx=Math.floor(x0/BUCKET);bx<=Math.floor(x1/BUCKET);bx++)for(let bz=Math.floor(z0/BUCKET);bz<=Math.floor(z1/BUCKET);bz++){const a=buckets.get(keyOf(bx,bz));const n=a?a.indexOf(c):-1;if(n>=0)a.splice(n,1)}byChunk.get(c.chunk)?.delete(c);c.active=false},
+  // Streaming: stream() switches to live-chunks-only (all off until setChunkLive(key,true)); stream(false) puts everything back. countIn(key) = colliders owned by a chunk.
+  stream(on=true){live=on?new Set():null;for(const set of byChunk.values())for(const c of set)c.off=!!live},
+  setChunkLive(key,on){if(!live)return 0;if(on)live.add(key);else live.delete(key);const set=byChunk.get(key);if(set)for(const c of set)c.off=!on;return set?set.size:0},
+  countIn:key=>byChunk.get(key)?.size||0,
+  blocked(x,z){
+   const bx=Math.floor(x/BUCKET),bz=Math.floor(z/BUCKET);
+   for(let dx=-1;dx<=1;dx++)for(let dz=-1;dz<=1;dz++)for(const c of buckets.get(keyOf(bx+dx,bz+dz))||[]){
+    if(!c.active||c.off)continue;
+    if(c.circle?Math.hypot(x-c.x,z-c.z)<c.r+PLAYER_RADIUS:Math.abs(x-c.x)<c.hx+PLAYER_RADIUS&&Math.abs(z-c.z)<c.hz+PLAYER_RADIUS)return true;
+   }
+   return false;
+  }
+ };
+}
+
+// ─── 3D construction ──────────────────────────────────────────────────────────
+// Ground textures are small generated canvases (no external art), like visuals.js.
+function groundTexture(kind){
+ const c=document.createElement('canvas');c.width=c.height=256;const ctx=c.getContext('2d');
+ const r=random(kind.length*977);
+ const base={farm:'#7d9a52',forest:'#4b663c',dirt:'#8a7152',mud:'#4a3826',field:'#86a057',plowed:'#5d4532',wheat:'#c7a249',green:'#6f9a45',paving:'#b9b7a8',plaza:'#c9c4b2'}[kind];
+ ctx.fillStyle=base;ctx.fillRect(0,0,256,256);
+ const specks=kind==='dirt'?['#00000014','#ffffff12','#5f4a3322']:kind==='forest'?['#00000016','#6d7d3a22','#7a5c3a24','#ffffff08']:['#00000010','#ffffff10','#9fb86522'];
+ for(let i=0;i<7000;i++){ctx.fillStyle=specks[i%specks.length];const s=kind==='dirt'?1+r()*2.5:1+r()*1.5;ctx.fillRect(r()*256,r()*256,s,kind==='dirt'?s:s*2.2)}
+ // Pavements: 2 m slabs with grout lines; the town square adds a darker chequer of 1 m squares.
+ if(kind==='paving'||kind==='plaza'){if(kind==='plaza')for(let y=0;y<256;y+=64)for(let x=0;x<256;x+=64)if((x+y)/64%2===0){ctx.fillStyle='#00000014';ctx.fillRect(x,y,64,64)}ctx.strokeStyle='#8d9186b0';ctx.lineWidth=2;for(let n=0;n<256;n+=128){ctx.strokeRect(n,0,128,128);ctx.strokeRect(n,128,128,128)}}
+ // Field rows: furrows of plowed soil, standing wheat, and rows of young crops.
+ if(kind==='mud')for(let i=0;i<60;i++){ctx.fillStyle=i%3?'#2e211655':'#7a5f4440';ctx.fillRect(r()*256,r()*256,8+r()*22,3+r()*7)} // TR3: wet blotches
+ if(kind==='plowed')for(let y=0;y<256;y+=16){ctx.fillStyle='#3f2c1d88';ctx.fillRect(0,y,256,5);ctx.fillStyle='#7d5d4440';ctx.fillRect(0,y+6,256,3)}
+ if(kind==='wheat')for(let x=0;x<256;x+=6){ctx.fillStyle=x%12?'#e2c46a55':'#a9873a55';ctx.fillRect(x,0,3,256)}
+ if(kind==='green')for(let y=0;y<256;y+=12){ctx.fillStyle='#5a8a3a99';ctx.fillRect(0,y,256,4);ctx.fillStyle='#8db25c55';ctx.fillRect(0,y+5,256,3)}
+ if(kind==='forest')for(let i=0;i<90;i++){ctx.fillStyle=i%3?'#3a522f55':'#7b603c40';ctx.fillRect(r()*256,r()*256,6+r()*14,4+r()*9)}
+ const tex=new THREE.CanvasTexture(c);tex.wrapS=tex.wrapT=THREE.RepeatWrapping;tex.colorSpace=THREE.SRGBColorSpace;tex.anisotropy=4;
+ return tex;
+}
+
+// Trees between the camera and the player dissolve with a dither pattern instead of
+// blocking the view. Works with instancing; the CPU only updates two vectors per frame.
+export function createSightlineFade(){
+ const uniforms={uFadeCamera:{value:new THREE.Vector3()},uFadeTarget:{value:new THREE.Vector3()},uFadeRadius:{value:1.9},uFadeEnabled:{value:1}};
+ function apply(material){
+  material.onBeforeCompile=shader=>{
+   Object.assign(shader.uniforms,uniforms);
+   shader.vertexShader='varying vec3 vFadeWorld;\n'+shader.vertexShader.replace('#include <project_vertex>',`#include <project_vertex>
+ vec4 fadeWorld=vec4(transformed,1.0);
+ #ifdef USE_INSTANCING
+ fadeWorld=instanceMatrix*fadeWorld;
+ #endif
+ vFadeWorld=(modelMatrix*fadeWorld).xyz;`);
+   shader.fragmentShader=`varying vec3 vFadeWorld;
+uniform vec3 uFadeCamera;uniform vec3 uFadeTarget;uniform float uFadeRadius;uniform float uFadeEnabled;
+float fadeBayer(vec2 p){ivec2 i=ivec2(mod(p,4.0));int n=i.x+i.y*4;
+ float m[16]=float[16](0.,8.,2.,10.,12.,4.,14.,6.,3.,11.,1.,9.,15.,7.,13.,5.);return (m[n]+.5)/16.;}
+`+shader.fragmentShader.replace('#include <clipping_planes_fragment>',`#include <clipping_planes_fragment>
+ {vec3 seg=uFadeTarget-uFadeCamera;float t=clamp(dot(vFadeWorld-uFadeCamera,seg)/max(dot(seg,seg),1e-4),0.,1.);
+  float d=distance(vFadeWorld,uFadeCamera+seg*t);
+  float fade=(1.-smoothstep(uFadeRadius*.45,uFadeRadius,d))*step(.02,t)*(1.-smoothstep(.86,.97,t))*uFadeEnabled;
+  if(fade*.88>fadeBayer(gl_FragCoord.xy))discard;}`);
+  };
+  material.customProgramCacheKey=()=>'city-sightline-fade';
+  return material;
+ }
+ return {uniforms,apply,update(camera,target){uniforms.uFadeCamera.value.copy(camera.position);uniforms.uFadeTarget.value.copy(target)}};
+}
+
+// options.label(text,x,y,z,width,rot,bg,fg,height) draws a sign (game.js's label helper).
+// The dealership sign's picture board: the two vehicle pictures side by side on the board's own canvas, drawn once they have loaded (the small module is imported only when this sign exists).
+async function paintSignPictures(mesh){try{const {SIGN_PICTURES}=await import('./sign-pictures.js'),c=mesh.material.map.image,ctx=c.getContext('2d'),imgs=(await Promise.all(SIGN_PICTURES.map(src=>new Promise(r=>{const i=new Image();i.onload=()=>r(i);i.onerror=()=>r(null);i.src=src})))).filter(Boolean),h=c.height*.94,w=h*1.6,gap=c.width*.04,x0=(c.width-imgs.length*w-(imgs.length-1)*gap)/2;imgs.forEach((i,k)=>ctx.drawImage(i,x0+k*(w+gap),(c.height-h)/2,w,h));mesh.material.map.needsUpdate=true}catch(e){console.warn('sign pictures',e)}}
+export function createWorld(scene,{label,cullRadius,streaming=false}={}){
+ let fountainParts=null,townTime=0;
+ const layout=worldLayout(),colliders=createColliders(),fade=createSightlineFade();
+ const group=new THREE.Group();group.name='world-zones';scene.add(group);
+
+
+ // Ground: one base plane for the whole map, the farm's and forest's own ground over their zones, then dirt roads, field interiors, the river and the bridge.
+ const grassKind=m=>{m.userData.groundKind='grass';return m};const softEdge=(m,x0,x1,z0,z1)=>{m.userData.groundEdge={x0,x1,z0,z1};return m}; // GD2: marks a ground plane's rectangle so its edge goes soft inside it (High; ground-shader.js)
+ const textures={paving:groundTexture('paving'),plaza:groundTexture('plaza'),farm:groundTexture('farm'),forest:groundTexture('forest'),dirt:groundTexture('dirt'),mud:groundTexture('mud'),field:groundTexture('field'),plowed:groundTexture('plowed'),wheat:groundTexture('wheat'),green:groundTexture('green')};
+ // Ground layers lie millimetres apart, and a depth buffer cannot tell planes 1-2 mm apart at a distance: the far ground, the base ground and the forest's own ground (all within
+  // 3 mm) flickered pale and dark when you looked down. Every flat ground mesh gets a depth bias by its rank in this list (a clone of its material), so the order of the layers
+  // never depends on how far away they are. The gaps in the list are also real centimetres now.
+  const GROUND_LAYERS=[-.09,-.082,-.074,-.069,-.068,-.066,-.058,-.05,-.049,-.045];
+  function groundLayer(material,y){const rank=GROUND_LAYERS.filter(l=>l<y-1e-9).length,m=material.clone();if(m.userData.groundKind)patchGround(m,m.userData.groundKind);m.polygonOffset=true;m.polygonOffsetFactor=-rank;m.polygonOffsetUnits=-rank*2;return m}
+  function plane(x0,x1,z0,z1,y,material,name){
+  const mesh=new THREE.Mesh(new THREE.PlaneGeometry(x1-x0,z1-z0),groundLayer(material,y));mesh.rotation.x=-Math.PI/2;
+  mesh.position.set((x0+x1)/2,y,(z0+z1)/2);mesh.receiveShadow=true;mesh.name=name;group.add(mesh);return mesh;
+ }
+  // R3b: the ground planes are cut where the ground is dug (rivers, lakes, the sea: dug-ground.js). A plane over a rectangle becomes the flat rectangles of the 4 m cells that are NOT dug, merged into one mesh. Everything else
+  // about it (colour, bias, name, uv) is as before; the dug cells are filled by the dug meshes (the chunk hook 'dug' below, or one mesh named 'river-valley' when the world is not streamed).
+  const dig=digGrid(MAP);
+  function groundSplit(x0,x1,z0,z1,y,material,name){
+   const pos=[],nor=[],uv=[],idx=[];
+   for(const r of groundRects(dig,x0,x1,z0,z1)){const k=pos.length/3;for(const [px,pz] of [[r.x0,r.z0],[r.x0,r.z1],[r.x1,r.z1],[r.x1,r.z0]]){pos.push(px,0,pz);nor.push(0,1,0);uv.push((px-x0)/(x1-x0),(pz-z0)/(z1-z0))}idx.push(k,k+1,k+2,k,k+2,k+3)}
+   const g=new THREE.BufferGeometry();g.setAttribute('position',new THREE.Float32BufferAttribute(pos,3));g.setAttribute('normal',new THREE.Float32BufferAttribute(nor,3));g.setAttribute('uv',new THREE.Float32BufferAttribute(uv,2));g.setIndex(idx);g.computeBoundingSphere();
+   const mesh=new THREE.Mesh(g,groundLayer(material,y));mesh.position.y=y;mesh.receiveShadow=true;mesh.name=name;group.add(mesh);return mesh
+ } function textured(tex,w,h,scale,color='#ffffff',kind=null){const map=tex.clone();map.needsUpdate=true;map.repeat.set(w/scale,h/scale);const m=new THREE.MeshStandardMaterial({map,color,roughness:1});if(kind)m.userData.groundKind=kind;return m}
+ const farmZone=zoneById('farm').bounds,forestZone=zoneById('forest').bounds;
+ const WORLD_RECT=MAP.world||GROUND; // F2: the flat ground is two big planes for the whole 1500 x 1800 m world (an empty chunk costs no draw call of its own); the chunks add only what is authored on them
+ groundSplit(WORLD_RECT.x0-700,WORLD_RECT.x1+700,WORLD_RECT.z0-700,WORLD_RECT.z1+700,-.09,grassKind(new THREE.MeshStandardMaterial({color:'#8a9a7c',roughness:.95})),'ground-far'); // far beyond the fog, so the world never seems to end at the map's edge
+ groundSplit(WORLD_RECT.x0,WORLD_RECT.x1,WORLD_RECT.z0,WORLD_RECT.z1,-.082,grassKind(new THREE.MeshStandardMaterial({color:'#8a9a7c',roughness:.95})),'ground-base');
+ // The river valley (0.34): one mesh from the lip on one side across the bank, the bed and the other bank to the lip on the other; its height is valleyAt and its colour goes from grass at the lip to
+ // mud at the bed. The ground planes are cut along its lips (groundSplit), so it is the ground there.
+  // R3b: the dug ground fills the cells cut out of the planes above: one mesh per chunk (streaming: the build hook 'dug') or one mesh named 'river-valley' over the whole world (not streamed), sampled from heightIn by dug-ground.js; vertex colours go from grass at the lip to mud at the bed.
+  const dugBase=Object.assign(new THREE.MeshStandardMaterial({vertexColors:true,roughness:1}),{userData:{groundKind:'valley'}}); // every dug mesh gets its own clone (ground layer -.078, same program)
+  function dugMesh(win,name){const d=dugMeshData(MAP,dig,win);if(!d.idx.length)return null;
+   const g=new THREE.BufferGeometry();g.setAttribute('position',new THREE.Float32BufferAttribute(d.pos,3));g.setAttribute('color',new THREE.Float32BufferAttribute(d.col,3));g.setIndex(d.idx);g.computeVertexNormals();g.computeBoundingSphere();
+   const mesh=new THREE.Mesh(g,groundLayer(dugBase,-.078));mesh.receiveShadow=true;mesh.name=name;return mesh}
+  if(!streaming){const m=dugMesh(WORLD_RECT,'river-valley');if(m)group.add(m)}
+  // Hills (0.34): each hill is its own grid of 2 m cells over the flat base ground (one mesh, one draw call, culled by the camera like any mesh); its height is heightAt, which is 0 at its edge,
+ // so it meets the base ground without a seam. Only open country has hills (terrain.js validateTerrain), so nothing built stands on a slope.
+ const hillMaterial=grassKind(new THREE.MeshStandardMaterial({color:'#8a9a7c',roughness:.95}));
+ for(const h of MAP.relief?.hills||[]){
+  const cell=2,nx=Math.ceil(h.rx*2/cell),nz=Math.ceil(h.rz*2/cell),pos=[],idx=[];
+  for(let j=0;j<=nz;j++)for(let i=0;i<=nx;i++){const x=h.x-h.rx+i*h.rx*2/nx,z=h.z-h.rz+j*h.rz*2/nz;pos.push(x,-.079+heightAt(x,z),z)}
+  for(let j=0;j<nz;j++)for(let i=0;i<nx;i++){const a=j*(nx+1)+i,b=a+1,c=a+nx+1,d=c+1;idx.push(a,c,b,b,c,d)}
+  const g=new THREE.BufferGeometry();g.setAttribute('position',new THREE.Float32BufferAttribute(pos,3));g.setIndex(idx);g.computeVertexNormals();g.computeBoundingSphere();
+  const mesh=new THREE.Mesh(g,groundLayer(hillMaterial,-.078));mesh.receiveShadow=true;mesh.name='hill-'+h.id;group.add(mesh);
+ }
+ {const f={x0:farmZone.x0-14,x1:farmZone.x1,z0:farmZone.z0-14,z1:farmZone.z1+7};groundSplit(f.x0,f.x1,f.z0,f.z1,-.074,softEdge(textured(textures.farm,f.x1-f.x0,f.z1-f.z0,7,'#ffffff','farm'),f.x0,f.x1,f.z0,f.z1),'ground-farm')}
+ {const f={x0:forestZone.x0,x1:forestZone.x1+14,z0:forestZone.z0-14,z1:forestZone.z1+7};groundSplit(f.x0,f.x1,f.z0,f.z1,-.074,softEdge(textured(textures.forest,f.x1-f.x0,f.z1-f.z0,6,'#ffffff','forest'),f.x0,f.x1,f.z0,f.z1),'ground-forest')}
+ for(const r of DIRT_ROADS)plane(r.x0,r.x1,r.z0,r.z1,-.066,textured(textures.dirt,r.x1-r.x0,r.z1-r.z0,5,'#ffffff','dirt'),'dirt-road');
+ // Fields: plowed soil, wheat and young crops, each its own ground, open to vehicles.
+ for(const f of FIELDS)plane(f.x0,f.x1,f.z0,f.z1,-.069,softEdge(textured(textures[f.surface],f.x1-f.x0,f.z1-f.z0,6,'#ffffff',GROUND_KINDS.includes(f.surface)?f.surface:'field'),f.x0,f.x1,f.z0,f.z1),'field-'+f.id);
+ // TR3: mud patches lie just over the fields and dirt tracks (-.064; terrain FOOTING 14 is the same number).
+ for(const m of MAP.mud||[])plane(m.x0,m.x1,m.z0,m.z1,-.064,softEdge(textured(textures.mud,m.x1-m.x0,m.z1-m.z0,4,'#ffffff','mud'),m.x0,m.x1,m.z0,m.z1),'mud-'+m.id);
+
+ // Every rural asphalt road (the County Road, Alder Center's streets, Oak Street East, Cedar Heights' loop, the Freight Road) is a ribbon along its centreline with a dashed
+ // line down the middle. The city's own streets are built in game.js.
+ const asphalt=new THREE.MeshStandardMaterial({color:'#585d60',roughness:.95}),lineMaterial=new THREE.MeshStandardMaterial({color:'#e8e2c8',roughness:.9,polygonOffset:true,polygonOffsetFactor:-12,polygonOffsetUnits:-24}),upAxis=new THREE.Vector3(0,1,0);
+ const densify=(points,max=6)=>{const out=[points[0]];for(let i=1;i<points.length;i++){const [ax,az]=points[i-1],[bx,bz]=points[i],k=Math.max(1,Math.ceil(Math.hypot(bx-ax,bz-az)/max));for(let s=1;s<=k;s++)out.push([ax+(bx-ax)*s/k,az+(bz-az)*s/k])}return out};
+ // PB2: where the ground bends (a river bank at a bridge approach, a hill foot) a 6 m chord lay up to 2 cm under the true surface; split a stretch in two (down to 1.5 m, 4 levels) until the middle is within 5 mm of the chord
+ const refine=points=>{const out=[points[0]],split=(a,b,d)=>{const len=Math.hypot(b[0]-a[0],b[1]-a[1]);if(d<4&&len>1.5){const m=[(a[0]+b[0])/2,(a[1]+b[1])/2];if(Math.abs(heightAt(m[0],m[1])-(heightAt(a[0],a[1])+heightAt(b[0],b[1]))/2)>.005){split(a,m,d+1);split(m,b,d+1);return}}out.push(b)};for(let i=1;i<points.length;i++)split(points[i-1],points[i],0);return out};
+ const toPath=points=>points.map((p,i)=>{const a=points[Math.max(0,i-1)],b=points[Math.min(points.length-1,i+1)],l=Math.hypot(b[0]-a[0],b[1]-a[1])||1;return {x:p[0],z:p[1],tx:(b[0]-a[0])/l,tz:(b[1]-a[1])/l}});
+ // Bridge crossings: the road is cut where it meets a bridge (the bridge builds its own deck, an arch over the river), and the road's own ribbon follows the ground (heightAt) so that it is
+ // never left floating or buried where the ground is not flat. Points are added at each bridge end and every 2 m across the bridge so the arch is smooth.
+ const onBridge=(x,z)=>MAP.water.bridges.find(b=>x>b.x0&&x<b.x1&&z>b.z0&&z<b.z1);
+  const withBridgePoints=line=>{const out=[line[0]];for(let i=1;i<line.length;i++){const [ax,az]=line[i-1],[bx,bz]=line[i],cuts=[]; // cuts: {t along the segment, the point}. R3b: a bridge with axis 'x' is cut at x0, x1 and every 2 m between (the deck arches along x), the others at z
+   for(const b of MAP.water.bridges){
+    if(b.axis==='x'){const z=(az+bz)/2;if(z<=b.z0||z>=b.z1||ax===bx)continue;const at=xc=>cuts.push({t:(xc-ax)/(bx-ax),p:[xc,az+(bz-az)*(xc-ax)/(bx-ax)]}),n0=cuts.length;for(const xc of [b.x0,b.x1])if((ax-xc)*(bx-xc)<0)at(xc);
+     if((ax>b.x0&&ax<b.x1)||(bx>b.x0&&bx<b.x1)||cuts.length>n0)for(let xc=b.x0+2;xc<b.x1;xc+=2)if((ax-xc)*(bx-xc)<0)at(xc);continue}
+    const x=(ax+bx)/2;if(x<=b.x0||x>=b.x1||az===bz)continue;const at=zc=>cuts.push({t:(zc-az)/(bz-az),p:[ax+(bx-ax)*(zc-az)/(bz-az),zc]}),n0=cuts.length;for(const zc of [b.z0,b.z1])if((az-zc)*(bz-zc)<0)at(zc);
+    if((az>b.z0&&az<b.z1)||(bz>b.z0&&bz<b.z1)||cuts.length>n0)for(let zc=b.z0+2;zc<b.z1;zc+=2)if((az-zc)*(bz-zc)<0)at(zc)}
+   cuts.sort((p,q)=>p.t-q.t);for(const c of cuts)out.push(c.p);out.push([bx,bz])}return out};
+ const splitAtBridges=line=>{const pieces=[],mid=(p,q)=>[(p[0]+q[0])/2,(p[1]+q[1])/2];let cur=[line[0]],inB=null;for(let i=1;i<line.length;i++){const m=mid(line[i-1],line[i]),b=onBridge(...m)||null;if(b!==inB&&cur.length){cur.push(line[i-1]);if(cur.length>1||true)pieces.push({line:cur,bridge:inB});cur=[line[i-1]];inB=b}cur.push(line[i])}pieces.push({line:cur,bridge:inB});return pieces.filter(p=>p.line.length>1&&!p.bridge)};
+ // F2 per-chunk ground (streaming): the same triangles as the loose meshes below, bucketed by chunk and merged per material (one asphalt, one driveway, one path mesh and one dash instance mesh per chunk) so the draw calls follow the chunks in view, not the number of roads and plots.
+ const gb=new Map(),bucketAt=(x,z)=>{const c=chunkIndex(x,z),k=chunkKey(c.i,c.j);let b=gb.get(k);if(!b){b={asphalt:{pos:[],idx:[]},driveway:{pos:[],idx:[]},path:{pos:[],idx:[]},dashes:[],vm:new Map()};gb.set(k,b)}return b};
+ const GROUND_Y={asphalt:-.045,driveway:-.05,path:-.049};
+ function ribbonInto(path,half,y,rid){const vert=(b,i)=>{const key=rid+':'+i;let a=b.vm.get(key);if(a===undefined){const p=path[i],d=b.asphalt;a=d.pos.length/3;d.pos.push(p.x-p.tz*half,y+heightAt(p.x-p.tz*half,p.z+p.tx*half),p.z+p.tx*half,p.x+p.tz*half,y+heightAt(p.x+p.tz*half,p.z-p.tx*half),p.z-p.tx*half);b.vm.set(key,a)}return a};
+  for(let i=1;i<path.length;i++){const m=bucketAt((path[i-1].x+path[i].x)/2,(path[i-1].z+path[i].z)/2),a=vert(m,i-1),c=vert(m,i);m.asphalt.idx.push(a,c,a+1,a+1,c,c+1)}}
+ function quadInto(kind,x0,x1,z0,z1){const d=bucketAt((x0+x1)/2,(z0+z1)/2)[kind],y=GROUND_Y[kind],k=d.pos.length/3;d.pos.push(x0,y,z0,x0,y,z1,x1,y,z1,x1,y,z0);d.idx.push(k,k+1,k+2,k,k+2,k+3)} for(const edge of MAP.roads.edges){
+  if(edge.surface!=='asphalt'||edge.level!=='rural')continue;
+  const line=withBridgePoints(densify(roadCenterline(edge)));
+  splitAtBridges(line).forEach((piece,k)=>streaming?ribbonInto(toPath(refine(piece.line)),edge.width/2,-.045,'road-'+edge.id+(k?'-'+k:'')):ribbon(toPath(refine(piece.line)),edge.width/2,-.045,asphalt,'road-'+edge.id+(k?'-'+k:''),true));
+  const dashes=[];let carried=0;for(let i=1;i<line.length;i++){const [ax,az]=line[i-1],[bx,bz]=line[i],len=Math.hypot(bx-ax,bz-az);let at=6-carried;while(at<=len){dashes.push({x:ax+(bx-ax)*at/len,z:az+(bz-az)*at/len,yaw:Math.atan2(bx-ax,bz-az)});at+=6}carried=len-(at-6)}
+  if(!dashes.length)continue;if(streaming){for(const d of dashes){const deck=deckAt(d.x,d.z);bucketAt(d.x,d.z).dashes.push({x:d.x,y:deck!==null?deck+.01:heightAt(d.x,d.z)-.032,z:d.z,yaw:d.yaw})}continue}
+  const marks=new THREE.InstancedMesh(new THREE.BoxGeometry(.18,.02,2.2),lineMaterial,dashes.length),mat=new THREE.Matrix4(),at=new THREE.Vector3(),turn=new THREE.Quaternion(),one=new THREE.Vector3(1,1,1);
+  dashes.forEach((d,i)=>{const deck=deckAt(d.x,d.z);marks.setMatrixAt(i,mat.compose(at.set(d.x,deck!==null?deck+.01:heightAt(d.x,d.z)-.032,d.z),turn.setFromAxisAngle(upAxis,d.yaw),one))});
+  marks.name='road-line-'+edge.id;group.add(marks);
+ } // Road joints (0.34, junctions.js): the rounded corners and width tapers that take the hard edges out of the junctions, one asphalt mesh.
+ if(streaming)for(const patch of junctionPatches()){const P=patch.points,d=bucketAt(P.reduce((a,p)=>a+p[0],0)/P.length,P.reduce((a,p)=>a+p[1],0)/P.length).asphalt,k=d.pos.length/3;for(const [x,z] of P)d.pos.push(x,-.045+heightAt(x,z),z);
+  for(let i=1;i<P.length-1;i++){const a=[P[i][0]-P[0][0],P[i][1]-P[0][1]],b=[P[i+1][0]-P[0][0],P[i+1][1]-P[0][1]];if(a[1]*b[0]-a[0]*b[1]>=0)d.idx.push(k,k+i,k+i+1);else d.idx.push(k,k+i+1,k+i)}}
+ {const pos=[],idx=[];for(const patch of streaming?[]:junctionPatches()){const P=patch.points,k=pos.length/3;for(const [x,z] of P)pos.push(x,-.045+heightAt(x,z),z);
+   for(let i=1;i<P.length-1;i++){const a=[P[i][0]-P[0][0],P[i][1]-P[0][1]],b=[P[i+1][0]-P[0][0],P[i+1][1]-P[0][1]];if(a[1]*b[0]-a[0]*b[1]>=0)idx.push(k,k+i,k+i+1);else idx.push(k,k+i+1,k+i)}}
+  if(idx.length){const g=new THREE.BufferGeometry();g.setAttribute('position',new THREE.Float32BufferAttribute(pos,3));g.setIndex(idx);g.computeVertexNormals();const mesh=new THREE.Mesh(g,groundLayer(asphalt,-.045));mesh.receiveShadow=true;mesh.name='road-joints';group.add(mesh)}} // The river: flat water between two muddy banks, outside every zone (a hard barrier). The bridge is the only way across.
+ const water=new THREE.MeshStandardMaterial({color:'#4a86a6',roughness:.2,metalness:.1,transparent:true,opacity:.94,side:THREE.DoubleSide,depthWrite:false}),mud=new THREE.MeshStandardMaterial({color:'#7d7352',roughness:1,side:THREE.DoubleSide});
+
+ function ribbon(path,half,y,material,name,lift=false){const up=lift===true?heightAt:lift||(()=>0);
+  const position=[],uv=[],index=[];let along=0;
+  path.forEach((p,i)=>{if(i)along+=Math.hypot(p.x-path[i-1].x,p.z-path[i-1].z);
+   position.push(p.x-p.tz*half,y+up(p.x-p.tz*half,p.z+p.tx*half),p.z+p.tx*half,p.x+p.tz*half,y+up(p.x+p.tz*half,p.z-p.tx*half),p.z-p.tx*half);uv.push(0,along/12,1,along/12);
+   if(i){const a=(i-1)*2;index.push(a,a+2,a+1,a+1,a+2,a+3)}});
+  const geometry=new THREE.BufferGeometry();geometry.setAttribute('position',new THREE.Float32BufferAttribute(position,3));geometry.setAttribute('uv',new THREE.Float32BufferAttribute(uv,2));geometry.setIndex(index);geometry.computeVertexNormals();
+  const mesh=new THREE.Mesh(geometry,groundLayer(material,y));mesh.name=name;mesh.receiveShadow=true;group.add(mesh);return mesh;
+ }
+ // dirt tracks up the hills (0.34): a ribbon laid on the ground (every edge point lifted by heightAt), the dirt layer, one draw call each
+ {const dirtTrack=patchGround(new THREE.MeshStandardMaterial({color:'#8a7152',roughness:1}),'dirt');for(const t of MAP.relief?.tracks||[])ribbon(toPath(densify(t.points,2)),t.half,-.066,dirtTrack,'track-'+t.id,true)
+  // R3a: gravel roads (surface 'gravel') are laid like the tracks: a ribbon along the centreline lifted by heightAt, the dirt ground kind (no new program), a paler colour, one draw call each.
+  const gravel=patchGround(new THREE.MeshStandardMaterial({color:'#a39d8c',roughness:1}),'dirt');gravel.userData.groundGravel=true;for(const e of MAP.roads.edges)if(e.surface==='gravel')splitAtBridges(withBridgePoints(densify(roadCenterline(e),2))).forEach((piece,k)=>ribbon(toPath(piece.line),e.width/2,-.066,gravel,'gravel-road-'+e.id+(k?'-'+k:''),true))}
+ for(const r of MAP.water.rivers){if(!riverIsLegacy(r))continue;const path=riverPath(r,3);ribbon(path,r.width/2+r.bank,RIVER_WATER_Y,water,'river')}
+ const stone=new THREE.MeshStandardMaterial({color:'#8b8f8c',roughness:1}),timber=new THREE.MeshStandardMaterial({color:'#6f5b43',roughness:1});
+ // Bridges (0.34): the deck is an arch, rising BRIDGE_RISE m above the ground at its crown and level where it meets the road (bridgeRise, height.js). Each part is one extrusion along the deck
+ // (flat-shaded faces): the deck body (stone), its asphalt top, a parapet and a timber cap on each side, and piers that stand on the river bed. Solid parapets keep nobody off the deck.
+ function extrude(zs,x0,x1,bottom,top,material,name,swap=false){const pos=[],idx=[],n=zs.length,P=swap?p=>[p[2],p[1],p[0]]:p=>p; // swap (R3b): an east-west deck: the along values are x and x0, x1 are z; the winding flips with the mirror
+  const quad=(a,b,c,d)=>{const k=pos.length/3;pos.push(...P(a),...P(b),...P(c),...P(d));if(swap)idx.push(k,k+2,k+1,k,k+3,k+2);else idx.push(k,k+1,k+2,k,k+2,k+3)};
+  for(let i=1;i<n;i++){const za=zs[i-1],zb=zs[i],ta=top(za),tb=top(zb),ba=bottom(za),bb=bottom(zb);
+   quad([x0,ta,za],[x0,tb,zb],[x1,tb,zb],[x1,ta,za]); // top
+   quad([x0,ba,za],[x1,ba,za],[x1,bb,zb],[x0,bb,zb]); // bottom
+   quad([x0,ba,za],[x0,bb,zb],[x0,tb,zb],[x0,ta,za]); // one side
+   quad([x1,ba,za],[x1,ta,za],[x1,tb,zb],[x1,bb,zb])} // the other
+  const g=new THREE.BufferGeometry();g.setAttribute('position',new THREE.Float32BufferAttribute(pos,3));g.setIndex(idx);g.computeVertexNormals();
+  const mesh=new THREE.Mesh(g,material);mesh.castShadow=mesh.receiveShadow=true;mesh.name=name;mesh.frustumCulled=true;group.add(mesh);return mesh}
+  for(const b of MAP.water.bridges){ // R3b: a bridge with axis 'x' is the same deck turned: it runs along x (len = x1 - x0), its width is z1 - z0
+   const ax=b.axis==='x',a0=ax?b.x0:b.z0,a1=ax?b.x1:b.z1,c0=ax?b.z0:b.x0,c1=ax?b.z1:b.x1,len=a1-a0,cx=(b.x0+b.x1)/2,cz=(b.z0+b.z1)/2,width=c1-c0,zs=[];for(let t=a0;t<a1-1e-6;t+=2)zs.push(t);zs.push(a1);
+   const rise=t=>ax?bridgeRise(b,0,t):bridgeRise(b,t);
+   extrude(zs,c0,c1,t=>rise(t)-.34,t=>rise(t)-.03,stone,'bridge-body',ax);
+   extrude(zs,c0,c1,t=>rise(t)-.03,t=>rise(t)-.02,asphalt,'bridge-deck',ax);
+   for(const side of [-1,1]){ // low parapets along both sides, solid so nobody walks off the deck
+    const o=side*(width/2-.25),a=side<0?[c0,c0+.5]:[c1-.5,c1];
+    extrude(zs,a[0],a[1],t=>rise(t)-.02,t=>rise(t)+.68,stone,'bridge-parapet',ax);extrude(zs,a[0]-.06,a[1]+.06,t=>rise(t)+.68,t=>rise(t)+.8,timber,'bridge-cap',ax);if(ax)colliders.box(cx,cz+o,len/2,.25);else colliders.box(cx+o,cz,.25,len/2);
+   }
+   for(const d of [-len*.22,len*.22])for(const side of [-1,1]){ // piers from the river bed up to the underside of the deck
+    const x=ax?cx+d:cx+side*(width/2-.8),z=ax?cz+side*(width/2-.8):cz+d,top=rise(ax?x:z)-.34,bed=-.079+heightAt(x,z)-.3,h=top-bed;const pier=new THREE.Mesh(new THREE.BoxGeometry(.9,h,.9),stone);pier.position.set(x,bed+h/2,z);pier.castShadow=pier.receiveShadow=true;pier.name='bridge-pier';group.add(pier)}
+  }
+
+ // Fences (instanced posts and rails, solid for walking).
+ const segments=fenceSegments(),wood=new THREE.MeshStandardMaterial({color:'#8b6d4b',roughness:.95});
+ // The fence meshes of a list of segments: one pair of instanced meshes (posts, rails). Whole map when streaming is off; one pair per loaded chunk when it is on (chunks-view.js). The colliders below are global
+ // data owned by the chunk they stand in (colliders.js ownership), whatever is drawn.
+ const m4=new THREE.Matrix4(),q=new THREE.Quaternion(),v=new THREE.Vector3(),s=new THREE.Vector3(),yAxis=new THREE.Vector3(0,1,0);
+ function fenceSet(list){
+  const set=new THREE.Group(),posts=new THREE.InstancedMesh(new THREE.BoxGeometry(.14,1.1,.14).translate(0,.55,0),wood,list.length*2),rails=new THREE.InstancedMesh(new THREE.BoxGeometry(1,.09,.06),wood,list.length*2);
+  posts.castShadow=rails.castShadow=true;posts.name='fence-posts';rails.name='fence-rails';
+  list.forEach((g,i)=>{
+   const len=Math.hypot(g.x1-g.x0,g.z1-g.z0),angle=Math.atan2(g.z1-g.z0,g.x1-g.x0);
+   posts.setMatrixAt(i*2,m4.makeTranslation(g.x0,0,g.z0));posts.setMatrixAt(i*2+1,m4.makeTranslation(g.x1,0,g.z1));
+   q.setFromAxisAngle(yAxis,-angle);
+   for(const [k,h] of [[0,.45],[1,.85]])rails.setMatrixAt(i*2+k,m4.compose(v.set((g.x0+g.x1)/2,h,(g.z0+g.z1)/2),q,s.set(len,1,1)));
+  });
+  set.name='fences';set.add(posts,rails);return set;
+ }
+ for(const g of segments)colliders.box((g.x0+g.x1)/2,(g.z0+g.z1)/2,Math.abs(g.x1-g.x0)/2+.07,Math.abs(g.z1-g.z0)/2+.07);
+ if(!streaming)group.add(fenceSet(segments));
+
+ // ── Trees: the Quaternius models (nature.js). One InstancedMesh per model per material (bark and leaves): 16 draw calls for the whole forest.
+ // Which trees are *in* those meshes changes as you move (see rebuild): only trees within the fog distance are drawn, scenery well behind the
+ // camera is skipped and felled trees are not drawn at all, so the cost follows what is near you, not how many trees exist. Which model a tree
+ // gets is a hash of its position (it does not use the layout's random numbers, so no tree has moved). Collisions never depend on what is drawn.
+ const nature=createNatureMaterials(fade);
+ const variantHash=(x,z)=>{const h=Math.sin(x*12.9898+z*78.233)*43758.5453;return h-Math.floor(h)};
+ const pick=(list,x,z)=>list[Math.min(list.length-1,Math.floor(variantHash(x,z)*list.length))];
+ const tints=['#ffffff','#f3f7e8','#e9f2da','#dfeccf'].map(c=>new THREE.Color(c));
+ const viewDistance=cullRadius??MAP.scenery.view.distance,view2=viewDistance*viewDistance,useCone=Number.isFinite(viewDistance);
+ const groups=[],cutMeshes=[]; // groups: {id, info, meshes:[bark, leaves], entries, dynamic}; cutMeshes: the meshes whose instances animate
+ function treeGroup(id,count,name,dynamic){
+  const info=modelInfo(id),leafMaterial=id.startsWith('pine')?nature.pineLeaves:nature.broadleafLeaves,capacity=Math.max(1,count);
+  const bark=new THREE.InstancedMesh(modelGeometry(id,'bark'),nature.bark,capacity),leaves=new THREE.InstancedMesh(modelGeometry(id,'leaves'),leafMaterial,capacity);
+  leaves.instanceColor=new THREE.InstancedBufferAttribute(new Float32Array(capacity*3),3);leaves.instanceColor.setUsage(THREE.DynamicDrawUsage);
+  bark.name=`${name}-${id}-bark`;leaves.name=`${name}-${id}-leaves`;
+  for(const mesh of [bark,leaves]){
+   mesh.count=0;mesh.castShadow=dynamic; // scenery trees cast no shadow: that halves the shadow pass
+   mesh.receiveShadow=true;mesh.frustumCulled=false; // the instances are culled by rebuild(), so the mesh's own bounds would be stale
+   mesh.instanceMatrix.setUsage(THREE.DynamicDrawUsage);if(dynamic)cutMeshes.push(mesh);group.add(mesh);
+  }
+  const g={id,info,meshes:[bark,leaves],entries:[],dynamic};groups.push(g);return g;
+ }
+ const addEntry=(g,t,tint)=>{m4.compose(v.set(t.x,0,t.z),q.setFromAxisAngle(yAxis,t.rot),s.setScalar(t.scale));const entry={x:t.x,z:t.z,matrix:Float32Array.from(m4.elements),tint,off:false,slot:-1};g.entries.push(entry);return entry};
+ // Decor trees (never cuttable, solid trunks): pines on Pine Ridge's side, broadleaf everywhere else.
+ const decorModels=layout.decor.map(t=>pick(forestSide(t.x,t.z)?PINES:BROADLEAVES,t.x,t.z));
+ const decorGroups=new Map([...new Set(decorModels)].map(id=>[id,treeGroup(id,decorModels.filter(m=>m===id).length,'decor',false)]));
+ layout.decor.forEach((t,i)=>{const g=decorGroups.get(decorModels[i]);addEntry(g,t,tints[t.tone]);colliders.circle(t.x,t.z,g.info.trunkRadius*t.scale*.85)});
+  // Street trees (the town's and Oak Street's, a couple of dozen): the same two broadleaf models as the farm, one small instanced pair per model (bark and leaves).
+  // They cast shadows, are frustum-culled as a group and dissolve with the sightline fade like every other tree. list: [{x, z, y}]. Returns each trunk's collision radius.
+  function addBroadleaves(list,name='street-tree',scale=.85){
+   const models=list.map(t=>pick(BROADLEAVES,t.x,t.z)),solid=[];
+   for(const id of BROADLEAVES){
+    const mine=list.filter((t,i)=>models[i]===id);if(!mine.length)continue;
+    const bark=new THREE.InstancedMesh(modelGeometry(id,'bark'),nature.bark,mine.length),leaves=new THREE.InstancedMesh(modelGeometry(id,'leaves'),nature.broadleafLeaves,mine.length);
+    mine.forEach((t,i)=>{m4.compose(v.set(t.x,heightAt(t.x,t.z)+(t.y??0),t.z),q.setFromAxisAngle(yAxis,variantHash(t.z,t.x)*Math.PI*2),s.setScalar(scale));bark.setMatrixAt(i,m4);leaves.setMatrixAt(i,m4);leaves.setColorAt(i,tints[i%4]);solid.push({x:t.x,z:t.z,radius:modelInfo(id).trunkRadius*scale*.85})});
+    bark.name=`${name}-${id}-bark`;leaves.name=`${name}-${id}-leaves`;
+    for(const mesh of [bark,leaves]){mesh.castShadow=mesh.receiveShadow=true;mesh.computeBoundingSphere();group.add(mesh)}
+   }
+   return solid;
+  }
+
+ // Cuttable trees: pines on cell centres, plus hidden stumps.
+ const n=layout.cuttable.length,cutModels=layout.cuttable.map(t=>pick(PINES,t.x,t.z));
+ const cutGroups=new Map(PINES.map(id=>[id,treeGroup(id,cutModels.filter(m=>m===id).length,'pine',true)]));
+ const stumps=new THREE.InstancedMesh(new THREE.CylinderGeometry(.21,.26,.34,8).translate(0,.17,0),new THREE.MeshStandardMaterial({map:nature.logBark,color:'#d8b88c',roughness:1}),n);
+ stumps.name='pine-stumps';stumps.castShadow=stumps.receiveShadow=true;stumps.instanceMatrix.setUsage(THREE.DynamicDrawUsage);group.add(stumps);
+ const hidden=new THREE.Matrix4().makeScale(0,0,0);
+ const trees=new Map();
+ const tilt=new THREE.Quaternion(),yaw=new THREE.Quaternion(),axis=new THREE.Vector3();
+ layout.cuttable.forEach((t,i)=>{
+  const g=cutGroups.get(cutModels[i]),entry=addEntry(g,t,tints[i%4]);
+  const state={...t,index:i,model:g.id,meshes:g.meshes,entry,get slot(){return entry.slot},standing:true,stage:'mature',collider:colliders.circle(t.x,t.z,g.info.trunkRadius*t.scale+.04,t.key),anim:null};
+  trees.set(t.key,state);poseTree(state);stumps.setMatrixAt(i,hidden);
+ });
+ // Which trees are in the meshes: those within the view distance of the player; trees farther than 30 m (choppable pines: 70 m) also have to be in front
+ // of the camera (within about 110 degrees of where it looks). Felled trees (off) are not drawn. Rebuilt when you move 3 m, turn about 14 degrees or a tree changes.
+ const view={x:0,z:0,fx:0,fz:-1,ready:false},dir=new THREE.Vector3();let dirty=true;
+ function rebuild(){
+  for(const g of groups){
+   const [bark,leaves]=g.meshes,bm=bark.instanceMatrix.array,lm=leaves.instanceMatrix.array,lc=leaves.instanceColor.array;let k=0;
+   for(const e of g.entries){
+    e.slot=-1;if(e.off)continue;
+    const dx=e.x-view.x,dz=e.z-view.z,d2=dx*dx+dz*dz;if(d2>view2)continue;
+    if(useCone&&d2>(g.dynamic?4900:900)&&dx*view.fx+dz*view.fz<-.35*Math.sqrt(d2))continue; // far behind the camera (scenery after 30 m, choppable pines after 70 m: their shadows only matter near you)
+    bm.set(e.matrix,k*16);lm.set(e.matrix,k*16);lc[k*3]=e.tint.r;lc[k*3+1]=e.tint.g;lc[k*3+2]=e.tint.b;e.slot=k++;
+   }
+   bark.count=leaves.count=k;bark.instanceMatrix.needsUpdate=leaves.instanceMatrix.needsUpdate=leaves.instanceColor.needsUpdate=true;
+  }
+  dirty=false;
+ }
+ function refreshView(camera,target){
+  camera.getWorldDirection(dir);const l=Math.hypot(dir.x,dir.z)||1,fx=dir.x/l,fz=dir.z/l;
+  if(!view.ready||dirty||Math.hypot(target.x-view.x,target.z-view.z)>3||fx*view.fx+fz*view.fz<.97){view.x=target.x;view.z=target.z;view.fx=fx;view.fz=fz;view.ready=true;rebuild()}
+ }
+ // Writes one pine's transforms. fall = 0..1 tips it over; shake wobbles it.
+ function poseTree(t,{fall=0,shake=0,dirX=0,dirZ=1,shrink=1}={}){
+  yaw.setFromAxisAngle(yAxis,t.rot);
+  axis.set(dirZ,0,-dirX).normalize();
+  tilt.setFromAxisAngle(axis.lengthSq()?axis:v.set(1,0,0),fall*Math.PI*.47+shake);
+  m4.compose(v.set(t.x,heightAt(t.x,t.z),t.z),tilt.multiply(yaw),s.setScalar(t.scale*shrink));
+  t.entry.matrix.set(m4.elements);if(t.entry.slot>=0)for(const mesh of t.meshes)mesh.setMatrixAt(t.entry.slot,m4);
+ }
+ function hideTree(t){t.entry.off=true;dirty=true; // a felled tree leaves the draw lists altogether
+  stumps.setMatrixAt(t.index,m4.compose(v.set(t.x,heightAt(t.x,t.z),t.z),yaw.setFromAxisAngle(yAxis,t.rot),s.set(t.scale,1,t.scale)))}
+ function touch(){if(dirty)rebuild();for(const mesh of cutMeshes)mesh.instanceMatrix.needsUpdate=true;stumps.instanceMatrix.needsUpdate=true}
+ rebuild();
+
+ // ── Landmarks (the farmyard, the sawmill) placed from the map, solid where their walls are, and the fork's signpost ──────────────────────────────────
+ const landmarks=MAP.landmarks.map(l=>{
+  const info=propInfo(l.prop),mesh=createProp(l.prop,fade);mesh.position.set(l.x,heightAt(l.x,l.z),l.z);mesh.rotation.y=l.yaw;group.add(mesh);
+  const cos=Math.round(Math.cos(l.yaw)),sin=Math.round(Math.sin(l.yaw)),turned=sin!==0;
+  const boxes=info.colliders.map(b=>colliders.box(l.x+b.x*cos+b.z*sin,l.z-b.x*sin+b.z*cos,turned?b.hz:b.hx,turned?b.hx:b.hz));
+  return {id:l.id,mesh,boxes,hidden:false,x:l.x,z:l.z,yaw:l.yaw,floor:info.floors||info.floor||null,radius:Math.hypot(info.width,info.depth)/2};
+ });
+ for(const sign of MAP.signs){
+  const post=new THREE.Mesh(new THREE.BoxGeometry(.18,3.4,.18),timber);post.position.set(sign.x,1.7,sign.z);post.castShadow=true;post.name='sign-post';group.add(post);colliders.circle(sign.x,sign.z,.16);
+  if(label)for(const board of sign.boards){const mesh=label(board.text||'',sign.x,board.y,sign.z+.12,4.4,sign.yaw,board.bg||'#3a2f22',board.fg||'#f1ebd9',board.h||.62);if(board.pictures&&mesh&&typeof Image==='function')paintSignPictures(mesh)} // a board with `pictures` shows the two Riden Deals vehicle pictures (sign-pictures.js, imported only now)
+ }
+ // Driveways and front paths: flat concrete and paving just above the grass and just under the road they join.
+ {const concrete=new THREE.MeshStandardMaterial({color:'#8f9396',roughness:.95}),paving=new THREE.MeshStandardMaterial({color:'#b9b3a4',roughness:.9});
+  for(const plot of MAP.reserved){if(plot.driveway)streaming?quadInto('driveway',plot.driveway.x0,plot.driveway.x1,plot.driveway.z0,plot.driveway.z1):plane(plot.driveway.x0,plot.driveway.x1,plot.driveway.z0,plot.driveway.z1,-.05,concrete,'driveway-'+plot.id);if(plot.path)streaming?quadInto('path',plot.path.x0,plot.path.x1,plot.path.z0,plot.path.z1):plane(plot.path.x0,plot.path.x1,plot.path.z0,plot.path.z1,-.049,paving,'path-'+plot.id)}}
+ // Street lamps (instanced poles and heads, solid) and the town square's benches.
+ {const spots=lampSpots().concat(townSpots().lamp.map(l=>({x:l.x,z:l.z,dx:l.dx,dz:l.dz,road:l.frontage}))),metal=new THREE.MeshStandardMaterial({color:'#3b4247',roughness:.7,metalness:.3}),glow=new THREE.MeshStandardMaterial({color:'#f4ecd2',emissive:'#ffe9a8',emissiveIntensity:.55,roughness:.5});
+  const poles=new THREE.InstancedMesh(new THREE.CylinderGeometry(.07,.1,4.6,8),metal,spots.length),heads=new THREE.InstancedMesh(new THREE.BoxGeometry(.75,.14,.3),glow,spots.length),m=new THREE.Matrix4(),q=new THREE.Quaternion(),one=new THREE.Vector3(1,1,1),at=new THREE.Vector3();
+  spots.forEach((s,i)=>{poles.setMatrixAt(i,m.compose(at.set(s.x,2.3,s.z),q.identity(),one));q.setFromAxisAngle(new THREE.Vector3(0,1,0),Math.atan2(s.dx,s.dz)+Math.PI/2);heads.setMatrixAt(i,m.compose(at.set(s.x+s.dx*.35,4.6,s.z+s.dz*.35),q,one));colliders.circle(s.x,s.z,.22)});
+  poles.name='street-lamp-poles';heads.name='street-lamp-heads';poles.castShadow=true;group.add(poles,heads);
+}
+ // Eastbank Works (0.33): the merged paving, painted bays and the per-yard prop chunks (eastbank.js); the buildings are landmarks above.
+ const eastbank=createEastbank({group,fade,groundLayer,asphalt,colliders});createSceneOverlay({parent:group,fade,heightAt,colliders}); // scene editor overlay (scene-overlay.js): empty in the shipped game; the editor reaches it as group.userData.sceneOverlay
+ // ── The town (0.31): raised pavements and the town square, the parking lot, painted markings, street furniture, the fountain and the bus stop ──────────────────────────────
+ {
+  const T=terrain(),m4=new THREE.Matrix4(),quat=new THREE.Quaternion(),yAxis=new THREE.Vector3(0,1,0),at=new THREE.Vector3(),one=new THREE.Vector3(1,1,1),flat=new THREE.Vector3();
+  const lit=(c,r=.85,extra={})=>new THREE.MeshStandardMaterial({color:c,roughness:r,...extra}),PAVED=.165;
+  // pavements that world.js draws (the city's own are built in game.js): slabs 0.3 m thick whose top is the pavement's footing height
+  for(const p of MAP.pavements)if(p.draw){const w=p.x1-p.x0,d=p.z1-p.z0,slab=new THREE.Mesh(new THREE.BoxGeometry(w,.3,d),textured(textures[p.plaza?'plaza':'paving'],w,d,4,'#ffffff','paving'));patchGround(slab.material,'paving');slab.position.set((p.x0+p.x1)/2,PAVED-.15,(p.z0+p.z1)/2);slab.receiveShadow=true;slab.name=p.plaza?'town-square':'pavement';group.add(slab)}
+  for(const lot of MAP.lots)streaming?quadInto('asphalt',lot.x0,lot.x1,lot.z0,lot.z1):plane(lot.x0,lot.x1,lot.z0,lot.z1,-.045,asphalt,'lot-'+lot.id);
+  // painted markings: one instanced mesh of thin white bars (on the city's raised street they sit a little higher)
+  {const bars=markingBars(),paint=new THREE.InstancedMesh(new THREE.BoxGeometry(1,.012,1),lit('#ecebe0',.9),bars.length);
+   bars.forEach((b,i)=>paint.setMatrixAt(i,m4.compose(at.set(b.x,T.surfaceAt(b.x,b.z)===SURFACE.STREET?.016:-.037,b.z),quat.identity(),flat.set(b.w,1,b.d))));paint.name='road-markings';paint.receiveShadow=true;group.add(paint)}
+  // instanced street furniture: each kind is a few parts (geometry, colour, offset), one InstancedMesh per part, placed and turned by its spots
+  const place=(name,parts,spots,solid)=>{if(!spots.length)return;const base=PAVED;
+   for(const [geo,color,[lx,ly,lz],rough] of parts){const mesh=new THREE.InstancedMesh(geo,lit(color,rough??.8),spots.length);
+    spots.forEach((s,i)=>{const yaw=s.yaw||0,c=Math.cos(yaw),n=Math.sin(yaw);mesh.setMatrixAt(i,m4.compose(at.set(s.x+lx*c+lz*n,base+ly,s.z-lx*n+lz*c),quat.setFromAxisAngle(yAxis,yaw),one))});
+    mesh.name=name;mesh.castShadow=name==='tree';group.add(mesh)}
+   if(solid)for(const s of spots)solid(s)};
+  const spots=townSpots(),cyl=(a,b,h,n=10)=>new THREE.CylinderGeometry(a,b,h,n),box=(w,h,d)=>new THREE.BoxGeometry(w,h,d),ico=(r,d=1)=>new THREE.IcosahedronGeometry(r,d);
+  place('hydrant',[[cyl(.17,.19,.55),'#b8322a',[0,.275,0]],[cyl(.21,.21,.12),'#8a2420',[0,.6,0]],[box(.34,.1,.1),'#8a2420',[0,.42,0]]],spots.hydrant,s=>colliders.circle(s.x,s.z,.26));
+  place('bin',[[cyl(.28,.25,.8),'#41564c',[0,.4,0]],[cyl(.31,.31,.07),'#2f3f37',[0,.83,0]]],spots.bin,s=>colliders.circle(s.x,s.z,.3));
+  place('parking-meter',[[cyl(.035,.035,1.05,6),'#6b7076',[0,.525,0]],[box(.2,.32,.12),'#4a5258',[0,1.2,0]]],spots.meter,s=>colliders.circle(s.x,s.z,.15));
+  place('bench',[[box(1.7,.08,.5),'#8a6a47',[0,.46,0]],[box(1.7,.45,.06),'#8a6a47',[0,.75,-.22]],[box(.06,.46,.46),'#3b4247',[-.75,.23,0]],[box(.06,.46,.46),'#3b4247',[.75,.23,0]]],spots.bench,s=>{const c=Math.round(Math.cos(s.yaw)),n=Math.round(Math.sin(s.yaw));colliders.box(s.x,s.z,Math.abs(c)*.85+Math.abs(n)*.3,Math.abs(c)*.3+Math.abs(n)*.85)});
+  for(const c of addBroadleaves(spots.tree.map(s=>({x:s.x,z:s.z,y:PAVED}))))colliders.circle(c.x,c.z,c.radius); // street trees are the broadleaf models, not cylinders and blobs
+  place('planter',[[box(1.6,.5,1.6),'#9a8f7a',[0,.25,0]],[ico(.62),'#4c7a46',[0,.85,0],.95],[ico(.45),'#5d8c50',[.38,.8,.3],.95]],spots.planter,s=>colliders.box(s.x,s.z,1.6,1.6));
+  place('bollard',[[cyl(.11,.11,.85,8),'#5b6368',[0,.425,0]],[cyl(.115,.115,.1,8),'#d6b64c',[0,.7,0]]],spots.bollard,s=>colliders.circle(s.x,s.z,.14));
+  // the town square: a stone ring path and the fountain (a basin, still water, a pedestal, a bowl and a jet that breathes)
+  const fountain=new THREE.Group();fountain.name='fountain';fountain.position.set(FOUNTAIN.x,PAVED,FOUNTAIN.z);group.add(fountain);
+  {const ring=new THREE.Mesh(new THREE.RingGeometry(FOUNTAIN.r+1,FOUNTAIN.r+2.2,48),lit('#a39f90',.9,{side:THREE.DoubleSide}));ring.rotation.x=-Math.PI/2;ring.position.y=.004;fountain.add(ring);
+   const stone=lit('#b4b0a2',.9),basin=new THREE.Mesh(cyl(FOUNTAIN.r,FOUNTAIN.r,.55,36),stone);basin.position.y=.275;fountain.add(basin);
+   const water=new THREE.Mesh(new THREE.CircleGeometry(FOUNTAIN.r-.4,36),lit('#4aa3c8',.15,{transparent:true,opacity:.88,metalness:.1}));water.rotation.x=-Math.PI/2;water.position.y=.56;fountain.add(water);
+   const pedestal=new THREE.Mesh(cyl(.45,.6,1.7,12),stone);pedestal.position.y=1.4;fountain.add(pedestal);const bowl=new THREE.Mesh(cyl(1.35,.8,.38,20),stone);bowl.position.y=2.35;fountain.add(bowl);
+   const bowlWater=new THREE.Mesh(new THREE.CircleGeometry(1.1,20),lit('#4aa3c8',.15,{transparent:true,opacity:.9}));bowlWater.rotation.x=-Math.PI/2;bowlWater.position.y=2.55;fountain.add(bowlWater);
+   const jet=new THREE.Mesh(new THREE.ConeGeometry(.16,1.2,10),lit('#dff3fb',.2,{transparent:true,opacity:.7}));jet.position.y=3.15;fountain.add(jet);
+   colliders.circle(FOUNTAIN.x,FOUNTAIN.z,FOUNTAIN.r+.2);fountainParts={jet,water,bowlWater}}
+  // the bus stop: a shelter with a glass back and a bench, and a sign post
+  {const g=new THREE.Group();g.name='bus-stop';g.position.set(BUS_STOP.x,PAVED,BUS_STOP.z);g.rotation.y=BUS_STOP.yaw;group.add(g);
+   const add=(geo,color,x,y,z,extra)=>{const mesh=new THREE.Mesh(geo,lit(color,.8,extra));mesh.position.set(x,y,z);g.add(mesh);return mesh};
+   add(box(3.4,.12,1.7),'#3d5a6c',0,2.5,0);for(const x of [-1.55,1.55])add(box(.1,2.5,.1),'#3b4247',x,1.25,-.7);add(box(3.2,1.6,.04),'#b9d8e4',0,1.3,-.8,{transparent:true,opacity:.4,roughness:.2});
+   add(box(1.8,.08,.5),'#8a6a47',0,.46,-.45);add(box(.06,.46,.46),'#3b4247',-.8,.23,-.45);add(box(.06,.46,.46),'#3b4247',.8,.23,-.45);add(cyl(.04,.04,2.8,6),'#6b7076',2.1,1.4,.2);add(box(.62,.62,.05),'#2f6fa5',2.1,2.55,.2);add(box(.3,.34,.06),'#f4f1e6',2.1,2.55,.23);
+   const c=Math.round(Math.cos(BUS_STOP.yaw)),n=Math.round(Math.sin(BUS_STOP.yaw));colliders.box(BUS_STOP.x+(-.8*n),BUS_STOP.z+(-.8*c),Math.abs(c)*3.2+Math.abs(n)*.12,Math.abs(c)*.12+Math.abs(n)*3.2)}
+ }
+ // The edge of the world: a ring of low hills far beyond the fog (they ignore it), so the map ends at a horizon, not at nothing.
+ {const fogColor=new THREE.Color(scene.fog?scene.fog.color:'#b9cbd0'),top=fogColor.clone().lerp(new THREE.Color('#5f7686'),.5),mid=fogColor.clone().lerp(new THREE.Color('#5f7686'),.28),N=96,cx=20,cz=-140,pos=[],col=[],idx=[];
+  const h=a=>.5+.5*Math.sin(a*3+1.3)*Math.cos(a*5+.4)+.25*Math.sin(a*11+2.1);
+  for(let i=0;i<N;i++){const a=i/N*Math.PI*2,r=520+Math.sin(a*4)*30,ridge=18+Math.max(0,h(a))*52;for(const [rr,y,c] of [[r+60,-12,fogColor],[r,ridge*.45,mid],[r-35,ridge,top]]){pos.push(cx+Math.cos(a)*rr,y,cz+Math.sin(a)*rr);col.push(c.r,c.g,c.b)}}
+  for(let i=0;i<N;i++){const j=(i+1)%N;for(let k=0;k<2;k++){const a=i*3+k,b=i*3+k+1,c=j*3+k,d=j*3+k+1;idx.push(a,c,b,b,c,d)}}
+  const g=new THREE.BufferGeometry();g.setAttribute('position',new THREE.Float32BufferAttribute(pos,3));g.setAttribute('color',new THREE.Float32BufferAttribute(col,3));g.setIndex(idx);
+  const hills=new THREE.Mesh(g,new THREE.MeshBasicMaterial({vertexColors:true,fog:false,side:THREE.DoubleSide,depthWrite:false}));hills.name='distant-hills';hills.renderOrder=-1;hills.frustumCulled=false;group.add(hills)}
+ // ── Reserved plots (O): a tinted patch, an outline and the plot's id on the ground, hidden until switched on ─────────────────────────────────────────
+ const plotColour={residential:'#2fbf9f',commercial:'#b0529b',industrial:'#e0a02e'},plotOverlay=new THREE.Group();plotOverlay.name='plot-overlay';plotOverlay.visible=false;group.add(plotOverlay);
+ for(const plot of MAP.reserved){
+  const w=plot.x1-plot.x0,d=plot.z1-plot.z0,cx=(plot.x0+plot.x1)/2,cz=(plot.z0+plot.z1)/2,color=plotColour[plot.kind];
+  const fill=new THREE.Mesh(new THREE.PlaneGeometry(w,d),new THREE.MeshBasicMaterial({color,transparent:true,opacity:.24,depthWrite:false}));fill.rotation.x=-Math.PI/2;fill.position.set(cx,.06,cz);plotOverlay.add(fill);
+  const outline=new THREE.LineLoop(new THREE.BufferGeometry().setFromPoints([[plot.x0,plot.z0],[plot.x1,plot.z0],[plot.x1,plot.z1],[plot.x0,plot.z1]].map(([x,z])=>new THREE.Vector3(x,.08,z))),new THREE.LineBasicMaterial({color}));plotOverlay.add(outline);
+  const canvas=document.createElement('canvas');canvas.width=256;canvas.height=128;const ctx=canvas.getContext('2d');ctx.clearRect(0,0,256,128);ctx.fillStyle='#ffffffee';ctx.font='bold 84px Arial';ctx.textAlign='center';ctx.textBaseline='middle';ctx.fillText(plot.id,128,66);
+  const tag=new THREE.Mesh(new THREE.PlaneGeometry(5,2.5),new THREE.MeshBasicMaterial({map:new THREE.CanvasTexture(canvas),transparent:true,depthWrite:false}));tag.rotation.x=-Math.PI/2;tag.position.set(cx,.09,cz);plotOverlay.add(tag);
+ }
+ // Faint grid overlay around the player, plus a brighter outline on the targeted cell.
+ const RADIUS=11,maxSegments=(RADIUS*2+2)*(RADIUS*2+2)*2;
+ const gridGeometry=new THREE.BufferGeometry();
+ gridGeometry.setAttribute('position',new THREE.BufferAttribute(new Float32Array(maxSegments*6),3).setUsage(THREE.DynamicDrawUsage));
+ gridGeometry.setAttribute('color',new THREE.BufferAttribute(new Float32Array(maxSegments*8),4).setUsage(THREE.DynamicDrawUsage));
+ const gridLines=new THREE.LineSegments(gridGeometry,new THREE.LineBasicMaterial({vertexColors:true,transparent:true,depthWrite:false}));
+ gridLines.name='plot-grid';gridLines.frustumCulled=false;gridLines.visible=false;gridLines.renderOrder=2;group.add(gridLines);
+ const cursor=new THREE.LineLoop(new THREE.BufferGeometry().setFromPoints([new THREE.Vector3(0,0,0),new THREE.Vector3(1,0,0),new THREE.Vector3(1,0,1),new THREE.Vector3(0,0,1)]),
+  new THREE.LineBasicMaterial({color:'#fff6c8',transparent:true,opacity:.75,depthWrite:false}));
+ cursor.name='plot-cursor';cursor.visible=false;cursor.renderOrder=3;group.add(cursor);
+ let gridCell=null;
+ function rebuildGrid(cx,cz){
+  const pos=gridGeometry.attributes.position.array,col=gridGeometry.attributes.color.array;let k=0;
+  const y=-.045;
+  const push=(x0,z0,x1,z1)=>{const mid=Math.hypot((x0+x1)/2-cx-.5,(z0+z1)/2-cz-.5),a=Math.max(0,1-mid/RADIUS)**1.4*.32;if(a<=.01)return;
+   pos.set([x0,y,z0,x1,y,z1],k*6);col.set([.96,.95,.82,a,.96,.95,.82,a],k*8);k++};
+  for(let ix=cx-RADIUS;ix<=cx+RADIUS;ix++)for(let iz=cz-RADIUS;iz<=cz+RADIUS;iz++){
+   if(!gridZoneAt(ix,iz))continue;
+   push(ix,iz,ix+1,iz);push(ix,iz,ix,iz+1);
+   if(!gridZoneAt(ix+1,iz)||ix===cx+RADIUS)push(ix+1,iz,ix+1,iz+1);
+   if(!gridZoneAt(ix,iz+1)||iz===cz+RADIUS)push(ix,iz+1,ix+1,iz+1);
+  }
+  gridGeometry.setDrawRange(0,k*2);gridGeometry.attributes.position.needsUpdate=true;gridGeometry.attributes.color.needsUpdate=true;
+ }
+
+ // Target ring and ground logs.
+ const ring=new THREE.Mesh(new THREE.RingGeometry(.62,.76,40),new THREE.MeshBasicMaterial({color:'#fff6c8',transparent:true,opacity:.9,depthWrite:false,side:THREE.DoubleSide}));
+ ring.rotation.x=-Math.PI/2;ring.visible=false;ring.renderOrder=4;ring.name='tree-target';group.add(ring);
+ const MAX_LOG_INSTANCES=96;
+ const logMesh=new THREE.InstancedMesh(new THREE.CylinderGeometry(.12,.12,1.15,8).rotateZ(Math.PI/2),new THREE.MeshStandardMaterial({map:nature.logBark,color:'#d2b080',roughness:1}),MAX_LOG_INSTANCES);
+ logMesh.count=0;logMesh.castShadow=logMesh.receiveShadow=true;logMesh.frustumCulled=false;logMesh.name='ground-logs';group.add(logMesh);
+ let clock=0,chunkView=null,edgeHills=null,cover=null;
+ if(streaming){ // chunk streaming (F1): the 5 x 5 chunks round the spawn are built here, behind the loading screen; world.update() keeps the ring loaded from then on
+  const gmat={asphalt:groundLayer(asphalt,-.045),driveway:groundLayer(new THREE.MeshStandardMaterial({color:'#8f9396',roughness:.95}),-.05),path:groundLayer(new THREE.MeshStandardMaterial({color:'#b9b3a4',roughness:.9}),-.049)};
+  const groundChunk=slice=>{const b=gb.get(slice.key);if(!b)return null;const set=new THREE.Group();set.name='ground-'+slice.key;
+   for(const kind of ['asphalt','driveway','path']){const d=b[kind];if(!d.idx.length)continue;const g=new THREE.BufferGeometry();g.setAttribute('position',new THREE.Float32BufferAttribute(d.pos,3));g.setIndex(d.idx);g.computeVertexNormals();g.computeBoundingSphere();const mesh=new THREE.Mesh(g,gmat[kind]);mesh.receiveShadow=true;mesh.name='ground-'+kind+'-'+slice.key;set.add(mesh)}
+   if(b.dashes.length){const marks=new THREE.InstancedMesh(new THREE.BoxGeometry(.18,.02,2.2),lineMaterial,b.dashes.length);b.dashes.forEach((d,i)=>marks.setMatrixAt(i,m4.compose(v.set(d.x,d.y,d.z),q.setFromAxisAngle(yAxis,d.yaw),s.set(1,1,1))));marks.computeBoundingSphere();marks.name='road-lines-'+slice.key;set.add(marks)}
+   return set.children.length?set:null};
+  chunkView=createChunkView({index:createChunkIndex({layout,fences:segments,range:worldRange()}),colliders,scene:group,map:MAP,build:{dug:slice=>dugMesh(chunkBounds(slice.i,slice.j),'dug-'+slice.key),water:slice=>waterChunkMesh(THREE,water,MAP,slice.i,slice.j),fences:slice=>slice.fences.length?fenceSet(slice.fences.map(e=>e.item)):null,ground:groundChunk},onFade:screenFade});
+  // GD5 ground cover: a view per world; the chunk view only tells it which masks are live. The models (cover-assets.js, 0.3 MB) load lazily, so startup does not grow; update() builds one stage per frame near the player.
+  cover=createCoverView({THREE,heightAt,seed:WORLD_SEED,rects:footprintRects(MAP.buildings,MAP.landmarks.map(l=>({x:l.x,z:l.z,yaw:l.yaw,footprint:propInfo(l.prop).footprint})))});
+  chunkView.on('build',c=>cover.onChunk({key:c.key,i:c.i,j:c.j,bounds:c.slice.bounds},{surfaceAt:(x,z)=>c.tile.surfaceAt(x,z)||chunkView.surfaceAt(x,z),biomeAt:(x,z)=>{const zn=c.tile.zoneAt(x,z);return zn&&zn.id==='forest'?'forest':zn&&zn.id==='farm'?'farm':'open'}}));
+  chunkView.on('dispose',c=>cover.onChunkGone(c.key));
+  import('./cover-assets.js').then(a=>cover.setAssets({atlas:a.COVER_ATLAS,models:a.COVER_MODELS})).catch(e=>console.warn('ground cover models not loaded',e));
+  chunkView.ensure(MAP.spawn.x,MAP.spawn.z,2);walkSource=chunkView;
+ }
+ return {
+  group,layout,trees,fade,addBroadleaves,eastbank,chunks:chunkView,ensure:(x,z,radius=1)=>chunkView?chunkView.ensure(x,z,radius):{built:0,ready:true,ms:0},
+  blocked:(x,z)=>colliders.blocked(x,z),
+  // GD5: the wind of this frame (a wind.js windSample result) for the cover shader; the tier follows applyQuality ('high' or 'low'); stats for tests and the debug hook.
+  setWind:w=>cover?.setWind(w),setCoverTier:t=>cover?.setTier(t),coverStats:()=>cover?cover.stats():null,coverView:cover,
+  // Hide or show a landmark prop and its colliders (the Hal egg pallet while the crates are on the truck).
+  setLandmarkVisible(id,v){const l=landmarks.find(e=>e.id===id);if(!l)return false;l.hidden=!v;l.mesh.visible=!!v;for(const b of l.boxes)b.active=!!v;return true},
+  // The height of a deck or platform under the point (a building's raised floor), or null on open ground.
+  floorAt(x,z){for(const l of landmarks){if(!l.floor)continue;const cos=Math.round(Math.cos(l.yaw)),sin=Math.round(Math.sin(l.yaw)),dx=x-l.x,dz=z-l.z,lx=dx*cos-dz*sin,lz=dx*sin+dz*cos;for(const f of [].concat(l.floor))if(lx>=f.x0&&lx<=f.x1&&lz>=f.z0&&lz<=f.z1)return f.y}return null},
+  // What is drawn: trees in the draw lists and the triangles they cost (for tests and the debug hook). setViewer places the view without a camera.
+  cullStats(){let drawn=0,total=0,triangles=0,all=0;for(const g of groups){const per=g.info.triangles;for(const e of g.entries){if(!e.off)total++;if(e.slot>=0)drawn++}triangles+=g.meshes[0].count*per;all+=g.entries.filter(e=>!e.off).length*per}return {radius:viewDistance,drawn,total,triangles,allTriangles:all}},
+  setPlotOverlay(on){plotOverlay.visible=!!on},plotOverlayVisible(){return plotOverlay.visible},
+  setViewer(x,z,fx=0,fz=-1){view.x=x;view.z=z;view.fx=fx;view.fz=fz;view.ready=true;rebuild()},
+  // Standing cuttable trees within range of a point.
+  cuttableNear(x,z,range=2.2){const out=[];for(const t of trees.values())if(t.standing&&Math.abs(t.x-x)<=range&&Math.abs(t.z-z)<=range&&Math.hypot(t.x-x,t.z-z)<=range)out.push(t);return out},
+  // Instantly reflect a saved felled tree (no animation): a stump.
+  setFelled(key){const t=trees.get(key);if(!t||!t.standing)return false;t.standing=false;t.stage='stump';t.collider.active=false;t.anim=null;hideTree(t);touch();return true},
+  // A felled tree growing back: 'stump' (nothing but the stump), 'sapling' (a small pine, still not choppable).
+  setStage(key,stage){
+   const t=trees.get(key);if(!t||t.standing||t.anim||t.stage===stage)return false;
+   t.stage=stage;
+   if(stage==='sapling'){t.entry.off=false;dirty=true;stumps.setMatrixAt(t.index,hidden);poseTree(t,{shrink:.3});stumps.setMatrixAt(t.index,m4.compose(v.set(t.x,heightAt(t.x,t.z),t.z),yaw.setFromAxisAngle(yAxis,t.rot),s.set(t.scale*.8,.5,t.scale*.8)))}
+   else if(stage==='cleared'){hideTree(t);stumps.setMatrixAt(t.index,hidden)} // the stump was dug out: bare ground
+   else hideTree(t);
+   touch();return true;
+  },
+  // A fully regrown tree: standing, solid and choppable again.
+  setRegrown(key){const t=trees.get(key);if(!t||t.standing)return false;t.standing=true;t.stage='mature';t.collider.active=true;t.anim=null;t.entry.off=false;dirty=true;stumps.setMatrixAt(t.index,hidden);poseTree(t);touch();return true},
+  // Visual feedback only; rules live in grid.js.
+  hitTree(key,from){const t=trees.get(key);if(!t?.standing)return;const d=Math.hypot(t.x-from.x,t.z-from.z)||1;t.anim={type:'shake',time:0,dirX:(t.x-from.x)/d,dirZ:(t.z-from.z)/d}},
+  // onDone runs once the trunk has finished falling (that is when the logs appear).
+  fellTree(key,from,onDone){const t=trees.get(key);if(!t?.standing)return;const d=Math.hypot(t.x-from.x,t.z-from.z)||1;
+   t.standing=false;t.stage='stump';t.collider.active=false;t.anim={type:'fall',time:0,dirX:(t.x-from.x)/d,dirZ:(t.z-from.z)/d,onDone}},
+  // A ring on the ground under the tree the player is about to chop (null hides it).
+  setTarget(tree){if(!tree){ring.visible=false;return}ring.visible=true;ring.position.set(tree.x,-.03,tree.z)},
+  // Logs lying on the ground: [{x,z,rot}], drawn as instances.
+  setLogs(list){
+   const n=Math.min(list.length,MAX_LOG_INSTANCES);
+   for(let i=0;i<n;i++)logMesh.setMatrixAt(i,m4.compose(v.set(list[i].x,heightAt(list[i].x,list[i].z)+.12+(this.floorAt(list[i].x,list[i].z)??0),list[i].z),q.setFromAxisAngle(yAxis,list[i].rot),s.set(1,1,1)));
+   logMesh.count=n;logMesh.instanceMatrix.needsUpdate=true;
+  },
+  // Grid overlay: show only in farm/forest. Returns the targeted cell (or null).
+  updateGrid(position,heading,show){
+   if(!show){gridLines.visible=cursor.visible=false;gridCell=null;return null}
+   const c=cellOf(position.x,position.z);
+   if(!gridCell||gridCell.ix!==c.ix||gridCell.iz!==c.iz){gridCell=c;rebuildGrid(c.ix,c.iz)}
+   gridLines.visible=true;
+   const t=cellOf(position.x+Math.sin(heading)*1.1,position.z+Math.cos(heading)*1.1),zone=gridZoneAt(t.ix,t.iz);
+   cursor.visible=!!zone;if(zone)cursor.position.set(t.ix,-.04,t.iz);
+   return zone?{...t,key:cellKey(t.ix,t.iz),zone}:null;
+  },
+  update(dt,camera,fadeTarget){
+   fade.update(camera,fadeTarget);refreshView(camera,fadeTarget);
+   if(fountainParts){townTime+=dt;fountainParts.jet.scale.y=1+.14*Math.sin(townTime*3.1);fountainParts.jet.position.y=3.15+.08*Math.sin(townTime*3.1);fountainParts.water.material.opacity=.86+.04*Math.sin(townTime*1.7)}
+   for(const l of landmarks)l.mesh.visible=!l.hidden&&Math.hypot(fadeTarget.x-l.x,fadeTarget.z-l.z)<viewDistance+l.radius; // far buildings are not drawn
+   eastbank.update(fadeTarget.x,fadeTarget.z); // far yards are not drawn
+   if(!edgeHills)edgeHills=group.getObjectByName('distant-hills');if(edgeHills)edgeHills.position.set(fadeTarget.x-Math.max(GROUND.x0,Math.min(GROUND.x1,fadeTarget.x)),0,fadeTarget.z-Math.max(GROUND.z0,Math.min(GROUND.z1,fadeTarget.z))); // F2: the horizon ring stays put over the old ground and slides with you beyond it (no jump), so it is still a horizon in the new world
+   chunkView?.update(fadeTarget.x,fadeTarget.z); // keeps the chunk ring loaded (2 ms budget a frame)
+   cover?.update(fadeTarget.x,fadeTarget.z,dt,group); // GD5: ground cover near the player, at most one build stage a frame
+   clock+=dt;if(ring.visible)ring.scale.setScalar(1+.07*Math.sin(clock*6));
+   let changed=false;
+   for(const t of trees.values()){
+    if(!t.anim)continue;changed=true;const a=t.anim;a.time+=dt;
+    if(a.type==='shake'){const k=Math.max(0,1-a.time/.4);poseTree(t,{shake:Math.sin(a.time*38)*.07*k,dirX:a.dirX,dirZ:a.dirZ});if(k===0)t.anim=null}
+    else{const fall=Math.min(1,a.time/1.1),eased=fall*fall;
+     poseTree(t,{fall:eased,dirX:a.dirX,dirZ:a.dirZ,shrink:a.time<1.25?1:Math.max(.001,1-(a.time-1.25)/.35)});
+     if(a.time>=1.6){t.anim=null;hideTree(t);a.onDone?.()}}
+   }
+   if(changed)touch();
+  }
+ };
+}
