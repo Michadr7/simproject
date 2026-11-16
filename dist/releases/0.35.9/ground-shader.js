@@ -19,7 +19,7 @@ export function groundDetail(kind,isHigh=high){
  if(!R.GD_DETAIL_KINDS.includes(kind))return o;
  const D=(n,v)=>'#define '+n+' '+(typeof v==='number'?num(v):v)+'\n',L=h=>vec3(hexToLinear(h));
  const seeds=D('GD_SEED_DETAIL',vec2(R.GD_SEED_DETAIL));
- if(kind==='grass'||kind==='farm'){
+ if(kind==='grass'||kind==='farm'||kind==='valley'){
   o.defs=seeds+D('GD_CLUMP_CELL',R.GD_CLUMP_CELL)+D('GD_CLUMP_DARK',R.GD_CLUMP_DARK)+D('GD_SEED_CLUMP',vec2(R.GD_SEED_CLUMP))+D('GD_GRASS_H',R.GD_GRASS_H)+(isHigh?D('GD_FLECK_CELL',R.GD_FLECK_CELL)+D('GD_FLECK_FILL',R.GD_FLECK_FILL)+D('GD_FLECK_GAIN',R.GD_FLECK_GAIN):'');
   o.color=' float gdCl=gdNoise(q/GD_CLUMP_CELL+GD_SEED_CLUMP);gdColor*=mix(GD_CLUMP_DARK,1.,smoothstep(.25,.6,gdCl));\n'+(isHigh?' {vec2 gdFc=q/GD_FLECK_CELL;float gdFh=gdHash(floor(gdFc)+GD_SEED_DETAIL);gdColor*=mix(1.,GD_FLECK_GAIN,step(1.-GD_FLECK_FILL,gdFh)*step(length(fract(gdFc)-.5),.3));}\n gdH=gdCl*GD_GRASS_H;\n':'');
   o.height=isHigh}

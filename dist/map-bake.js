@@ -1,13 +1,14 @@
 // Shared map bake (MM2, notes/minimap-design.md sections 2 and 6): one BASE image (2 m/px) plus 0.5 m detail tiles (128 m, LRU cache), baked in slices under a per-frame ms budget, with the relief shade grid built once. Every map (corner, full screen, phone) draws crops of it. DOM only through the injected doc.createElement('canvas'); the clock is injected.
 import {MAP} from './map-definition.js';
 import {terrain,MINIMAP_COLOUR} from './terrain.js';
+import {maskTile,chunkIndex,CHUNK} from './chunks.js';
 import {propInfo} from './props.js';
 import {heightAt} from './height.js';
 import {drawWaterLayer} from './water-chunks.js';
 import {BASE_MPP,TILE_SIZE,TILE_MPP,TILE_PX,TILE_GUTTER} from './map-view.js';
-// The area that is baked. Today's map view (530 x 440 m); MAP.world (1500 x 1800 m) is the planned whole world: pass it as `bounds` when the terrain mask grows to cover it (the BASE then costs about 12x more, see the note's measured table).
-export const BAKE_BOUNDS=MAP.minimap.view;
-export const BAKE_BUDGET_MS=3,TILE_CACHE=24,TILE_CACHE_FULL=32,SHADE_STEP=4,UNIT_PX=4096,TILE_IMG=TILE_PX+2*TILE_GUTTER;
+// The area that is baked (MM2b): the whole world, MAP.world (1500 x 1800 m, x -450..1050, z -1200..600). Inside the old ground (560 x 500 m) the detailed whole-map mask is used; the wilds use the 100 m chunk masks (chunks.js maskTile, the same ones the streaming world paints), built on demand.
+export const BAKE_BOUNDS=MAP.world||MAP.minimap.view;
+export const BAKE_BUDGET_MS=3,TILE_CACHE=24,TILE_CACHE_FULL=32,SHADE_STEP=4,UNIT_PX=4096,TILE_IMG=TILE_PX+2*TILE_GUTTER,MASK_CACHE=32,ROCK_FROM=.15,ROCK_TO=.4,ROCK_RGB=[128,124,112];
 const clamp=(v,a,b)=>v<a?a:v>b?b:v;
 const hit=(a,b,m=0)=>a.x0<b.x1+m&&a.x1>b.x0-m&&a.z0<b.z1+m&&a.z1>b.z0-m;
 // Relief shading (0.34): a brightness for a world point from the ground's height: slopes facing the north-west light are brighter, the others darker, higher ground a little lighter and the river valley darker. 1 on flat ground.
@@ -15,30 +16,53 @@ const shade=(h,gx,gz)=>h===0&&gx===0&&gz===0?1:Math.max(.55,Math.min(1.5,1+(gx+g
 export function relief(x,z){const d=1.5,h=heightAt(x,z);if(h===0&&heightAt(x+d,z+d)===0&&heightAt(x-d,z-d)===0)return 1;return shade(h,(heightAt(x+d,z)-heightAt(x-d,z))/(2*d),(heightAt(x,z+d)-heightAt(x,z-d))/(2*d))}
 // The shade is worked out once on a coarse grid (step metres) and sampled bilinearly per pixel. buildRows(n) does n grid rows of the work (heights first, then shades) so it can be sliced; at() clamps at the grid edge.
 export function makeShadeGrid(b,hf=heightAt,step=SHADE_STEP){
- const gw=Math.ceil((b.x1-b.x0)/step)+1,gh=Math.ceil((b.z1-b.z0)/step)+1,hs=new Float32Array(gw*gh),out=new Float32Array(gw*gh);
+ const gw=Math.ceil((b.x1-b.x0)/step)+1,gh=Math.ceil((b.z1-b.z0)/step)+1,hs=new Float32Array(gw*gh),out=new Float32Array(gw*gh),rk=new Float32Array(gw*gh);
  const hAt=(i,j)=>hs[clamp(j,0,gh-1)*gw+clamp(i,0,gw-1)];let phase=0,row=0;
  return {gw,gh,get ready(){return phase===2},
   buildRows(n){
    while(n-->0&&phase<2){
     if(phase===0)for(let i=0;i<gw;i++)hs[row*gw+i]=hf(b.x0+i*step,b.z0+row*step);
-    else for(let i=0;i<gw;i++)out[row*gw+i]=shade(hs[row*gw+i],(hAt(i+1,row)-hAt(i-1,row))/(2*step),(hAt(i,row+1)-hAt(i,row-1))/(2*step));
+    else for(let i=0;i<gw;i++){const gx=(hAt(i+1,row)-hAt(i-1,row))/(2*step),gz=(hAt(i,row+1)-hAt(i,row-1))/(2*step);out[row*gw+i]=shade(hs[row*gw+i],gx,gz);rk[row*gw+i]=clamp((Math.hypot(gx,gz)-ROCK_FROM)/(ROCK_TO-ROCK_FROM),0,1)}
     if(++row>=gh){row=0;phase++}}
    return phase===2},
   at(x,z){const fx=clamp((x-b.x0)/step,0,gw-1.001),fz=clamp((z-b.z0)/step,0,gh-1.001),i=Math.floor(fx),j=Math.floor(fz),u=fx-i,v=fz-j,o=j*gw+i;
-   return (out[o]*(1-u)+out[o+1]*u)*(1-v)+(out[o+gw]*(1-u)+out[o+gw+1]*u)*v}};
+   return (out[o]*(1-u)+out[o+1]*u)*(1-v)+(out[o+gw]*(1-u)+out[o+gw+1]*u)*v},
+  // how much bare rock shows on open ground at a point: 0 on flat land, 1 on slopes of ROCK_TO and steeper (bilinear from the same grid)
+  rock(x,z){const fx=clamp((x-b.x0)/step,0,gw-1.001),fz=clamp((z-b.z0)/step,0,gh-1.001),i=Math.floor(fx),j=Math.floor(fz),u=fx-i,v=fz-j,o=j*gw+i;
+   return (rk[o]*(1-u)+rk[o+1]*u)*(1-v)+(rk[o+gw]*(1-u)+rk[o+gw+1]*u)*v}};
 }
-// Ground colours: each pixel takes its cell's surface from the terrain mask, or its zone's colour on walkable grass, or meadow (as the old minimap did).
-export function makeGround(map=MAP,t=terrain()){
+// The ground the bake reads (MM2b): inside the old ground the whole-map mask (`base`, 0.5 m cells), outside it the chunk masks (maskFn(i,j,map), 100 m, built on demand and kept in a small LRU). sample(x,z) packs a cell as surface | walk << 8 | zone << 9, or -1 off the world. prepare(x0,x1,z0,z1) builds at most ONE missing chunk mask and says whether more are missing, so the baker can spend one work unit per build (a build takes 0.7 ms on average, 9 ms at most in Node).
+export function makeWorldMask(map=MAP,base=terrain(),maskFn=maskTile,cap=MASK_CACHE){
+ const g=map.ground,cache=new Map(),pack=(m,c)=>m.surface[c]|m.walk[c]<<8|m.zone[c]<<9,key=(i,j)=>j*4096+i;
+ let li=NaN,lj=NaN,lm=null;const stats={built:0};
+ const get=(i,j,build)=>{const k=key(i,j);let m=cache.get(k);if(m!==undefined){cache.delete(k);cache.set(k,m);return m}if(!build)return undefined;m=maskFn(i,j,map);stats.built++;cache.set(k,m);if(cache.size>cap)cache.delete(cache.keys().next().value);return m};
+ return {base,stats,get size(){return cache.size},
+  sample(x,z){
+   if(x>=g.x0&&x<g.x1&&z>=g.z0&&z<g.z1){const c=base.index(x,z);if(c>=0)return pack(base,c)}
+   const i=Math.floor((x-(map.world||FRAME_OFFSET).x0)/CHUNK),j=Math.floor((z-(map.world||FRAME_OFFSET).z0)/CHUNK);
+   if(i!==li||j!==lj){lm=get(i,j,true);li=i;lj=j}
+   if(!lm)return -1;const c=lm.index(x,z);return c<0?-1:pack(lm,c)},
+  prepare(x0,x1,z0,z1){
+   const W=map.world||FRAME_OFFSET,i0=Math.floor((x0-W.x0)/CHUNK),i1=Math.floor((x1-W.x0)/CHUNK),j0=Math.floor((z0-W.z0)/CHUNK),j1=Math.floor((z1-W.z0)/CHUNK);let built=false,more=false;
+   for(let j=j0;j<=j1;j++)for(let i=i0;i<=i1;i++){if(get(i,j,false)!==undefined)continue;if(built){more=true;continue}get(i,j,true);built=true}
+   return more}};
+}
+const FRAME_OFFSET={x0:-450,z0:-1200};
+// Ground colours: each pixel takes its cell's surface from the mask, or its zone's colour on walkable grass, or meadow (as the old minimap did). Open meadow on a steep slope shows bare rock (the `rock` callback of the shade grid).
+export function makeGround(map=MAP,t=terrain(),{world=true,maskFn=maskTile}={}){
  const rgb=c=>[parseInt(c.slice(1,3),16),parseInt(c.slice(3,5),16),parseInt(c.slice(5,7),16)],surf=[];
  for(const [k,c] of Object.entries(MINIMAP_COLOUR))surf[+k]=rgb(c);
- return {t,surf,zones:map.zones.map(z=>rgb(z.color)),meadow:rgb('#3d5a3c')}}
-// Paint rows y0..y1 of an image w px wide whose top-left is world (ox,oz) at mpp metres per pixel, into RGBA data (a Uint8ClampedArray).
-export function paintRows(data,w,y0,y1,ox,oz,mpp,G,shadeAt){
- const {t,surf,zones,meadow}=G;
+ return {t:world&&map.world?makeWorldMask(map,t,maskFn):t,surf,zones:map.zones.map(z=>rgb(z.color)),meadow:rgb('#3d5a3c')}}
+// Paint rows y0..y1 of an image w px wide whose top-left is world (ox,oz) at mpp metres per pixel, into RGBA data (a Uint8ClampedArray). rockAt(x,z) is optional.
+export function paintRows(data,w,y0,y1,ox,oz,mpp,G,shadeAt,rockAt=null){
+ const {t,surf,zones,meadow}=G,sampler=t.sample;
  for(let y=y0;y<y1;y++){const wz=oz+(y+.5)*mpp;
-  for(let x=0;x<w;x++){const wx=ox+(x+.5)*mpp,c=t.index(wx,wz);let col=meadow;
-   if(c>=0){const s=surf[t.surface[c]];if(s)col=s;else if(t.walk[c]&&t.zone[c])col=zones[t.zone[c]-1]}
-   const sh=shadeAt(wx,wz),o=(y*w+x)*4;data[o]=col[0]*sh;data[o+1]=col[1]*sh;data[o+2]=col[2]*sh;data[o+3]=255}}}
+  for(let x=0;x<w;x++){const wx=ox+(x+.5)*mpp;let col=meadow,open=true;
+   if(sampler){const v=t.sample(wx,wz);if(v>=0){const s=surf[v&255];if(s){col=s;open=false}else if(v&256&&v>>9){col=zones[(v>>9)-1];open=false}}}
+   else{const c=t.index(wx,wz);if(c>=0){const s=surf[t.surface[c]];if(s){col=s;open=false}else if(t.walk[c]&&t.zone[c]){col=zones[t.zone[c]-1];open=false}}}
+   let r=col[0],g=col[1],b=col[2];
+   if(open&&rockAt){const k=rockAt(wx,wz);if(k>0){r+=(ROCK_RGB[0]-r)*k;g+=(ROCK_RGB[1]-g)*k;b+=(ROCK_RGB[2]-b)*k}}
+   const sh=shadeAt(wx,wz),o=(y*w+x)*4;data[o]=r*sh;data[o+1]=g*sh;data[o+2]=b*sh;data[o+3]=255}}}
 // Footprints of the landmarks (houses, shops, barns, the sawmill), turned to face the way they stand, as polygons with a bounding box.
 export function landmarkPolys(map=MAP){
  const out=[];
@@ -83,7 +107,8 @@ export function createBake({doc,bounds=BAKE_BOUNDS,now=()=>performance.now(),bui
   if(j.row<j.h){
    if(j.row===0)j.img=ctx.createImageData?.(j.w,j.h)||null;
    const n=Math.max(1,Math.ceil(UNIT_PX/j.w)),y1=j.img?.data?Math.min(j.h,j.row+n):j.h;
-   if(j.img?.data){paintRows(j.img.data,j.w,j.row,y1,j.box.x0,j.box.z0,j.mpp,G,grid.at);stats.pixels+=(y1-j.row)*j.w}
+   if(G.t.prepare&&j.img?.data&&G.t.prepare(j.box.x0,j.box.x0+j.w*j.mpp,j.box.z0+j.row*j.mpp,j.box.z0+y1*j.mpp))return; // a chunk mask is built per unit, so one unit never builds more than one
+   if(j.img?.data){paintRows(j.img.data,j.w,j.row,y1,j.box.x0,j.box.z0,j.mpp,G,grid.at,grid.rock);stats.pixels+=(y1-j.row)*j.w}
    j.row=y1;if(j.row>=j.h&&j.img?.data)ctx.putImageData(j.img,0,0);return}
   if(j.phase<phases.length){phases[j.phase++](ctx,j.box,j.mpp,j.box);return}
   commit(j)}
@@ -99,7 +124,7 @@ export function createBake({doc,bounds=BAKE_BOUNDS,now=()=>performance.now(),bui
   const i0=clamp(Math.floor((box.x0-bounds.x0)/BASE_MPP),0,bw),i1=clamp(Math.ceil((box.x1-bounds.x0)/BASE_MPP),0,bw),j0=clamp(Math.floor((box.z0-bounds.z0)/BASE_MPP),0,bh),j1=clamp(Math.ceil((box.z1-bounds.z0)/BASE_MPP),0,bh),w=i1-i0,h=j1-j0;
   if(w<=0||h<=0)return;
   const ctx=base.getContext('2d'),region={x0:bounds.x0+i0*BASE_MPP,x1:bounds.x0+i1*BASE_MPP,z0:bounds.z0+j0*BASE_MPP,z1:bounds.z0+j1*BASE_MPP},img=ctx.createImageData?.(w,h);
-  if(img?.data){paintRows(img.data,w,0,h,region.x0,region.z0,BASE_MPP,G,grid.at);ctx.putImageData(img,i0,j0)}
+  if(img?.data){paintRows(img.data,w,0,h,region.x0,region.z0,BASE_MPP,G,grid.at,grid.rock);ctx.putImageData(img,i0,j0)}
   ctx.save();ctx.beginPath();ctx.rect(i0,j0,w,h);ctx.clip();for(const p of phases)p(ctx,bounds,BASE_MPP,region);ctx.restore();version++}
  return {
   base,bounds,stats,get baseReady(){return baseReady},get version(){return version},get pending(){return !!job||needBase||queue.length>0},get cacheSize(){return cache.size},cacheKeys:()=>[...cache.keys()],

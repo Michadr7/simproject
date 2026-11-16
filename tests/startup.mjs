@@ -148,7 +148,7 @@ for(const saved of [false,true]){
  assert.match(ids.get('direction').style.transform,/^rotate\(/,'the arrow is the gig arrow (it used to be overwritten by the market beacon)');assert.equal(globalThis.__renderScene.getObjectByName('objective-beacon').visible,false,'no market beacon during a gig');
  ids.get('objectiveToggle').click();assert(ids.get('objectiveDetails').hidden);assert.equal(ids.get('objectiveToggle')['aria-expanded'],'false');ids.get('objectiveToggle').click();assert(!ids.get('objectiveDetails').hidden);
  phoneFrame();assert.equal(phoneState.progress.activeJob.stage,'return');assert.equal(ids.get('gigStepTask').textContent,'☑');
- Object.assign(phoneState.me.position,{x:phoneState.progress.activeJob.returnLocation.x,y:.165,z:phoneState.progress.activeJob.returnLocation.z});key('KeyE');phoneFrame();
+ Object.assign(phoneState.me.position,{x:phoneState.progress.activeJob.returnLocation.x,y:.165,z:phoneState.progress.activeJob.returnLocation.z});key('KeyE');phoneFrame();if(!ids.get('dialog').hidden){ids.get('jobAction').click();phoneFrame()} // a parcel opens the door dialog (G2): the first greeting finishes it
  assert(phoneState.progress.cash>beforePay,'the gig paid');assert.equal(phoneState.progress.activeJob,null);assert(!gigMarker.visible);
  if(saved){Object.assign(phoneState.me.position,{x:36,y:.165,z:-6.3});key('KeyE');phoneFrame()}
  // Exercise frame-level throttling, final stop delivery, mesh sync and remote events.

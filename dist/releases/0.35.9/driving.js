@@ -33,6 +33,12 @@ function fillerMarker(fuel){
 }
 const SOLID={apply:material=>material}; // no sightline fade for vehicles
 export const STEER_ANGLE=.5; // radians of wheel turn at full lock (visual)
+// A5 (notes/atv-handling-design.md): the rider seat for models that carry anchors but not the shortbed's own seats/grip (the ATV now; the tractors, FV2, by adding a RIDER_GRIPS entry for their class group). The seat is the model's anchor_driver_seat (hip joint a little under the cushion top: `sit`), the hands go to anchor_hands_L/R (rotated about the node `pivot` with the steering, since the handlebar is merged into the body), `lean` tips the spine forward, `jiggle` is the rider's bounce in metres at top speed, `bar` the handlebar's turn at full lock.
+export const RIDER_GRIPS=Object.freeze({atv:Object.freeze({hips:0,sit:.03,lean:.2,jiggle:.012,bar:.5,pivot:'handlebar'}),tractor:Object.freeze({hips:0,sit:.03,lean:.15,jiggle:.015,bar:.8,pivot:'steering_wheel'})}); // FV2: both tractors (group 'tractor') use the model's anchor_driver_seat/anchor_hands_L/R; the steering wheel is merged into the body (no own mesh), so the hands swing about the steering_wheel node by steer*.8 rad (the R75 wheel is .58 m ahead of the hips: a bigger swing would overreach) instead
+export const riderSeats=(anchors,grip)=>anchors?.anchor_driver_seat&&grip?{driver:[anchors.anchor_driver_seat[0],anchors.anchor_driver_seat[1]-grip.sit,anchors.anchor_driver_seat[2]]}:null;
+// A hand's target in the player's own frame (origin: the feet, hipsHeight under the hips; the same frame as the shortbed's steering wheel targets): the anchor turned about the handlebar pivot by the steering.
+export function riderHand(hand,pivot,steer,grip,seat,hipsHeight){const a=steer*grip.bar,c=Math.cos(a),s=Math.sin(a),dx=hand[0]-pivot[0],dz=hand[2]-pivot[2];return {x:pivot[0]+dx*c+dz*s-seat[0],y:hand[1]-(seat[1]-hipsHeight),z:pivot[2]-dx*s+dz*c-(seat[2]+grip.hips)}}
+export const riderJiggle=(speed,top,t,grip)=>grip.jiggle*Math.min(1,Math.abs(speed)/top)*(Math.sin(t*23)*.6+Math.sin(t*37.7)*.4); // frame-rate independent: a function of the clock
 
 // scene: the world's scene; surface(x, z): terrain surface id; footing(x, z): ground height under a point; baseBlocked(x, z): the game's blocked() WITHOUT the vehicles
 // (so a vehicle never collides with itself); saved: progress.vehicles (already normalized).
@@ -42,7 +48,7 @@ export function createDriving({scene,surface,footing,baseBlocked,saved=[]}){
   const cls=CLASSES[spec.model],mesh=createProp(spec.model,SOLID);mesh.name='vehicle-'+spec.id;mesh.rotation.order='YXZ';scene.add(mesh);
   const marker=spec.fuel?fillerMarker(spec.fuel):null;if(marker)mesh.add(marker);
   const f={spec,cls,mesh,marker,wheels:mesh.userData.wheels||[],state:freshVehicle(spec.home),y:footing(spec.home.x,spec.home.z),pitch:0,roll:0,spin:0,lastSpeed:0,present:true,display:!!display,colour:null,fuelMgal:spec.fuel?spec.fuel.tankMgal:0,burn:0,cond:1000,hit:noHit(),crash:freshCrashState(),engine:freshEngine(1000,0),pullSide:pullSide(spec.id),bog:freshBog()}; // cond: 0..1000 (damage.js, saved when below 1000); crash: the debounce window; engine: run / crank / off
-  f.colour=colour||defaultColour(spec.model);applyPaint(mesh,spec.model,f.colour);
+  {const g=RIDER_GRIPS[cls.group],rs=!mesh.userData.seats&&riderSeats(mesh.userData.anchors,g);if(rs){mesh.userData.seats=rs;mesh.userData.grip=g;mesh.userData.riderHands=true}if(cls.steerMax)for(const w of f.wheels)w.max=cls.steerMax} f.colour=colour||defaultColour(spec.model);applyPaint(mesh,spec.model,f.colour);
   f.cargo=null;f.gate=0;f.view=createCargoView(spec.model);mesh.add(f.view.group); // cargo (cargo.js): what lies on the bed, drawn on it
   return f;
  };
@@ -111,7 +117,9 @@ const tilt=f=>{const s=f.state,sy=Math.sin(s.yaw),cy=Math.cos(s.yaw),at=(lx,lz)=
   // Where the occupant's hips are (world x, y, z) and the heading, for a vehicle that shows you seated (the shortbed: its seats anchor); null otherwise.
   seatedAt(){const s=driven?.mesh.userData.seats?.[side];if(!s)return null;driven.mesh.updateMatrixWorld();seatVec.set(s[0],s[1],s[2]+(driven.mesh.userData.grip?.hips??.2)).applyMatrix4(driven.mesh.matrixWorld);return {x:seatVec.x,y:seatVec.y,z:seatVec.z,yaw:driven.state.yaw,driver:side==='driver'}},
   // DR1: where the seated occupant's feet go and how they are turned (the whole body tilts with the cab's pitch and roll, hips on the seat anchor; hipsDrop: hips to feet in metres): {x, y, z, rx, ry, rz} or null.
-  seatPose(hipsDrop){const s=this.seatedAt();if(!s)return null;const m=driven.mesh;seatVec.set(0,-1,0).applyQuaternion(m.quaternion);return {x:s.x+seatVec.x*hipsDrop,y:s.y+seatVec.y*hipsDrop,z:s.z+seatVec.z*hipsDrop,rx:m.rotation.x,ry:m.rotation.y,rz:m.rotation.z}},
+  seatPose(hipsDrop){const s=this.seatedAt();if(!s)return null;const m=driven.mesh,gr=m.userData.grip,jy=gr?.jiggle?riderJiggle(driven.state.speed,driven.cls.top,pulse,gr):0;seatVec.set(0,-1,0).applyQuaternion(m.quaternion);return {x:s.x+seatVec.x*hipsDrop,y:s.y+seatVec.y*hipsDrop+jy,z:s.z+seatVec.z*hipsDrop,rx:m.rotation.x,ry:m.rotation.y,rz:m.rotation.z}},
+  // A5: hand targets (player frame) for a rider astride a vehicle with a merged handlebar: [['R',{x,y,z}],['L',{x,y,z}]] or null.
+  riderHands(hipsHeight){const m=driven?.mesh.userData;if(!m?.riderHands||side!=='driver')return null;const an=m.anchors,g=m.grip,pv=m.nodes[g.pivot],st=driven.state.steer;return [['R',riderHand(an.anchor_hands_R,pv,st,g,m.seats.driver,hipsHeight)],['L',riderHand(an.anchor_hands_L,pv,st,g,m.seats.driver,hipsHeight)]]},
   // Get out: your own door, else the other side, behind, in front (`free(x, z)` is the game's blocked() inverted). Returns the point, or null (the caller then uses its safe-spot search).
   leave(free){if(!driven)return null;const f=driven,p=exitPoint(f.state,f.cls,free,side);(f.doorHold=f.doorHold||{driver:0,passenger:0})[side]=.9;driven=null;f.state.speed=0;f.state.steer=0;return p},
   // One slice of driving (dt <= 1/30 s). input: {throttle, steer, brake}; people: [{x, z, r}] pedestrians. A passenger does not steer: the vehicle stands still.

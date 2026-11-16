@@ -32,11 +32,13 @@ const dug=new WeakMap();
 const compileMap=map=>{let c=dug.get(map);if(!c){const rivers=(map.water?.rivers||[]).filter(r=>!riverIsLegacy(r)&&r.points?.length>=2).map(river=>({river,reach:Math.max(...river.points.map(p=>p.w))/2+riverBank(river)+RIVER_SLOPE}));
  c={legacy:map===MAP?RIVERS:legacyRivers(map),rivers,lakes:(map.water?.lakes||[]).map(l=>({l,x0:Math.min(...l.outline.map(p=>p[0]))-LAKE_BANK,x1:Math.max(...l.outline.map(p=>p[0]))+LAKE_BANK,z0:Math.min(...l.outline.map(p=>p[1]))-LAKE_BANK,z1:Math.max(...l.outline.map(p=>p[1]))+LAKE_BANK})),sea:map.water?.sea?.shoreline?.length>=2?map.water.sea:null};
  c.any=!!(rivers.length||c.lakes.length||c.sea);dug.set(map,c)}return c};
+// RV1 (user 2026-11-15, the saw-tooth water edge): the bank no longer leaves the waterline flat. BANK_LIFT is the share of the bank that rises in a straight line (the rest is the old cosine), so the ground has a real slope where it meets the water (0.115 on the old reach) and a 1 m mesh puts the waterline within about 0.2 m of the true one; SHOULDER_LIFT does the same softly where the bank meets the shoulder.
+export const BANK_LIFT=.5,SHOULDER_LIFT=.2;
 function riverBed(map,R,x,z){
  const q=nearestOnRiver(R.river,x,z,R.reach);if(!q)return 0;const s=q.s,half=s.w/2,bank=riverBank(R.river),d=q.d,hs=Math.min(0,Math.max(s.y,-RIVER_SHOULDER));
  if(d<=half)return s.y-riverDepthAt(map,R.river,q,x,z);
- if(d<=half+bank)return hs+(s.y-hs)*(1+Math.cos(Math.PI*(d-half)/bank))/2;
- if(d<half+bank+RIVER_SLOPE)return hs*(1+Math.cos(Math.PI*(d-half-bank)/RIVER_SLOPE))/2;
+ if(d<=half+bank){const u=(d-half)/bank;return s.y+(hs-s.y)*(BANK_LIFT*u+(1-BANK_LIFT)*(1-Math.cos(Math.PI*u))/2)};
+ if(d<half+bank+RIVER_SLOPE){const v=(d-half-bank)/RIVER_SLOPE;return hs*(1-(SHOULDER_LIFT*v+(1-SHOULDER_LIFT)*(1-Math.cos(Math.PI*v))/2))}
  return 0;
 }
 export function valleyIn(map,x,z){

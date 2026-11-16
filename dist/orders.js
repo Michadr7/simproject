@@ -9,7 +9,7 @@ import {levelOf} from './skills.js';
 import {normalizeProperties} from './ownership.js';
 import {MAP} from './map-definition.js';
 import {doorOf,propertyById} from './properties.js';
-import {validColour,colourOf,coloursOf} from './paint.js';
+import {validColour,colourOf,coloursOf,defaultColour} from './paint.js';
 import {weekday} from './housing.js';
 import {formatClock} from './routine.js';
 
@@ -144,7 +144,9 @@ const slotsOf=h=>h.kind==='apartment'?VEHICLE_SLOTS.apartment:VEHICLE_SLOTS[MAP.
 export const vehicleCapacity=p=>homesHeld(p).reduce((n,h)=>n+slotsOf(h),0);
 export const ownedVehicles=p=>p.vehicles||[];
 // The vehicles you own plus the ones on the way: both take a place.
-export const vehicleCount=p=>ownedVehicles(p).length+normalizeOrders(p.orders).queue.filter(q=>q.vehicle).length;
+// G3: the story's loan truck (starter.js: progress.starter.loanUid while step 4..9) is Hal's, not yours: it takes no place at home, so the gift at the end needs room only when the story finishes.
+export const loanUidOf=p=>{const s=p?.starter;return s&&!s.done&&s.step>=4&&s.step<=9&&s.loanUid?s.loanUid:null};
+export const vehicleCount=p=>ownedVehicles(p).filter(v=>v.uid!==loanUidOf(p)).length+normalizeOrders(p.orders).queue.filter(q=>q.vehicle).length;
 const noRoom=p=>vehicleCount(p)>=vehicleCapacity(p)?`You have no room for another vehicle (${vehicleCount(p)} of ${vehicleCapacity(p)}). Rent or buy another home first: an apartment holds 1, a small house 1, a medium house 2, a large house 3.`:null;
 export const vehicleName=model=>MAP.vehicles.find(v=>v.model===model)?.name||model;
 export const vehicleLabel=(model,colour)=>`${colourOf(model,colour)?.name||''} ${vehicleName(model)}`.trim();
@@ -182,6 +184,15 @@ export function orderVehicle(p,model,colour,home){
  const total=price+VEHICLE_ORDER.fee;if(p.cash<total)return fail(`You need ${cash(total)}: ${cash(price)} for the vehicle and ${cash(VEHICLE_ORDER.fee)} delivery.`);
  const now=nowMinutes(p),entry={id:orders.nextId,home:target,items:[],vehicle:model,colour,subtotal:price,fee:VEHICLE_ORDER.fee,placedAt:now,arrivesAt:now+VEHICLE_ORDER.delay};
  return {state:{...p,cash:p.cash-total,orders:{...orders,nextId:orders.nextId+1,queue:[...orders.queue,entry],stock:sold(orders,p,model,colour)}},order:entry,message:`Ordered the ${vehicleLabel(model,colour)}: ${cash(total)} with ${cash(VEHICLE_ORDER.fee)} delivery. It arrives ${arrivalText(entry.arrivesAt)} (${etaText(entry.arrivesAt,now)}) at ${homesHeld(p).find(h=>h.id===target).name}.`};
+}
+// G3 grantVehicle: a vehicle that does not come from the dealership (the story's loan truck, Hal's sale): {loan:true} needs no room and no payment; otherwise the price is paid and a place at home is needed.
+// pose = {x,z,yaw}. Returns {state, vehicle, message} or {state, error}. The stock is not touched.
+export function grantVehicle(p,model,colour,pose,{price=0,loan=false,fuelMgal=null}={}){
+ const orders=normalizeOrders(p.orders),fail=error=>({state:p,error}),slot=MAP.vehicles.find(v=>v.model===model);
+ if(!slot||!pose||![pose.x,pose.z,pose.yaw].every(Number.isFinite))return fail('That vehicle cannot be given.');
+ if(!loan){const bad=noRoom(p);if(bad)return fail(bad);if(p.cash<price)return fail(`You need ${cash(price)} to buy the ${vehicleName(model)}.`)}
+ const c=validColour(model,colour)?colour:defaultColour(model),entry={uid:'v'+orders.nextVehicle,model,colour:c,x:pose.x,z:pose.z,yaw:pose.yaw,fuelMgal:fuelMgal===null?slot.fuel.tankMgal:Math.max(0,Math.min(slot.fuel.tankMgal,Math.floor(fuelMgal)))};
+ return {state:{...p,cash:p.cash-(loan?0:price),vehicles:[...ownedVehicles(p),entry],orders:{...orders,nextVehicle:orders.nextVehicle+1}},vehicle:entry,message:loan?`Hal lends you the ${vehicleLabel(model,c)}.`:`You bought the ${vehicleLabel(model,c)} for ${cash(price)}. The keys are yours.`};
 }
 // Where a delivered vehicle is aimed: a few metres in front of the home's door, facing along the street.
 export function parkingAim(home){

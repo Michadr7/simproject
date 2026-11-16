@@ -2,14 +2,15 @@
 import assert from 'node:assert/strict';
 import {MAP} from '../dist/map-definition.js';
 import {terrain,MINIMAP_COLOUR} from '../dist/terrain.js';
-import {createBake,makeGround,makeShadeGrid,paintRows,landmarkPolys,BAKE_BOUNDS,BAKE_BUDGET_MS,UNIT_PX,TILE_IMG} from '../dist/map-bake.js';
+import {createBake,makeGround,makeWorldMask,makeShadeGrid,paintRows,landmarkPolys,BAKE_BOUNDS,BAKE_BUDGET_MS,UNIT_PX,TILE_IMG,TILE_CACHE_FULL,MASK_CACHE,ROCK_RGB} from '../dist/map-bake.js';
+import {maskTile} from '../dist/chunks.js';
 import {tilesFor,BASE_MPP,TILE_PX} from '../dist/map-view.js';
 
-const V=BAKE_BOUNDS,clock={t:0},fakeDoc=()=>{const log={created:0,put:[],draw:0};
+const V=MAP.minimap.view,WORLD=MAP.world,clock={t:0},fakeDoc=()=>{const log={created:0,put:[],draw:0};
  const doc={log,createElement(){log.created++;const c={width:0,height:0,getContext(){return c.ctx||(c.ctx=new Proxy({createImageData:(w,h)=>({width:w,height:h,data:new Uint8ClampedArray(w*h*4)}),putImageData:(i,x,y)=>log.put.push([x,y,i.width,i.height]),drawImage(){log.draw++}},{get:(o,k)=>o[k]??(()=>{}),set:()=>true}))}};return c}};return doc};
 // a fake ground that charges the clock per pixel (index() is called once per pixel)
 const PX_MS=.0005,ground=()=>({t:{index(){clock.t+=PX_MS;return -1},surface:[],walk:[],zone:[]},surf:[],zones:[],meadow:[60,90,60]});
-const flat=()=>0,mk=(extra={})=>{clock.t=0;const doc=fakeDoc();return {doc,bake:createBake({doc,now:()=>clock.t,ground:ground(),heightFn:flat,trees:()=>[],buildings:[],...extra})}};
+const flat=()=>0,mk=(extra={})=>{clock.t=0;const doc=fakeDoc();return {doc,bake:createBake({doc,bounds:V,now:()=>clock.t,ground:ground(),heightFn:flat,trees:()=>[],buildings:[],...extra})}};
 const drain=(bake,n=1e5)=>{for(let i=0;i<n&&bake.pending;i++){clock.t+=2;bake.step()}assert(!bake.pending,'drained')};
 
 // 1. real ground: a road pixel is asphalt (times shade), grass is a zone colour, off-mask is meadow
@@ -73,9 +74,40 @@ const drain=(bake,n=1e5)=>{for(let i=0;i<n&&bake.pending;i++){clock.t+=2;bake.st
  b2.invalidateAt(one[0].x0+10,one[0].z0+10,3);drain(b2);assert.equal(b2.tile(key).dirty,true,'changed while baking: baked again on the next want');
  b2.invalidateAll();assert(b2.pending,'invalidateAll rebakes the BASE');drain(b2);
 }
-// 8. the real map: one tile and the BASE bake with real terrain, no NaN, opaque
+// 8. the real map (default bounds = the whole world): the BASE bakes with real terrain, no NaN, opaque
 {clock.t=0;const doc=fakeDoc(),bake=createBake({doc,now:()=>performance.now(),buildings:MAP.buildings.map(b=>({x:b.x,z:b.z,hx:b.w/2,hz:b.d/2})),trees:()=>[{x:0,z:60,standing:true}]});
  const t0=performance.now();let n=0;while(bake.pending&&n++<1e5){bake.step(1e9)}assert(!bake.pending);assert(bake.baseReady);const ms=performance.now()-t0;
  assert(ms<2000,'the real BASE bakes fast in Node: '+ms.toFixed(0)+' ms');
 }
-console.log('PASS map-bake: shade grid, ground colours, rotated footprints, sliced budget, BASE first, LRU, invalidateAt, shared bake');
+// 9. MM2b: the whole world. Default bounds are MAP.world; inside the old ground the whole-map mask is used, outside it the chunk masks; wilds are coloured by surface, slope and sea
+{assert.deepEqual({...BAKE_BOUNDS},{...WORLD});assert.deepEqual([WORLD.x0,WORLD.z0,WORLD.x1,WORLD.z1],[-450,-1200,1050,600]);assert.equal(TILE_CACHE_FULL,32);
+ const T=terrain(),built=[],G=makeGround(MAP,T,{maskFn:(i,j,m)=>{built.push(i+','+j);return maskTile(i,j,m)}}),W=G.t;
+ // inside the old ground: the same cell as the whole-map mask, and no chunk mask is built
+ const oak=MAP.roads.nodes.oakWest,c=T.index(oak.x,oak.z),v=W.sample(oak.x,oak.z);assert.equal(v&255,T.surface[c]);assert.equal(v>>9,T.zone[c]);assert.equal(built.length,0,'old ground: no chunk mask');
+ // outside it: a chunk mask is built once, then reused; off the world is -1
+ const wx=700,wz=-900;assert(W.sample(wx,wz)>=0);W.sample(wx+1,wz+1);assert.equal(built.length,1,'one chunk mask, reused');assert.equal(W.sample(WORLD.x0-50,WORLD.z0-50),-1,'off the world');
+ // prepare() builds at most one missing mask per call and says whether more are missing
+ const w2=makeWorldMask(MAP,T,(i,j,m)=>maskTile(i,j,m)),a=w2.prepare(600,850,-1000,-780);assert.equal(w2.size,1,'one built per call');assert(a,'more are missing');let k=0;while(w2.prepare(600,850,-1000,-780)&&k++<20);assert(w2.size>=6,'every chunk of the range is there: '+w2.size);assert(!w2.prepare(600,850,-1000,-780));
+ // cache cap
+ const w3=makeWorldMask(MAP,T,maskTile,4);for(let i=0;i<10;i++)w3.sample(WORLD.x0+i*100+50,WORLD.z0+50);assert.equal(w3.size,4,'the mask LRU keeps its cap');assert.equal(MASK_CACHE,32);
+ // pixels: the sea, a wild road and open meadow with rock on a steep hill
+ const px=(x,z,sh=()=>1,rock=null)=>{const d=new Uint8ClampedArray(4);paintRows(d,1,0,1,x-1,z-1,2,G,sh,rock);return [...d]};
+ const sea=MAP.water.sea,seaZ=sea.shoreline.reduce((m,p)=>Math.max(m,p[1]),-1e9)+60;assert.deepEqual(px(300,Math.min(WORLD.z1-20,seaZ)),[0x3f,0x7e,0xa3,255],'sea is water colour');
+ assert.deepEqual(px(WORLD.x0+30,WORLD.z0+30),[0x3d,0x5a,0x3c,255],'open wilds are meadow');
+ assert.deepEqual(px(WORLD.x0+30,WORLD.z0+30,()=>1,()=>1),[...ROCK_RGB,255],'a steep slope shows rock on open ground');
+ assert.deepEqual(px(oak.x,oak.z,()=>1,()=>1).slice(0,3),[0x45,0x49,0x4b],'rock never covers a road');
+ // the shade grid reports rock on the steep side of a hill and none on flat ground
+ const hf=(x,z)=>Math.max(0,20-Math.hypot(x-50,z-50)/1.5),g=makeShadeGrid({x0:0,x1:100,z0:0,z1:100},hf);g.buildRows(1e9);assert(g.rock(70,50)>0,'rock on the slope');assert.equal(g.rock(2,2),0,'flat ground: none');
+}
+// 10. the whole world through the baker: BASE size, the world tile grid fits the 32-tile cache logic, memory and the budget with the real ground
+{const doc=fakeDoc(),log=[],bake=createBake({doc,now:()=>performance.now(),buildings:[],trees:()=>[],cap:TILE_CACHE_FULL,onJob:i=>log.push(i)});
+ assert.equal(bake.bounds,BAKE_BOUNDS);assert.equal(bake.base.width,750);assert.equal(bake.base.height,900);
+ const all=tilesFor({x0:WORLD.x0,x1:WORLD.x1,z0:WORLD.z0,z1:WORLD.z1,cx:0,cz:0},bake.bounds);assert.equal(all.length,12*15);
+ // a driving window (400 m) in the wilds needs at most 4 x 4 tiles; walk it east across 12 tiles: the cache never passes 32 and nothing needed is dropped
+ let worst=0,maxCache=0,t0=performance.now();
+ for(let x=WORLD.x0+100;x<WORLD.x1-100;x+=60){const win={x0:x-75,x1:x+75,z0:-1000,z1:-850,cx:x,cz:-925},want=tilesFor(win,bake.bounds);bake.want(want,{x:x,z:-925});let n=0;while(bake.pending&&n++<1e5){const a=performance.now();bake.step(1e9);worst=Math.max(worst,performance.now()-a)}
+  maxCache=Math.max(maxCache,bake.cacheSize);assert(want.every(t=>bake.tile(t.key)),'every tile of the window is ready')}
+ assert(maxCache<=32,'cache cap held: '+maxCache);
+ globalThis.__mm2b={baseMs:bake.stats.lastBaseMs,worst,tiles:bake.stats.tiles,maxCache,total:performance.now()-t0,maxUnit:bake.stats.maxUnitMs};
+}
+console.log('PASS map-bake: shade grid, ground colours, rotated footprints, sliced budget, BASE first, LRU, invalidateAt, real BASE, whole world (chunk masks, rock, cache 32)');

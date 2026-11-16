@@ -174,7 +174,7 @@ export function createRuns({root,claude=null,now=Date.now,extraEnv={},runTurnFn=
 
   async stop(id){
    const run=load(id);if(!run)return err('No such run.',404);
-   if(active&&active.runId===id){await active.handle.stop('stopped');await active.handle.done;return {run:view(readRun(root,id))}}
+   if(active&&active.runId===id){const h=active.handle;await h.stop('stopped');await h.done;return {run:view(readRun(root,id))}}
    if(run.status==='confirming'){const more=run.pending?.kind==='more';run.status=more?'capped':'closed';run.reason=more?'':'Cancelled before it started.';run.pending=null;run.confirmUntil=null;save(run);return {run:view(run)}}
    return err('That run is not running.')},
 
@@ -223,5 +223,5 @@ export function createRuns({root,claude=null,now=Date.now,extraEnv={},runTurnFn=
    return reaped},
 
   // At hub exit (Ctrl+C): stop the working process tree so it does not outlive the hub.
-  async shutdown(){if(active){await active.handle.stop('interrupted');await active.handle.done}}};
+  async shutdown(){if(active){const h=active.handle;await h.stop('interrupted');await h.done}}};
  return api}

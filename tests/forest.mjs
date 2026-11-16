@@ -10,6 +10,7 @@ import {PIECE_PAY,shiftPay} from '../dist/shift.js';
 import {normalizeProgress} from '../dist/jobs.js';
 import {MAX_MARKS} from '../dist/marks.js';
 import {zoneById} from '../dist/map-definition.js';
+import {PARCEL_HANDS} from '../dist/gig-parcel.js';
 
 const trees=worldLayout().cuttable,F=zoneById('forest').bounds;
 // ten blocks over Pine Ridge, ids A1..E2, every tree in exactly one
@@ -54,4 +55,6 @@ assert.equal(treeFelled(off,marked).counted,false,'off shift a felled tree count
  assert.equal(s.shift.tasks.find(t=>t.kind==='landing').done,stacks.target)}
 // planks taken off the belt count as milled
 {const r=planksMilled(p,4);assert.equal(r.state.shift.pieces.planks,4);assert.equal(planksMilled(off,4).state,off,'off shift: nothing')}
+// G3b: no pile pick-up while the gig box is in your arms (G2b leftover)
+{const box={gigs:{active:{id:1,drop:null}}},pile=stackLog({...p,carry:{kind:'log'}},LANDING).state;assert.equal(takeLogFromPile({...pile,...box},LANDING).error,PARCEL_HANDS,'the box is in hand: no log from the pile');assert.match(takeLogFromPile({...pile,...box,carry:{kind:'log'}},LANDING).error,/hands are full/,'a log in hand says so first');assert(takeLogFromPile({...pile,gigs:{active:{id:1,drop:{x:1,z:1}}}},LANDING).state,'the box on the ground: free hands');assert(takeLogFromPile(pile,LANDING).state,'no gig: as before')}
 console.log('PASS forest.mjs: ten cut blocks, two marked a day by the day number (all come round, 40 to 400 marked pines), the landing on open ground, a marked tree pays $3.00 and an unmarked one $0.75 (no reputation lost), logs stacked at the landing join the company pile (saved, and can be taken back), planks delivered to the lumberyard join the stock and pay $1.00 each; all only on a Ridgeline shift.');

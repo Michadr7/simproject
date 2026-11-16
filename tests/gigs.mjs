@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import {GIG_TYPES,payFor,repeatsToday,parRoute,normalizeGigs,boardFor,acceptGig,tickGig,completeGig,failGig,gigDone,freshGigs,qualityFor,gameMinutes,marketBoard} from '../dist/gigs.js';
+import {DOOR_STYLES,doorStyle,doorTip,doorHint,doorChoices,GIG_TYPES,payFor,repeatsToday,parRoute,normalizeGigs,boardFor,acceptGig,tickGig,completeGig,failGig,gigDone,freshGigs,qualityFor,gameMinutes,marketBoard} from '../dist/gigs.js';
 import {freshProgress} from '../dist/jobs.js';
 // payFor: the design's worked example, repeat steps, rep cap, tips
 assert.equal(payFor('fragile',85,2,20),3076);
@@ -55,4 +55,16 @@ assert.deepEqual(tickGig(q2,{position:{x:20,z:0}}).gigs.active.visited,[false,fa
 // knocks lower fragile pay
 const fr=normalizeGigs({active:{type:'fragile',places:[{x:0,z:0}],knocks:2}});let fs={...p,gigs:{...fr}};fs=tickGig(fs,{position:{x:0,z:0},knock:1});assert.equal(completeGig(fs,100).quality,55);
 assert.equal(gameMinutes({housing:{day:2},routine:{minutes:30}}),1470);
+// parcel door: three greetings, exactly one is the client's and tips 200..800 cents; the hint names it
+for(const c of ['a','b','c','d','e','f','g']){const ch=doorChoices({type:'parcel',client:c,id:3});assert.equal(ch.length,3);assert.equal(ch.filter(x=>x.tip>0).length,1);const t=ch.find(x=>x.tip>0);assert(t.tip>=200&&t.tip<=800&&t.tip%100===0);assert.equal(t.id,doorStyle(c).id);assert(doorHint('parcel',c,'Rob').includes(doorStyle(c).hint))}
+assert.equal(doorChoices({type:'grocery',client:'a',id:1}),null);assert.equal(doorHint('grocery','a','x'),'');assert.equal(new Set(['a','b','c','d','e','f','g','h','i','j'].map(c=>doorStyle(c).id)).size,3,'all three styles occur');
+const pa={...p,gigs:{...p.gigs,active:normalizeGigs({active:{type:'parcel',client:'a',id:3,places:[{x:0,z:0}]}}).active}};
+const pd=tickGig(pa,{position:{x:0,z:0}}),right=doorChoices(pd.gigs.active).find(x=>x.tip>0);
+assert.equal(completeGig(pd,100).paid,1000);assert.equal(completeGig(pd,100,{tip:right.tip}).paid,1000+right.tip);
+// round quality: par distance or better is 100, 25% over is 80 (acceptGig keeps where you started)
+const rs0={x:0,z:0},ra=normalizeGigs({active:{type:'round',places:[{x:10,z:0},{x:20,z:0},{x:30,z:0}],start:rs0}}).active;assert.deepEqual({x:ra.start.x,z:ra.start.z},rs0);
+let rp3={...p,gigs:{...p.gigs,rep:10,active:ra}};for(const x of [10,20,30])rp3=tickGig(rp3,{position:{x,z:0},metres:10});
+const par=parRoute(ra.places,ra.start).length;assert.equal(par,30);assert.equal(completeGig(rp3,100,{par}).quality,100);
+let rp4={...rp3,gigs:{...rp3.gigs,active:{...rp3.gigs.active,metres:60}}};assert.equal(completeGig(rp4,100,{par}).quality,0);rp4.gigs.active.metres=37.5;assert.equal(completeGig(rp4,100,{par}).quality,80);
+assert.equal(completeGig(rp4,100).quality,100,'no par given: no penalty');
 console.log('gigs ok');

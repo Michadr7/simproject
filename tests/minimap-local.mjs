@@ -2,10 +2,10 @@
 import assert from 'node:assert/strict';
 import {createMinimap} from '../dist/minimap.js';
 import {MAP} from '../dist/map-definition.js';
-const VIEW=MAP.minimap.view,calls={draw:[],lineTo:0,dash:0,strokeRect:0,fill:0},bakeCalls={at:[],all:0};
+const VIEW=MAP.minimap.view,WORLD=MAP.world,calls={draw:[],lineTo:0,dash:0,strokeRect:0,fill:0},bakeCalls={at:[],all:0};
 const ctx=new Proxy({drawImage:(...a)=>calls.draw.push(a),lineTo:()=>{calls.lineTo++},setLineDash:a=>{if(a.length)calls.dash++},strokeRect:()=>{calls.strokeRect++}},{get:(o,k)=>o[k]??(()=>{}),set:()=>true});
 const canvas={width:0,height:0,style:{},classList:{toggle(){}},getContext:()=>ctx,getBoundingClientRect:()=>({left:0,top:0,width:200,height:200})};
-const bake={baseReady:true,base:{},bounds:VIEW,version:0,want(){},tile:()=>null,step(){},invalidateAll(){bakeCalls.all++},invalidateAt(x,z,r){bakeCalls.at.push([x,z,r])}};
+const bake={baseReady:true,base:{},bounds:WORLD,version:0,want(){},tile:()=>null,step(){},invalidateAll(){bakeCalls.all++},invalidateAt(x,z,r){bakeCalls.at.push([x,z,r])}};
 const mm=createMinimap({},{canvas,fixedDpr:1,bake}),frame=(o,n=1)=>{for(let i=0;i<n;i++)mm.update(1/60,{yaw:0,heading:0,...o})};
 assert.equal(canvas.width,200);assert.equal(canvas.height,200,'the corner map is 200 x 200');
 const span=()=>{const a=mm.pick(0,0),b=mm.pick(200,200);return {w:b.x-a.x,h:b.z-a.z,cx:(a.x+b.x)/2,cz:(a.z+b.z)/2}};
@@ -14,7 +14,9 @@ frame({player:{x:0,z:-100}},30);let s=span();assert(Math.abs(s.w-150)<.01&&Math.
 const d=calls.draw.at(-1);assert.equal(d[5],0);assert.equal(d[6],0);assert.equal(d[7],200);assert.equal(d[8],200,'inside the world the crop covers the canvas');
 assert(calls.dash>0&&calls.strokeRect>0,'dashed world border drawn');
 // at the west edge of the world the window is NOT clamped: the player stays centred and the ground covers half the canvas
-calls.draw.length=0;frame({player:{x:VIEW.x0,z:-100}},30);s=span();assert(Math.abs(s.cx-VIEW.x0)<.01,'player stays centred at the edge');const e=calls.draw.at(-1);assert(Math.abs(e[5]-100)<1e-6&&Math.abs(e[7]-100)<1e-6,'ground covers only the in-world half: '+e.slice(5));
+calls.draw.length=0;frame({player:{x:WORLD.x0,z:-100}},30);s=span();assert(Math.abs(s.cx-WORLD.x0)<.01,'player stays centred at the edge');const e=calls.draw.at(-1);assert(Math.abs(e[5]-100)<1e-6&&Math.abs(e[7]-100)<1e-6,'ground covers only the in-world half: '+e.slice(5));
+// MM2b: the world edge is the real edge (x -450), not the old 530 x 440 view: far outside the old view the ground still fills the canvas
+calls.draw.length=0;frame({player:{x:700,z:-900}},30);{const w=calls.draw.at(-1);assert(w[7]===200&&w[8]===200,'wilds: ground covers the whole canvas');calls.draw.length=0;frame({player:{x:VIEW.x0-80,z:-100}},30);const v=calls.draw.at(-1);assert(v[7]===200,'west of the old view edge is still ground')}
 // sprinting on foot does not zoom; driving flat out zooms toward 400 m and looks ahead
 frame({player:{x:0,z:-100},speed:9,driving:false},300);assert(Math.abs(span().w-150)<.01,'on foot never zooms');
 frame({player:{x:0,z:-100},speed:29,driving:true,heading:Math.PI/2},60*12);s=span();assert(s.w>390&&s.w<=400.01,'driving fast: about 400 m, got '+s.w);assert(s.cx>.15*s.w&&s.cx<=.2*s.w+.5,'centre shifted ahead (+x) by up to 0.2 W, got '+s.cx);

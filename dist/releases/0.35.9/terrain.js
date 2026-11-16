@@ -15,11 +15,22 @@ export const MINIMAP_COLOUR=Object.freeze({2:'#45494b',3:'#45494b',4:'#9c8462',5
 const FIELD_SURFACE={wheat:SURFACE.WHEAT,plowed:SURFACE.PLOWED,green:SURFACE.GREEN};
 
 // The centreline of a road edge: its two nodes with any `path` points between them, smoothed into a curve when `curve` is set.
+// RV1 (user 2026-11-15, the bridge ends in a diagonal cut): a bridge deck is straight and square to its axis, so a curved road that meets it at an angle or off its middle left a diagonal seam. bridgeAlign eases the points of a road within BRIDGE_LEAD m of a
+// bridge end sideways onto the deck's middle line (a smoothstep: exactly on the line at the end, untouched BRIDGE_LEAD m away), so the road arrives straight and centred. Only roads that run over the deck are touched.
+export const BRIDGE_LEAD=12;
+export function bridgeAlign(points,map=MAP){
+ const bridges=map.water?.bridges||[];if(!bridges.length)return points;let out=points;
+ for(const b of bridges){const ax=b.axis==='x',a0=ax?b.x0:b.z0,a1=ax?b.x1:b.z1,c0=ax?b.z0:b.x0,c1=ax?b.z1:b.x1,cc=(c0+c1)/2,hw=(c1-c0)/2;
+  const along=p=>ax?p[0]:p[1],lat=p=>ax?p[1]:p[0];
+  if(!out.some(p=>along(p)>=a0&&along(p)<=a1&&Math.abs(lat(p)-cc)<=hw))continue;
+  out=out.map(p=>{const a=along(p),e=a<a0?a0-a:a>a1?a-a1:-1;if(e<0||e>=BRIDGE_LEAD||Math.abs(lat(p)-cc)>BRIDGE_LEAD)return p;const u=1-e/BRIDGE_LEAD,w=u*u*(3-2*u),l=lat(p)+(cc-lat(p))*w;return ax?[p[0],l]:[l,p[1]]})}
+ return out;
+}
 export function roadCenterline(edge,map=MAP){
  const a=map.roads.nodes[edge.from],b=map.roads.nodes[edge.to];
  if(edge.closed)return smoothClosed([[a.x,a.z],...(edge.path||[])],2);
  const points=[[a.x,a.z],...(edge.path||[]),[b.x,b.z]];
- return edge.curve&&points.length>2?riverPath({points},2).map(p=>[p.x,p.z]):points;
+ return edge.curve&&points.length>2?bridgeAlign(riverPath({points},2).map(p=>[p.x,p.z]),map):points;
 }
 // A smooth closed curve through the points (Catmull-Rom with wrap-around neighbours), sampled about every `step` metres; the last point repeats the first.
 function smoothClosed(p,step){

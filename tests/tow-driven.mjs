@@ -6,9 +6,10 @@ import {MAP} from '../dist/map-definition.js';
 import {CLASSES,doorPoint} from '../dist/vehicle.js';
 const sleep=ms=>new Promise(r=>setTimeout(r,ms)),live=(g,id)=>g.ids.get('phoneCall').children.flatMap(c=>c.children||[]).find(e=>e.id===id)||null,last=(g,id)=>g.created.filter(e=>e.id===id).at(-1);
 const car=(x,z,yaw,model='shortbed',extra={})=>({uid:'v1',model,colour:'#c23b2e',x,z,yaw,fuelMgal:10000,...extra});
-const boot=(vehicle,pos,cash=30000)=>bootGame({position:pos,progress:{cash,completed:5,routine:{minutes:480},vehicles:[vehicle],orders:{nextVehicle:2}}});
+// TEST1: the game's toast hide timers are real 4.5 s timers, and a toast timer of an EARLIER booted game fires on the document of the NEXT one (the synthetic document is a global), hiding its toast mid-test. So the toast is read from a recorder of every text set, never from the hidden flag.
+const boot=async(vehicle,pos,cash=30000)=>{const g=await bootGame({position:pos,progress:{cash,completed:5,routine:{minutes:480},vehicles:[vehicle],orders:{nextVehicle:2}}});const el=g.ids.get('jobToast');let tc='';g.seen=[];Object.defineProperty(el,'textContent',{get:()=>tc,set:v=>{tc=v;g.seen.push(String(v))},configurable:true});return g};
 async function sitIn(g,v,cls){const {pump,send,ids,GameState}=g,door=doorPoint(v,cls);Object.assign(GameState.me.position,{x:door.x,z:door.z});pump(1);send('keydown','KeyE');send('keyup','KeyE');pump(3);assert.equal(ids.get('vehiclePanel').dataset.state,'driving','in the vehicle')}
-const toastText=g=>g.ids.get('jobToast').hidden?'':g.ids.get('jobToast').textContent;
+const toastText=g=>g.seen.at(-1)||'',toastSaid=(g,re)=>g.seen.some(s=>re.test(s));
 
 // A1. A tow while driving.
 {const V={x:-20,z:30,yaw:0},g=await boot(car(V.x,V.z,V.yaw),{x:V.x+6,z:V.z});
@@ -36,14 +37,14 @@ const heads=[Math.PI/2,Math.PI/2-.35,Math.PI/2+.35],report=[];
 for(const yaw of heads){
  const g=await boot(car(280,40,yaw,'offroad'),{x:276,z:40});
  try{const {pump,send,scene}=g,V={x:280,z:40,yaw};pump(1.5);await sitIn(g,V,CLASSES.offroad);send('keydown','KeyW');
-  let edgeSeen=false,x=280;for(let i=0;i<24;i++){pump(1);x=scene().getObjectByName('vehicle-v1').position.x;if(/edge of the map/.test(toastText(g)))edgeSeen=true;if(x>330)break}
+  let edgeSeen=false,x=280;for(let i=0;i<24;i++){pump(1);x=scene().getObjectByName('vehicle-v1').position.x;if(toastSaid(g,/edge of the map/))edgeSeen=true;if(x>330)break}
   report.push([+yaw.toFixed(2),+x.toFixed(1)]);assert(x>330||edgeSeen,`heading ${yaw.toFixed(2)}: the offroad truck passes x 330 or says the edge message (it stopped at x ${x.toFixed(1)})`);
  }finally{await g.done()}}
 // B2. The world's last metres: driven east along Eden Road into the edge (x 1040), the vehicle stops and says so (and the hull never leaves the world).
 {const g=await boot(car(280,68,Math.PI/2,'offroad'),{x:276,z:68});
  try{const {pump,send,scene}=g,V={x:280,z:68,yaw:Math.PI/2};pump(1.5);await sitIn(g,V,CLASSES.offroad);send('keydown','KeyW');let said=false,x=280;
-  for(let i=0;i<500&&!said;i++){pump(x>980?.1:1);x=scene().getObjectByName('vehicle-v1').position.x;if(/edge of the map/.test(toastText(g)))said=true}
-  if(!said){await sleep(700);pump(.1);said=/edge of the map/.test(toastText(g))} // the note comes a beat after the bump (a real timer)
+  for(let i=0;i<500&&!said;i++){pump(x>980?.1:1);x=scene().getObjectByName('vehicle-v1').position.x;if(toastSaid(g,/edge of the map/))said=true}
+  for(let k=0;k<300&&!said;k++){await sleep(50);pump(.04);said=toastSaid(g,/edge of the map/)} // the note comes a beat after the bump (a real 400 ms timer): wait for it up to 15 s, leave at once when it is said
   assert(said,`at the world edge the toast says so (x ${x.toFixed(1)})`);assert(x<1050,'and the vehicle stays inside the world')}
  finally{await g.done()}}
 console.log('PASS tow-driven.mjs: a tow called from the driven vehicle takes it to the shop bay and leaves you on foot at the counter (Call app and toast both report, a refused tow keeps you seated); the offroad truck driven east from (280, 40) passes the old rim at three headings '+JSON.stringify(report)+'; at the world edge it says: You are at the edge of the map');

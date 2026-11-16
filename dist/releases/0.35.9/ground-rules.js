@@ -64,7 +64,7 @@ export const GD_WET_DEFAULT=1, GD_MUD_WET=.85, GD_WET_DARK=.62, GD_WET_ROUGH=.35
 export const GD_PUDDLE_LEVEL=.32, GD_PUDDLE_SOFT=.03, GD_PUDDLE_SCALE=1/2.4, GD_PUDDLE_SCALE2=1/.9, GD_PUDDLE_MIX2=.3; // a low-frequency noise is the fake height; below the level (x wet) it is a puddle
 export const GD_MUD_RIDGE=.45, GD_MUD_RIDGE_CELL=.4, GD_MUD_CLOD_SCALE=1/.3, GD_MUD_H=.05;
 export const GD_F0=.02, GD_SHEEN_GAIN=1.6, GD_SKY_GAMMA=2.2; // puddle sky sheen: Schlick fresnel x the shared sky horizon colour (display-space colour, so lifted by the gamma)
-export const GD_DETAIL_KINDS=['grass','farm','forest','dirt','mud','plowed','paving']; // kinds with their own detail code (the others only get GD1/GD2)
+export const GD_DETAIL_KINDS=['grass','farm','forest','dirt','mud','plowed','paving','valley']; // kinds with their own detail code (the others only get GD1/GD2; RV1: the valley has the grass clumps and flecks, so the dug river ground matches the grass beside it)
 // JS mirrors
 export function pebbleAt(x,z,cell=GD_PEBBLE_CELL,occ=GD_PEBBLE_OCC,r=GD_PEBBLE_R){const px=x/cell+GD_SEED_PEBBLE[0],pz=z/cell+GD_SEED_PEBBLE[1],ix=Math.floor(px),iz=Math.floor(pz),fx=px-ix,fz=pz-iz,h0=hash2(ix,iz);
  if(h0>=occ)return {h:0,id:0};const rr=mix(r[0],r[1],hash2(ix+5.3,iz+5.3)),cx=rr+(1-2*rr)*hash2(ix+17.1,iz+17.1),cz=rr+(1-2*rr)*hash2(ix+43.7,iz+43.7),d=Math.hypot(fx-cx,fz-cz)/rr;

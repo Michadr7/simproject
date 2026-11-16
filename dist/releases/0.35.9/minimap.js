@@ -1,7 +1,7 @@
 import {ZONES} from './world.js';
 import {MAP} from './map-definition.js';
 import {DEV_MODE} from './dev-flag.js';
-import {sharedBake,relief,TILE_CACHE} from './map-bake.js';
+import {sharedBake,relief,TILE_CACHE_FULL} from './map-bake.js';
 import {BASE_MPP,TILE_MPP,TILE_GUTTER,tilesFor,levelFor,cropWindow,cropSource,zoomTarget,footTarget,freshZoom,smoothZoom,lookAheadStep,edgeIndicator} from './map-view.js';
 
 // Whole-world map, north (-z) up: the city in the south, the river and bridge across the middle, Willow Fields (west) and Pine Ridge (east) north of it.
@@ -14,7 +14,7 @@ const SIZES={small:{w:200,h:200},large:{w:600,h:490}},EDGE='#141c19',JOB='#f2ca7
 export function createMinimap(doc,{canvas,cityRoads=[],buildings=[],trees=()=>[],startSize='small',fixedDpr=0,bake=null}){
  if(!canvas)return {update(){},toggle(){},invalidate(){},invalidateAt(){},pick(){return null},get large(){return false}};
  const dpr=fixedDpr||Math.min(2,globalThis.devicePixelRatio||1);
- const B=bake||sharedBake(doc,{buildings,trees,onJob:DEV_MODE?i=>{if(i.ms>=25)console.debug('[map-bake]',i.kind,i.key,i.ms.toFixed(1)+' ms')}:null});
+ const B=bake||sharedBake(doc,{buildings,trees,cap:TILE_CACHE_FULL,onJob:DEV_MODE?i=>{if(i.ms>=25)console.debug('[map-bake]',i.kind,i.key,i.ms.toFixed(1)+' ms')}:null});
  let size=startSize,dirty=true,timer=0,seen=-1,zs=freshZoom(),look={x:0,z:0},win=null;
  function resize(){
   const {w,h}=SIZES[size];

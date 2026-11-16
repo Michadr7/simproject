@@ -17,7 +17,8 @@ import {isAlive} from '../hub/runner.js';
 const HERE=path.dirname(fileURLToPath(import.meta.url)),FAKE=path.join(HERE,'fixtures','fake-claude.mjs'),HUB=path.join(HERE,'..','hub');
 const root=fs.mkdtempSync(path.join(os.tmpdir(),'hub-runs-'));fs.mkdirSync(path.join(root,'plans'));fs.mkdirSync(path.join(root,'.hub'));
 const sleep=ms=>new Promise(r=>setTimeout(r,ms));
-const waitFor=async(fn,ms=8000)=>{const t=Date.now();while(Date.now()-t<ms){const v=await fn();if(v)return v;await sleep(40)}throw new Error('timed out waiting')};
+// TEST1: a generous 30 s limit (it returns the moment fn is truthy, so a fast PC pays nothing); the old 8 s limit failed now and then while 220 other test processes ran at once. The error names the waiting line.
+const waitFor=async(fn,ms=30000)=>{const t=Date.now();while(Date.now()-t<ms){const v=await fn();if(v)return v;await sleep(40)}throw new Error('timed out waiting ('+ms+' ms) for: '+String(fn).slice(0,120))};
 const setWeekly=(pct,five=20)=>fs.writeFileSync(path.join(root,'.hub','usage.jsonl'),JSON.stringify({at:Date.now(),source:'t',weekly:{pct,resetsAt:Math.floor(Date.now()/1000)+86400},fiveHour:{pct:five,resetsAt:Math.floor(Date.now()/1000)+3600}})+'\n');
 let planN=0;
 function makePlan(model,size,{answerAt,approve=true}={}){
@@ -171,7 +172,7 @@ assert.equal(runs.list().holding,null);
 if(process.platform==='win32'){
  env.HUB_FAKE_SCENARIO='question';const rp=makePlan('sonnet','S');r=runs.start({planId:rp.id,revision:1,model:'sonnet'});const idR=r.run.id;await finished(idR);
  const hang=()=>spawn(process.execPath,[FAKE],{env:{...process.env,HUB_FAKE_SCENARIO:'hang'},stdio:['pipe','ignore','ignore'],windowsHide:true});
- const live=hang(),stranger=hang();await sleep(400);
+ const live=hang(),stranger=hang();await sleep(400);await waitFor(()=>isAlive(live.pid)&&isAlive(stranger.pid));
  const mark=(pid,exeName)=>{const x=readRun(root,idR);x.status='running';x.pid=pid;x.exeName=exeName;x.turns.at(-1).endedAt=null;saveRun(root,x)};
  mark(live.pid,path.basename(process.execPath).toLowerCase());
  const fresh=createRuns({root,claude:{path:process.execPath,prefix:[FAKE]},extraEnv:env});

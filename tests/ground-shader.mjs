@@ -113,7 +113,7 @@ try{S.patchGround(new THREE.MeshStandardMaterial(),'lava');ok(false,'unknown kin
  ok(Lo('mud').emissive===''&&!Lo('mud').common.includes('uSkyHorizon')&&Lo('mud').rough.includes('gdRoughT')&&Lo('mud').normal==='','Low mud: dark and glossy, no sheen, no fake normals');
  ok(H('mud').rough.includes('roughnessFactor')&&H('mud').normal.includes('dFdx')&&H('mud').fragment.includes('uGdWet')&&H('mud').fragment.includes('gdPud'),'High mud: roughness, fake normals, wet hook');
  for(const k of ['dirt','forest','plowed','grass','farm','mud'])ok(H(k).normal.includes('normal_fragment_maps')&&!Lo(k).normal,'fake normals High only: '+k);
- ok(H('paving').normal===''&&H('valley').normal===''&&H('wheat').normal==='','kinds without relief keep the plain normal');
+ ok(H('paving').normal===''&&H('wheat').normal==='','kinds without relief keep the plain normal');ok(H('valley').normal!==''&&H('valley').normal===H('grass').normal,'RV1: the river valley has the grass relief, so the dug ground matches the grass beside it');
  for(const k of R.GROUND_KINDS)for(const hi of [true,false]){const a=S.groundShaderParts(k,hi,false);ok(!/#define \w+ -?\d+\n/.test(a.common),'float literals in the defines: '+k+(hi?'':' lo'))}
  // gravel: same program as dirt, per-material uniform
  const mk=g=>{const m=S.patchGround(new THREE.MeshStandardMaterial({color:'#a39d8c'}),'dirt');if(g)m.userData.groundGravel=true;const sh={uniforms:{},vertexShader:THREE.ShaderLib.standard.vertexShader,fragmentShader:THREE.ShaderLib.standard.fragmentShader};m.onBeforeCompile(sh);return [m,sh]};

@@ -2,7 +2,7 @@
 // panel shows (imperial: miles an hour, gallons). createVehicleHud writes that to the page, and only when something changed.
 import {fuelText,fuelTitle,mph} from './fuel.js';
 import {bandOf,percent,lampOf} from './damage.js';
-export const SILHOUETTES=['shortbed','worktruck','offroad','flatbed']; // the drawn vehicles in index.html (#vpDamage); any other model shows the generic one
+export const SILHOUETTES=['shortbed','worktruck','offroad','flatbed','tractor_juff','tractor_kidbi']; // the drawn vehicles in index.html (#vpDamage); any other model shows the generic one
 export const STOP_SPEED=1; // m/s: below this you may get out (the same rule as game.js exitVehicle)
 
 // fuel: {mgal, capacityMgal, type} of the vehicle you are in, or null.

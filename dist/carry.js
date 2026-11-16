@@ -5,7 +5,7 @@
 // A log put into the saw counts as a stack on the belt at once (the cut animation is cosmetic), so a save or a reload mid-cut loses nothing.
 import {MAX_LOGS,nextLogIdFor} from './grid.js';
 import {isWalkable} from './world.js';
-import {freshStats} from './skills.js';
+import {freshStats} from './skills.js';import {parcelHeld,PARCEL_HANDS} from './gig-parcel.js';
 
 export const BELT_SLOTS=4,PLANKS_PER_STACK=4,MAX_PLANK_DROPS=12;
 // What carrying does to the body: a log slows you to 80%, planks to 85%; no sprinting while carrying; stamina drains 1.5x (log) or 1.25x (planks). Dropped stacks never expire.
@@ -45,7 +45,7 @@ export const beltFull=progress=>(progress.belt||0)>=BELT_SLOTS;
 const HANDS='Your hands are full. Put it down first (X).';
 // Lifts a log off the ground onto the shoulder (not into the bag).
 export function shoulderLog(progress,id){
- if(progress.carry)return {error:HANDS};
+ if(progress.carry||parcelHeld(progress))return {error:progress.carry?HANDS:PARCEL_HANDS};
  if(!(progress.logs||[]).some(l=>l.id===id))return {error:'That log is gone.'};
  const stats={...(progress.stats||freshStats()),logsCollected:(progress.stats?.logsCollected||0)+1};
  return {state:{...progress,carry:{kind:'log'},stats,logs:progress.logs.filter(l=>l.id!==id)},message:'Log on your shoulder. Press X to put it down.'};
@@ -65,7 +65,7 @@ export function feedLog(progress,sawOn){
 }
 // One stack (4 planks) off the end of the belt into the hands.
 export function takePlanks(progress){
- if(progress.carry)return {error:HANDS};
+ if(progress.carry||parcelHeld(progress))return {error:progress.carry?HANDS:PARCEL_HANDS};
  if(!(progress.belt>0))return {error:'The belt is empty.'};
  return {state:{...progress,carry:{kind:'planks',count:PLANKS_PER_STACK},belt:progress.belt-1},message:`You pick up ${PLANKS_PER_STACK} planks. Press X to put them down.`};
 }
@@ -82,7 +82,7 @@ export function rescueCarry(progress){
  const oldest=drops.reduce((a,d)=>d.id<a.id?d:a,drops[0]);return {...progress,plankDrops:drops.filter(d=>d!==oldest)};
 }
 export function pickUpPlanks(progress,id){
- if(progress.carry)return {error:HANDS};
+ if(progress.carry||parcelHeld(progress))return {error:progress.carry?HANDS:PARCEL_HANDS};
  const drop=(progress.plankDrops||[]).find(d=>d.id===id);if(!drop)return {error:'Those planks are gone.'};
  return {state:{...progress,carry:{kind:'planks',count:drop.count},plankDrops:progress.plankDrops.filter(d=>d.id!==id)},message:`You pick up ${drop.count} planks. Press X to put them down.`};
 }

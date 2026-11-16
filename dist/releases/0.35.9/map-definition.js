@@ -480,6 +480,7 @@ export const MAP=deepFreeze({
   {id:'farm-barn',prop:'barn',zone:'farm',x:-66,z:-270,yaw:0},{id:'farm-small-barn',prop:'small-barn',zone:'farm',x:-84,z:-262,yaw:0},{id:'farm-open-barn',prop:'open-barn',zone:'farm',x:-83,z:-246,yaw:0},
   {id:'farm-silo',prop:'silo-house',zone:'farm',x:-48,z:-272,yaw:0},{id:'farm-coop',prop:'coop',zone:'farm',x:-52,z:-256,yaw:0},{id:'farm-windmill',prop:'windmill',zone:'farm',x:-44,z:-282,yaw:0},
   {id:'farm-house',prop:'house-t',zone:'farm',x:-62,z:-244,yaw:0},
+   {id:'farm-egg-crates',prop:'prop.pallet-crate',zone:'farm',x:-66,z:-235.4,yaw:0,decor:true}, // G3: the pallet of egg crates Hal's story loads onto the truck (starter.js PLACES.crates)
   // Alder Center: a street wall of Kenney commercial buildings and the Store along both sides of the cross street, each flush with the sidewalk behind it (CC0 / Poly Pizza).
   {id:'alder-store',prop:'store',plot:'C1',zone:'alder',x:-13.5,z:-72.40,yaw:Math.PI},
   {id:'alder-offices',prop:'shop-i',plot:'C2',zone:'alder',x:-2,z:-75.50,yaw:Math.PI},

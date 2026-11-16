@@ -3,7 +3,7 @@ import {createWorld,zoneAt,isWalkableLive as isWalkable,footingAt,standHeight,wo
 import {isMarked,LANDING,treeFelled,stackLog,planksMilled,stockOf,takeLogFromPile,inLumberyard,deliverPlanks,LUMBERYARD,logGathered,stumpCleared,saplingPlanted,racksOf,RACK_CAP,stackPlanks,takeFromRack,forkUsed,forkLoadOf} from './forest.js';
 import * as forklift from './forklift.js';
 import {createTreeMarks,createLandingRing,createStockPiles} from './marks.js';
-import {loadCarry,unloadOne,unloadKind,cargoText,LOAD_REACH,takeAll,countOf,freeCount,orderCount,orderIdsOf,addPlanks,removePlanks,removeOrderPlanks} from './cargo.js';
+import {loadCarry,unloadOne,unloadKind,cargoText,LOAD_REACH,takeAll,countOf,freeCount,orderCount,orderIdsOf,addPlanks,removePlanks,removeOrderPlanks,hasCrates} from './cargo.js';
 import {createCargoUI} from './cargo-ui.js';
 import {scheduleTruck,truckOf,truckWaiting,truckDue,truckArrived,loadFromHands,loadFromStock,loadFromBed,sendOff,BAY as TRUCK_BAY} from './customers.js';
 import {createCustomerTruck} from './customer-truck.js';
@@ -49,11 +49,11 @@ import {DEV_MODE} from './dev-flag.js';import {VERSION} from './version.js';impo
 import {createInventoryUI} from './inventory-ui.js';
 import {addItem,useItem,unequipItem,hasItem,hotbarItems,equipTool,sellLogs,canOf,setCan} from './inventory.js';
 import {createPhone} from './phone.js';import {createGps} from './gps.js';
-import {acceptContract,completeContract,tickContract,gigTarget,atGigPoint,refreshGigBoard,gameMinutes,marketContracts} from './gig-bridge.js';import {advanceStarter,starterObjective,skipStarter,PLACES as STORY_PLACES} from './starter.js';
+import {acceptContract,completeContract,tickContract,gigTarget,atGigPoint,refreshGigBoard,gameMinutes,marketContracts,gigDoor,dropGigParcel,pickGigParcel} from './gig-bridge.js';import {parcelHeld,PARCEL_HANDS,parcelModelId,PARCEL_DEFAULT} from './gig-parcel.js';import {createProp} from './props.js';import {createHal} from './hal.js';import {storyDeck,storyPalletHidden,halHere,applyStory,startLoan,ensureLoan,halTalk,buyFromHal,knockQuality,aimPoint,CRATE_REACH,MARKET_REACH,advanceStarter,starterObjective,skipStarter,PLACES as STORY_PLACES,SKIP_SALE_PRICE} from './starter.js';
 import {GameState,initializeState,setMePosition,tickLife,setStatDrainMultiplier} from './state.js';
 import {needsEffects} from './life.js';
 import {loadProfile,saveProfile,wipePlayerKeys} from './profile.js';
-import {MultiplayerClient} from './multiplayer.js';
+import {MultiplayerClient} from './multiplayer.js';import {makeSessionClock,canSync,syncAdvance,SYNC_WARNING,VISIT_NOTE} from './session-clock.js';const sessionClock=makeSessionClock(); // the session game clock (session-clock.js): equals the saved clock alone or as host, follows the host's when you join
 import {createMainMenu,relayBase,refusalText,loadSettings} from './main-menu.js';import {createSaveMenu} from './save-menu.js';import {createCloud,PUSH_EVERY_MS} from './cloud-save.js';import {createAccountMenu} from './account-menu.js';import {normalizeLobbyCode,REFUSED} from './relay-protocol.js';
 import {findNearestClearSpot,MAX_SEARCH,OPEN_AREA} from './safe-spot.js';
 import {createHouseSigns} from './house-signs.js';
@@ -88,7 +88,7 @@ import {createIndoorCamera} from './indoor-camera.js';
 import {polishWorld} from './visuals.js';
 import {createMovementInput} from './input.js';
 import {createCharacter,loadCharacterAssets,characterAssetsReady,SOLE_LIFT} from './character.js';import {createMenuScene} from './menu-scene.js';import {createSky,INDOOR_EXPOSURE} from './sky.js';import {createShadows} from './shadows.js';import {createMenuLive,MENU_FPS,MENU_FPS_LOW,MENU_STILL,creatorReturn,menuVehicleFor} from './menu-scene-rules.js';
-import {palettes,defaults,loadAppearance,saveAppearance,normalizeAppearance,BODIES,OUTFITS,PART_KEYS,CLOTHES_KEYS,partChoices,quickOutfits,switchBody,randomLook} from './appearance.js';
+import {outfit as makeOutfit,palettes,defaults,loadAppearance,saveAppearance,normalizeAppearance,BODIES,OUTFITS,PART_KEYS,CLOTHES_KEYS,partChoices,quickOutfits,switchBody,randomLook} from './appearance.js';
 // Decode the embedded character models once, before any character (player, clerks, pedestrians) is built.
 await loadCharacterAssets();
 const $=id=>document.getElementById(id);
@@ -127,7 +127,7 @@ const trees=[],lampMeshes=[]; // trees: the camera's list of fading hand-built t
 // Oak Street's trees. Kept clear of shop signs, doorways and the crosswalk approach. They are placed as models once the world exists (below).
 const OAK_TREES=[[-9,-4.5],[10,-4.5],[28,-4.5],[43,-6.5],[-14,19],[7,19],[32,19],[49,19],[-18,-31],[-18,-43],[-43,18]]; // tests/street-trees.mjs: none may stand on a road
 function lamp(x,z){const post=box(.12,5,.12,x,2.5,z,'#354342');post.material=post.material.clone();post.material.transparent=true;lampMeshes.push(post);box(1,.15,.55,x+.35,5,z,'#394644');cityLampHeads.push(box(.75,.04,.4,x+.35,4.9,z,'#f2e4b7'))}[-10,15,42].forEach(x=>{lamp(x,-4.6);lamp(x,17)});
-const pedestrians=createPedestrians(scene);
+const pedestrians=createPedestrians(scene);const hal=createHal({scene,createCharacter,outfit:makeOutfit,groundAt:standHeight}); // G3: Hal Brennan in person at the farm (hal.js)
 for(let x of[9,27]){box(2,.18,.7,x,.65,17.5,'#876e50');box(2,.55,.13,x,1,17.85,'#876e50');box(.12,.7,.55,x-.8,.3,17.5,'#394a42');box(.12,.7,.55,x+.8,.3,17.5,'#394a42')}box(.8,1.2,.8,11,.6,-4.5,'#435c4f',true);
 polishWorld(scene,box,label,trees);for(const [x,title] of Object.values(MAP.shops).map(shop=>[shop.x,shop.sign]))label(title,x,2.95,-8.08,2.1,0,'#24483f','#f1ebd9',.25);
 for(const x of [3.8,-10.2]){box(.85,.8,.55,x,.55,-7,'#637f70',true);label('DELIVERIES',x,1.06,-6.7,.8,0,'#29473b','#e9e3c7',.16)}
@@ -267,11 +267,11 @@ function loadForklift(room){if(forkView||forkLoading)return;forkLoading=true;Pro
 function updatePalletTags(){const o=shop&&officeByKey(shop);if(!o||o.kind!=='warehouse'||!o.room.updateTags)return;const extra=[],fl=forkLoadOf(GameState.progress);if(fl>0&&forkView){const at=forklift.toWorld(fork.state,0,fp.CARRY_Z);extra.push({x:at.x,y:forkView.topY+.25,z:at.z,count:fl,product:'planks',order:palletsOf(GameState.progress.companies?.ridgeline).find(q=>q.at.fork)?.order||0})}o.room.updateTags(camera,{x:me.position.x,z:me.position.z},extra)} // the tags above the pallets (pallet-tags.js), the one on the forks too
 function updateFork(){if(forkView)forkView.set(fork.state,forkLoadOf(GameState.progress))}
 const forkBlocks=(x,z)=>{if(fork.on||!forkView||(fork.where==='outside')!==!shop)return false;const s=fork.state,dx=x-s.x,dz=z-s.z,c=Math.cos(s.yaw),n=Math.sin(s.yaw);return Math.abs(dx*c-dz*n)<.85&&Math.abs(dx*n+dz*c)<1.9} // a parked forklift is solid to a walker
-function getOnFork(){const pr=GameState.progress;if(!onRidgeline()||careerOf(pr,'ridgeline').rank<4){toast('The forklift is for Ridgeline Yard hands (rank 4) and up, on shift.');return}if(pr.carry){toast('Put down what you are carrying first.');return}
+function getOnFork(){const pr=GameState.progress;if(!onRidgeline()||careerOf(pr,'ridgeline').rank<4){toast('The forklift is for Ridgeline Yard hands (rank 4) and up, on shift.');return}if(pr.carry||parcelHeld(pr)){toast(pr.carry?'Put down what you are carrying first.':PARCEL_HANDS);return}
  stowTool();{player.updateMatrixWorld(true);const h=avatar.bone?.('Hips');if(h){const v=new THREE.Vector3(),o=new THREE.Vector3();h.getWorldPosition(v);player.getWorldPosition(o);if(v.y-o.y>.6&&v.y-o.y<1.3)forkHips=v.y-o.y}}fork.on=true;fork.state={...fork.state,speed:0};keys.clear();toast('On the forklift: the controls are in the vehicle panel')}
 // Seated at the wheel: the thighs forward (character.js seated pose) and both hands on the steering wheel (forklift-local (±0.14, 1.5, -0.21), turned into the character's own frame)
 const forkHand={R:new THREE.Vector3(),L:new THREE.Vector3()};
-let cabHeld=false;const cabHand=new THREE.Vector3(),cabRim=new THREE.Vector3(),cabZ=new THREE.Vector3(0,0,1);function updateCabPose(){const s=driving.seatedAt();avatar.setSeated(!!s);if(s&&s.driver){const m=driving.active.mesh.userData,sw=m.steeringWheel,a=m.seats.driver,g=m.grip;for(const [side,k] of [['R',-1],['L',1]]){cabRim.set(Math.sin(k*g.angle)*g.radius,Math.cos(k*g.angle)*g.radius,0).applyAxisAngle(cabZ,sw.rotation.z);avatar.reach(side,cabHand.set(sw.position.x+cabRim.x-a[0],sw.position.y+cabRim.y-(a[1]-forkHips),sw.position.z-g.back-(a[2]+g.hips)),1);avatar.setHandCurl(side,.8)}avatar.setLean(g.lean);cabHeld=true}else if(cabHeld){cabHeld=false;avatar.clearReach();avatar.setLean(0);avatar.setHandCurl('R',0);avatar.setHandCurl('L',0)}} // seated in the shortbed: both hands on the steering wheel (reach targets are in the player's own frame, which here is the truck's)
+let cabHeld=false;const cabHand=new THREE.Vector3(),cabRim=new THREE.Vector3(),cabZ=new THREE.Vector3(0,0,1);function updateCabPose(){const s=driving.seatedAt();avatar.setSeated(!!s);const rh=s&&s.driver?driving.riderHands(forkHips):null;if(rh){for(const [sd,p] of rh){avatar.reach(sd,cabHand.set(p.x,p.y,p.z),1);avatar.setHandCurl(sd,.8)}avatar.setLean(driving.active.mesh.userData.grip.lean);cabHeld=true}else if(s&&s.driver){const m=driving.active.mesh.userData,sw=m.steeringWheel,a=m.seats.driver,g=m.grip;for(const [side,k] of [['R',-1],['L',1]]){cabRim.set(Math.sin(k*g.angle)*g.radius,Math.cos(k*g.angle)*g.radius,0).applyAxisAngle(cabZ,sw.rotation.z);avatar.reach(side,cabHand.set(sw.position.x+cabRim.x-a[0],sw.position.y+cabRim.y-(a[1]-forkHips),sw.position.z-g.back-(a[2]+g.hips)),1);avatar.setHandCurl(side,.8)}avatar.setLean(g.lean);cabHeld=true}else if(cabHeld){cabHeld=false;avatar.clearReach();avatar.setLean(0);avatar.setHandCurl('R',0);avatar.setHandCurl('L',0)}} // seated in the shortbed: both hands on the steering wheel (reach targets are in the player's own frame, which here is the truck's)
 function updateForkPose(){if(!fork.on){updateCabPose();return}avatar.setSeated(true);const y=1.5-(forklift.SEAT_TOP+FORK_SIT-forkHips),z=-.21-forklift.SEAT.z;forkHand.R.set(-.14,y,z);forkHand.L.set(.14,y,z);avatar.reach('R',forkHand.R,1);avatar.reach('L',forkHand.L,1);avatar.setHandCurl('R',.8);avatar.setHandCurl('L',.8)}
 function getOffFork(){const s=fork.state;fork.on=false;avatar.setSeated(false);avatar.clearReach();avatar.setHandCurl('R',0);avatar.setHandCurl('L',0);fork.state={...s,speed:0};const spot=[[-1.45,0],[1.45,0],[0,-2.3],[-1.9,-1.4],[1.9,-1.4]].map(([x,z])=>forklift.toWorld(s,x,z)).find(p=>!blocked(p.x,p.z))||forklift.seatOf(s);placeSafely(spot.x,.02,spot.z);keys.clear();updateFork()}
 // Physical forks (DESIGN 4.16 I, step 2): there is no E to lift or set a pallet down. The forks go into a pallet's pocket (fork-pallets.js), raising them lifts it, and lowering a carried pallet onto a free shelf
@@ -442,11 +442,29 @@ function notifyPhone(app,text){
  queueToast(text);phone?.notify(app);audio.ping();
 }
 function toast(text){showToast(text,4500)}
-function takeGig(id){const r=acceptContract(GameState.progress,id);if(r.error){toast(r.error);return}GameState.progress=r.state;persist();toast('Gig accepted · '+GameState.progress.activeJob.title+' · Follow the gold marker')}
+function takeGig(id){const r=acceptContract(GameState.progress,id,me.position);if(r.error){toast(r.error);return}GameState.progress=r.state;persist();toast('Gig accepted · '+GameState.progress.activeJob.title+' · Follow the gold marker')}
 // The starter story (starter.js, "A Hand for Hal"): events move it on; the truck beats wait for the short flatbed.
-function storyEvent(event,data){const p=GameState.progress,r=advanceStarter(p,event,data);if(r.error)return false;const cash=r.cash||0;GameState.progress={...p,starter:r.state,cash:p.cash+cash,routine:{...p.routine,earned:p.routine.earned+cash}};notifyPhone('player',r.message+(cash?' · +'+money(cash):''));return true}
-function storyTick(){const p=GameState.progress,s=p.starter;if(!s||s.done||inside||s.step>3)return;if(s.step===0){if(!(p.messages||[]).some(m=>m.text.startsWith('Noah: Come by')))notifyPhone('player','Noah: Come by the market, I could use a hand.')}else if(s.step===3&&Math.hypot(me.position.x-STORY_PLACES.farmhouse.x,me.position.z-STORY_PLACES.farmhouse.z-4)<14)storyEvent('arrived')}
-function skipChoice(){const p=GameState.progress,s=p.starter;return s&&!s.done&&s.step<=1&&!p.completed?[{label:'Skip the introduction',run:()=>speak(shops.market.clerk.group,'Noah','If you skip, there is no story and no truck from Hal. He will sell you one for $2,800 later. Skip anyway?',[{label:'Yes, skip it',run:()=>{GameState.progress={...GameState.progress,starter:skipStarter()};persist();toast('Introduction skipped.')}},{label:'No, keep going',run:()=>{}}])}]:[]}
+let storyKnocks=0; // counted crashes of the loan truck while the egg crates are on it (not saved: a reload mid-drive forgives them)
+function storyEvent(event,data){const r=applyStory(GameState.progress,event,data);if(r.error){if(r.soft)notifyPhone('player',r.error);return false}GameState.progress=r.progress;if(r.moved)driving.place(r.moved.uid,r.moved.pose);notifyPhone('player',r.text);persist();return true}
+let storyCargoKey='',storyPallet=null;
+function syncStoryCargo(s){const uid=s?.loanUid,want=storyPalletHidden(s),f=uid?driving.byId.get(uid):null; // G3b: Hal's crates: while the story says 'loaded' there are STORY_CRATES crates on the loan truck's deck (cargo.js, one InstancedMesh) and the pallet by the barn is shrunk away; otherwise the deck is cleared of crates and the pallet is back
+if(f){const d=storyDeck(s,driving.cargoOf(uid),f.spec.model);if(d)driving.setCargo(uid,d.cargo)} // every frame, cheap: a driving.sync from the saved list cannot lose the crates
+const key=want?'1':'0';if(key===storyCargoKey)return;storyCargoKey=key;if(!storyPallet){scene.traverse(o=>{if(!storyPallet&&o.isMesh&&o.name==='prop-prop.pallet-crate'&&Math.abs(o.position.x-STORY_PLACES.crates.x)<.5&&Math.abs(o.position.z-STORY_PLACES.crates.z)<.5)storyPallet=o})}if(!storyPallet)return;storyPallet.scale.setScalar(want?.001:1)}
+ // the pallet: world.js sets only .visible each frame, never the scale; its collider stays (removing it would need a world.js edit)
+function storyTick(){const p=GameState.progress,s=p.starter;syncStoryCargo(s);if(!s||s.done||inside)return;if(s.step===0){if(!(p.messages||[]).some(m=>m.text.startsWith('Noah: Come by')))notifyPhone('player','Noah: Come by the market, I could use a hand.')}else if(s.step>=4&&s.step<=9){const r=ensureLoan(p);if(r){GameState.progress=r.progress;driving.sync(r.progress.vehicles);notifyPhone('player',r.text);persist()}if(s.step===8&&p.housing?.rented)storyEvent('rented')}}
+const storyKnock=e=>{const s=GameState.progress.starter;if(s&&s.step===4&&s.loaded&&e.id===s.loanUid)storyKnocks++};
+const storyFuel=(id,frac)=>{const s=GameState.progress.starter;if(s&&s.step===5&&id===s.loanUid&&frac>=.5)storyEvent('refuelled')}; // half a tank counts as filling up
+const loanNear=(pt,r)=>{const s=GameState.progress.starter,f=s?.loanUid&&driving.byId.get(s.loanUid);return !!f&&Math.hypot(f.state.x-pt.x,f.state.z-pt.z)<r};
+function halChoice(id){if(id==='groceries'){const r=startLoan(GameState.progress);if(r.error){toast(r.error);return}GameState.progress=r.progress;driving.sync(r.progress.vehicles);notifyPhone('player',r.text);persist();speak(hal.group,'Hal Brennan','Keys are in her. Four crates of eggs are on the pallet by the barn: take them to Noah.')}else if(id==='buy'){const r=buyFromHal(GameState.progress);if(r.error){toast(r.error);return}GameState.progress=r.progress;driving.sync(r.progress.vehicles);persist();speak(hal.group,'Hal Brennan','She is in the yard. Keep her running.');toast(r.text)}}
+function talkHal(){const t=halTalk(GameState.progress);speak(hal.group,'Hal Brennan',t.text.replace(/^Hal: /,''),t.choices.map(c=>({label:c.label,run:()=>halChoice(c.id)})))}
+function storyCandidates(add){const p=GameState.progress,s=p.starter;if(!s||inside||shop)return;
+ if(hal.visible&&halHere(p))add('hal',{x:hal.x,z:hal.z},()=>entityPoint(hal.group),'Talk to Hal',talkHal,2.4);
+ if(s.done||s.step!==4)return;const C=STORY_PLACES.crates,M=STORY_PLACES.market;
+ if(!s.loaded)add('story-load',C,()=>new THREE.Vector3(C.x,1.3,C.z),'Load the egg crates onto the truck',()=>{if(!loanNear(C,CRATE_REACH)){toast('Park the truck beside the crates first.');return}{const lu=GameState.progress.starter?.loanUid,bed=lu?driving.cargoOf(lu):null;if(bed?.length&&!hasCrates(bed)){toast('Clear the timber off the deck first.');return}}storyKnocks=0;storyEvent('loaded')},2.6);
+ else add('story-unload',M,()=>new THREE.Vector3(M.x,1.3,M.z),'Hand the egg crates to Noah',()=>{if(!loanNear(M,MARKET_REACH)){toast('Bring the truck to the market first.');return}if(storyEvent('delivered-crates',{quality:knockQuality(storyKnocks)}))storyKnocks=0},3.2)}
+function storyAimed(o){if(o.kind!=='door'||inside||shop)return o;const so=starterObjective(GameState.progress),pt=so&&so.aim!=='market'?aimPoint(so.aim):null;return pt?{...o,aim:pt,beacon:{x:pt.x,z:pt.z,y:standHeight(pt.x,pt.z),lift:.7,hideWithin:2.4}}:o}
+// G3: the story ticks and Hal live above (storyTick, storyCandidates, halChoice)
+function skipChoice(){const p=GameState.progress,s=p.starter;return s&&!s.done&&s.step<=1&&!p.completed?[{label:'Skip the introduction',run:()=>speak(shops.market.clerk.group,'Noah','If you skip, there is no story and no truck from Hal. He will sell you one for \$'+SKIP_SALE_PRICE/100+' later. Skip anyway?',[{label:'Yes, skip it',run:()=>{GameState.progress={...GameState.progress,starter:skipStarter()};persist();toast('Introduction skipped.')}},{label:'No, keep going',run:()=>{}}])}]:[]}
 const toastQueue=[];let toastShowing=false;
 function showToast(text,ms){$('jobToast').textContent=text;$('jobToast').hidden=false;toastShowing=true;clearTimeout(toast.timer);toast.timer=setTimeout(()=>{toastShowing=false;$('jobToast').hidden=true;const next=toastQueue.shift();if(next)showToast(next,3800)},ms)}
 // a notification toast: shown at once when nothing is showing, otherwise it waits (the three newest are kept); action feedback (toast) still shows at once
@@ -474,7 +492,7 @@ function changeHousing(action){
  if(action==='rest'){startSleep();return}
  const result=housingTransaction(GameState.progress,action,{atEntrance:!inside&&!shop&&nearby(me.position,STUDIO),atBed:inside&&!shop&&Math.hypot(me.position.x-home.BED.x,me.position.z-home.BED.z)<1.4});
  if(result.error){toast(result.error);return}GameState.progress=result.state;persist();$('dialog').hidden=true;clearWorldPanel();modal=false;keys.clear();
- if(action==='rent'){toast('Keys received · Studio 2B is yours to rent.');enterHome()}
+ if(action==='rent'){toast('Keys received · Studio 2B is yours to rent.');enterHome();storyEvent('rented')}
  else toast('Bills paid.');
 }
 function showBills(){const h=GameState.progress.housing,due=totalDue(h);showDialog('HOME / WEEK '+weekNumber(h.day),'Your weekly bills.',h.rented?'Unpaid rent: '+money(h.rentDue)+'. Unpaid utilities: '+money(h.utilitiesDue)+'. Next bill: '+weekday(h.nextBillDay)+' (Week '+weekNumber(h.nextBillDay)+'), in '+dueIn(h)+' days. Weekly rent is $60; estimated utilities are '+money(estimatedUtilities(h))+' ($7 base for the older studio, plus $0.15 per home-cooked meal). No offline charges.':'Visit 18 Oak Street. Move-in is $90: a $30 deposit and $60 for your first week. Utilities start at $7 per week.','Total due '+money(due)+' · cash after payment '+money(GameState.progress.cash-due),due?()=>changeHousing('pay'):null,due?'Pay bills · '+money(due):'')}
@@ -499,7 +517,7 @@ function showWorld(anchor,name,text,choices=[],actor=null){
 function speak(actor,name,text,choices=[]){showWorld(()=>entityPoint(actor),name,text,choices,actor)}
 function station(point,name,text,choices){showWorld(()=>worldPoint(point),name,text,choices)}
 // The owner of a company at its office (0.35, DESIGN 4.15): the interview that hires you, promotions, tools waiting for you, and how a shift works.
-function ownerMenu(o){const id=o.employer,p=GameState.progress,actor=o.room.clerk.group,owner=ownerOf(p,id).name,company=employerName(p,id),c=careerOf(p,id),e=employerById(id),choices=[];
+function ownerMenu(o){if(o.employer==='ridgeline')storyEvent('note-given');const id=o.employer,p=GameState.progress,actor=o.room.clerk.group,owner=ownerOf(p,id).name,company=employerName(p,id),c=careerOf(p,id),e=employerById(id),choices=[];
  if(!c.hired)choices.push({label:'I’m looking for work.',run:()=>speak(actor,owner,'Everyone starts at the bottom here. You get an axe, '+money(e.ranks[0].wage)+' an hour while you’re on our land, and a little for every log. Shifts run 6 AM to 6 PM, no night work.',[{label:'I’ll take it.',run:()=>interview(o)},{label:'Let me think about it.',run:()=>{}}])});
  else{const n=nextRank(p,id);if(n&&!n.top)choices.push({label:'Am I due a promotion?',run:()=>promotionTalk(o)});if(c.owed.length)choices.push({label:'Anything waiting for me?',run:()=>{const r=collectOwed(GameState.progress,id);if(r.error){toast(r.error);return}GameState.progress=r.state;persist();speak(actor,owner,'Here you go: '+r.handed.map(t=>itemById(t)?.name||t).join(', ')+'.')}});
   choices.push({label:'How does a shift work?',run:()=>speak(actor,owner,'Clock in on your phone (Jobs) or at the time clock by the wall, from 6 AM to 5:30 PM. You’re paid by the hour while you’re on our land, plus for every log and plank. Do the day’s tasks for a bonus. I close at six.')})}
@@ -570,16 +588,16 @@ function candidates(){const all=[],add=(id,point,anchor,label,run,range=1.5,key)
   if(floor===(home.BED_FLOOR||0))add('bed',B,()=>worldPoint({...B,y:.8+up}),'Sleep',()=>station({...B,y:1+up},'Take a rest?',(multiplayer.online?'Restore your energy fully. The clock keeps running while you are online.':'Sleep until 6:00 AM and restore your energy fully. You wake a little hungry and thirsty.'),[{label:'Rest and recover',run:()=>changeHousing('rest')}]),1.4);
   if(st){if(floor===0)add('up',{x:st.x,z:st.footZ},()=>worldPoint({x:st.x,y:1.4,z:st.footZ}),'Go upstairs',()=>changeFloor(1),1.5);else add('down',{x:st.x,z:st.topZ},()=>worldPoint({x:st.x,y:1.4+up,z:st.topZ}),'Go downstairs',()=>changeFloor(0),1.5)}
   return all}
- const gig=GameState.progress.activeJob;
- if(gig?.stage==='return')add('phone-gig',gig.returnLocation,()=>new THREE.Vector3(gig.returnLocation.x,1.4,gig.returnLocation.z),'Report back · collect '+money(gig.reward),()=>{
-   const result=completeContract(GameState.progress,me.position);
+ const gig=GameState.progress.activeJob;{const dr=GameState.progress.gigs?.active?.drop;if(dr&&Math.hypot(dr.x-me.position.x,dr.z-me.position.z)<2.6)add('parcel-pick',{x:dr.x,z:dr.z},()=>new THREE.Vector3(dr.x,.6+heightAt(dr.x,dr.z)+(world.floorAt(dr.x,dr.z)??0),dr.z),'Pick up the parcel',pickUpParcel,1.8)}
+ if(gig?.stage==='return'&&gig.dropped)add('phone-gig-wait',gig.returnLocation,()=>new THREE.Vector3(gig.returnLocation.x,1.4,gig.returnLocation.z),'Pick up the parcel first',()=>toast('Your parcel is on the ground. Pick it up first.'));else if(gig?.stage==='return')add('phone-gig',gig.returnLocation,()=>new THREE.Vector3(gig.returnLocation.x,1.4,gig.returnLocation.z),'Report back · collect '+money(gig.reward),()=>{
+   const dd=gigDoor(GameState.progress);if(dd){showWorld(()=>new THREE.Vector3(gig.returnLocation.x,1.4,gig.returnLocation.z),dd.name,dd.text,dd.choices.map(c=>({label:c.label,run:()=>{closeWorldDialog();const r=completeContract(GameState.progress,me.position,'street',c.tip);if(r.error){toast(r.error);return}GameState.progress=r.state;persist();storyEvent('gig-done');toast('Gig complete, '+money(r.paid)+' earned'+(c.tip?' (tip '+money(c.tip)+')':''))}})));return}const result=completeContract(GameState.progress,me.position);
    if(result.error){toast(result.error);return}
-   GameState.progress=result.state;persist();toast('Gig complete · '+money(result.paid)+' earned');
+   GameState.progress=result.state;persist();storyEvent('gig-done');toast('Gig complete · '+money(result.paid)+' earned');
  },1.35);
 
  add('home',{x:STUDIO.x,z:-8.1},()=>new THREE.Vector3(1,1.5,-8.15),GameState.progress.housing.rented?'Enter your studio':'View studio listing',()=>{if(GameState.progress.housing.rented)enterHome();else showWorld(()=>new THREE.Vector3(1,1.6,-8.15),'Studio 2B · To let','Furnished studio. $90 move-in includes a $30 deposit and the first week’s $60 rent. Utilities start at $7 per week.',[{label:'Rent studio · $90',run:()=>changeHousing('rent')}])},2.8);
  if(GameState.progress.phase==='carrying'&&GameState.progress.completed%3!==1){const r=routeFor(GameState.progress);add('delivery',r,()=>new THREE.Vector3(r.x,1.3,r.z),'Leave delivery · '+money(r.pay),()=>station(r,'Delivery collection box','Order for '+r.name+'. Payment: '+money(r.pay)+'.',[{label:'Place order & collect payment',run:()=>finishJob('deliver')}]),1.4)}
- for(const person of pedestrians.people)add('person-'+person.name,person.group.position,()=>entityPoint(person.group),'Talk to '+person.name,()=>speak(person.group,person.name,'Hey! How’s your day going?',[{label:'Any advice for someone new?',run:()=>speak(person.group,person.name,person.line)},{label:'Nice to meet you.',run:()=>speak(person.group,person.name,'You too. See you around the neighborhood!')}]),1.5);
+ storyCandidates(add);for(const person of pedestrians.people)add('person-'+person.name,person.group.position,()=>entityPoint(person.group),'Talk to '+person.name,()=>speak(person.group,person.name,'Hey! How’s your day going?',[{label:'Any advice for someone new?',run:()=>speak(person.group,person.name,person.line)},{label:'Nice to meet you.',run:()=>speak(person.group,person.name,'You too. See you around the neighborhood!')}]),1.5);
  if(!inside&&!shop){
   const pump=fuel.pumpAt(me.position.x,me.position.z,USE_RANGE_M);
   if(pump){const at=()=>new THREE.Vector3(pump.use.x,1.2,pump.use.z);
@@ -648,7 +666,7 @@ let putting=null,bendNow=0; // bendNow: 0..1, how far down the bend is; the carr
 const LOG_HOME_V=new THREE.Vector3(LOG_HOME.x,LOG_HOME.y,LOG_HOME.z),LOG_GROUND_V=new THREE.Vector3(LOG_GROUND.x,LOG_GROUND.y,LOG_GROUND.z),LOG_DOWN=LOG_GROUND_V.clone().sub(LOG_HOME_V);let logPose=0; // putting: {elapsed,done,apply}; logPose: how far the right hand has gone up to steady the shoulder log
 // The bend (carry.js bendAmount): every pick-up from the ground and every put-down leans the spine 50 degrees and drops the hips 0.22 m; `apply` runs at the bottom.
 function beginBend(apply){if(putting||actionBusy()||inside||shop)return false;keys.clear();fuel.putBack();putting={elapsed:0,done:false,apply};return true}
-function putDownCarried(){const p=GameState.progress;if(!p.carry||inside||shop||putting||actionBusy())return;const planks=p.carry.kind==='planks',reach=planks&&sawmillCtl?.ready?Math.max(1.1,Math.max(sawmillCtl.plankSize.x,sawmillCtl.plankSize.z)/2+.7):1.1;let x=me.position.x+Math.sin(me.rotation.y)*reach,z=me.position.z+Math.cos(me.rotation.y)*reach;const bad=(a,b)=>blocked(a,b);if(bad(x,z)){ // in front is blocked: try the spot underfoot, then a ring around you, so a put-down is never a dead end
+function putDownCarried(){const p=GameState.progress;if(!p.carry&&parcelHeld(p)){putDownParcel();return}if(!p.carry||inside||shop||putting||actionBusy())return;const planks=p.carry.kind==='planks',reach=planks&&sawmillCtl?.ready?Math.max(1.1,Math.max(sawmillCtl.plankSize.x,sawmillCtl.plankSize.z)/2+.7):1.1;let x=me.position.x+Math.sin(me.rotation.y)*reach,z=me.position.z+Math.cos(me.rotation.y)*reach;const bad=(a,b)=>blocked(a,b);if(bad(x,z)){ // in front is blocked: try the spot underfoot, then a ring around you, so a put-down is never a dead end
   let found=false;for(const [d,k] of [[0,0],[1.1,8],[1.8,8],[2.6,8]]){for(let i=0;i<(k||1)&&!found;i++){const a=i/(k||1)*Math.PI*2,cx=me.position.x+Math.sin(a)*d,cz=me.position.z+Math.cos(a)*d;if(!bad(cx,cz)){x=cx;z=cz;found=true}}if(found)break}
   if(!found){toast('Find some clear ground to put it down.');return}}
  const rot=me.rotation.y+Math.PI/2,q=quarterOf(me.rotation.y); // the stack lies across the way you were facing, as you carried it
@@ -677,7 +695,7 @@ let fillBlocked=false,fillAcc=0,fillSave=0,fillToast=0,fHeld=false,fuelFlow=0,fu
 const NOZZLE_HAND=new THREE.Vector3(-.26,1.08,.5),NOZZLE_POLE=new THREE.Vector3(-.5,-.4,-.1),nozzleHandAt=new THREE.Vector3(),listenerAt=()=>({x:me.position.x,z:me.position.z});
 function takeNozzle(pump){
  if(inside||shop||driving.active||actionBusy()||putting)return;
- if(GameState.progress.carry){toast('Your hands are full. Put it down first (X).');return}
+ if(GameState.progress.carry||parcelHeld(GameState.progress)){toast(GameState.progress.carry?'Your hands are full. Put it down first (X).':PARCEL_HANDS);return}
  if(fuel.held){toast('You already have a nozzle out.');return}
  stowTool();fuel.take(pump);fillBlocked=false;fillSale={mgal:0,cents:0};fuel.setReadout(pump,fillSale);audio.click(pump.use,listenerAt());
  toast(`${fuelTitle(pump.fuel)} nozzle in your hand. Go to the glowing tank cap and hold F to fill.`);
@@ -737,7 +755,7 @@ function fuelTick(dt){
  driving.setFuel(id,r.target.mgal);
  GameState.progress={...GameState.progress,cash:r.cash};
  fillSale=fillSale||{mgal:0,cents:0};fillSale={mgal:fillSale.mgal+r.soldMgal,cents:fillSale.cents+r.cents};fuel.setReadout(fuel.held,fillSale);
- fuelFlow=1;fuelFull=r.target.mgal/info.capacityMgal;
+ fuelFlow=1;fuelFull=r.target.mgal/info.capacityMgal;storyFuel(id,fuelFull);
  fillSave+=dt;if(fillSave>=1){persist();fillSave=0}
  fillToast+=dt;if(fillToast>=.5){fillToast=0;toast(`Filling ${fuelName(fuel.held.fuel)} · ${fuelText(r.target.mgal,info.capacityMgal)} · ${money(r.cash)}`)}
  if(r.soldMgal<want){fillBlocked=true;fillAcc=0;fuelFlow=0;toast(r.target.mgal>=info.capacityMgal?`The tank is full. ${gallons(fillSale.mgal)} gal for ${money(fillSale.cents)}.`:'You cannot pay for any more fuel.');audio.chime(fuel.held.use,listenerAt(),{ok:r.target.mgal>=info.capacityMgal})}
@@ -746,14 +764,14 @@ function fuelTick(dt){
 const shake={t:0,amp:0,off:new THREE.Vector3()};let hitStop=0;const calm=()=>typeof matchMedia==='function'&&matchMedia('(prefers-reduced-motion: reduce)').matches; // VD7a: hitStop = seconds of vehicle freeze still owed (eaten by stepWorld; the loop, clock and saves never pause); calm = reduced motion: no shake, no freeze, a softer flash
 function crashFeedback(e){const q=calm();if(e.at&&e.dir)debris.burst(e.at,e.dir,e.points);const fl=$('hitFlash');if(fl){fl.style.setProperty('--flash',(flashOf(e.total)*(q?.4:1)).toFixed(2));fl.classList.remove('on');void fl.offsetWidth;fl.classList.add('on')}vehicleHud.pulse();if(!q)hitStop=Math.max(hitStop,hitStopOf(e.total))} // red edge flash (CSS animation, once), debris at the contact point, the panel pulse, the hit-stop
 function driveEvent(e){const f=driving.byId.get(e.id);if(!f)return;const nm=f.spec.name.replace(/^Eastbank /,'');
- if(e.type==='crash'){if(!calm()){shake.amp=Math.max(shake.t>0?shake.amp:0,shakeAmplitude(e.total));shake.t=SHAKE_SECONDS}crashFeedback(e);audio.crash(e);if(e.stall){audio.stall();const L=GameState.progress.life;GameState.progress.life={...L,energy:Math.max(0,L.energy-ENERGY_COST)}}if(e.changed)toast(bandToast(nm,e.cond));else if(e.stall)toast('The engine stalled. Press W to restart.')}
+ if(e.type==='crash'){storyKnock(e);if(!calm()){shake.amp=Math.max(shake.t>0?shake.amp:0,shakeAmplitude(e.total));shake.t=SHAKE_SECONDS}crashFeedback(e);audio.crash(e);if(e.stall){audio.stall();const L=GameState.progress.life;GameState.progress.life={...L,energy:Math.max(0,L.energy-ENERGY_COST)}}if(e.changed)toast(bandToast(nm,e.cond));else if(e.stall)toast('The engine stalled. Press W to restart.')}
  else if(e.type==='crank')audio.ignition(me.position,listenerAt(),{tier:f.cls.tier,seconds:e.seconds});
  else if(e.type==='start'){const tip=driving.exhaust(f);if(tip)smoke.burst(tip,START_PUFFS[f.cls.tier]??6)}
  else if(e.type==='dead')toast('It will not start: it is wrecked.');else if(e.type==='bog'&&!driveEvent.told){driveEvent.told=true;toast('Stuck in the mud: rock it with W and S, wait a few seconds, or call the tow service for a pull-out.')}}
 function applyShake(dt){if(shake.t>0){shake.t-=dt;const o=shakeOffset(shake.t,shake.amp);shake.off.set(o.x,o.y,o.z);camera.position.add(shake.off)}else shake.off.set(0,0,0)}// Driving (driving.js, vehicle.js): E at a vehicle's driver door gets in (refused while carrying), E while driving gets out once you are below 1 m/s, at the door (else the other side, behind, in front).
 function enterVehicle(id,seat='driver',go=false){
  if(driving.active||inside||shop||consuming||putting||actionBusy())return;
- if(GameState.progress.carry){toast('Your hands are full. Put it down first (X).');return}
+ if(GameState.progress.carry||parcelHeld(GameState.progress)){toast(GameState.progress.carry?'Your hands are full. Put it down first (X).':PARCEL_HANDS);return}
  if(driving.byId.get(id)?.display){toast('It is not yours. Buy it at the dealership lot or order it on your phone.');return}
  if(!go&&driving.doorThen(id,seat,()=>enterVehicle(id,seat,true)))return;if(!driving.enter(id,seat))return;audio.prepare(driving.active.cls.id);fuel.putBack();if((driving.active.fuelMgal>0||!driving.active.spec.fuel)&&driving.active.cond>0){audio.ignition(me.position,listenerAt(),{tier:driving.active.cls.tier,seconds:driving.damageOf().crank});const tip=driving.exhaust();if(tip)smoke.burst(tip,START_PUFFS[driving.active.cls.tier]??6)}
  const at=driving.seat();me.position.x=at.x;me.position.z=at.z;me.rotation.y=driving.yaw;keys.clear();look.resetMotion();
@@ -813,7 +831,13 @@ function updateWorldUI(){
 const marker=new THREE.Group();marker.name='objective-beacon';const markerMaterial=new THREE.MeshBasicMaterial({color:'#d4e7b3',transparent:true,opacity:.8,depthWrite:false});
 const ring=new THREE.Mesh(new THREE.RingGeometry(.62,.72,32),markerMaterial);ring.rotation.x=-Math.PI/2;ring.position.y=.2;marker.add(ring);
 const diamond=new THREE.Mesh(new THREE.OctahedronGeometry(.16),markerMaterial);diamond.position.y=2.5;marker.add(diamond);scene.add(marker);
-const parcel=new THREE.Mesh(new THREE.BoxGeometry(.38,.32,.22),mat('#ad8c60'));parcel.position.set(0,1.16,-.25);player.add(parcel);
+const parcelProtos=new Map(),parcelProto=id=>{let m=parcelProtos.get(id);if(!m){m=createProp(id,{apply:x=>x});parcelProtos.set(id,m)}return m},parcel=createProp(PARCEL_DEFAULT,{apply:m=>m});let parcelModel=PARCEL_DEFAULT;;parcel.name='gig-parcel';parcel.visible=false;player.add(parcel); // G2b/G3b: the real carton model (small 0.30 x 0.20 x 0.20 m or medium 0.40 x 0.30 x 0.30 m, clean or dirty by client hash), ONE pooled mesh that swaps geometry and material (the other prototypes are never in the scene): in the arms in front of the chest while held, on the ground (scene child) once put down; the old brown BoxGeometry is gone
+let parcelMode='',parcelX=NaN,parcelZ=NaN; // syncParcel only moves the mesh when the mode or the saved drop spot changes: no per-frame allocation
+function syncParcel(old){const a=GameState.progress.gigs?.active,want=a?parcelModelId(a):parcelModel;if(want!==parcelModel){const pr=parcelProto(want);parcel.geometry=pr.geometry;parcel.material=pr.material;parcelModel=want}const mode=old||(a&&!a.drop)?'held':a&&a.drop&&!inside&&!shop?'ground':'';parcel.visible=mode!=='';if(!mode){parcelMode='';return}const d=mode==='ground'?a.drop:null;if(mode!==parcelMode||(d&&(d.x!==parcelX||d.z!==parcelZ))){parcelMode=mode;if(d){parcelX=d.x;parcelZ=d.z;scene.add(parcel);parcel.position.set(d.x,heightAt(d.x,d.z)+(world.floorAt(d.x,d.z)??0),d.z)}else{player.add(parcel);parcel.position.set(0,1,.36)}}}
+function putDownParcel(){if(inside||shop){toast('Put the parcel down outside.');return}if(putting||actionBusy())return;let x=me.position.x+Math.sin(me.rotation.y)*.9,z=me.position.z+Math.cos(me.rotation.y)*.9; // same spot search as putDownCarried: in front, else underfoot, else a ring
+  if(blocked(x,z)){let found=false;for(const [d,k] of [[0,0],[1.1,8],[1.8,8],[2.6,8]]){for(let i=0;i<(k||1)&&!found;i++){const a=i/(k||1)*Math.PI*2,cx=me.position.x+Math.sin(a)*d,cz=me.position.z+Math.cos(a)*d;if(!blocked(cx,cz)){x=cx;z=cz;found=true}}if(found)break}if(!found){toast('Find some clear ground to put it down.');return}}
+  beginBend(()=>{const r=dropGigParcel(GameState.progress,{x,z});if(r.error){toast(r.error);return}GameState.progress=r.state;persist();toast(r.message)})}
+function pickUpParcel(){beginBend(()=>{const r=pickGigParcel(GameState.progress);if(r.error){toast(r.error);return}GameState.progress=r.state;persist();toast(r.message)})}
 const workMarker=new THREE.Mesh(new THREE.RingGeometry(.35,.43,32),new THREE.MeshBasicMaterial({color:'#e7c681',side:THREE.DoubleSide,transparent:true,opacity:.85}));workMarker.rotation.x=-Math.PI/2;shops.cafe.scene.add(workMarker);
 const drinkCup=new THREE.Mesh(new THREE.CylinderGeometry(.07,.055,.17,10),mat('#eee3ce'));drinkCup.position.set(.32,1.12,.3);player.add(drinkCup);
 let customerKey='',customerRoute=[],customerWalking=false,customerLeaving=false;
@@ -828,17 +852,17 @@ function updateWork(dt){
  workMarker.visible=false;drinkCup.visible=shop==='cafe'&&GameState.progress.cafe.stage==='serve';
  const dest=targetFor(GameState.progress),route=routeFor(GameState.progress),carrying=GameState.progress.phase==='carrying';
  $('housingStatus').textContent=GameState.progress.housing.rented?'Studio 2B · Bills due '+money(totalDue(GameState.progress.housing))+' · next in '+dueIn(GameState.progress.housing)+' days':'No home · Studio move-in $90.00';
- $('clockStatus').textContent=weekday(GameState.progress.housing.day)+' · '+clockText(GameState.progress.routine)+' · Week '+weekNumber(GameState.progress.housing.day);$('clockChip').textContent=weekday(GameState.progress.housing.day).slice(0,3)+' · '+clockText(GameState.progress.routine);$('earningsStatus').textContent='Earned today '+money(GameState.progress.routine.earned);
+ $('clockStatus').textContent=weekday(hudDay())+' · '+formatClock(hudMinutes())+' · Week '+weekNumber(hudDay())+hudTag();$('clockChip').textContent=weekday(hudDay()).slice(0,3)+' · '+formatClock(hudMinutes());$('earningsStatus').textContent='Earned today '+money(GameState.progress.routine.earned);
  $('needsStatus').textContent='Food '+Math.round(GameState.progress.life.food)+'% · Thirst '+Math.round(GameState.progress.life.thirst)+'% · Energy '+Math.round(GameState.progress.life.energy)+'%';
  $('needsStatus').dataset.depleted=String(GameState.progress.life.food===0||GameState.progress.life.thirst===0);
  renderVitals(GameState.progress.life);
  $('locationName').textContent=shop?SHOPS[shop].name.toUpperCase():inside?(home.kind==='house'?home.name.toUpperCase():'STUDIO 2B'):zoneAt(me.position.x,me.position.z).label;$('locationSubtitle').textContent=inside&&home.kind==='house'?'Cedar Heights':shop||inside?(officeByKey(shop)?'Eastbank Works':'Oak & Alder'):zoneAt(me.position.x,me.position.z).subtitle;
  if(shop){const task=cafeTask(GameState.progress),isCafe=shop==='cafe',c=GameState.progress.cafe;const exit=Math.hypot(me.position.x-SHOP_EXIT.x,me.position.z-SHOP_EXIT.z)<1.5,counter=Math.hypot(me.position.x-COUNTER.x,me.position.z-COUNTER.z)<1.6,atTask=isCafe&&Math.hypot(me.position.x-task.x,me.position.z-task.z)<1.35;
- $('cash').textContent=money(GameState.progress.cash);$('objective').querySelector('.eyebrow').textContent=isCafe&&c.stage!=='off'?'ON SHIFT · ALDER COFFEE':'NEIGHBORHOOD';$('objective').querySelector('h2').textContent=isCafe?task.title:SHOPS[shop].name;$('objective').querySelector('p').textContent=isCafe?(c.stage==='off'?'Speak to Elena at the counter about café work. $24 per shift. Start 8 AM–4 PM.':'Orders served: '+c.served+'/2 · '+(c.stage==='brew'||c.stage==='serve'?'Ticket: '+ORDERS[c.customer].drink+'. ':'')+'Follow the floor marker. Clock out to collect wages.'):officeByKey(shop)?(officeByKey(shop).kind==='warehouse'?warehouseHint():'Talk to the owner at the counter, or use the time clock on the right wall. Open 6 AM–6 PM.'):'Visit the cashier for groceries. Open 7 AM–10 PM.';$('distance').textContent=busy?'Working… '+Math.round(busy.elapsed/busy.duration*100)+'%':'Talk at the counter (E or click) · walk out the front door to leave';$('direction').style.transform='none';$('prompt').hidden=!active||modal||!!busy||(!exit&&!counter&&!atTask);$('prompt').querySelector('span').textContent=atTask?task.title:exit?'Go outside':isCafe?'Order lunch':'Buy groceries';marker.visible=false;workMarker.visible=isCafe;workMarker.position.set(task.x,.04,task.z);parcel.visible=carrying;return}
+ $('cash').textContent=money(GameState.progress.cash);$('objective').querySelector('.eyebrow').textContent=isCafe&&c.stage!=='off'?'ON SHIFT · ALDER COFFEE':'NEIGHBORHOOD';$('objective').querySelector('h2').textContent=isCafe?task.title:SHOPS[shop].name;$('objective').querySelector('p').textContent=isCafe?(c.stage==='off'?'Speak to Elena at the counter about café work. $24 per shift. Start 8 AM–4 PM.':'Orders served: '+c.served+'/2 · '+(c.stage==='brew'||c.stage==='serve'?'Ticket: '+ORDERS[c.customer].drink+'. ':'')+'Follow the floor marker. Clock out to collect wages.'):officeByKey(shop)?(officeByKey(shop).kind==='warehouse'?warehouseHint():'Talk to the owner at the counter, or use the time clock on the right wall. Open 6 AM–6 PM.'):'Visit the cashier for groceries. Open 7 AM–10 PM.';$('distance').textContent=busy?'Working… '+Math.round(busy.elapsed/busy.duration*100)+'%':'Talk at the counter (E or click) · walk out the front door to leave';$('direction').style.transform='none';$('prompt').hidden=!active||modal||!!busy||(!exit&&!counter&&!atTask);$('prompt').querySelector('span').textContent=atTask?task.title:exit?'Go outside':isCafe?'Order lunch':'Buy groceries';marker.visible=false;workMarker.visible=isCafe;workMarker.position.set(task.x,.04,task.z);syncParcel(carrying);return}
 
 
  if(inside){$('cash').textContent=money(GameState.progress.cash);const house=home.kind==='house',held=GameState.progress.properties?.[home.id];$('objective').querySelector('.eyebrow').textContent=house?'YOUR HOME':'YOUR FIRST HOME';$('objective').querySelector('h2').textContent=house?home.name:'Make yourself at home.';$('objective').querySelector('p').textContent=house?'Rest, cook, and make yourself at home. '+(held?.tenure==='rent'?'Rent '+money(listingOf(home.id).rentCents)+' every 7 days; next due in '+Math.max(0,held.nextBillDay-GameState.progress.housing.day)+' days. Pay or leave in the Housing app.':'You own this home.'):'Rest, cook, and make yourself at home. Rent: $60 / week. Next bills: '+weekday(GameState.progress.housing.nextBillDay)+' in '+dueIn(GameState.progress.housing)+' days.';$('distance').textContent=house&&home.STAIRS?'Bed: rest · Stairs: go up or down · Door: go outside':'Bed: rest · Door: go outside';$('direction').style.transform='none';
-  const floor=home.room.floor||0,st=home.STAIRS,exit=floor===0&&Math.hypot(me.position.x-home.EXIT.x,me.position.z-home.EXIT.z)<1.5,bed=floor===(home.BED_FLOOR||0)&&Math.hypot(me.position.x-home.BED.x,me.position.z-home.BED.z)<1.4,kitchen=floor===0&&Math.hypot(me.position.x-home.KITCHEN.x,me.position.z-home.KITCHEN.z)<1.5,stairs=!!st&&Math.hypot(me.position.x-st.x,me.position.z-(floor===0?st.footZ:st.topZ))<1.5;$('prompt').hidden=!active||modal||(!exit&&!bed&&!kitchen&&!stairs);$('prompt').querySelector('span').textContent=exit?'Go outside':kitchen?'Prepare a meal':stairs?(floor===0?'Go upstairs':'Go downstairs'):'Rest and recover';marker.visible=false;parcel.visible=carrying;return}
+  const floor=home.room.floor||0,st=home.STAIRS,exit=floor===0&&Math.hypot(me.position.x-home.EXIT.x,me.position.z-home.EXIT.z)<1.5,bed=floor===(home.BED_FLOOR||0)&&Math.hypot(me.position.x-home.BED.x,me.position.z-home.BED.z)<1.4,kitchen=floor===0&&Math.hypot(me.position.x-home.KITCHEN.x,me.position.z-home.KITCHEN.z)<1.5,stairs=!!st&&Math.hypot(me.position.x-st.x,me.position.z-(floor===0?st.footZ:st.topZ))<1.5;$('prompt').hidden=!active||modal||(!exit&&!bed&&!kitchen&&!stairs);$('prompt').querySelector('span').textContent=exit?'Go outside':kitchen?'Prepare a meal':stairs?(floor===0?'Go upstairs':'Go downstairs'):'Rest and recover';marker.visible=false;syncParcel(carrying);return}
  $('cash').textContent=money(GameState.progress.cash);$('deliveryCount').textContent=GameState.progress.completed+' '+(GameState.progress.completed===1?'delivery':'deliveries')+' completed';
  $('objective').querySelector('.eyebrow').textContent=carrying?'ORDER COLLECTED':'DELIVERY WORK';
  $('objective').querySelector('h2').textContent=carrying?'Deliver to '+dest.name:starterObjective(GameState.progress)?.title||(GameState.progress.completed?'Ready for another?':'Earn your first wages.');
@@ -847,7 +871,7 @@ function updateWork(dt){
  $('distance').textContent=Math.round(distance)+' m · '+dest.name;
  const atJob=carrying&&nearby(me.position,dest),atApartment=nearby(me.position,STUDIO); // E here only delivers an order; shop doors need no prompt
  const atCar=vehicles.some(v=>Math.hypot(me.position.x-v.x,me.position.z-v.z)<1.6);$('prompt').hidden=!active||modal||(!atJob&&!atApartment&&!atCar&&!nearestPerson());$('prompt').querySelector('span').textContent=atJob?'Deliver order':atApartment?'Apartment entrance':atCar?'Inspect parked vehicle':'Talk to '+nearestPerson()?.name;
- parcel.visible=carrying;
+ syncParcel(carrying);
  if(active&&!modal){saveElapsed+=dt;if(saveElapsed>=4){saveElapsed=0;persist()}}
 }
 window.addEventListener('keydown',e=>{
@@ -1191,7 +1215,7 @@ phone=createPhone({document,getState:()=>GameState,gps:{state:gps,mapOptions:{bu
  onClose:()=>{modal=false;keys.clear();look.resetMotion()},
  onRefresh:()=>{storyEvent('read-message');const next=refreshGigBoard(GameState.progress);if(next!==GameState.progress){GameState.progress=next;persist()}},
  onAccept:id=>{
-   const result=acceptContract(GameState.progress,id);
+   const result=acceptContract(GameState.progress,id,me.position);
    if(result.error)return result;
    GameState.progress=result.state;persist();
    toast('Gig accepted · '+GameState.progress.activeJob.title+' · Follow the gold marker');
@@ -1279,7 +1303,6 @@ $('objectiveToggle').onclick=toggleObjective;
 function updateRing(){
  let ring=null;
  if(busy){const task=cafeTask(GameState.progress);ring={point:worldPoint({...task,y:1.4}),label:({brew:'Preparing coffee',serve:'Serving',clean:'Cleaning table'})[busy.action],fraction:busy.elapsed/busy.duration,left:busy.duration-busy.elapsed}}
- else{const job=GameState.progress.activeJob;if(job?.mode==='timed'&&job.stage==='task'&&job.workSeconds>0&&!inside&&!shop)ring={point:{x:me.position.x,y:me.position.y+2.45,z:me.position.z},label:job.title,fraction:job.workSeconds/job.duration,left:job.duration-job.workSeconds}}
  const p=ring&&active&&!modal?screenAnchor(ring.point,camera,innerWidth,innerHeight,THREE.Vector3):null,el=$('workProgress');
  el.hidden=!p;if(!p)return;
  const percent=Math.round(Math.max(0,Math.min(1,ring.fraction))*100);
@@ -1290,7 +1313,7 @@ function updateRing(){
 // the market); this is the only place that draws it. The beacon disappears when you are already there (the prompt takes over).
 const OBJECTIVE_WORLD={marketDoor:{x:SHOPS.market.x,z:MAP.shops.market.doorway.beaconZ},counter:{local:COUNTER,world:{x:SHOPS.market.x+COUNTER.x,y:MAP.shops.market.interior.origin.y,z:MAP.shops.market.interior.origin.z+COUNTER.z}},cafeDoor:{x:SHOPS.cafe.x,z:SHOPS.cafe.z}};
 function updateObjective(dt){
- const progress=GameState.progress,objective=resolveObjective({progress,place:{inside:!!inside,shop},room:currentRoom(),gigTarget,delivery:targetFor(progress),world:OBJECTIVE_WORLD});
+ const progress=GameState.progress,objective=storyAimed(resolveObjective({progress,place:{inside:!!inside,shop},room:currentRoom(),gigTarget,delivery:targetFor(progress),world:OBJECTIVE_WORLD}));
  const spot=objective.beacon,near=spot?Math.hypot(me.position.x-(spot.local?.x??spot.x),me.position.z-(spot.local?.z??spot.z)):0;
  marker.visible=!!spot&&active&&near>spot.hideWithin;
  if(spot){marker.position.set(spot.x,spot.y,spot.z);markerTime+=dt;diamond.position.y=2.5+spot.lift+Math.sin(markerTime*2)*.09;diamond.rotation.y+=dt*.7}
@@ -1309,11 +1332,10 @@ function renderVitals(life){
   row.dataset.value=String(value);$(id+'Fill').style.width=value+'%';$(id+'Value').textContent=String(value);
  }
 }
-function updateGig(dt){
+let gigLabelId='',gigLabelDone=-1;function updateGig(dt){
  const job=GameState.progress.activeJob;$('gigChecklist').hidden=!job;
  gigMarker.visible=active&&!!job&&!inside;
  if(!job)return;
- if(job.id==='heavy-delivery'&&job.stage==='task')parcel.visible=true;
  const target=gigTarget(job),room=currentRoom();
  let display=target,parent=scene;
  if(target.room==='cafe'){
@@ -1327,10 +1349,10 @@ function updateGig(dt){
  for(const [id,done] of [['gigStepGo',arrived],['gigStepTask',finished],['gigStepReturn',returned]]){
    $(id).textContent=done?'☑':'☐';$(id).setAttribute('aria-label',done?'Complete':'Incomplete');
  }
- $('gigTaskLabel').textContent=job.mode==='timed'?`Complete task · ${Math.floor(job.workSeconds)} / ${job.duration}s`:job.mode==='courier'?`Deliver envelope · ${Math.floor(job.runMetres)} / ${job.runDistance}m run`:'Deliver the heavy box';
+ if(job.id!==gigLabelId||job.done!==gigLabelDone){gigLabelId=job.id;gigLabelDone=job.done;$('gigTaskLabel').textContent=job.stops>1?'Make the deliveries ('+job.done+' of '+job.stops+' done)':job.kind==='parcel'?'Deliver the parcel':'Make the delivery'}
  $('objective').querySelector('.eyebrow').textContent='ACTIVE GIG · '+money(job.reward);
  $('objective').querySelector('h2').textContent=job.title;
- $('objective').querySelector('p').textContent=finished?'Return to the gold marker and press E to collect your pay.':job.stage==='travel'?job.description:job.mode==='timed'?'Stay still at the marked station. Moving or leaving resets this task’s timer.':job.mode==='courier'?'Run with Shift toward the delivery marker. Only distance actually run counts.':'Carry the box to the gold delivery marker. Movement uses twice the energy.';
+ $('objective').querySelector('p').textContent=job.dropped?'Your parcel is on the ground: press E beside it to pick it up.':finished?job.kind==='parcel'?'Go to the door and press E: how you greet the client earns a tip.':'Return to the gold marker and press E to collect your pay.':job.stage==='travel'?job.description:'Carry the order to the gold delivery marker.';
  $('distance').textContent=target.room!==room?(target.room==='cafe'?'Enter Alder Coffee':'Go outside to continue'):Math.round(Math.hypot(me.position.x-target.x,me.position.z-target.z))+' m · '+(finished?'Return for payment':'Gig location');
 }
 // Passing out (DESIGN 4.18): black fade, then (at black) the vehicle or forklift stops, a carried log or planks are put down, and you are moved to your main home's bed
@@ -1370,7 +1392,7 @@ function updateSleep(dt){
  $('sleepFade').style.opacity=String(sleepElapsed<.25?sleepElapsed/.25:sleepElapsed<1.25?1:Math.max(0,(1.5-sleepElapsed)/.25));
  if(sleepElapsed>=1.5){
    const slept=sleepThrough(GameState.progress,{online:multiplayer.online,drainMultiplier:GameState.progress.settings?.statDrainMultiplier});GameState.progress=expireCafe(slept.state);
-   sleepElapsed=null;$('sleepFade').hidden=true;modal=false;keys.clear();look.resetMotion();persist();toast(slept.message);
+   sleepElapsed=null;$('sleepFade').hidden=true;modal=false;keys.clear();look.resetMotion();persist();toast(slept.message);storyEvent('slept');
  }
 }
 
@@ -1416,6 +1438,28 @@ multiplayer.onDropped(({wasIn,refused})=>{showLobby();if(!$('welcome').hidden)re
  toast(reconnectTries?'Still trying to reach the lobby…':'Lost the connection to the lobby. Reconnecting…');
  setTimeout(()=>{if(!multiplayer.socket)multiplayer.connect(url)},RECONNECT_MS[reconnectTries++]);
 });
+// MP-CLOCK (session-clock.js): a joiner uses the host's game clock. The HUD and sky read the session clock while you follow the host; 'visit' leaves your saved day and time (and so crops, rent, pet and gig timers) still, 'sync' moves them along.
+function hudDay(){return sessionClock.following?sessionClock.day:GameState.progress.housing.day}function hudMinutes(){return sessionClock.following?sessionClock.minutes:GameState.progress.routine.minutes}function hudTag(){return sessionClock.following&&sessionClock.mode==='visit'?' · Visiting':''}
+let clockChoice=null,clockSendNow=false; // clockChoice = {key,mode}: what this player picked for this lobby, kept for the session only
+function sessionStep(step){const P=GameState.progress,sc=sessionClock;
+ if(sc.mode==='local'){const next=advanceTime(P,step*.5);sc.setLocal(next.housing.day,next.routine.minutes);return next}
+ sc.advance(step);
+ if(sc.mode==='sync'){const d=sc.abs-gameMinutes(P);return d>0?advanceTime(P,d):P}
+ return P} // 'visit': nothing of the saved clock moves
+function clockDialog(step){$('clockChoice').hidden=step==='none';$('clockAsk').hidden=step!=='ask';$('clockWarn').hidden=step!=='warn'}
+function chooseClock(mode){clockDialog('none');sessionClock.setMode(mode);clockChoice={key:multiplayer.rejoinUrl||'',mode};toast(mode==='sync'?'Your save now follows the host\'s clock.':'Visiting: your own day and time wait for you.')}
+function askClockChoice(){const P=GameState.progress,ok=canSync(gameMinutes(P),sessionClock.abs),add=Math.round(syncAdvance(gameMinutes(P),sessionClock.abs));
+ $('clockHost').textContent='Host time: day '+sessionClock.day+', '+formatClock(sessionClock.minutes)+'.';$('clockVisitNote').textContent=VISIT_NOTE;$('clockWarnText').textContent=SYNC_WARNING+(add>=60?' About '+Math.round(add/60)+' game hours will pass for you.':'');
+ $('clockSync').disabled=!ok;$('clockSyncNote').textContent=ok?'':'The host\'s day is earlier than your save, so syncing would turn your calendar back. You can only visit.';
+ clockDialog('ask');$('clockVisit').focus()}
+$('clockVisit').onclick=()=>chooseClock('visit');$('clockSync').onclick=()=>{clockDialog('warn');$('clockSyncGo').focus()};$('clockSyncGo').onclick=()=>chooseClock('sync');$('clockSyncBack').onclick=()=>{clockDialog('ask');$('clockVisit').focus()};
+$('clockChoice').addEventListener('keydown',e=>{if(e.key==='Escape'){e.preventDefault();if(!$('clockWarn').hidden){clockDialog('ask');$('clockVisit').focus()}else chooseClock('visit')}});
+multiplayer.onConnected(()=>{sessionClock.setHost(multiplayer.isHost);if(multiplayer.isHost){sessionClock.setMode('local');clockSendNow=true}});
+multiplayer.onHost(()=>{const was=sessionClock.isHost;sessionClock.setHost(multiplayer.isHost);if(multiplayer.isHost&&!was){clockDialog('none');if(!sessionClock.synced)sessionClock.setMode('local');clockSendNow=true;toast('You are the host now: your clock is the session clock.')}});
+multiplayer.onClock(m=>{if(sessionClock.isHost)return;const first=!sessionClock.synced;if(first&&sessionClock.mode==='local')sessionClock.setMode('visit');sessionClock.receiveHost(m);
+ if(first){if(clockChoice&&clockChoice.key===(multiplayer.rejoinUrl||''))chooseClock(clockChoice.mode);else askClockChoice()}});
+multiplayer.onPlayerJoined(()=>{if(sessionClock.isHost)clockSendNow=true});
+multiplayer.onDisconnected(()=>{clockDialog('none');sessionClock.reset();sessionClock.setLocal(GameState.progress.housing.day,GameState.progress.routine.minutes)});
 // Main menu (main-menu.js). Play is offline; Host and Join open a connection first and start the game once the server has answered.
 const mainMenu=createMainMenu({$,storage:{getItem:k=>localStorage.getItem(k),setItem:(k,v)=>localStorage.setItem(k,v)},connect:url=>multiplayer.connect(url),disconnect:()=>multiplayer.disconnect(),onConnected:cb=>multiplayer.onConnected(cb),onDisconnected:cb=>multiplayer.onDisconnected(cb),onRefused:cb=>multiplayer.onRefused(cb),needUpdate:()=>updateNotice.announce(LOBBY_UPDATE),relay:relayBase(typeof location!=='undefined'?location:null),play:startGame,applyQuality,openCredits:()=>openCredits('menu')});
 // Settings > Your save (save-menu.js): export, import, backups. A replaced save reloads the page with persist() locked, or pagehide would write the old game back.
@@ -1441,6 +1485,7 @@ function updateMultiplayer(now,moving,dt){
  // Also send the final stopped position and door/reset teleports, at the same cap.
  if(networkTimer>=50&&(moving||changed))sendLocalPosition();
  for(const mesh of Object.values(remoteMeshes))updateRemotePlayer(mesh,dt);
+ if(sessionClock.dueBroadcast(dt,clockSendNow)){clockSendNow=false;multiplayer.sendClock(sessionClock.hostMessage())} // the host's game clock, every 30 s and when someone joins
 }
 
 let prev=performance.now(),frames=0,elapsed=0,menuDrawn=false,stuckTime=0;
@@ -1459,11 +1504,11 @@ function stepWorld(step){
    driveSave+=step;if(driveSave>=5){driveSave=0;persist()}}
  }else if(active&&!modal&&!actionBusy()&&!putting){let f=Number(keys.has('KeyW')||keys.has('ArrowUp'))-Number(keys.has('KeyS')||keys.has('ArrowDown')),s=Number(keys.has('KeyD')||keys.has('ArrowRight'))-Number(keys.has('KeyA')||keys.has('ArrowLeft'));let len=Math.hypot(f,s);if(len){f/=len;s/=len;const fx=moveFx(),speed=(fx.sprint&&(keys.has('ShiftLeft')||keys.has('ShiftRight'))?8.2:4.5)*fx.speed,dx=(-Math.sin(yaw)*f+Math.cos(yaw)*s)*speed*step,dz=(-Math.cos(yaw)*f-Math.sin(yaw)*s)*speed*step;if(!blocked(me.position.x+dx,me.position.z))me.position.x+=dx;if(!blocked(me.position.x,me.position.z+dz))me.position.z+=dz;const angle=Math.atan2(dx,dz);me.rotation.y+=Math.atan2(Math.sin(angle-me.rotation.y),Math.cos(angle-me.rotation.y))*(1-Math.exp(-step*24));phase+=step*speed*2.0;pressed=true}}
  const movedStep=Math.hypot(me.position.x-startX,me.position.z-startZ),moving=pressed&&movedStep>.000001,running=moving&&moveFx().sprint&&(keys.has('ShiftLeft')||keys.has('ShiftRight'));
- if(active&&!modal&&!document.hidden){GameState.progress=expireCafe(advanceTime(GameState.progress,step*.5));const oldStage=GameState.progress.activeJob?.stage;
-const load=Math.max(GameState.progress.activeJob?.id==='heavy-delivery'&&oldStage==='task'?2:1,carryEffects(GameState.progress.carry).load);
+ if(active&&!modal&&!document.hidden){GameState.progress=expireCafe(sessionStep(step));const oldStage=GameState.progress.activeJob?.stage;
+const load=Math.max(1,carryEffects(GameState.progress.carry).load);
 tickLife(step,moving,running,load);if(passT===null&&sleepElapsed===null&&needsEffects(GameState.progress.life).passOut)startPassOut();
 GameState.progress=tickContract(GameState.progress,{position:me.position,room:currentRoom(),dt:step,moving,paused:!!consuming,running,distance:movedStep});
-if(oldStage&&!GameState.progress.activeJob)notifyPhone('gigs','Gig failed: the time ran out.');storyTick();garageTick();if(oldStage!==GameState.progress.activeJob?.stage)persist();if(!inside&&!shop)pedestrians.update(step,me.position);regrowClock+=step;if(regrowClock>=5){regrowClock=0;tickRegrowth()}if(inside||shop){saveElapsed+=step;if(saveElapsed>=4){saveElapsed=0;persist()}}}
+if(oldStage&&!GameState.progress.activeJob)notifyPhone('gigs','Gig failed: the time ran out.');storyTick();garageTick();if(oldStage!==GameState.progress.activeJob?.stage)persist();if(!inside&&!shop){pedestrians.update(step,me.position);hal.update(step,me.position,halHere(GameState.progress))}regrowClock+=step;if(regrowClock>=5){regrowClock=0;tickRegrowth()}if(inside||shop){saveElapsed+=step;if(saveElapsed>=4){saveElapsed=0;persist()}}}
  if(active&&!modal&&!document.hidden)updateCafeVisuals(step);updateConsumption(step);updateDoors(step);updateChop(step);updatePutting(step);fuelTick(step);
  return pressed;
 }
@@ -1495,7 +1540,7 @@ zoom=THREE.MathUtils.lerp(zoom,zoomTarget,1-Math.exp(-view*10));
 
 look.tick(view);
 if(worldPanel?.actor&&!$('dialog').hidden){const actor=worldPanel.actor,pa=getMeWorldPosition(new THREE.Vector3()),pb=actor.getWorldPosition(new THREE.Vector3()),mid=pa.clone().add(pb).multiplyScalar(.5);const angle=Math.atan2(pa.x-pb.x,pa.z-pb.z);actor.rotation.y=angle;me.rotation.y=angle+Math.PI;worldPlayer.position.copy(mid);if(shop)shops[shop].camera(worldPlayer,angle+.45,.32,5.8,view);else updateCamera(worldPlayer,angle+.45,.32,5.8,view)}else if(shop){getMeWorldPosition(worldPlayer.position);shops[shop].camera(worldPlayer,yaw,pitch,zoom,view);}else if(inside)(home.camera||indoorCamera)(me,yaw,pitch,zoom,view);else{camera.position.sub(shake.off);updateCamera(me,yaw,pitch,zoom,view);applyShake(view)}
-sky.update(GameState.progress.routine.minutes,{target:inside||shop?null:me.position,indoors:!!shop});if(inside)renderer.toneMappingExposure=INDOOR_EXPOSURE;else shadows.update({sky:sky.state(),outdoors:!shop,indoors:!!shop,low:mainMenu.settings.quality!=='high',centre:me.position}); // shadows.js: the shadow box snaps to texels and fades at low sun (High), patches under people and vehicles (Low). Before that: the sun or moon follows the player outdoors; rooms stay day-bright for now
+sky.update(sessionClock.following?sessionClock.minutes:GameState.progress.routine.minutes,{target:inside||shop?null:me.position,indoors:!!shop});if(inside)renderer.toneMappingExposure=INDOOR_EXPOSURE;else shadows.update({sky:sky.state(),outdoors:!shop,indoors:!!shop,low:mainMenu.settings.quality!=='high',centre:me.position}); // shadows.js: the shadow box snaps to texels and fades at low sun (High), patches under people and vehicles (Low). Before that: the sun or moon follows the player outdoors; rooms stay day-bright for now
 if(!driving.driving)lightMode='auto';if(GameState.progress.properties!==lightsHeldFor){lightsHeldFor=GameState.progress.properties;lightsHeld=heldIds(GameState.progress)}
 if(!inside)nightLights.update(view,{sky:sky.state(),high:mainMenu.settings.quality==='high',held:lightsHeld,vehicles:[driving.driving?{key:'own',mesh:driving.active.mesh,model:driving.active.spec.model,use:'driver',mode:lightMode,own:true}:null,{key:'customer-truck',mesh:customerTruck.mesh,model:'flatbed',use:customerTruck.phase==='in'||customerTruck.phase==='out'?'driver':'parked'},{key:'dock-truck',mesh:dockTruck.mesh,model:'flatbed',use:dockTruck.phase==='in'||dockTruck.phase==='out'?'driver':'parked'}]}); // lamps, windows and vehicle lamps follow the picture's time (night-lights.js); a parked vehicle is dark
 

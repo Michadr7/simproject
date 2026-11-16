@@ -4,6 +4,7 @@ import {MAP} from '../dist/map-definition.js';
 import {hire} from '../dist/careers.js';
 import {clockIn} from '../dist/shift.js';
 import {freshProgress,normalizeProgress} from '../dist/jobs.js';
+import {PARCEL_HANDS} from '../dist/gig-parcel.js';
 import {RACK_IDS,RACK_CAP,racksOf,rackPlanks,stackPlanks,takeFromRack} from '../dist/forest.js';
 import {RACK_SLOTS,boardAt} from '../dist/warehouse.js';
 import {HALL,FACE_ROWS,UNITS,BAYS,LEVELS,bayX,slotById,reachableByHand,WAREHOUSE_STAGING,WAREHOUSE_TABLE,WAREHOUSE_INTERIOR} from '../dist/warehouse-layout.js';
@@ -33,6 +34,7 @@ const base=hire(freshProgress(),'ridgeline').state,shifted=clockIn({...base,hous
 // a Yard hand on shift with the Stack task and pallets in the racks ({cell: planks}: read as pallets, as a save from before pallets would be)
 const racked=(map,extra={})=>({...shifted,shift:{...shifted.shift,tasks:[{kind:'stack',piece:'racks',target:1,done:0}]},companies:{...shifted.companies,ridgeline:{...shifted.companies.ridgeline,racks:map}},...extra});
 assert(/Too high/.test(stackPlanks({...racked({}),carry:{kind:'planks',count:4}},'A1-2').error),'an upper shelf cannot be reached by hand');assert(/Clock in/.test(takeFromRack({...base,companies:{ridgeline:{racks:{'A1-1':9}}}},'A1-1').error),'off shift nothing moves');assert(/is empty/.test(takeFromRack(shifted,'A1-1').error));assert(/hands are full/.test(takeFromRack({...racked({'A1-1':9}),carry:{kind:'log'}},'A1-1').error));
+{const box={gigs:{active:{id:1,drop:null}}};assert.equal(takeFromRack(racked({'D1-1':10},box),'D1-1').error,PARCEL_HANDS,'G3b: the gig box in hand: no planks from the rack');assert.match(takeFromRack(racked({'D1-1':10},{...box,carry:{kind:'planks',count:2}}),'D1-1').error,/hands are full/);assert(takeFromRack(racked({'D1-1':10},{gigs:{active:{id:1,drop:{x:1,z:1}}}}),'D1-1').state,'the box on the ground: free hands')}
 {let p=racked({'D1-1':10});let r=takeFromRack(p,'D1-1');assert(!r.error);p=r.state;assert.deepEqual(p.carry,{kind:'planks',count:4},'a stack of four');assert.equal(racksOf(p)['D1-1'],6,'from the pallet in the rack');
  assert(/Carry planks/.test(stackPlanks(racked({}),'A1-1').error),'empty hands cannot stack');assert(/no such rack/.test(stackPlanks(p,'Z9').error));
  r=stackPlanks(p,'A1-1');p=r.state;assert.equal(racksOf(p)['A1-1'],4);assert.equal(p.carry,null);assert.equal(r.filled,false);assert(/4 \/ 40/.test(r.message));

@@ -42,7 +42,7 @@ for(const n of ['handlebar','seat','seat_2','steer_FL','steer_FR','wheel_FL','wh
 
 // 3. Startup size rule (LZ1: over 1.5 MB added to the startup module means lazy). A4 added 1,164,178 bytes.
 import {statSync} from 'node:fs';
-const size=statSync(new URL('../dist/props-assets.js',import.meta.url)).size;assert(size<7.2e6,'props-assets.js stays under 7.2 MB (it was 5.81 MB before A4)');
+const size=statSync(new URL('../dist/props-assets.js',import.meta.url)).size;assert(size<7.7e6,'props-assets.js stays under 7.7 MB (5.81 MB before A4, 6.97 after it; +0.45 MB cartons and crates in G3b)');
 
 // 4. Paint, price (added last), slot, tracks, sound, lamps
 assert.equal(coloursOf('atv').length,6);assert.equal(paintUniforms('atv','olive').hue,-1);assert(Math.abs(PAINT.atv.src-79)<1);

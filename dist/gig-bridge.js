@@ -1,8 +1,8 @@
-// Bridge between the game's old gig hooks (the names contracts.js used) and gigs.js (notes/gigs-starter-design.md section 3).
+// Bridge between the game's old gig hooks (the names the old contracts module used; it is deleted) and gigs.js (notes/gigs-starter-design.md section 3).
 // game.js, phone.js and objective.js keep calling acceptContract, tickContract, completeContract, availableContracts and gigTarget; the new
 // rules live in gigs.js. progress.gigs.active is the truth; progress.activeJob is a derived VIEW of it (title, stage, locations), rebuilt after every change here.
 // The board is derived from counters, so refreshGigBoard has nothing to do. Walking types only: the vehicle types wait for the vehicle work.
-import {boardFor,acceptGig,tickGig,completeGig,gigDone,typeById,payFor,repeatsToday,townContext,gameMinutes,GIG_TYPES,BOARD_SLOTS} from './gigs.js';
+import {dropParcel,pickParcel} from './gig-parcel.js';import {boardFor,acceptGig,tickGig,completeGig,gigDone,typeById,payFor,repeatsToday,townContext,gameMinutes,GIG_TYPES,BOARD_SLOTS,parRoute,doorChoices,doorHint} from './gigs.js';
 export {gameMinutes};
 const slotId=i=>'slot-'+i,slotOf=id=>/^slot-[0-3]$/.test(id)?+id.slice(5):-1;
 const point=pl=>({x:pl.x,y:.165,z:pl.z,room:pl.room||'street'});
@@ -13,14 +13,14 @@ export const atGigPoint=(position,room,point)=>room===point.room&&Math.hypot(pos
 export function activeView(p){
  const a=p.gigs?.active;if(!a)return null;const t=typeById(a.type),done=gigDone(p),next=a.places.find((_,i)=>!a.visited[i])||a.places.at(-1);
  const last=a.places.at(-1),now=gameMinutes(p);
- return {id:'gig-'+a.id,type:a.type,title:`${t.title} for ${nameOf(a.client)}`,description:stopsText(a.places)+' '+t.twist+'.',reward:payFor(a.type,100,repeatsToday(p.gigs.recent,a.type,now),p.gigs.rep,0,a.large),mode:'delivery',
-  stage:done?'return':a.visited.some(Boolean)?'task':'travel',location:point(next),taskLocation:point(next),returnLocation:point(last),stops:a.places.length,done:a.visited.filter(Boolean).length,dueAt:a.dueAt};
+ return {id:'gig-'+a.id,type:a.type,title:`${t.title} for ${nameOf(a.client)}`,description:stopsText(a.places)+' '+t.twist+'.'+doorHint(a.type,a.client,nameOf(a.client)),reward:payFor(a.type,100,repeatsToday(p.gigs.recent,a.type,now),p.gigs.rep,0,a.large),mode:'delivery',
+  stage:done?'return':a.visited.some(Boolean)?'task':'travel',location:point(next),taskLocation:point(next),returnLocation:point(last),kind:a.type,stops:a.places.length,left:a.places.length-a.visited.filter(Boolean).length,done:a.visited.filter(Boolean).length,dueAt:a.dueAt,dropped:!!a.drop};
 }
 const withView=p=>({...p,activeJob:activeView(p)});
 // What the board slot offers (the phone card reads title, description, reward, terms).
 function offer(p,s){
  const t=typeById(s.type),now=gameMinutes(p),large=s.large;
- return {id:slotId(s.slot),title:`${t.title} for ${s.clientName||nameOf(s.client)}`,description:stopsText(s.places)+' '+t.twist+'.',reward:payFor(s.type,100,repeatsToday(p.gigs.recent,s.type,now),p.gigs.rep,0,large),terms:t.limit?`${t.limit} min limit`:'No time limit',mode:'delivery'};
+ return {id:slotId(s.slot),title:`${t.title} for ${s.clientName||nameOf(s.client)}`,description:stopsText(s.places)+' '+t.twist+'.'+doorHint(s.type,s.client,s.clientName||nameOf(s.client)),reward:payFor(s.type,100,repeatsToday(p.gigs.recent,s.type,now),p.gigs.rep,0,large),terms:t.limit?`${t.limit} min limit`:'No time limit',mode:'delivery'};
 }
 // Walking types only, until the vehicle gigs have their cargo and knock code.
 const LIVE=new Set(GIG_TYPES.filter(t=>t.live!==false).map(t=>t.id));
@@ -29,10 +29,10 @@ export const CONTRACTS=Object.freeze([0,1,2,3].map(i=>Object.freeze({id:slotId(i
 export const contractById=id=>CONTRACTS.find(c=>c.id===id);
 export const refreshGigBoard=progress=>progress;
 export const availableContracts=p=>p.activeJob||p.gigs?.active?[]:liveBoard(p).map(s=>offer(p,s));
-export function acceptContract(p,id){
+export function acceptContract(p,id,position=null){
  const i=slotOf(id);if(i<0)return {error:'This gig is unavailable.'};
  if(!liveBoard(p).some(s=>s.slot===i))return {error:'This gig is unavailable.'};
- const r=acceptGig(p,i,gameMinutes(p));return r.error?r:{state:withView(r.state)};
+ const r=acceptGig(p,i,gameMinutes(p),undefined,position&&Number.isFinite(position.x)&&Number.isFinite(position.z)?{x:position.x,z:position.z}:null);return r.error?r:{state:withView(r.state)};
 }
 // What Noah's counter offers: the grocery and parcel gigs of the board.
 export const marketContracts=p=>p.activeJob||p.gigs?.active?[]:liveBoard(p).filter(s=>s.type==='grocery'||s.type==='parcel').map(s=>offer(p,s));
@@ -42,7 +42,15 @@ export function tickContract(p,{position,room='street',dt=0,moving=false,distanc
  const before=p.gigs.active.visited.join(),next=tickGig(p,{position,room,dt,moving,metres:distance,now:gameMinutes(p)});
  return next.gigs.active&&next.gigs.active.visited.join()===before&&p.activeJob?{...next,activeJob:p.activeJob}:withView(next);
 }
-export function completeContract(p,position,room='street'){
+// The round's par: the shortest order of the three stops from where you accepted, plus slack because streets are not straight lines.
+export const PAR_SLACK=1.2;
+export const parFor=p=>{const a=p.gigs?.active;return a?.type==='round'&&a.start&&a.places.length>1?Math.round(parRoute(a.places,a.start).length*PAR_SLACK):0};
+// The parcel's door dialog: null for any other gig, else the client's name and the three ways to greet them (each with the tip it earns).
+export const gigDoor=p=>{const a=p.gigs?.active,choices=doorChoices(a);return choices?{name:nameOf(a.client),text:'You are at the door. How do you greet '+nameOf(a.client)+'?',choices}:null};
+// X and E on the parcel: the pure drop/pick, with the derived activeJob view rebuilt (tickContract would keep a stale one).
+export const dropGigParcel=(p,at)=>{const r=dropParcel(p,at);return r.error?r:{...r,state:withView(r.state)}};
+export const pickGigParcel=p=>{const r=pickParcel(p);return r.error?r:{...r,state:withView(r.state)}};
+export function completeContract(p,position,room='street',tip=0){
  const job=activeView(p);if(!job||job.stage!=='return'||!atGigPoint(position,room,job.returnLocation))return {error:'Complete the task and return to the marked contact first.'};
- const r=completeGig(p,gameMinutes(p));return r.error?r:{state:withView(r.state),paid:r.paid};
+ const r=completeGig(p,gameMinutes(p),{tip,par:parFor(p)});return r.error?r:{state:withView(r.state),paid:r.paid};
 }

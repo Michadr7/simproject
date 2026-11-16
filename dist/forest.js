@@ -2,6 +2,7 @@
 // stacked log counts for on shift. Pure: (progress, ...) -> {state, ...}. Trees are cuttable trees from world.js (worldLayout().cuttable): {key, x, z}.
 import {MAP,zoneById} from './map-definition.js';
 import {recordPiece} from './shift.js';
+import {parcelHeld,PARCEL_HANDS} from './gig-parcel.js'; // G3b: no rack or pile pick-up while the gig box is in your arms
 import {RACK_IDS,reachableByHand} from './warehouse-layout.js';
 import {PALLET_CAP,racksMap,forkCount,addToRack,takeFromRackCell,useForkPlanks} from './pallets.js';
 
@@ -62,7 +63,7 @@ export function stackPlanks(progress,slot){
 // Planks out of a floor-level rack cell (picking an order): a stack of up to four into your hands. The game offers it only while one of your orders still needs planks.
 export function takeFromRack(progress,slot){
  if(!onShift(progress))return {error:'Clock in to pick orders for Ridgeline Timber.'};
- if(progress.carry)return {error:'Your hands are full.'};
+ if(progress.carry||parcelHeld(progress))return {error:progress.carry?'Your hands are full.':PARCEL_HANDS};
  if(!RACK_IDS.includes(slot))return {error:'There is no such rack.'};
  if(!reachableByHand(slot))return {error:'Too high to reach by hand: the upper shelves need a forklift.'};
  const cur=racksOf(progress)[slot]||0;if(!cur)return {error:`Rack ${slot} is empty.`};
@@ -94,7 +95,7 @@ export function stackLog(progress,position){
 // A log taken back off the pile (to the sawmill's bench, or onto a truck): on shift, empty-handed, at the landing.
 export function takeLogFromPile(progress,position){
  if(!onShift(progress))return {error:'Clock in to take logs from the company pile.'};
- if(progress.carry)return {error:'Your hands are full.'};
+ if(progress.carry||parcelHeld(progress))return {error:progress.carry?'Your hands are full.':PARCEL_HANDS};
  if(!atLanding(position))return {error:'The landing is by the yard hut.'};
  if(!stockOf(progress).logs)return {error:'The pile is empty.'};
  const s=addStock(progress,{logs:-1});return {state:{...s,carry:{kind:'log'}},message:`Took a log from the pile · ${stockOf(s).logs} left.`};

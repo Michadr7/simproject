@@ -3,7 +3,7 @@
 // ctx = {clients:[{id,name}], places:[{id,x,z,room}]}; the default is built lazily from the town (population.js + orders.js dropSpot).
 import {townPopulation} from './population.js';
 import {dropSpot} from './orders.js';
-import {propertyById} from './properties.js';
+import {propertyById} from './properties.js';import {normalizeDrop,PARCEL_FIRST} from './gig-parcel.js';
 const T=(id,title,base,o={})=>Object.freeze({id,title,base,stops:1,rep:0,bed:false,limit:0,hard:false,...o});
 export const GIG_TYPES=Object.freeze([
  T('grocery','Grocery run',1200,{limit:60,twist:'Deliver within 60 game minutes'}),
@@ -35,7 +35,7 @@ export const freshGigs=()=>({rep:0,recent:[],active:null,nextId:1,taken:{},clien
 export function normalizeActive(v){
  const t=typeById(v?.type);if(!t||!Array.isArray(v.places))return null;
  const places=v.places.slice(0,3).map(pt);if(!places.length||places.some(x=>!x))return null;
- return {id:int(v.id,1,1e9,1),type:t.id,client:typeof v.client==='string'?v.client.slice(0,60):'',places,visited:places.map((_,i)=>v.visited?.[i]===true),stage:int(v.stage,0,places.length,0),startedAt:int(v.startedAt,0,1e9),dueAt:int(v.dueAt,0,1e9),quality:int(v.quality,0,100,100),knocks:int(v.knocks,0,100),metres:int(v.metres,0,1e6),tip:int(v.tip,0,100000),large:v.large===true,trips:int(v.trips,1,2,1)};
+ return {id:int(v.id,1,1e9,1),type:t.id,client:typeof v.client==='string'?v.client.slice(0,60):'',places,visited:places.map((_,i)=>v.visited?.[i]===true),stage:int(v.stage,0,places.length,0),startedAt:int(v.startedAt,0,1e9),dueAt:int(v.dueAt,0,1e9),quality:int(v.quality,0,100,100),knocks:int(v.knocks,0,100),metres:int(v.metres,0,1e6),tip:int(v.tip,0,100000),large:v.large===true,trips:int(v.trips,1,2,1),start:pt(v.start),drop:normalizeDrop(v.drop)};
 }
 export function normalizeGigs(v){
  const g=freshGigs();if(!v||typeof v!=='object')return g;
@@ -93,11 +93,11 @@ export function boardFor(p,now=gameMinutes(p),ctx=townContext()){
 }
 // Noah's counter shows only the grocery and parcel gigs of the board.
 export const marketBoard=(p,now,ctx)=>boardFor(p,now,ctx).filter(s=>s.type==='grocery'||s.type==='parcel');
-export function acceptGig(p,slot,now=gameMinutes(p),ctx){
+export function acceptGig(p,slot,now=gameMinutes(p),ctx,start=null){
  const g=p.gigs||freshGigs();
  if(g.active)return {error:'Finish your active gig before accepting another.'};
  const s=boardFor(p,now,ctx).find(x=>x.slot===slot);if(!s)return {error:'This gig is unavailable.'};
- const t=typeById(s.type),places=s.places.map(pt),active=normalizeActive({id:g.nextId,type:s.type,client:s.client,places,startedAt:now,dueAt:t.limit?now+t.limit:0,large:s.large});
+ const t=typeById(s.type),places=s.places.map(pt),active=normalizeActive({id:g.nextId,type:s.type,client:s.client,places,startedAt:now,dueAt:t.limit?now+t.limit:0,large:s.large,start});
  return {state:{...p,gigs:{...g,active,nextId:g.nextId+1,taken:{...g.taken,[slot]:s.window}}}};
 }
 const near=(pos,pl)=>Math.hypot(pos.x-pl.x,pos.z-pl.z)<=1.35;
@@ -105,7 +105,7 @@ const near=(pos,pl)=>Math.hypot(pos.x-pl.x,pos.z-pl.z)<=1.35;
 export function tickGig(p,{position,room='street',dt=0,moving=false,knock=0,metres=0,now=gameMinutes(p)}={}){
  const g=p.gigs;if(!g?.active)return p;
  const a={...g.active,visited:[...g.active.visited]};a.knocks=Math.min(100,a.knocks+int(knock,0,10));a.metres=Math.min(1e6,a.metres+Math.max(0,Number.isFinite(metres)?metres:0));
- if(position)for(let i=0;i<a.places.length;i++){
+ if(position&&!a.drop)for(let i=0;i<a.places.length;i++){
   if(a.visited[i]||a.places[i].room!==room||!near(position,a.places[i]))continue;
   if(a.type!=='round'&&a.visited.slice(0,i).includes(false))continue;
   a.visited[i]=true;
@@ -114,6 +114,12 @@ export function tickGig(p,{position,room='street',dt=0,moving=false,knock=0,metr
  if(typeById(a.type).hard&&a.dueAt&&now>a.dueAt)return failGig({...p,gigs:{...g,active:a}},now,'late');
  return {...p,gigs:{...g,active:a}};
 }
+// The parcel's door (design section 3): the client likes one of three ways of being greeted; the gig text hints which; the right answer tips 200 to 800 cents, the others tip nothing.
+export const DOOR_STYLES=Object.freeze([{id:'quiet',label:'Knock quietly',hint:'works nights and sleeps days: knock quietly'},{id:'bell',label:'Ring the bell',hint:'likes a proper ring of the bell'},{id:'step',label:'Leave it on the step',hint:'is shy: just leave it on the step'}]);
+export const doorStyle=client=>DOOR_STYLES[hash('door',client)%DOOR_STYLES.length];
+export const doorTip=(client,id)=>200+100*(hash('tip',client,id)%7);
+export const doorHint=(type,client,name)=>type==='parcel'?` ${name||'The client'} ${doorStyle(client).hint}.`:'';
+export const doorChoices=a=>a?.type==='parcel'?DOOR_STYLES.map(s=>({id:s.id,label:s.label,tip:s.id===doorStyle(a.client).id?doorTip(a.client,a.id):0})):null;
 export const gigDone=p=>!!p.gigs?.active&&p.gigs.active.stage>=p.gigs.active.places.length;
 export function failGig(p,now=gameMinutes(p),why='failed'){
  const g=p.gigs;if(!g?.active)return p;
@@ -122,7 +128,7 @@ export function failGig(p,now=gameMinutes(p),why='failed'){
 // opts.tip: the dialog's tip in cents (clamped to the type's range); par: par route length for the round.
 export function completeGig(p,now=gameMinutes(p),opts={}){
  const g=p.gigs,a=g?.active;if(!a)return {error:'You have no active gig.'};
- if(!gigDone(p))return {error:'Finish the marked stops first.'};
+ if(!gigDone(p))return {error:'Finish the marked stops first.'};if(a.drop)return {error:PARCEL_FIRST};
  const t=typeById(a.type),late=!!(t.limit&&a.dueAt&&now>a.dueAt);
  if(t.hard&&late)return {state:failGig(p,now,'late'),paid:0,failed:true};
  let overPct=0;if(a.type==='round'&&opts.par>0){const walked=Math.max(0,a.metres);overPct=Math.max(0,Math.round((walked/opts.par-1)*100))}

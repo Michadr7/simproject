@@ -200,7 +200,7 @@ body:has(#welcome:not([hidden])) :is(#minimap,#vitals,#statusDock,#clockChip),bo
 .vp-damage[hidden]{display:none}.vp-stuck{margin:0;font:600 12px/1.3 Arial,sans-serif;color:#f2743a}.vp-stuck[hidden]{display:none}.vp-stuck[data-level=warn]{color:#f2b53a}
 .vp-damage b{font:600 12px/1 Arial,sans-serif;font-variant-numeric:tabular-nums;color:#eceae6}
 .vp-sil{display:none;width:66px;height:25px;flex:none}
-.vp-damage[data-model=shortbed] .vp-sil[data-sil=shortbed],.vp-damage[data-model=worktruck] .vp-sil[data-sil=worktruck],.vp-damage[data-model=offroad] .vp-sil[data-sil=offroad],.vp-damage[data-model=flatbed] .vp-sil[data-sil=flatbed],.vp-damage[data-model=generic] .vp-sil[data-sil=generic]{display:block}
+.vp-damage[data-model=shortbed] .vp-sil[data-sil=shortbed],.vp-damage[data-model=worktruck] .vp-sil[data-sil=worktruck],.vp-damage[data-model=offroad] .vp-sil[data-sil=offroad],.vp-damage[data-model=flatbed] .vp-sil[data-sil=flatbed],.vp-damage[data-model=tractor_juff] .vp-sil[data-sil=tractor_juff],.vp-damage[data-model=tractor_kidbi] .vp-sil[data-sil=tractor_kidbi],.vp-damage[data-model=generic] .vp-sil[data-sil=generic]{display:block}
 .vp-damage[data-band=fine]{color:#5fcf80}.vp-damage[data-band=worn]{color:#c4dc5a}.vp-damage[data-band=damaged]{color:#f2b53a}.vp-damage[data-band=limping]{color:#f2743a}.vp-damage[data-band=wrecked]{color:#e8323a}.vp-keys{display:grid;gap:5px;font-size:11px;color:#e3e1dc}
 .vp-key{display:flex;align-items:center;gap:2px}
 .vp-key[data-muted=true]{opacity:.5}

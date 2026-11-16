@@ -41,7 +41,7 @@ Read with DESIGN.md 4.14 (Gigs revamp bullet), 4.15, 4.19. Money is integer cent
 
 - **Money check:** 1,200 + 300 + 2,500 + 4,000 + 2,500 = 10,500 cents earned, minus about 500 for food = **about $100 at beat 9**, so the $90 rent is reachable without grinding. Fuel money is separate (Hal's $32). Worst case (low quality, short gig) about $85: the Noah fallback covers the gap.
 - **Order is fixed, with two soft spots:** beats 7 and 8 can be done in either order; beat 3's food is checked as "ate something since beat 3" (any food counts, a phone order does not block).
-- **Skipping:** a "Skip the introduction" choice in Noah's first dialog. Recommended: skipping gives no cash and no truck; Hal sells the truck at the farm for $2,800 instead (open question 4).
+- **Skipping:** a "Skip the introduction" choice in Noah's first dialog. Recommended: skipping gives no cash and no truck; Hal sells the truck at the farm for $500 instead (open question 4).
 - **Multiplayer:** the story is per player; beat 10's sleep becomes "rest in the bed" (time never skips online, DESIGN 4.14). Everything else is local state.
 - **Map changes:** **`town.js`: none. `world.js`: none. `map-definition.js`: one added line**, the `MAP.vehicles` entry for the new model (`sale:'online'`, no `home`, so no lot bay is needed; the lot's three truck bays are full). All story places (Hal's porch, the crate pile, the truck's farm pose, the studio parking spot for the gift) live in `starter.js` as data and are checked by a test with `world.js isWalkable` and the existing safe-pose search, so a map change that breaks them fails a test. The studio parking spot: the apartments have a lot beside the building (DESIGN 4.14); its pose must be measured in S5 (unverified).
 
@@ -78,11 +78,11 @@ Example: a fragile haul at quality 85, the 3rd today, rep 20: floor(3500 x 0.94 
 **Pay curve against prices (rough, real time):** walking types average about $13 per 1.5 real min, about $500 per real hour before the repeat rule, about $380 with a mix after it; vehicle types about $40 per 3.5 real min, about $600 per real hour. So the Worktruck ($4,500) is about 7 to 8 real hours of mixed gigs, the pickup ($11,000) about 18; the Tylan stays gated by Lumberjack level 5 and logging pays more per hour (DESIGN 5: about $400 to $600 an hour) plus rank growth, so a career stays the better long-term choice. Today's Noah loop pays roughly $1,000 an hour with no cap: the new rates are lower per hour but varied; Haiku tunes after a play-test.
 
 ## 4. The vehicle ladder and the short flatbed
-**Recommendation: the truck is the story's reward (beat 10), not a purchase after N gigs.** Reasons: (1) the testers' complaint is "I want a vehicle right away" and 16 to 22 minutes is right away; (2) "buy after N gigs" recreates the grind they called boring; (3) the loan in beats 5 and 6 doubles as the driving and fuel lesson, so the gift is earned in play; (4) it stays fair because it is small, slow-ish and has a small deck, and every later truck beats it at something. A second one can be **bought online for $2,800** (for a second home, or after skipping the story).
+**Recommendation: the truck is the story's reward (beat 10), not a purchase after N gigs.** Reasons: (1) the testers' complaint is "I want a vehicle right away" and 16 to 22 minutes is right away; (2) "buy after N gigs" recreates the grind they called boring; (3) the loan in beats 5 and 6 doubles as the driving and fuel lesson, so the gift is earned in play; (4) it stays fair because it is small, slow-ish and has a small deck, and every later truck beats it at something. A second one can be **bought online for $500** (for a second home, or after skipping the story).
 
 | Class | Price | Top m/s (mph) | Accel | mpg | Tank | Bed (space units) | Gate |
 |---|---|---|---|---|---|---|---|
-| **Corvan Shortbed** (new, `shortbed`) | gift, or $2,800 online | 16.5 (37) | 2.6 | 10 | 14 gal gas | 50 (10 logs or 50 planks; flat deck) | none |
+| **Corvan Shortbed** (new, `shortbed`) | gift, or $500 online | 16.5 (37) | 2.6 | 10 | 14 gal gas | 50 (10 logs or 50 planks; flat deck) | none |
 | Worktruck | $4,500 | 17.9 (40) | 3 | 8 | 21 gal diesel | 32 | none |
 | Tylan Flatbed | $8,000 | 15.6 (35) | 1.6 | 6 | 30 gal diesel | 120 | Lumberjack 5 |
 | Off Road Pickup | $11,000 | 26.8 (60) | 4.5 | 14.5 | 18 gal diesel | 32 | none |
@@ -110,7 +110,7 @@ Not recommended: a generated box truck or the Worktruck cab with a generated dec
 **Pure functions to write (each with tests):**
 - `gigs.js`: `GIG_TYPES` (data), `normalizeGigs(v)`, `boardFor(p, now)` (counters, unlock rules, no duplicate type, client rest), `acceptGig(p, slot, now)`, `tickGig(p, {position, room, dt, moving, knock, metres})`, `completeGig(p, position, room, now)`, `failGig(p, now, why)`, `payFor(type, quality, repeats, rep)`, `repeatsToday(recent, type, now)`, `parRoute(points, start)` (best order of 3 stops, brute force over 6 orders).
 - `starter.js`: `BEATS` (data: id, title, text, place, the event that finishes it), `PLACES` (Hal's porch, crate pile, truck farm pose, studio parking pose), `normalizeStarter(v, p)`, `starterObjective(p)` -> `{title, text, aim}` (the objective card and the tracker's story row read this instead of the hard-coded text at `game.js` ~787), `advanceStarter(p, event)` -> `{state, message}` or `{error}` (events: `read-message`, `delivered`, `ate`, `arrived`, `loaded`, `delivered-crates`, `refuelled`, `note-given`, `gig-done`, `rented`, `slept`).
-- `orders.js`: `VEHICLE_PRICE.shortbed = 280000`; `grantVehicle(p, model, colour, pose)` (the gift and loan path: room check, no payment, new uid).
+- `orders.js`: `VEHICLE_PRICE.shortbed = 50000`; `grantVehicle(p, model, colour, pose)` (the gift and loan path: room check, no payment, new uid).
 - `vehicle.js` class, `cargo.js` deck and `crate` piece, `paint.js` colours (data).
 
 **Stages (each small, each stops with `npm test` passing; model per stage):**
@@ -122,17 +122,17 @@ Not recommended: a generated box truck or the Worktruck cab with a generated dec
 | S4 | Tune numbers after a play-test | Haiku | `gigs.js` data only | existing |
 | S5 | `starter.js` pure + objective card text; beats 1-4 and 7-9 (no vehicle yet); skip choice; old-save rule | Sonnet | new `dist/starter.js`, `jobs.js` (normalise), `game.js` (objective text ~786-790, Noah ~515-524, Hal's dialog), Hal drawn near the farm via the existing character code | new `tests/starter.mjs` (every beat's event, wrong events refused, old save skipped, places walkable); one short `tests/starter-game.mjs` (beats 1-2) |
 | S6 | The model: received, converted (`scripts/build-shortbed.mjs`), `ASSETS.md`, `assets-register.json`, `credits.js` if licensed | user, then Sonnet | `scripts/`, `dist/shortbed-assets.js` | `tests/vehicle.mjs` hull vs model |
-| S7 | Class, paint, deck, `crate` piece, `MAP.vehicles` line, Store card (online, $2,800), `npm run pictures` | Sonnet | `vehicle.js`, `paint.js`, `cargo.js`, `cargo-view.js`, `orders.js`, `map-definition.js` (one line) | `tests/vehicle.mjs`, `tests/paint.mjs`, `tests/cargo.mjs`, `tests/store-categories.mjs` (picture present) |
+| S7 | Class, paint, deck, `crate` piece, `MAP.vehicles` line, Store card (online, $500), `npm run pictures` | Sonnet | `vehicle.js`, `paint.js`, `cargo.js`, `cargo-view.js`, `orders.js`, `map-definition.js` (one line) | `tests/vehicle.mjs`, `tests/paint.mjs`, `tests/cargo.mjs`, `tests/store-categories.mjs` (picture present) |
 | S8 | Story beats 5, 6, 10 (loan, crates, fuel cash, gift, sleep) and vehicle gig types 5 to 8 (knock detection from driving) | Sonnet | `starter.js`, `gigs.js`, `orders.js grantVehicle`, `game.js` hooks, `driving.js` (a knock event) | `tests/starter.mjs` (loan not counted, removed if broken, gift needs room), `tests/gigs.mjs` (knocks to quality) |
 | S9 | Text and number tweaks after the second play-test | Haiku | data only | existing |
 
 After any `dist/` change: `npm run release -- --force` before the packaged tests (0.35.4 is not deployed); bump the version if it is deployed by then. Send each stage as a hub plan (`npm run plan`), build only an approved revision.
 
 ## 6. Open questions for the user
-1. **Gift or purchase:** the truck as the story's reward (recommended), or "buy for $2,800 after 5 gigs"?
+1. **Gift or purchase:** the truck as the story's reward (recommended), or "buy for $500 after 5 gigs"?
 2. **The model:** will you model the Shortbed yourself (like the Tylan), or should we look for a licensed one? Without it S6 to S8 wait.
 3. **Names:** "Corvan Shortbed" and Hal Brennan as the story's giver: keep, or rename?
-4. **Old saves and skippers:** no story, and Hal sells the truck at the farm for $2,800 (recommended), or a free truck for everyone?
+4. **Old saves and skippers:** no story, and Hal sells the truck at the farm for $500 (recommended), or a free truck for everyone?
 5. **Hal in person** (+1 character at the farm) or phone-only (free)?
 6. **Hal as a regular client** after the story (farm chain errands some mornings)?
 7. **Retire the six old gigs completely** (recommended), or keep the café "hold the station" one?
@@ -148,7 +148,7 @@ After any `dist/` change: `npm run release -- --force` before the packaged tests
 - Population-driven clients assume `population.js buildPopulation(MAP)` is cheap enough to call once at load (it is pure and cached by design; not measured).
 
 ## Addendum 2026-11-13 (user's answers, more gigs)
-Decisions by the user: Q3 keep the names Corvan Shortbed and Hal Brennan; Q4 a player who skips the story is WARNED they will not get the reward (no free truck for skippers; Hal's $2,800 sale stays open to them); Q5 Hal appears in person at the farm; Q6 Hal becomes a regular gig customer after the story; Q7 retire all six old gigs; Q8 the story runs in multiplayer (sleep becomes rest there). Q1 reward at the end of the story. Q2: the user asked for a licensed shortbed model to be found (see the chat; none confirmed yet).
+Decisions by the user: Q3 keep the names Corvan Shortbed and Hal Brennan; Q4 a player who skips the story is WARNED they will not get the reward (no free truck for skippers; Hal's $500 sale stays open to them); Q5 Hal appears in person at the farm; Q6 Hal becomes a regular gig customer after the story; Q7 retire all six old gigs; Q8 the story runs in multiplayer (sleep becomes rest there). Q1 reward at the end of the story. Q2: the user asked for a licensed shortbed model to be found (see the chat; none confirmed yet).
 The user also asked for delivery gigs and short fun cafe shifts. Draft additions, each with ONE twist (to be designed in detail, then built in the gigs.js stages):
 | # | Gig | Twist | Needs |
 |---|---|---|---|
