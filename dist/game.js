@@ -48,7 +48,7 @@ import {itemById,ITEMS} from './items.js';
 import {DEV_MODE} from './dev-flag.js';import {VERSION} from './version.js';import {installUpdateNotice} from './update-check.js';
 import {createInventoryUI} from './inventory-ui.js';
 import {addItem,useItem,unequipItem,hasItem,hotbarItems,equipTool,sellLogs,canOf,setCan} from './inventory.js';
-import {createPhone} from './phone.js';
+import {createPhone} from './phone.js';import {createGps} from './gps.js';
 import {acceptContract,completeContract,tickContract,gigTarget,atGigPoint,refreshGigBoard,gameMinutes,marketContracts} from './gig-bridge.js';import {advanceStarter,starterObjective,skipStarter,PLACES as STORY_PLACES} from './starter.js';
 import {GameState,initializeState,setMePosition,tickLife,setStatDrainMultiplier} from './state.js';
 import {needsEffects} from './life.js';
@@ -66,7 +66,7 @@ import {advanceTime,clockText,shopOpen,hoursText,formatClock} from './routine.js
 import {normalizeLife,lifeTransaction} from './life.js';
 import {SHOPS,SHOP_ENTRY,SHOP_EXIT,COUNTER,createShop} from './shops.js';
 import {createSlidingDoor} from './doors.js';
-import {MAP,roadRects} from './map-definition.js';
+import {MAP,roadRects,nearestRescuePoint} from './map-definition.js';
 import {activeAction,canStart,refusal} from './actions.js';
 import {resolveObjective} from './objective.js';
 import {substeps,MAX_FRAME} from './timestep.js';
@@ -414,7 +414,7 @@ function placeSafely(x,y,z,{keepIfNone=false}={}){
  return {x:spot.x,z:spot.z,moved:spot.distance>.0001,found:spot.distance!==Infinity};
 }
 function reset(){if(driving.active)driving.leave(()=>false);fuel.putBack(); // R while driving: the vehicle stays where it is and you go to the spawn
- if(active)look.resetMotion();if(shop){const en=officeByKey(shop)?.interior.entry||SHOP_ENTRY;return placeSafely(en.x,.02,en.z)}if(inside)return placeSafely(home.ENTRY.x,.02,home.ENTRY.z);const r=placeSafely(MAP.spawn.x,MAP.spawn.y,MAP.spawn.z);yaw=0;pitch=.38;return r}reset();
+ if(active)look.resetMotion();if(shop){const en=officeByKey(shop)?.interior.entry||SHOP_ENTRY;return placeSafely(en.x,.02,en.z)}if(inside)return placeSafely(home.ENTRY.x,.02,home.ENTRY.z);const rp=nearestRescuePoint(me.position.x,me.position.z)||MAP.spawn,r=placeSafely(rp.x,MAP.spawn.y,rp.z);yaw=0;/* RU2: R goes to the nearest region's safe point (the Ironwood point is the spawn) */pitch=.38;return r}reset();
 // Moves you to the nearest clear spot from where you stand (the dev panel's Unstick, and the automatic rescue in the frame loop).
 function unstick(){const r=placeSafely(me.position.x,me.position.y,me.position.z);if(r.moved){persist();toast('You were stuck, so you were moved to the nearest clear spot.')}return r}
 if(GameState.progress.position){const p=GameState.progress.position;world.ensure(p.x,p.z);if(!blocked(p.x,p.z)){me.position.x=p.x;me.position.z=p.z;camera.position.set(p.x,4,p.z+7)}else{const spot=findNearestClearSpot(blocked,p.x,p.z,{openArea:OPEN_AREA}); // a blocked saved position (the 0.31 parked car) no longer sends you back to the spawn
@@ -801,7 +801,7 @@ function exitVehicle(now){
  me.rotation.y=f.state.yaw+(driving.seatSide==='passenger'||seatWas==='passenger'?-Math.PI/2:Math.PI/2);keys.clear();look.resetMotion();pitch=.38;zoom=zoomTarget=7;persist();
 }
 function updateWorldUI(){
- vehicleHud(fork.on?vehicleHudModel({forklift:{speed:fork.state.speed,lift:fork.state.lift,load:forkLoadOf(GameState.progress),hint:fork.hint||'',goal:fork.goal||''}}):vehicleHudModel({driving:driving.active,seat:driving.seatSide,name:driving.active?.spec.name,speed:driving.speed,lights:driving.driving?lightsLabel(lightMode,nightLights.ownOn):null,fuel:driving.active?driving.fuelOf(driving.active.spec.id):null,damage:driving.active?driving.damageOf():null,bog:driving.driving?driving.bogOf():null,ground:driving.active?(()=>{const s=surfaceLive(driving.active.state.x,driving.active.state.z);return {label:SURFACE_LABEL[s]||'Ground',factor:surfaceSpeed(s,driving.active.cls)}})():null}));
+ vehicleHud(fork.on?vehicleHudModel({forklift:{speed:fork.state.speed,lift:fork.state.lift,load:forkLoadOf(GameState.progress),hint:fork.hint||'',goal:fork.goal||''}}):vehicleHudModel({driving:driving.active,seat:driving.seatSide,name:driving.active?.spec.name,speed:driving.speed,lights:driving.driving?lightsLabel(lightMode,nightLights.ownOn):null,fuel:driving.active?driving.fuelOf(driving.active.spec.id):null,damage:driving.active?driving.damageOf():null,bog:driving.driving?driving.bogOf():null,gps:driving.driving?gps.hud:null,ground:driving.active?(()=>{const s=surfaceLive(driving.active.state.x,driving.active.state.z);return {label:SURFACE_LABEL[s]||'Ground',factor:surfaceSpeed(s,driving.active.cls)}})():null}));
  camera.updateMatrixWorld(true);const hit=chooseInteraction(candidates(),me.position,me.rotation.y);selectedInteraction=hit;
  { const target=chopping?chopping.tree:hit?.id?.startsWith('tree-')?hit.point:null;world.setTarget(active&&!modal?target:null); }
  const p=hit?screenAnchor(hit.anchor(),camera,innerWidth,innerHeight,THREE.Vector3):null;$('prompt').hidden=!active||modal||!!busy||!!chopping||!p||!!driving.active;
@@ -1031,13 +1031,13 @@ function startClear(key,t){
 }
 function strikeStump(c){
  const result=clearStump(GameState.progress,c.tree.key,me.position);if(result.error){toast(result.error);return}
- const sc=stumpCleared(result.state);GameState.progress=sc.state;persist();lastStages.set(c.tree.key,'cleared');world.setStage(c.tree.key,'cleared');minimap.invalidate();
+ const sc=stumpCleared(result.state);GameState.progress=sc.state;persist();lastStages.set(c.tree.key,'cleared');world.setStage(c.tree.key,'cleared');minimap.invalidateAt(c.tree.x,c.tree.z);
  toast(result.message+(sc.message?' · '+sc.message:'')+(result.leveledUp?` Lumberjack level ${result.level}! ${perkText(result.level)}`:''));
 }
 function plantHere(key){
  if(!onRidgeline()){toast(CLOSED_FOREST);return}
  const r=plantSapling(GameState.progress,key,me.position);if(r.error){toast(r.error);return}
- const sp=saplingPlanted(r.state);GameState.progress=sp.state;persist();lastStages.set(key,'sapling');world.setStage(key,'sapling');minimap.invalidate();
+ const sp=saplingPlanted(r.state);GameState.progress=sp.state;persist();lastStages.set(key,'sapling');world.setStage(key,'sapling');{const t=world.trees.get(key);if(t)minimap.invalidateAt(t.x,t.z)}
  toast(r.message+(sp.message?' · '+sp.message:''));
 }
 function strikeTree(c){
@@ -1050,7 +1050,7 @@ function strikeTree(c){
   // The trunk falls first; its logs appear on the ground (and can be picked up) once it has landed.
   const ids=result.logs.map(l=>l.id);ids.forEach(id=>pendingLogs.add(id));
   world.fellTree(c.tree.key,me.position,()=>{ids.forEach(id=>pendingLogs.delete(id));world.setLogs(GameState.progress.logs)});
-  minimap.invalidate();
+  minimap.invalidateAt(c.tree.x,c.tree.z);
   toast((result.leveledUp?`${result.message} Lumberjack level ${result.level}! ${perkText(result.level)}`:result.message)+shiftNote);
  }else{
   world.hitTree(c.tree.key,me.position);
@@ -1132,7 +1132,7 @@ function tickRegrowth(){
  progress=grown.state;
  if(progress!==GameState.progress){const logsChanged=progress.logs!==GameState.progress.logs;GameState.progress=progress;persist();if(logsChanged)world.setLogs(progress.logs)}
  for(const key of grown.restored){world.setRegrown(key);lastStages.delete(key)}
- if(grown.restored.length)minimap.invalidate();
+ for(const key of grown.restored){const t=world.trees.get(key);if(t)minimap.invalidateAt(t.x,t.z)}
  for(const [key,stage] of felledStages(GameState.progress,now))if(lastStages.get(key)!==stage){lastStages.set(key,stage);world.setStage(key,stage)}
 }
 // Zones: grid overlay, tree sightline fade, sun/shadows following the player, minimap.
@@ -1141,6 +1141,7 @@ const minimap=createMinimap(document,{canvas:$('minimap'),
  cityRoads:roadRects('asphalt'),
  buildings:MAP.buildings.map(b=>({x:b.x,z:b.z,hx:b.w/2,hz:b.d/2})),
  trees:()=>world.trees.values()});
+const gps=createGps(); // GP1: the route, the pin and the job auto-route (gps.js); the phone's GPS screen sets them, updateZones feeds it your position
 function updateZones(dt){
  const outdoors=!inside&&!shop,zone=zoneAt(me.position.x,me.position.z).id;
  world.targetCell=world.updateGrid(me.position,me.rotation.y,gridOn&&outdoors&&active&&!modal&&zone!=='city');
@@ -1150,7 +1151,9 @@ function updateZones(dt){
  const markers=[];
  if(outdoors){const job=GameState.progress.activeJob;if(job&&gigMarker.visible)markers.push({x:gigMarker.position.x,z:gigMarker.position.z,color:'#f2ca79'});if(marker.visible)markers.push({x:marker.position.x,z:marker.position.z,color:'#d4e7b3'});for(const v of driving.fleet)if(v.present&&!v.display&&!v.dev&&v!==driving.active)markers.push({x:v.state.x,z:v.state.z,color:'#6fb7ff'})} // your own vehicles show on the minimap in blue
  const p=outdoors?me.position:shop?SHOPS[shop]:STUDIO;
- minimap.update(dt,{player:{x:p.x,z:p.z},heading:outdoors?me.rotation.y:0,yaw,markers});
+ if(outdoors){const jb=GameState.progress.activeJob;gps.setJobTarget(active&&jb&&gigMarker.visible?{x:gigMarker.position.x,z:gigMarker.position.z}:null);if(gps.update(dt,{x:p.x,z:p.z})==='arrived')toast('You have arrived.')}
+ minimap.update(dt,{player:{x:p.x,z:p.z},heading:outdoors?me.rotation.y:0,yaw,markers,route:outdoors?gps.ahead:null,pin:outdoors?gps.pin:null,speed:driving.speed,driving:!!driving.active});
+ if(phone?.isOpen)phone.gpsUpdate(dt,{player:{x:p.x,z:p.z},heading:outdoors?me.rotation.y:0,yaw});
 }
 function updateConsumption(dt){
  if(document.hidden)return;
@@ -1182,7 +1185,7 @@ storeUI=createStoreUI({document,getState:()=>GameState,
 });
 // Phone owns only its overlay; existing modal guards stop WASD and mouse look.
 cargoUI=createCargoUI({document,onOpen:()=>{clearWorldPanel();modal=true;keys.clear();look.release()},onClose:()=>{modal=false;keys.clear();look.resetMotion()}});
-phone=createPhone({document,getState:()=>GameState,inVehicle:()=>!!driving.active||!!fork.on,audio,pullInfo:()=>{const b=driving.driving?driving.bogOf():null;return pullOutAvailable({inVehicle:!!b,stuck:b?.stuck,soft:b?.soft})?{cents:pullFee(GameState.progress),hours:BOG_PULL_HOURS}:null},onPull:()=>{try{const b=driving.driving?driving.bogOf():null;if(!pullOutAvailable({inVehicle:!!b,stuck:b?.stuck,soft:b?.soft})){toast('You are not stuck.');return {error:'You are not stuck.'}}const spot=driving.firmSpot(),f=driving.active,r=garageDo(q=>pullOut(q,f.spec.id,spot,{drivenUid:f.spec.id,available:true}));if(r.error){toast(r.error);return {error:r.error}}driving.relocate(spot);toast(r.message);return {message:r.message}}catch(e){const m='The tow service could not do that: '+(e?.message||e);toast(m);return {error:m}}},onRead:app=>{const next=markRead(GameState.progress,app);if(next!==GameState.progress){GameState.progress=next;persist()}},isOnSite:id=>shiftOnSite(id),onClockIn:id=>doClockIn(id),onClockOut:()=>doClockOut(),onQuit:id=>{const r=quit(GameState.progress,id);if(r.error)return {error:r.error};GameState.progress=r.state;persist();return {message:'You quit '+employerName(GameState.progress,id)+'. Your rank is reset.'}},onCollect:id=>{const r=collectOwed(GameState.progress,id);if(r.error)return {error:r.error};GameState.progress=r.state;persist();return {message:'Collected '+r.handed.map(t=>itemById(t)?.name||t).join(', ')+'.'}},onOrder:(cart,home)=>{const r=placeOrder(GameState.progress,cart,home);if(r.error)return {error:r.error};GameState.progress=r.state;persist();return {message:r.message}},onOrderVehicle:(model,colour,home)=>{const r=orderVehicle(GameState.progress,model,colour,home);if(r.error)return {error:r.error};GameState.progress=r.state;persist();return {message:r.message}},onSetMain:id=>{const r=setMainHome(GameState.progress,id);if(r.error)return {error:r.error};GameState.progress=r.state;persist();return {message:r.message}},onTow:uid=>towCall(uid),onHomeAction:(action,id)=>{const r=propertyTransaction(GameState.progress,action,id);if(r.error)return {error:r.error};GameState.progress=r.state;persist();return {message:r.message}},
+phone=createPhone({document,getState:()=>GameState,gps:{state:gps,mapOptions:{buildings:MAP.buildings.map(b=>({x:b.x,z:b.z,hx:b.w/2,hz:b.d/2})),trees:()=>world.trees.values()}},inVehicle:()=>!!driving.active||!!fork.on,audio,pullInfo:()=>{const b=driving.driving?driving.bogOf():null;return pullOutAvailable({inVehicle:!!b,stuck:b?.stuck,soft:b?.soft})?{cents:pullFee(GameState.progress),hours:BOG_PULL_HOURS}:null},onPull:()=>{try{const b=driving.driving?driving.bogOf():null;if(!pullOutAvailable({inVehicle:!!b,stuck:b?.stuck,soft:b?.soft})){toast('You are not stuck.');return {error:'You are not stuck.'}}const spot=driving.firmSpot(),f=driving.active,r=garageDo(q=>pullOut(q,f.spec.id,spot,{drivenUid:f.spec.id,available:true}));if(r.error){toast(r.error);return {error:r.error}}driving.relocate(spot);toast(r.message);return {message:r.message}}catch(e){const m='The tow service could not do that: '+(e?.message||e);toast(m);return {error:m}}},onRead:app=>{const next=markRead(GameState.progress,app);if(next!==GameState.progress){GameState.progress=next;persist()}},isOnSite:id=>shiftOnSite(id),onClockIn:id=>doClockIn(id),onClockOut:()=>doClockOut(),onQuit:id=>{const r=quit(GameState.progress,id);if(r.error)return {error:r.error};GameState.progress=r.state;persist();return {message:'You quit '+employerName(GameState.progress,id)+'. Your rank is reset.'}},onCollect:id=>{const r=collectOwed(GameState.progress,id);if(r.error)return {error:r.error};GameState.progress=r.state;persist();return {message:'Collected '+r.handed.map(t=>itemById(t)?.name||t).join(', ')+'.'}},onOrder:(cart,home)=>{const r=placeOrder(GameState.progress,cart,home);if(r.error)return {error:r.error};GameState.progress=r.state;persist();return {message:r.message}},onOrderVehicle:(model,colour,home)=>{const r=orderVehicle(GameState.progress,model,colour,home);if(r.error)return {error:r.error};GameState.progress=r.state;persist();return {message:r.message}},onSetMain:id=>{const r=setMainHome(GameState.progress,id);if(r.error)return {error:r.error};GameState.progress=r.state;persist();return {message:r.message}},onTow:uid=>towCall(uid),onHomeAction:(action,id)=>{const r=propertyTransaction(GameState.progress,action,id);if(r.error)return {error:r.error};GameState.progress=r.state;persist();return {message:r.message}},
  canOpen:()=>active&&!modal&&!creatorOpen&&!actionBusy(),
  onOpen:()=>{clearWorldPanel();modal=true;keys.clear();look.release()},
  onClose:()=>{modal=false;keys.clear();look.resetMotion()},

@@ -100,7 +100,7 @@ const tilt=f=>{const s=f.state,sy=Math.sin(s.yaw),cy=Math.cos(s.yaw),at=(lx,lz)=
   cameraZoom(f=driven){return f?Math.hypot(f.cls.camera.back,f.cls.camera.up):7},
   cameraPitch(f=driven){return f?Math.atan2(f.cls.camera.up,f.cls.camera.back):.38},
   // The doors that can be used (none while you sit in a vehicle): [{id, seat: 'driver'|'passenger', name, x, z}]
-  doors(){return driven?[]:fleet.filter(f=>f.present).flatMap(f=>['driver','passenger'].map(seat=>({id:f.spec.id,seat,name:f.spec.name,model:f.spec.model,display:f.display,colour:f.colour,...doorPoint(f.state,f.cls,seat)})))},
+  doors(){return driven?[]:fleet.filter(f=>f.present).flatMap(f=>(f.cls.seats===1?['driver']:['driver','passenger']).map(seat=>({id:f.spec.id,seat,name:f.spec.name,model:f.spec.model,display:f.display,colour:f.colour,...doorPoint(f.state,f.cls,seat)})))},
   seat(){return driven?seatPoint(driven.state,driven.cls,side):null},
   // The muffler tip of a vehicle in the world (x, y, z) and the way the pipe points (dx, dz: straight back), for the smoke.
   exhaust(f=driven){if(!f||!f.cls.exhaust)return null;const e=f.cls.exhaust,w=toWorld(f.state,e.x,e.z);return e.stack?{x:w.x,y:f.y+e.y,z:w.z,dx:0,dz:0,up:true}:{x:w.x,y:f.y+e.y,z:w.z,dx:-Math.sin(f.state.yaw),dz:-Math.cos(f.state.yaw)}}, // a stack (the flatbed) points up
@@ -118,7 +118,7 @@ const tilt=f=>{const s=f.state,sy=Math.sin(s.yaw),cy=Math.cos(s.yaw),at=(lx,lz)=
   step(dt,input,people=[]){if(!driven||side!=='driver')return null;const f=driven,fuelled=!!f.spec.fuel;clock+=dt;
    const eng=engineStep(f.engine,{cond:f.cond,throttle:input.throttle||0,now:clock});f.engine=eng.engine;if(eng.event)events.push({type:eng.event,id:f.spec.id,seconds:eng.event==='crank'?+(f.engine.readyAt-clock).toFixed(2):0}); // stalled, cranking or wrecked: no throttle (the vehicle coasts to a stop; E always gets you out)
    const run=f.engine.mode==='run',load=loadOf(f.spec.model,f.cargo),hurt=withDamage(withLoad(f.cls,load),f.cond),k=topFactor(f.bog),dmg=k<1?{...hurt,top:hurt.top*k,reverse:hurt.reverse*k}:hurt,cut=!run||(fuelled&&f.fuelMgal<=0), // an empty tank: no throttle too
-    inp={...input,throttle:cut?0:input.throttle,steer:pulledSteer(input.steer,dmg.pull,f.pullSide,f.state.speed)},before=f.state,b=stepBog(f.bog,{throttle:inp.throttle,speed:f.state.speed,surface:surface(f.state.x,f.state.z),group:f.cls.group,load,dt}),r=stepVehicle(f.state,inp,dt,dmg,envFor(f,people));f.bog=b;if(b.event)events.push({type:b.event==='stuck'?'bog':'unbog',id:f.spec.id});f.state=r.state;lastHit=r.hit; // TR4: the bog meter (surface-table.js) reads the state before the step; Stuck scales the top speed (eased) inside the step
+    inp={...input,throttle:cut?0:input.throttle,steer:pulledSteer(input.steer,dmg.pull,f.pullSide,f.state.speed)},before=f.state,b=stepBog(f.bog,{throttle:inp.throttle,speed:f.state.speed,surface:surface(f.state.x,f.state.z),group:f.cls.group,load,dt,bogMul:f.cls.bogMul}),r=stepVehicle(f.state,inp,dt,dmg,envFor(f,people));f.bog=b;if(b.event)events.push({type:b.event==='stuck'?'bog':'unbog',id:f.spec.id});f.state=r.state;lastHit=r.hit; // TR4: the bog meter (surface-table.js) reads the state before the step; Stuck scales the top speed (eased) inside the step
    if(r.hit)crash(f,r,before.speed);
    if(fuelled){f.burn+=burnMgal(Math.hypot(r.state.x-before.x,r.state.z-before.z),f.cls.gallonsPerMile*(1+.3*load)*(run?dmg.burnMul??1:0));const whole=Math.floor(f.burn);f.burn-=whole;f.fuelMgal=Math.max(0,f.fuelMgal-whole)}
    return r},

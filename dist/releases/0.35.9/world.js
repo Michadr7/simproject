@@ -117,6 +117,7 @@ export function worldLayout(){
   const tx=x+r()*spacing*.8,tz=z+r()*spacing*.8;if(claimed(tx,tz)||nearDirtRoad(tx,tz,1.5)||nearAsphalt(tx,tz,3.5)||inRiver(tx,tz,4)||nearBuilding(tx,tz,3)||nearProp(tx,tz,PROP_CLEARANCE))continue;
   decor.push({x:tx,z:tz,scale:.9+r()*.5,rot:r()*Math.PI*2,tone:Math.floor(r()*4)})}};
  for(const spec of scenery.belts)belt(...spec);
+ for(const spec of scenery.edgeBands||[])belt(...spec); // RU2: the 30 m band inside the wilds' north, west and east edges
  // A few shade trees between the farm fields.
  for(let i=0;i<scenery.farmShade.count;i++){const r=random(blockSeed(i,7,WORLD_SEED+1)),x=farm.x0+4+r()*(farm.x1-farm.x0-10),z=farm.z0+3+r()*(farm.z1-farm.z0-6),c=cellOf(x,z);
   if(nearDirtRoad(x,z,2.5)||nearProp(x,z,PROP_CLEARANCE)||FIELDS.some(f=>x>f.x0-2&&x<f.x1+2&&z>f.z0-2&&z<f.z1+2)||x>farm.x1-scenery.farmShade.clearOfRoad)continue;

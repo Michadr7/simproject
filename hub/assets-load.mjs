@@ -8,7 +8,7 @@ import {pathToFileURL} from 'node:url';
 import {createHash} from 'node:crypto';
 import {describeModules,buildAssets,groupByPack,findUses,quotedIn,moduleImported} from './assets.js';
 
-export const ASSET_MODULES=Object.freeze(['props-assets','nature-assets','rigged-assets','axe-assets','saw-assets','forklift-assets','flatbed-assets','water-cooler-asset','sign-pictures','vehicle-pictures','character-male','character-female']);
+export const ASSET_MODULES=Object.freeze(['props-assets','props-assets-farm','nature-assets','rigged-assets','axe-assets','saw-assets','forklift-assets','flatbed-assets','water-cooler-asset','sign-pictures','vehicle-pictures','character-male','character-female']);
 const SMALL=['source','width','depth','height','triangles','bounds','trunkRadius','canopyRadius','length'];
 const pick=o=>{const r={};for(const k of SMALL)if(o&&o[k]!==undefined)r[k]=o[k];return r};
 const pickAll=map=>Object.fromEntries(Object.entries(map||{}).map(([k,v])=>[k,pick(v)]));
@@ -39,7 +39,8 @@ function hashesOf(m){
 
 export async function loadMeta(root){
  const L=n=>import(pathToFileURL(path.join(root,'dist',n+'.js')).href);
- const [props,nature,rigged,axes,saws,forklift,flatbed,cooler,signs,vehicles]=await Promise.all(['props-assets','nature-assets','rigged-assets','axe-assets','saw-assets','forklift-assets','flatbed-assets','water-cooler-asset','sign-pictures','vehicle-pictures'].map(L));
+ const [props0,farmProps,nature,rigged,axes,saws,forklift,flatbed,cooler,signs,vehicles]=await Promise.all(['props-assets','props-assets-farm','nature-assets','rigged-assets','axe-assets','saw-assets','forklift-assets','flatbed-assets','water-cooler-asset','sign-pictures','vehicle-pictures'].map(L));
+ const props={PROPS:{...props0.PROPS,...farmProps.FARM_PROPS}}; // the farm.* records are a separate lazy module in the game
  const rg=pickAll(rigged.RIGGED);for(const [id,m] of Object.entries(rigged.RIGGED))if(m.report&&m.report.triangles!=null)rg[id].triangles=m.report.triangles;
  const hashes=hashesOf({props,nature,rigged,axes,saws,forklift,flatbed,cooler,vehicles,signs});
  for(const k of ['male','female'])hashes['character:'+k]=sha((await L('character-'+k)).default);

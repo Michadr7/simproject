@@ -1,0 +1,20 @@
+// Lazy farm props (stage LZ1): the farm.* records are not in props-assets.js; props.js loads dist/props-assets-farm.js on demand (ensureFarmProps()). Nothing may crash before it has loaded.
+import assert from 'node:assert/strict';
+import * as THREE from '../dist/vendor/three.module.js';
+import {PROPS} from '../dist/props-assets.js';
+import {propInfo,createProp,createPropInstances,ensureFarmProps,farmPropsLoaded,isFarmProp} from '../dist/props.js';
+const fade={apply:m=>m};
+assert(!Object.keys(PROPS).some(id=>id.startsWith('farm.')),'props-assets.js holds no farm.* record');
+assert(!farmPropsLoaded()&&isFarmProp('farm.cow')&&!isFarmProp('barn'));
+assert.throws(()=>propInfo('farm.cow'),/not loaded yet/,'a clear error, not "Unknown prop", before loading');
+assert.throws(()=>propInfo('farm.nope'),/not loaded yet/);
+assert.throws(()=>propInfo('nothing-here'),/Unknown prop/);
+assert(createProp('farm.cow',fade).userData.pending,'createProp gives an empty pending group before loading');
+assert.equal(createPropInstances('farm.cow',[{x:0,z:0}],fade).count,0,'createPropInstances draws nothing before loading');
+assert(propInfo('barn').width>0,'the core props work without the farm module');
+const a=ensureFarmProps(),b=ensureFarmProps();await Promise.all([a,b]);
+assert(farmPropsLoaded()&&await a===await b,'both calls share one load');
+assert(propInfo('farm.cow').height>0&&propInfo('farm.rake-tedder').nodes!==undefined);
+const m=createProp('farm.cow',fade);assert(m instanceof THREE.Mesh&&!m.userData.pending,'a real mesh once loaded');
+assert.equal(createPropInstances('farm.pallet-wood',[{x:1,z:2},{x:3,z:4}],fade).count,2);
+console.log('Lazy farm props: PASS (65 farm.* ids load on demand; nothing crashes before)');

@@ -1,4 +1,4 @@
-// Converts models (GLB, glTF or FBX) into one embedded module, dist/props-assets.js: buildings, vehicles and yard props. For each prop it can turn the
+// Converts models (GLB, glTF or FBX) into embedded modules, dist/props-assets.js (+ dist/props-assets-farm.js for the lazy farm.* ids): buildings, vehicles and yard props. For each prop it can turn the
 // model, scale it (to a width, a length or a metres-per-model-unit), cut off the ground plate it was modelled on, simplify the mesh, bake plain material
 // colours into vertex colours (or shrink the one colour texture), and derive collision boxes from the footprint of whatever stands above a given height.
 //   TOOL_DIR=/path/with/node_modules node scripts/build-props.mjs <assets-src folder> [id,id,...]
@@ -8,7 +8,7 @@ import {createRequire} from 'node:module';
 import {readFileSync,writeFileSync,existsSync} from 'node:fs';
 import {join,resolve,dirname} from 'node:path';
 import {pathToFileURL} from 'node:url';
-import {splitWheels} from './split-wheels.mjs';
+import {splitWheels,splitWheelsByParts} from './split-wheels.mjs';
 const toolDir=resolve(process.env.TOOL_DIR||'.'),toolRequire=createRequire(join(toolDir,'noop.js'));
 let MeshoptSimplifier=null,sharp=null; // only the single-mesh props need these; the rigged models (RIGGED below) do not, so a missing TOOL_DIR is only an error when a prop is built
 try{({MeshoptSimplifier}=toolRequire('meshoptimizer'));sharp=toolRequire('sharp');await MeshoptSimplifier.ready}catch{MeshoptSimplifier=sharp=null}
@@ -55,6 +55,12 @@ const PROPS={
  // The off-road pickup (0.33): Sketchfab "Low poly Pickup truck v3" by Aditya Graphical (CC-BY-4.0): a textured body plus a lights part with its own texture (painted as a patch); the four tyres and their hub caps split out as wheels.
  offroad:{file:'Veichles/low_poly_pickup_truck_v3/scene.gltf',longest:5.6,turn:180,cut:null,triangles:null,texture:[512,82],patchPlain:true,splitWheels:true,collide:{cell:.5,band:[.3,1.9],walls:false,despeckle:false,fit:true}},
  worktruck:{file:'Veichles/green_pickup/scene.gltf',longest:6,cut:null,triangles:null,texture:[512,82],uvForAll:true,splitWheels:true,collide:{cell:.5,band:[.3,1.9],walls:false,despeckle:false,fit:true}},
+  // The farm tractors and the tank trailer (FV1; the project owner's conform of two CC-BY Sketchfab models, assets-src/Farm/conformed/*_lite.glb; notes/farm-vehicle-contract.md): true size in metres, footprint centred on x and z (the model origin is the hull centre, axleZ = minus the file's centre z), ground at y 0, tyre and rim colours from COLOR_0, splitWheels takes the four wheels out, anchor_* kept as record.anchors.
+  // A4 (notes/atv-handling-design.md): the player's own ATV, `ATV Utility - V8 Game.glb` (assets-src/Vehicles/ATV): metres, file origin kept (centre of the four tyre contacts), nose +z, the 17 anchor_* kept. moveAnchors are the owner's decisions of 2026-11-15: taillight anchors up to y .648, the exhaust anchor and the exhaust empty to the muffler tip (-0.28, 0.49, -1.035). The 8 flat materials become vertex colours: the body is one mesh and each wheel (tyre, rim, hub stub) one more, 5 draw calls instead of the file's 21.
+  atv:{file:'Vehicles/ATV/ATV Utility - V8 Game.glb',scale:1,cut:null,triangles:null,nodes:true,splitWheels:'nodes',keepOrigin:true,moveAnchors:{anchor_taillight_L:[.34,.648,-.975],anchor_taillight_R:[-.34,.648,-.975],anchor_exhaust:[-.28,.49,-1.035],exhaust:[-.28,.49,-1.035]},collide:{cell:.5,band:[.3,1.9],walls:false,despeckle:false,fit:true}},
+  tractor_juff:{file:'Farm/conformed/tractor_juff_lowpoly_lite.glb',scale:1,cut:null,triangles:null,nodes:true,splitWheels:'nodes',collide:{cell:.5,band:[.3,1.9],walls:false,despeckle:false,fit:true}},
+  tractor_kidbi:{file:'Farm/conformed/tractor_kidbi_only_lite.glb',scale:1,cut:null,triangles:null,nodes:true,splitWheels:'nodes',collide:{cell:.5,band:[.3,1.9],walls:false,despeckle:false,fit:true}},
+  tow_tank:{file:'Farm/conformed/tow_kidbi_tank_lite.glb',scale:1,cut:null,triangles:null,nodes:true,splitWheels:'nodes',collide:{cell:.5,band:[.3,1.9],walls:false,despeckle:false,fit:true}},
  // Interior furniture (Kenney Furniture Kit, CC0): 2 m per model unit, plain colours baked to vertex colours, solid boxes on a 25 cm grid (a rug has none).
  ...Object.fromEntries(Object.entries({'f-bed-double':'Bed Double','f-bed-single':'Bed Single','f-sofa':'Lounge Sofa','f-coffee-table':'Table Coffee','f-table':'Table','f-chair':'Chair','f-tv':'Television','f-tv-cabinet':'Cabinet Television','f-bookcase':'Bookcase Open','f-wardrobe':'Bookcase Closed Doors',
   'f-desk':'Desk','f-desk-chair':'Chair Desk','f-cabinet':'Kitchen Cabinet','f-sink':'Kitchen Sink','f-stove':'Kitchen Stove','f-fridge':'Kitchen Fridge Large','f-toilet':'Toilet','f-bath':'Bathtub','f-bath-sink':'Bathroom Sink','f-lamp':'Lamp Round Floor','f-rug':'Rug Rectangle','f-plant':'Potted Plant','f-stairs':'Stairs','f-side-table':'Side Table'})
@@ -84,6 +90,8 @@ const PROPS={
   'bag-feed-green':'bag_feed_green','bag-feed-open':'bag_feed_open','sack-closed':'sack_closed','sack-open-large':'sack_open_large','sack-tied':'sack_tied','bucket-metal':'bucket_metal','bucket-wood':'bucket_wood','milk-can':'milk_can','wheelbarrow':'wheelbarrow'})
   .map(([id,file])=>['farm.'+id,{file:`Farm/sr90/${file}.glb`,scale:1,cut:null,triangles:null,collide:{cell:.1,band:[.02,2.4],walls:false,despeckle:false,fit:true}}])),
  'farm.water-tower':{file:'Farm/sr90/water_tower.glb',scale:1,cut:null,triangles:null,collide:{cell:.5,band:[.2,3],walls:true,despeckle:false}}, // a wooden tower on legs: boxes only where the legs are
+ // The two farmhouses: House_Brick and House_Red, textured in the pack, baked to flat colours (scripts/farm-sr90-bake.py with SR90_EXPORT) and simplified to about 8,000 triangles; real size, origin on the ground at the footprint centre, front (door side) toward +z, wall boxes like the other farm buildings.
+ ...Object.fromEntries(['brick','red'].map(c=>['farm.house-'+c,{file:`Farm/sr90/house_${c}.glb`,scale:1,cut:null,triangles:8000,collide:WALLS}])),
  ...Object.fromEntries(Object.entries({seeder:'seeder',cultivator:'cultivator',harrow:'harrow','baler-round':'baler_round','mower-bar':'mower_bar','mower-yellow':'mower_yellow','rake-tedder':'rake_tedder',sprayer:'sprayer',spreader:'trailer_grain','trailer-red':'trailer_red','trailer-tank-sr90':'trailer_tank','cart-small':'cart_small','combine-harvester':'combine_harvester','combine-header':'combine_header'}) // spreader = the pack's Trailer_Grain (a fertiliser spreader, not a grain cart); rake-tedder from the full file (its _lite twin only differs in the wheel materials, and one mesh is built anyway)
   .map(([id,file])=>['farm.'+id,{file:`Farm/sr90/${file}.glb`,scale:1,cut:null,triangles:null,keepOrigin:true,nodes:true,collide:{cell:.5,band:[.3,1.9],walls:false,despeckle:false}}])),
  farmyard:{skip:true,file:'LowPOlyFarm_buildings.glb',width:40,cut:'auto',triangles:13000,texture:[1024,78],collide:{cell:1,band:[2,99],walls:false,despeckle:true}} // not used: it looked too rough in the game
@@ -114,9 +122,10 @@ function readGltf(path){
     idx=p.indices!==undefined?Uint32Array.from(acc(p.indices)):Uint32Array.from({length:P.length/3},(_,k)=>k),mat=json.materials?.[p.material]?.pbrMetallicRoughness||{};
    const tp=P.slice(),tn=N?N.slice():null;for(let k=0;k<P.length;k+=3){const x=P[k],y=P[k+1],z=P[k+2];tp[k]=m[0]*x+m[4]*y+m[8]*z+m[12];tp[k+1]=m[1]*x+m[5]*y+m[9]*z+m[13];tp[k+2]=m[2]*x+m[6]*y+m[10]*z+m[14];
     if(tn){const a=N[k],b=N[k+1],c=N[k+2];tn[k]=m[0]*a+m[4]*b+m[8]*c;tn[k+1]=m[1]*a+m[5]*b+m[9]*c;tn[k+2]=m[2]*a+m[6]*b+m[10]*c;const l=Math.hypot(tn[k],tn[k+1],tn[k+2])||1;tn[k]/=l;tn[k+1]/=l;tn[k+2]/=l}} // normals are unit length again after a scaled node transform (the Worktruck's nodes scale by 0.0006 in all: quantised to bytes they were all zero)
-   const ti=mat.baseColorTexture?json.textures[mat.baseColorTexture.index].source:null;
+   const CA=p.attributes.COLOR_0!==undefined?json.accessors[p.attributes.COLOR_0]:null,CV=CA?acc(p.attributes.COLOR_0):null,vcol=CV?(CA.type==='VEC4'?Float32Array.from({length:CA.count*3},(_,q)=>CV[(q/3|0)*4+q%3]):CV).map(v=>CA.componentType===5121?v/255:CA.componentType===5123?v/65535:v):null; // COLOR_0 (the farm tractors' tyres and rims in one material): per-vertex linear colour, multiplied into the material colour
+    const ti=mat.baseColorTexture?json.textures[mat.baseColorTexture.index].source:null;
    const gm=json.materials?.[p.material]||{},strength=gm.extensions?.KHR_materials_emissive_strength?.emissiveStrength??1,glows=gm.emissiveFactor&&gm.emissiveFactor.some(v=>v>0); // an emissive material (a lit panel): kept apart so the game can draw it glowing
-   parts.push({pos:tp,nor:tn,uv:U,idx,color:(mat.baseColorFactor||[1,1,1,1]).slice(0,3),image:ti,node:n.name||'',grp:g,emissive:glows?{color:gm.emissiveFactor.slice(0,3),strength}:null})}
+   parts.push({pos:tp,nor:tn,uv:U,idx,vcol,color:(mat.baseColorFactor||[1,1,1,1]).slice(0,3),image:ti,node:n.name||'',grp:g,emissive:glows?{color:gm.emissiveFactor.slice(0,3),strength}:null})}
   if(/^anchor_/.test(n.name||'')){const name=n.name.replace(/\.\d{3}$/,''); // Blender adds ".002" to a duplicated name (the island's petrol pump came out as anchor_use_py_0.002): dropped
    if(anchors[name])throw new Error('two anchors named '+name);anchors[name]=[m[12],m[13],m[14]]} // anchor empties (as in the sawmill GLB): their world position, converted with the prop below
   if(n.mesh===undefined&&n.name&&!/^anchor_/.test(n.name)&&!/_Source$/.test(n.name))pivots[n.name.replace(/\.\d{3}$/,'')]=[m[12],m[13],m[14]]; // spec.nodes: the pivot (world position) of every other empty: wheel_*, steer_*, unload_auger, seat, tank_fill ...
@@ -163,11 +172,14 @@ function paintParts(parts,paint){
  return out;
 }
 const b64=a=>Buffer.from(a.buffer,a.byteOffset,a.byteLength).toString('base64');
-const existing=existsSync('dist/props-assets.js')&&only?(await import(pathToFileURL(resolve('dist/props-assets.js')).href+'?x='+Date.now())).PROPS:{};
+const loadOld=async(f,name)=>existsSync(f)?(await import(pathToFileURL(resolve(f)).href+'?x='+Date.now()))[name]:{};
+// The farm.* records live in their own lazy module (dist/props-assets-farm.js, loaded by ensureFarmProps() in props.js); --only runs keep both files' old records.
+const existing=only?{...await loadOld('dist/props-assets.js','PROPS'),...await loadOld('dist/props-assets-farm.js','FARM_PROPS')}:{};
 const out={props:{...existing}},report=[];
 for(const [id,spec] of Object.entries(PROPS)){
  if(spec.skip||(only&&!only.has(id)))continue;
  const path=join(root,spec.file),model=path.toLowerCase().endsWith('.fbx')?await readFbx(path,spec):readGltf(path);
+ if(spec.moveAnchors)for(const [nm,v] of Object.entries(spec.moveAnchors)){if(model.anchors[nm])model.anchors[nm]=v.slice();if(model.pivots[nm])model.pivots[nm]=v.slice()} // A4: DATA moves of an anchor or an empty (file coordinates, glTF y up), so the artist's .glb stays untouched
  if(spec.paint)model.parts=paintParts(model.parts,spec.paint);
  if(spec.patchPlain){ // parts that use another texture or a plain colour (lights, glass) are painted as small solid patches in the corner of the one texture; their uvs point at the patch
   const main=model.parts.find(p=>p.image!==null)?.image,S=spec.texture[0];spec._patches=[];
@@ -182,7 +194,7 @@ for(const [id,spec] of Object.entries(PROPS)){
  for(const p of model.parts){
   const count=p.pos.length/3,isWheel=p.emissive?2:spec.wheels&&/wheel|tyre|tire/i.test(p.node||'')?1:0;let pi=0;if(spec.nodes&&p.grp){let q=partNames.indexOf(p.grp);if(q<0)q=partNames.push(p.grp)-1;pi=q+1} /* spec.nodes: part id in the bits above 2 */for(let k=0;k<count;k++)group.push(isWheel|(pi<<2)); /* group 2: a vertex of an emissive (glowing) part */for(let k=0;k<p.pos.length;k++)pos.push(p.pos[k]);
   if(p.nor)for(let k=0;k<p.nor.length;k++)nor.push(p.nor[k]);else for(let k=0;k<p.pos.length;k++)nor.push(0);
-  if(textured)for(let k=0;k<count*2;k++)uv.push(p.patch?p.patch.uv[k%2]:p.uv[k]);else{const c=p.color.map(sRGB8);for(let k=0;k<count;k++)col.push(c[0],c[1],c[2])}
+  if(textured)for(let k=0;k<count*2;k++)uv.push(p.patch?p.patch.uv[k%2]:p.uv[k]);else{const c=p.color.map(sRGB8);for(let k=0;k<count;k++)if(p.vcol)col.push(sRGB8(p.color[0]*p.vcol[k*3]),sRGB8(p.color[1]*p.vcol[k*3+1]),sRGB8(p.color[2]*p.vcol[k*3+2]));else col.push(c[0],c[1],c[2])}
   for(const i of p.idx)idx.push(i+base);base+=count}
  pos=Float32Array.from(pos);nor=Float32Array.from(nor);idx=Uint32Array.from(idx);
  if(textured)uv=Float32Array.from(uv);else col=Uint8Array.from(col);
@@ -281,14 +293,16 @@ for(const [id,spec] of Object.entries(PROPS)){
   door:spec.door?{x:spec.door.x,z:+wz1.toFixed(2),width:spec.door.width,height:spec.door.height}:null,...(glow?{glow}:{}),...(model.clips?.length?{clips:model.clips}:{}),...(partsRec?{parts:partsRec}:{}),...(spec.nodes&&Object.keys(model.pivots||{}).length?{nodes:Object.fromEntries(Object.entries(model.pivots).map(([nm,[x,y,z]])=>[nm,[+((x-cx)*k).toFixed(4),+((y-baseY)*k).toFixed(4),+((z-cz)*k).toFixed(4)]]))}:{}),
   ...(Object.keys(model.anchors||{}).length?{anchors:Object.fromEntries(Object.entries(model.anchors).map(([name,[x,y,z]])=>[name,[+((x-cx)*k).toFixed(4),+((y-baseY)*k).toFixed(4),+((z-cz)*k).toFixed(4)]]))}:{}),pos:b64(posA),nor:b64(norQ),norQ:true,idx:b64(idxA),vertices:count};
  if(textured){record.texture=texture;record.uv=b64(Float32Array.from(U))}else record.col=b64(Uint8Array.from(C));
- if(spec.splitWheels)Object.assign(record,splitWheels(record,{id})); // the wheels become separate meshes (scripts/split-wheels.mjs), centred on their axles
+ if(spec.splitWheels==='nodes'){Object.assign(record,splitWheelsByParts(record,{id}));delete record.parts}else if(spec.splitWheels)Object.assign(record,splitWheels(record,{id})); // the wheels become separate meshes (scripts/split-wheels.mjs), centred on their axles
  out.props[id]=record;
  report.push(`${id.padEnd(11)} ${before} -> ${I.length/3} tris, ${(wx1-wx0).toFixed(1)} x ${(wz1-wz0).toFixed(1)} m, ${sy.toFixed(1)} m tall, ${boxes.length} boxes${floor?', floor '+floor.y+' m':''}, ${textured?'texture':'colours'}, ${count} vertices`);
 }
 if(needTools){
  const ordered=Object.fromEntries(Object.keys(PROPS).filter(id=>out.props[id]).map(id=>[id,out.props[id]]));
- const text=`// GENERATED by scripts/build-props.mjs from the models in assets-src (see ASSETS.md for sources and licences).\nexport const PROPS=${JSON.stringify(ordered)};\n`;
- writeFileSync('dist/props-assets.js',text);console.log(report.join('\n'));console.log('wrote dist/props-assets.js',(text.length/1024).toFixed(0),'KB,',Object.keys(ordered).length,'props');
+ const head='// GENERATED by scripts/build-props.mjs from the models in assets-src (see ASSETS.md for sources and licences).\n',isFarm=id=>id.startsWith('farm.');
+ const core=Object.fromEntries(Object.entries(ordered).filter(([id])=>!isFarm(id))),farm=Object.fromEntries(Object.entries(ordered).filter(([id])=>isFarm(id)));
+ const text=`${head}export const PROPS=${JSON.stringify(core)};\n`,farmText=`${head}// The farm.* props (Quaternius farm set and the SR90 pack): about 8 MB, so props.js loads this module on demand (ensureFarmProps()), not at startup.\nexport const FARM_PROPS=${JSON.stringify(farm)};\n`;
+ writeFileSync('dist/props-assets.js',text);writeFileSync('dist/props-assets-farm.js',farmText);console.log(report.join('\n'));console.log('wrote dist/props-assets.js',(text.length/1024).toFixed(0),'KB,',Object.keys(core).length,'props; dist/props-assets-farm.js',(farmText.length/1024).toFixed(0),'KB,',Object.keys(farm).length,'props');
 }
 // Rigged models: dist/rigged-assets.js holds each as a base64 GLB plus the data the game wants without opening it (anchors, node bounds, clip lengths).
 {const ids=Object.keys(RIGGED).filter(id=>!only||only.has(id));

@@ -7,7 +7,7 @@ assert.deepEqual(ROAD_CLASSES,{street:13.4,rural:22.4,gravel:13.4,dirt:8.9});
 
 // every old edge is in the graph with a class, a speed and a length that matches its geometry
 const g=roadGraph(MAP);
-assert.equal(Object.keys(g.edges).length,MAP.roads.edges.length);
+assert.equal(Object.keys(g.edges).length,MAP.roads.edges.length+MAP.roads.links.length); // R4: one graph-only link (west-hill-link)
 for(const e of MAP.roads.edges){const E=g.edges[e.id];assert(E,e.id);assert.equal(E.class,roadClassOf(e));assert.equal(E.speed,roadSpeed(e));assert(E.length>0);assert(Math.abs(E.length-roadLength(e,MAP))<1e-9);
  assert(Math.abs(E.legs.reduce((s,l)=>s+l.length,0)-E.length)<1e-6,`${e.id} legs add up`)}
 assert.equal(g.edges['oak-street'].class,'street');assert.equal(g.edges['county-road'].class,'rural');assert.equal(g.edges['farm-road'].class,'dirt');

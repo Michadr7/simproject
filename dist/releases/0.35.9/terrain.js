@@ -6,7 +6,7 @@
 // A cell counts as inside a shape when its centre is. Everything inside the map's `playable` rectangle starts walkable (open country); shapes painted later win, in this
 // order: zones, roads, fields, pavements, the river and its banks, bridges. Water and banks are never walkable; a bridge deck always is.
 import {junctionPatches,cornerRegion,inPolygon} from './junctions.js';
-import {MAP,roadRect,riverPath,riverIsLegacy,riverBank,seaLineZ} from './map-definition.js';
+import {MAP,roadRect,riverPath,riverIsLegacy,riverBank,seaLineZ,fallPoolCentre} from './map-definition.js';
 
 export const SURFACE=Object.freeze({GRASS:1,STREET:2,ROAD:3,DIRT:4,PAVEMENT:5,WATER:6,BANK:7,BRIDGE:8,WHEAT:9,PLOWED:10,GREEN:11,DRIVEWAY:12,PATH:13,MUD:14,GRAVEL:15}); // MUD (TR3): painted from map.mud after the fields; GRAVEL (TR3): the ground of a 'gravel' road (no road uses it until R3)
 // How high the player's feet sit on each surface (the city's streets and pavements are raised meshes; the County Road is a plane on the grass).
@@ -91,6 +91,13 @@ export function buildTerrain(map=MAP,{cell=.5,window=null}={}){
    for(const [r,paint] of [[s=>s.w/2+bank,c=>{surface[c]=SURFACE.BANK;walk[c]=0}],[s=>s.w/2,c=>{surface[c]=SURFACE.WATER;walk[c]=0}]])for(const s of samples)disc(s.x,s.z,r(s),paint)}}
  // 5b. the sea (R3b): everything south of the shoreline is water, never walkable (the beach north of the line is dug but walkable: the feet follow heightAt)
  {const sea=map.water?.sea;if(sea?.shoreline?.length>=2&&g.z1>Math.min(...sea.shoreline.map(p=>p[1])))for(let i=0;i<cols;i++){const lz=seaLineZ(sea,centreX(i));for(let j=Math.max(0,Math.floor((lz-g.z0)/cell-.5)+1);j<rows;j++){const c=j*cols+i;surface[c]=SURFACE.WATER;walk[c]=0}}}
+ // 5c. lakes and waterfalls (basin walkability): everything inside a lake's outline is water and never walkable (like the sea: the dug shore band outside the outline stays walkable grass, the feet follow heightAt);
+ // a fall's plunge pool (a disc of pool.r round fallPoolCentre) and its curtain (a ribbon w wide from the lip to the pool) are water too. Painted over roads (a road must not cross water: validateMap), under bridge decks.
+ for(const lake of map.water?.lakes||[]){const O=lake.outline;if(!Array.isArray(O)||O.length<3)continue;
+  const xs=O.map(p=>p[0]),zs=O.map(p=>p[1]);
+  rect({x0:Math.min(...xs),x1:Math.max(...xs),z0:Math.min(...zs),z1:Math.max(...zs)},c=>{if(inPolygon(O,centreX(c%cols),centreZ((c-c%cols)/cols))){surface[c]=SURFACE.WATER;walk[c]=0}})}
+ for(const f of map.water?.falls||[]){const p=fallPoolCentre(f);
+  disc(p.x,p.z,f.pool.r,c=>{surface[c]=SURFACE.WATER;walk[c]=0});ribbon([[f.lip.x,f.lip.z],[p.x,p.z]],f.w/2,c=>{surface[c]=SURFACE.WATER;walk[c]=0})}
  // 6. bridge decks
  for(const bridge of map.water?.bridges||[])rect(bridge,c=>{surface[c]=SURFACE.BRIDGE;walk[c]=1});
 

@@ -19,7 +19,7 @@ export const SIZES=Object.freeze(['small','medium','large']);
 export const FEE_CENTS=Object.freeze({small:300,medium:800,large:2500}),BUNDLE=Object.freeze({small:6,medium:2,large:1}),DELAY_MIN=Object.freeze({small:180,medium:720,large:1440});
 // Vehicles (0.34): the dealership on the Eastbank depot lot sells the two drivable models, each in six colours (paint.js). Buy on the lot (E at the door: yours at once, parked where it stands), or order from the phone: a delivery fee and
 // two game days later it is parked on your home's driveway. Prices in cents, per model. A sold colour is out of stock for 3 to 6 game days (restock), so one buyer cannot clear the lot; the lot's display vehicles show what is in stock.
-export const VEHICLE_PRICE=Object.freeze({worktruck:450000,offroad:1100000,flatbed:800000,shortbed:50000});export const RESTOCK_DAYS=Object.freeze({min:3,max:6});
+export const VEHICLE_PRICE=Object.freeze({worktruck:450000,offroad:1100000,flatbed:800000,shortbed:50000,tractor_juff:520000,tractor_kidbi:980000,atv:380000});export const RESTOCK_DAYS=Object.freeze({min:3,max:6}); // FV1: the farm tractors are the last two prices (tests/orders.mjs reads the first key): Hustler Compact $5,200, Husky R75 Tractor $9,800 (the R75's farming level 3 gate waits for the farming skill)
 // How many vehicles a home holds (DESIGN 4.14): an apartment 1; a house by its size (MAP.properties size). The limit is the sum over the homes you rent or own; owned and on-the-way vehicles both count.
 export const VEHICLE_SLOTS=Object.freeze({apartment:1,small:1,medium:2,large:3});
 export const VEHICLE_ORDER=Object.freeze({fee:15000,delay:2880});

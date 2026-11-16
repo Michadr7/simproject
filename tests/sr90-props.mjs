@@ -2,8 +2,11 @@
 // Checks: the ids, sizes, bale real size, the combine's unloading auger node, wheel nodes kept as parts and pivots, origin on the ground, one mesh and one draw call each, no clash with the older farm ids.
 import assert from 'node:assert/strict';
 import * as THREE from '../dist/vendor/three.module.js';
-import {PROPS} from '../dist/props-assets.js';
-import {propInfo,propGeometry,createProp} from '../dist/props.js';
+import {PROPS as CORE} from '../dist/props-assets.js';
+import {propInfo,propGeometry,createProp,ensureFarmProps} from '../dist/props.js';
+import {FARM_PROPS} from '../dist/props-assets-farm.js';
+await ensureFarmProps(); // the farm.* records are a lazy module (props.js)
+const PROPS={...CORE,...FARM_PROPS};
 import {creditFor} from '../dist/credits.js';
 const fade={apply:m=>m};
 const PROP_IDS=['bale-round-hay','bale-round-strapped','bale-square-large','bale-square-small','bale-square-green-a','bale-square-straw','bale-square-green-b','bale-square-flat-green','bale-large-green',
@@ -19,7 +22,7 @@ const ALL=[...PROP_IDS,'farm.water-tower',...Object.keys(MACHINES)];
 assert.equal(new Set(ALL).size,ALL.length,'52 distinct ids');assert.equal(ALL.length,52);
 for(const id of ALL){assert(PROPS[id],id+' is in props-assets.js');assert(PROPS[id].source.startsWith('Farm/sr90/'),id+' comes from the sr90 pack')}
 // no clash: every id from the sr90 pack is in the list, and the older farm ids and the KidBi tank name are untouched
-for(const [id,p] of Object.entries(PROPS))if(p.source.startsWith('Farm/sr90/'))assert(ALL.includes(id),id+' is a listed sr90 id');
+for(const [id,p] of Object.entries(PROPS))if(p.source.startsWith('Farm/sr90/'))assert(ALL.includes(id)||/^farm\.house-(brick|red)$/.test(id),id+' is a listed sr90 id'); // the two farmhouses are checked in tests/farm-houses.mjs
 for(const id of ['farm.big-barn','farm.silo','farm.fence-a','farm.fence-b','farm.cow','farm.horse','farm.llama','farm.pig','farm.pug','farm.sheep','farm.zebra','barn','windmill'])assert(!PROPS[id].source.startsWith('Farm/sr90/'),id+' still the older model');
 assert(!PROPS['farm.trailer-tank'],'the sr90 tank trailer is named farm.trailer-tank-sr90 (the KidBi tank keeps farm.trailer-tank)');
 assert.equal(PROPS['farm.spreader'].source,'Farm/sr90/trailer_grain.glb','farm.spreader is the pack\'s Trailer_Grain (a fertiliser spreader)');

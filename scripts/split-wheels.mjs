@@ -25,3 +25,21 @@ export function splitWheels(record,{minTyreTris=100,id='record'}={}){
   return {at,radius:+((e.hi[1]-e.lo[1])/2).toFixed(3),width:+(e.hi[0]-e.lo[0]).toFixed(3),front:at[2]>zMid,triangles:e.tris.length,...pack(s)}}).sort((a,b)=>b.at[2]-a.at[2]||b.at[0]-a.at[0]);
  return {...pack(body),wheels,bodyTriangles:body.ii.length/3};
 }
+
+// The same result for a model whose wheels are NAMED nodes (the farm tractors, notes/farm-vehicle-contract.md): build-props with spec.nodes writes record.parts (body first, then one index run per wheel_XX / steer_XX / steering_wheel node) and
+// record.nodes (their pivots). Each wheel_FL/FR/RL/RR run becomes its own mesh centred on its hub node; everything else (steering wheel, steer pivots' own parts) stays in the body. record.parts is dropped (its runs no longer match), record.nodes kept.
+export function splitWheelsByParts(record,{id='record'}={}){
+ const P=dec(record.pos,Float32Array),N=dec(record.nor,Int8Array),I=dec(record.idx,Uint16Array),textured=!!record.uv,A=textured?dec(record.uv,Float32Array):dec(record.col,Uint8Array),stride=textured?2:3;
+ const runs=(record.parts||[]).filter(p=>/^wheel_(FL|FR|RL|RR)$/.test(p.name));
+ if(runs.length!==4)throw new Error(`${id}: expected four wheel_* parts, found ${runs.length}`);
+ const subset=tris=>{const map=new Map(),pp=[],nn=[],aa=[],ii=[];for(const t of tris)for(let k=0;k<3;k++){const o=I[t*3+k];if(!map.has(o)){map.set(o,map.size);pp.push(P[o*3],P[o*3+1],P[o*3+2]);nn.push(N[o*3],N[o*3+1],N[o*3+2]);for(let c=0;c<stride;c++)aa.push(A[o*stride+c])}ii.push(map.get(o))}return {pp,nn,aa,ii,count:map.size}};
+ const pack=s=>({pos:enc(Float32Array.from(s.pp)),nor:enc(Int8Array.from(s.nn)),idx:enc(Uint16Array.from(s.ii)),norQ:true,vertices:s.count,...(textured?{uv:enc(Float32Array.from(s.aa))}:{col:enc(Uint8Array.from(s.aa))})});
+ const taken=new Set(),wheelTris=run=>{const out=[];for(let q=run.from;q<run.from+run.count;q+=3)out.push(q/3);return out};
+ const wheels=runs.map(run=>{const tris=wheelTris(run);tris.forEach(t=>taken.add(t));const hub=record.nodes?.[run.name];if(!hub)throw new Error(`${id}: no pivot for ${run.name}`);
+  const lo=[1e9,1e9,1e9],hi=[-1e9,-1e9,-1e9];for(const t of tris)for(let k=0;k<3;k++)for(let d=0;d<3;d++){const v=P[I[t*3+k]*3+d];lo[d]=Math.min(lo[d],v);hi[d]=Math.max(hi[d],v)}
+  const s=subset(tris);for(let k=0;k<s.pp.length;k+=3)for(let d=0;d<3;d++)s.pp[k+d]-=hub[d];
+  return {at:hub.map(v=>+v.toFixed(4)),radius:+((hi[1]-lo[1])/2).toFixed(3),width:+(hi[0]-lo[0]).toFixed(3),front:run.name[6]==='F',triangles:tris.length,...pack(s)}}).sort((a,b)=>b.at[2]-a.at[2]||b.at[0]-a.at[0]);
+ const body=subset([...Array(I.length/3).keys()].filter(t=>!taken.has(t)));
+ const {parts,...rest}=record;
+ return {...pack(body),wheels,bodyTriangles:body.ii.length/3};
+}

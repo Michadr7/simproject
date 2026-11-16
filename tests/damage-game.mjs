@@ -95,7 +95,7 @@ const run=(d,seconds,input,events)=>{for(let t=0;t<seconds;t+=DT){d.step(DT,inpu
 // 10. The page: one silhouette per drivable model plus a generic one, a colour for every band, and the game hooks are in.
 {const html=fs.readFileSync(new URL('../dist/index.html',import.meta.url),'utf8'),css=fs.readFileSync(new URL('../dist/style.css',import.meta.url),'utf8'),game=fs.readFileSync(new URL('../dist/game.js',import.meta.url),'utf8');
  for(const m of [...SILHOUETTES,'generic'])assert(html.includes(`data-sil="${m}"`),'a silhouette for '+m);
- assert.deepEqual([...SILHOUETTES].sort(),Object.keys(CLASSES).sort(),'every drivable class has a drawing');
+ assert.deepEqual([...SILHOUETTES].sort(),Object.keys(CLASSES).filter(k=>CLASSES[k].group!=='tractor'&&k!=='atv').sort(),'every drivable class has a drawing (the farm tractors use the generic silhouette until FV2 draws theirs: farm-vehicles-design section 5; the ATV until A5/A8 draws its own, A4)');
  for(const b of BANDS)assert(css.includes(`.vp-damage[data-band=${b.id}]`),'a colour for '+b.id);assert(html.includes('id="vpDamage"')&&html.includes('id="vpDmgText"'));
  for(const hook of ['driving.takeEvents()','driveEvent(e)','damage:driving.active?driving.damageOf():null','applyShake(view)','shake.off'])assert(game.includes(hook),'game.js hook: '+hook);
 }

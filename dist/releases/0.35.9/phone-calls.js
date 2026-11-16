@@ -35,4 +35,4 @@ export function towOptions(vehicles,statusOf,labelOf){
 }
 // TR4: the 'Pull me out' line. info: {cents (0 = free, hard luck), hours}.
 export const pullLabel=info=>`Pull me out · ${info.cents===0?'free this time':'$'+(info.cents/100).toFixed(2)} · ${Math.round(info.hours*60)} min`;
-export const towLabel=o=>o.inShop?'In the shop':o.tow===0?'Tow · free this time':`Tow to the repair shop · $${(o.tow/100).toFixed(2)}`;
+export const towLabel=o=>o.inShop?'In the shop':o.tow==null?'Already at the shop':o.tow===0?'Tow · free this time':`Tow to the repair shop · $${(o.tow/100).toFixed(2)}`;

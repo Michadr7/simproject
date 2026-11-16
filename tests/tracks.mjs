@@ -13,7 +13,7 @@ const life={[S.MUD]:600,[S.PLOWED]:300,[S.WHEAT]:240,[S.GREEN]:240,[S.DIRT]:180,
 for(const [s,l] of Object.entries(life))assert.equal(trackOf(+s).life,l,'life of surface '+s);
 for(const s of [S.STREET,S.ROAD,S.PAVEMENT,S.BRIDGE,S.DRIVEWAY,S.WATER,S.BANK])assert.equal(trackOf(s),null,'no track on surface '+s);
 assert.equal(TRACK_MAX,1024);assert.equal(TRACK_STEP,.6);assert.equal(TRACK_MIN_SPEED,.5);assert.equal(TRACK_FADE_FROM,.7);assert.equal(TRACK_DRAW_NEAR,70);assert.equal(TRACK_DRAW_FAR,90);assert.equal(TRACK_CARRY_M,30);
-assert.deepEqual(TRACK_WIDTH,{shortbed:.2,worktruck:.24,offroad:.3,flatbed:.55,atv:.25});assert.equal(widthOf('forklift'),0,'the forklift lays nothing');assert.equal(widthOf('flatbed'),.55);
+assert.deepEqual(TRACK_WIDTH,{shortbed:.2,worktruck:.24,offroad:.3,flatbed:.55,atv:.25,tractor_juff:.35,tractor_kidbi:.38});assert.equal(widthOf('forklift'),0,'the forklift lays nothing');assert.equal(widthOf('flatbed'),.55);
 
 // 2. The mud carried meter: full on mud or plowed ground, 30 m of wear after, never negative, a pure number.
 assert.equal(carryAfter(0,S.MUD,.5),30);assert.equal(carryAfter(0,S.PLOWED,0),30);assert.equal(carryAfter(0,S.GRASS,10),0,'grass does not fill it');

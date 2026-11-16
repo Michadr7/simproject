@@ -13,7 +13,7 @@ const HERE=path.dirname(fileURLToPath(import.meta.url));
 export const ROOT=path.resolve(HERE,'..');
 // Estimated tokens. The brief is read by every agent, so it keeps its 3,000 target. The index is searched with Grep (a question costs a few hundred tokens), so its budget
 // is only a guard against bloat for the rare whole read; it was 12,000 in the plan, which assumed 3.6 characters a token and was wrong by half (see CHARS_PER_TOKEN).
-export const BUDGET={brief:3000,index:31500}; /* 30000 -> 31500 (user approved, SR90 import and PB2; a trim of the index format is planned after them) */ /* 29400 -> 30000 (GD1 ground shader, 29,503; headroom for TR6 and GD2 to GD5; user approved) */ // index 28800 -> 29400 (TR3, TR4, W3: three more modules and tests, 28,926; user approved); 28500 -> 28800 (R2: road-geometry.js and a test, 28,648; user approved); 28250 -> 28500 (R1: the road graph in map-definition.js and a test, 28,409 incl. other work); 28000 -> 28250 (W1: the water contract in map-definition.js and a test, 28,194); 27750 -> 28000 (SND1: vehicle-sounds.js and a test pushed it to 27,814); 27500 -> 27750 (VD7a: debris.js and two tests); 27000 -> 27500 (VD3: one new module, one test and two scripts pushed it to 27,097)
+export const BUDGET={brief:3000,index:32500}; /* 31500 -> 32500 (user approved 2026-11-15, GP1; trim still planned) */ /* 30000 -> 31500 (user approved, SR90 import and PB2; a trim of the index format is planned after them) */ /* 29400 -> 30000 (GD1 ground shader, 29,503; headroom for TR6 and GD2 to GD5; user approved) */ // index 28800 -> 29400 (TR3, TR4, W3: three more modules and tests, 28,926; user approved); 28500 -> 28800 (R2: road-geometry.js and a test, 28,648; user approved); 28250 -> 28500 (R1: the road graph in map-definition.js and a test, 28,409 incl. other work); 28000 -> 28250 (W1: the water contract in map-definition.js and a test, 28,194); 27750 -> 28000 (SND1: vehicle-sounds.js and a test pushed it to 27,814); 27500 -> 27750 (VD7a: debris.js and two tests); 27000 -> 27500 (VD3: one new module, one test and two scripts pushed it to 27,097)
 // Measured, not guessed: on 2026-11-10 a Haiku run that read both files cost about 26,000 tokens for 48,300 characters, so about 1.9 characters a token for this dense, symbol-heavy
 // text (the Read tool's line numbers are included in that figure). Prose is nearer 4. Re-measure after a big format change; a run's usage is the real count.
 export const CHARS_PER_TOKEN=1.9;
@@ -30,7 +30,7 @@ const kb=n=>n>=1024*1024?(n/1024/1024).toFixed(1)+' MB':Math.round(n/1024)+' KB'
 const clip=(s,n)=>{s=s.replace(/\s+/g,' ').trim();if(s.length<=n)return s;const cut=s.slice(0,n-1),sp=cut.lastIndexOf(' ');return (sp>n*.6?cut.slice(0,sp):cut)+'…'};
 
 // The first comment run of a file, if it comes before any code (imports and blank lines may come first): what the file says about itself.
-export function leadingComment(text,max=100){
+export function leadingComment(text,max=80){
  const lines=text.split(/\r?\n/).slice(0,40),out=[];let inBlock=false;
  for(const raw of lines){const line=raw.trim();
   if(inBlock){const end=line.indexOf('*/');out.push(line.replace(/\*\/.*$/,'').replace(/^\*\s?/,''));if(end>=0)inBlock=false;if(!inBlock&&out.length)break;continue}
@@ -52,7 +52,7 @@ const listFiles=(dir,test)=>fs.existsSync(dir)?fs.readdirSync(dir,{withFileTypes
 export const coversOf=text=>[...new Set([...text.matchAll(/from\s+['"]\.\.\/dist\/([A-Za-z0-9_.-]+\.js)['"]/g)].map(m=>m[1]))];
 // "## / ###" headings with their line numbers, so an agent can open a long document by range.
 // dropNotes: leave out long parenthetical status notes (dates, test counts, who built it): the heading's own words are the search key, and the notes are cut off mid-sentence at this width anyway.
-export function headings(file,{levels=[2,3],max=80,width=88,dropNotes=false}={}){
+export function headings(file,{levels=[2,3],max=80,width=64,dropNotes=false}={}){
  if(!fs.existsSync(file))return [];const out=[];read(file).split(/\r?\n/).forEach((line,i)=>{const m=/^(#{2,4})\s+(.+?)\s*$/.exec(line);if(m&&levels.includes(m[1].length)){const raw=m[2].replace(/[`*]/g,'');out.push({line:i+1,level:m[1].length,title:clip(dropNotes?raw.replace(/\s*\([^)]{26,}\)/g,''):raw,width)})}});
  return out.slice(-max)}
 
@@ -72,18 +72,18 @@ export function buildIndex({root=ROOT,head=undefined}={}){
  const code=[],generated=[];let missing=0;
  for(const name of modules){const file=path.join(dist,name),size=fs.statSync(file).size;
   if(GENERATED.test(name)){generated.push(`- ${name} · ${kb(size)}`);continue}
-  const text=read(file),lines=lineCount(text),purpose=leadingComment(text)||PURPOSE_OVERRIDES[name]||'',ex=exportsOf(text),cov=covers.get(name)||[];
+  const text=read(file),lines=lineCount(text),purpose=leadingComment(text,80)||PURPOSE_OVERRIDES[name]||'',ex=exportsOf(text),cov=covers.get(name)||[];
   if(!purpose)missing++;
   const shown=ex.slice(0,5).join(', ')+(ex.length>5?` (+${ex.length-5})`:'');
   const testText=name==='game.js'?`the ${booted} tests that boot the packaged game (tests/support/boot-game.mjs)`:cov.length?cov.slice(0,2).join(', ')+(cov.length>2?` (+${cov.length-2})`:''):'none';
   code.push(`- ${name} · ${lines} lines${size>60*1024?' · read by range':''} · ${purpose||'(no header comment)'}${shown?` · exports: ${shown}`:''} · tests: ${testText}`)}
  // In the hub/ and test lines the words "Mikkadr Hub" repeat on most lines under a section already about the hub: leave them out and clip shorter by the same amount, so the same description shows.
  const hubDescribed=(text,max)=>{const full=leadingComment(text,1e6),s=full.replace(/\bMikkadr Hub,? ?/g,'');return clip(s,max-(full.length-s.length))};
- const testLines=tests.map(t=>{const c=hubDescribed(read(path.join(root,'tests',t)),75);return `- ${t.replace(/\.mjs$/,'')}${c?' · '+c:''}`});
- const scriptLines=scripts.map(s=>{const c=leadingComment(read(path.join(root,'scripts',s)),90);return `- ${s}${c?' · '+c:''}`});
- const workerLines=workers.map(s=>{const c=leadingComment(read(path.join(root,'worker',s)),90);return `- worker/${s}${c?' · '+c:''}`});
+ const testLines=tests.map(t=>{const c=hubDescribed(read(path.join(root,'tests',t)),42);return `- ${t.replace(/\.mjs$/,'')}${c?' · '+c:''}`});
+ const scriptLines=scripts.map(s=>{const c=leadingComment(read(path.join(root,'scripts',s)),60);return `- ${s}${c?' · '+c:''}`});
+ const workerLines=workers.map(s=>{const c=leadingComment(read(path.join(root,'worker',s)),60);return `- worker/${s}${c?' · '+c:''}`});
  const hubFiles=listFiles(path.join(root,'hub'),n=>/\.(mjs|js)$/.test(n)); // Mikkadr Hub (Node only): the token watcher, the usage probe, the page
- const hubLines=hubFiles.map(s=>{const c=hubDescribed(read(path.join(root,'hub',s)),90);return `- hub/${s}${c?' · '+c:''}`});
+ const hubLines=hubFiles.map(s=>{const c=hubDescribed(read(path.join(root,'hub',s)),60);return `- hub/${s}${c?' · '+c:''}`});
  const otherDist=listFiles(dist,n=>!n.endsWith('.js')).join(', ');
  const docLines=[];for(const doc of ['context.md','DESIGN.md','README.md','DEPLOY.md','ASSETS.md']){const f=path.join(root,doc);if(!fs.existsSync(f))continue;
   const hs=headings(f,doc==='README.md'?{levels:[2],max:6}:{levels:[2,3],max:70,dropNotes:true});docLines.push(`### ${doc} (${lineCount(read(f))} lines${doc==='context.md'||doc==='DESIGN.md'?', open by line range':''})`);for(const h of hs)docLines.push(`- L${h.line} ${h.title}`)}

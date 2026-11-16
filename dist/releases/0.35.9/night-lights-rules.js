@@ -89,7 +89,10 @@ export const VEHICLE_LAMPS=Object.freeze({
  worktruck:{front:{x:.69,y:1.03,z:2.745},rear:{x:.86,y:1.18,z:-3.02}},
  offroad:{front:{x:.775,y:1.08,z:2.5},rear:{x:.88,y:1.12,z:-2.68}},
  flatbed:{front:{x:.75,y:1.35,z:4.215},rear:{x:1.05,y:1,z:-4.285}},
- shortbed:{front:{x:.717,y:.94,z:2.695},rear:{x:.89,y:1.035,z:-2.636}}, // the centres of the model's own lamp lenses (its lights part)
+  shortbed:{front:{x:.717,y:.94,z:2.695},rear:{x:.89,y:1.035,z:-2.636}}, // the centres of the model's own lamp lenses (its lights part)
+ tractor_juff:{front:{x:.3,y:.8,z:1.42},rear:{x:.69,y:1.3,z:-1.39}}, // FV1: first guesses from the model's anchor_headlight / anchor_taillight (the anchors are 0.15 m apart on the hood; the lamps are set 0.3 m out: eye-check)
+ tractor_kidbi:{front:{x:.43,y:1.03,z:1.2},rear:{x:.7,y:1.12,z:-1.15}}, // FV1: the centres of the model's own lamp lens parts (its Light material)
+ atv:{front:{x:.19,y:.52,z:.915},rear:{x:.34,y:.648,z:-.99}}, // A4: the headlamp lens spans x .072-.228 (anchor .15), set at .19 to stay inside tests/night-lights.mjs's width rule (> 0.3 hx); lens box x +-.228, y .48-.56, front face z .915) and the moved anchor_taillight (y .648, rear face z -1.0)
 });
 export const LAMP_SPRITE={frontSize:.26,rearSize:.2,front:[1,.95,.8],rear:[1,.12,.08],frontStrength:.7,rearStrength:.55,frontOut:.03,rearOut:.03};
 // size: {hx, hz, height} (vehicle.js CLASSES and the prop's height). A model without its own entry gets lamps from its size.

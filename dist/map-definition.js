@@ -80,14 +80,16 @@ freightN:{x:195,z:n(-180)-3.5},
   {id:'eden-car-link',from:'carLinkJoin',to:'edenGate',width:6,surface:'asphalt',level:'rural',class:'street',wild:true},
   {id:'west-bank-lane',from:'westFork',to:'p3Lane',width:6,surface:'gravel',class:'gravel',curve:true,wild:true,
    path:[[-118,-40],[-160,-78],[-215,-86],[-252,-80],[-272,-68],[-290,-40],[-300,-14],[-304,5],[-316,5],[-344,5],[-358,5],[-376,-12],[-388,-45]]}, // around the west hill's 25 m margin, through the west gate, straight over the bridge (z 5)
-  {id:'bay-road',from:'bayJoin',to:'bayFront',width:10,surface:'asphalt',level:'rural',class:'rural',wild:true},
-  {id:'bay-front',from:'frontWest',to:'frontEast',width:12,surface:'asphalt',level:'rural',class:'street',wild:true},
-  {id:'bay-cross-west',from:'crossWestJoin',to:'crossWestEnd',width:10,surface:'asphalt',level:'rural',class:'street',wild:true},
-  {id:'bay-cross-east',from:'frontEast',to:'crossEastEnd',width:10,surface:'asphalt',level:'rural',class:'street',wild:true},
-  {id:'estuary-road',from:'frontWest',to:'p6Gate',width:10,surface:'asphalt',level:'rural',class:'street',wild:true}, // over the Estuary Bridge (x 105..145) to P6
-  {id:'coast-link',from:'coastStart',to:'coastJoin',width:9,surface:'asphalt',level:'rural',class:'rural',path:[],wild:true}, // a straight diagonal (path [] = a ribbon)
-  {id:'p5-spur',from:'coastStart',to:'p5Gate',width:6,surface:'gravel',class:'gravel',path:[],wild:true}
- ]
+  {id:'bay-road',name:'Bay Road',from:'bayJoin',to:'bayFront',width:10,surface:'asphalt',level:'rural',class:'rural',wild:true},
+  {id:'bay-front',name:'Harbor Front',from:'frontWest',to:'frontEast',width:12,surface:'asphalt',level:'rural',class:'street',wild:true},
+  {id:'bay-cross-west',name:'Quay Street',from:'crossWestJoin',to:'crossWestEnd',width:10,surface:'asphalt',level:'rural',class:'street',wild:true},
+  {id:'bay-cross-east',name:'Ferry Street',from:'frontEast',to:'crossEastEnd',width:10,surface:'asphalt',level:'rural',class:'street',wild:true},
+  {id:'estuary-road',name:'Estuary Road',from:'frontWest',to:'p6Gate',width:10,surface:'asphalt',level:'rural',class:'street',wild:true}, // over the Estuary Bridge (x 105..145) to P6
+  {id:'coast-link',name:'Coast Link',from:'coastStart',to:'coastJoin',width:9,surface:'asphalt',level:'rural',class:'rural',path:[],wild:true}, // a straight diagonal (path [] = a ribbon)
+  {id:'p5-spur',name:'P5 Spur',from:'coastStart',to:'p5Gate',width:6,surface:'gravel',class:'gravel',path:[],wild:true}
+ ],
+ // R4: graph-only links: routing edges for roads that are drawn some other way (roadGraph and roadProblems read them; nothing draws or paints them). The west-hill relief track (relief.tracks) is the first 45 m of the way to West Bank Lane.
+ links:[{id:'west-hill-link',from:'oakWest',to:'westFork',width:6,surface:'dirt',class:'dirt',path:[[-58.5,5]]}]
 };
 
 // (Old note, still true for the shape of the data) The river is a centreline through `points` (smoothed into a gentle curve) with a width, a bed depth and a water height per point, and `bank` metres of mud on each side. It rises from
@@ -310,7 +312,7 @@ const properties=[
 ];
 // Drivable vehicles (0.33, DESIGN 4.13 D): the two depot vehicles, parked nose to the back wall (north, so yaw pi: a model's front is +z) in the depot's first truck and car bays. Anyone can drive them (no keys yet). `model` is a converted
 // prop and a vehicle class (vehicle.js CLASSES); the id is the save key (`progress.vehicles`). The parked scenery cars and trucks elsewhere are not drivable.
-export const DRIVABLE_MODELS=Object.freeze(['worktruck','offroad','flatbed','shortbed']);
+export const DRIVABLE_MODELS=Object.freeze(['worktruck','offroad','flatbed','shortbed','tractor_juff','tractor_kidbi','atv']);
 // RULE: every vehicle model needs a `sale` field (DESIGN 4.14). 'dealership': a display vehicle on the Riden Deals lot, bought there only. 'online': in the phone Store only, no display slot and no `home`. 'both': display slot and Store.
 // The lot holds one display vehicle per dealership or both model, in the depot's bays (validateMap checks there are enough bays).
 export const SALE_MODES=Object.freeze(['dealership','online','both']);
@@ -339,7 +341,12 @@ const vehicles=[
  // the Tylan Flatbed (0.35): the third truck bay; for sale from Lumberjack level 5 (shown, locked, before that). The fuel port is the model's anchor_fuel_port.
  {id:'eastbank-flatbed',model:'flatbed',name:'Tylan Flatbed',sale:'both',requires:{skill:'lumberjack',level:5},home:{x:93.25,z:-13,yaw:PI},fuel:{type:'diesel',tankMgal:30000,port:{x:1.22,z:-.235}}},
  // the Kasumuchi S70 shortbed (0.35.8, the project owner's model): the starter truck, $500, gasoline; it stands in the first car bay (x 96.85), nose to the back wall; the fuel port is the model's anchor_fuel_port (x 0.98, y 0.86, z -0.25)
- {id:'eastbank-shortbed',model:'shortbed',name:'Kasumuchi S70',sale:'both',home:{x:96.85,z:-15.2,yaw:PI},fuel:{type:'gas',tankMgal:20000,port:{x:.98,y:.86,z:-.25}}}
+ {id:'eastbank-shortbed',model:'shortbed',name:'Kasumuchi S70',sale:'both',home:{x:96.85,z:-15.2,yaw:PI},fuel:{type:'gas',tankMgal:20000,port:{x:.98,y:.86,z:-.25}}},
+  // FV1 (notes/farm-vehicles-design.md; the Husky Ranch yard comes with FV10, so for now the Riden Deals lot): the two farm tractors in car bays 2 and 3 (x 99.55 and 102.25), diesel. The model has no fuel-port anchor: the ports are estimates on the hood's left side (the mount side). The Husky Trailer (tow_tank) is a model only until FV3/FV4: no slot.
+  {id:'eastbank-tractor-juff',model:'tractor_juff',name:'Hustler Compact',sale:'both',home:{x:99.55,z:-15.5,yaw:PI},fuel:{type:'diesel',tankMgal:12000,port:{x:.5,y:1,z:.9}}},
+  {id:'eastbank-tractor-kidbi',model:'tractor_kidbi',name:'Husky R75 Tractor',sale:'both',home:{x:102.25,z:-15.5,yaw:PI},fuel:{type:'diesel',tankMgal:25000,port:{x:.55,y:1.1,z:.85}}},
+  // A4 (notes/atv-handling-design.md): the ATV, the player's own model, on the Riden Deals lot for now (car bay 4, x 104.95; the Eden Outdoors shop comes with A7/B3), gasoline, 4 gal. The fuel port is the model's anchor_fuel_port.
+  {id:'eastbank-atv',model:'atv',name:'Eden Trail ATV',sale:'both',home:{x:104.95,z:-15.5,yaw:PI},fuel:{type:'gas',tankMgal:4000,port:{x:.07,y:.835,z:.16}}}
 ];
 // Employers (0.35, DESIGN 4.15): a company with one owner (an NPC at the start), a skill, an office building, the places that count as "on site" (a zone, a plot or an
 // interior room), opening hours in game minutes (6 AM to 6 PM; the last clock-in half an hour before closing) and its ranks. A rank: what it needs (skill level,
@@ -503,11 +510,40 @@ export const MAP=deepFreeze({
   {id:'riden-deals',prop:'store',zone:'eastbank',x:97,z:-28.5,yaw:0}, // the dealership showroom: a second copy of the Alder Store model (528 triangles), front to the south over the lot
  {id:'eastbank-tank',prop:'tank-small',zone:'eastbank',x:137,z:34,yaw:0,decor:true}
  ], // Signposts: boards are read from the front (yaw 0 faces south, towards walkers arriving from the bridge).
+ towns:[{id:'kaspian',name:'Kaspian Bay',bounds:{x0:150,x1:530,z0:270,z1:410}}], // R4: named places outside the zone system (junctions.js TOWNS lists the ids); streets carry a name field, signs are the wild signs below
+ // RU1 (map-master 7.1): weapon and fishing zones as data rectangles, read by event (never per frame) through weaponZoneAt and fishingAt below. `hunting`: a rectangle minus `roadMargin` m around every road and minus the keepOut circles (camps C1..C3, plots P1 and P2, 100 m each). `noWeapon`: towns and yards (the weapon is put away); noWeapon wins over hunting where both would apply. Everywhere else a weapon may be carried but not fired.
+ weaponZones:[
+  {id:'blackstone',kind:'hunting',name:'Blackstone Pass',x0:350,x1:1050,z0:-1200,z1:-700,roadMargin:100,keepOut:[{id:'camp-c1',x:760,z:-790,r:100},{id:'camp-c2',x:480,z:-900,r:100},{id:'camp-c3',x:700,z:-1040,r:100},{id:'plot-p1',x:600,z:-690,r:100},{id:'plot-p2',x:900,z:-900,r:100}]},
+  {id:'old-block',kind:'noWeapon',name:'Ironwood and the old block',x0:-250,x1:290,z0:-380,z1:100},
+  {id:'kaspian-bay',kind:'noWeapon',name:'Kaspian Bay',x0:160,x1:520,z0:250,z1:440},
+  {id:'eden',kind:'noWeapon',name:'Eden',x0:700,x1:1000,z0:-360,z1:-60},
+  {id:'eden-outdoors',kind:'noWeapon',name:'Eden Outdoors lot',x0:680,x1:730,z0:-430,z1:-390},
+  {id:'ranch-growth',kind:'noWeapon',name:'Husky Ranch',x0:-330,x1:-35,z0:-420,z1:-178}],
+ // Fishing (rod only, no licence): the lake basin rectangle, the five cast spots (r m round each; the dock end is taken as 20 m north of the dock's landing at (650, -450)), and the water kinds that count when the player stands within `reach` m of them (the old river and the sea shore; the stream and the outflow weir are spots).
+ fishing:{reach:6,rects:[{id:'lake-basin',x0:520,x1:800,z0:-660,z1:-440}],
+  spots:[{id:'dock-end',name:'Dock end',x:650,z:-470,r:10},{id:'stream-mouth',name:'Stream mouth',x:700,z:-660,r:10},{id:'outflow-weir',name:'Outflow weir',x:540,z:-470,r:10},{id:'rocky-point',name:'Rocky point',x:790,z:-540,r:10},{id:'p1-shore',name:'P1 shore',x:600,z:-680,r:10}],
+  water:['river','sea']},
+ // RU2 (map-master 7.3): one safe point per region. Reset (R) and the stuck rescue go to the nearest of these (nearestRescuePoint), then findNearestClearSpot searches round it. Owned plots add their own point later. `region` groups them for the map screen.
+ rescuePoints:[
+  {id:'ironwood',name:'Ironwood',region:'old-block',x:-5,z:15},
+  {id:'kaspian-harbor',name:'Kaspian Bay harbor front',region:'kaspian-bay',x:340,z:400},
+  {id:'eden-gate',name:'Eden main gate',region:'eden',x:690,z:-200},
+  {id:'lake-car-park',name:'Lake car park',region:'lake',x:620,z:-420},
+  {id:'trailhead',name:'Blackstone trailhead',region:'blackstone',x:830,z:-720},
+  {id:'camp-c1',name:'Camp C1',region:'blackstone',x:760,z:-790},
+  {id:'camp-c2',name:'Camp C2',region:'blackstone',x:480,z:-900},
+  {id:'camp-c3',name:'Camp C3',region:'blackstone',x:700,z:-1040},
+  {id:'husky-farmstead',name:'Husky Ranch farmstead',region:'ranch-growth',x:-200,z:-250}],
  signs:[
   {id:'fork',zone:'forest',x:-23.8,z:n(-170),yaw:0,boards:[{text:'← WILLOW FIELDS',y:2.1},{text:'PINE RIDGE →',y:2.9}]},
   {id:'alder-sign',zone:'alder',x:57,z:-56,yaw:0,boards:[{text:'IRONWOOD',y:2.4}]},
   {id:'cedar-sign',zone:'cedar',x:127,z:-44,yaw:0,boards:[{text:'CEDAR HEIGHTS',y:2.4}]},
   {id:'eastbank-sign',zone:'eastbank',x:74,z:-5,yaw:-1.5707963267948966,boards:[{text:'EASTBANK WORKS →',y:2.4}]},
+  {id:'bay-road-sign',wild:true,x:259,z:79,yaw:0,boards:[{text:'KASPIAN BAY',y:2.7},{text:'BAY ROAD',y:2.0}]}, // R4: Kaspian Bay's street signs (MAP.towns): wild signs lie in the world and name no zone
+  {id:'harbor-sign',wild:true,x:259,z:391,yaw:0,boards:[{text:'HARBOR FRONT',y:2.4}]},
+  {id:'quay-sign',wild:true,x:359,z:391,yaw:0,boards:[{text:'QUAY STREET',y:2.4}]},
+  {id:'ferry-sign',wild:true,x:529,z:391,yaw:0,boards:[{text:'FERRY STREET',y:2.4}]},
+  {id:'coast-sign',wild:true,x:514,z:327,yaw:-1.5707963267948966,boards:[{text:'COAST LINK',y:2.7},{text:'P5 SPUR',y:2.0}]},
   {id:'riden-deals-sign',zone:'eastbank',x:78,z:-1.5,yaw:0,boards:[{pictures:true,y:3.0,h:1.0,bg:'#111111'},{text:'RIDEN DEALS',y:2.1,bg:'#111111',fg:'#f5c518'},{text:'NEW & USED VEHICLES',y:1.45,bg:'#111111',fg:'#f1ebd9'}]} // on the grass at the lot's south-west side, beside Oak Street East, read from the road (keep it off the strip in front of the lot: trucks turning out of the bays swing over it)
  ],
  studio:{x:1,z:-6.3,doorZ:-8.25,interior:{entry:{x:0,z:3.3},exit:{x:0,z:4.45},bed:{x:-3.6,z:-2.3}}},
@@ -524,6 +560,8 @@ export const MAP=deepFreeze({
   belts:[[-125,-61,-60,105,5.5,.09,11],[-61,58,48,105,5.5,.09,13],[58,300,75,110,5.5,.09,23],[200,300,-130,75,5.5,.09,24],[200,300,-390,-130,5.5,.09,18],
    [-235,300,-390,-316,5.5,.09,16],[-235,-170,-316,-130,5.5,.09,17],[-170,-35,-316,-286,5.5,.09,22],[-170,-35,-178,-140,5,.12,15],[-25,190,-216,-150,5.5,.1,21],
    [-62,-36,-170,-48,5,.1,19],[58,200,-190,-135,5.5,.1,20],[-20,58,-170,-125,5.5,.1,25],[60,200,-40,-20,5,.1,26],[58,70,-125,-40,5,.1,27]],
+  // RU2 (map-master 7.4): the edge of the world, a 30 m band inside the wilds' north, west and east edges (the sea closes the south), same fields as belts. The old belts above stay where they are.
+  edgeBands:[[-440,1040,-1190,-1160,5.5,.2,31],[-440,-410,-1160,590,5.5,.2,32],[1010,1040,-1160,590,5.5,.2,33]],
   view:{distance:158}, // trees farther than this from the player are not drawn (the fog fully hides them at 155 m)
   farmShade:{count:30,clearOfRoad:8}
  }
@@ -695,6 +733,25 @@ export function waterProblems(map=MAP){
 export const zoneById=(id,map=MAP)=>map.zones.find(z=>z.id===id)||null;
 // The zone whose walkable rectangle contains the point (edges belong to the zone on their west/north side first).
 export function zoneAtPoint(x,z,map=MAP){return map.zones.find(zone=>x>=zone.bounds.x0&&x<=zone.bounds.x1&&z>=zone.bounds.z0&&z<=zone.bounds.z1)||null}
+// RU1: what a weapon may do at (x, z): {kind:'noWeapon'|'hunting'|'open', id}. Event-time only (hunting asks the road graph for the nearest road).
+export function weaponZoneAt(x,z,map=MAP){const Z=map.weaponZones||[],hit=r=>x>=r.x0&&x<=r.x1&&z>=r.z0&&z<=r.z1;
+ for(const w of Z)if(w.kind==='noWeapon'&&hit(w))return {kind:'noWeapon',id:w.id};
+ for(const w of Z){if(w.kind!=='hunting'||!hit(w))continue;
+  if((w.keepOut||[]).some(k=>Math.hypot(x-k.x,z-k.z)<k.r))continue;
+  const r=w.roadMargin>0?nearestRoad(x,z,map):null;if(r&&r.d<w.roadMargin)continue;
+  return {kind:'hunting',id:w.id}}
+ return {kind:'open',id:null}}
+// RU2: the rescue point nearest to (x, z): {id, name, region, x, z, d} or null. Event-time only (reset, stuck rescue).
+export function nearestRescuePoint(x,z,map=MAP){let best=null;
+ for(const p of map.rescuePoints||[]){const d=Math.hypot(x-p.x,z-p.z);if(!best||d<best.d)best={...p,d}}
+ return best}
+// RU1: where the rod may be cast: {kind:'spot'|'basin'|'water', id} or null. Spots first, then the lake basin rectangles, then water of a listed kind (river, sea, lake) within `reach` m.
+export function fishingAt(x,z,map=MAP){const F=map.fishing;if(!F)return null;
+ for(const s of F.spots||[])if(Math.hypot(x-s.x,z-s.z)<=s.r)return {kind:'spot',id:s.id};
+ for(const r of F.rects||[])if(x>=r.x0&&x<=r.x1&&z>=r.z0&&z<=r.z1)return {kind:'basin',id:r.id};
+ const reach=F.reach||0,kinds=F.water||[];
+ for(const [dx,dz] of [[0,0],[1,0],[-1,0],[0,1],[0,-1],[.7,.7],[-.7,.7],[.7,-.7],[-.7,-.7]]){const w=waterAt(x+dx*reach,z+dz*reach,map);if(w&&kinds.includes(w.kind))return {kind:'water',id:w.kind}}
+ return null}
 export function roadRect(edge,map=MAP){
  const a=map.roads.nodes[edge.from],b=map.roads.nodes[edge.to],half=edge.width/2;
  return a.z===b.z?{x0:Math.min(a.x,b.x),x1:Math.max(a.x,b.x),z0:a.z-half,z1:a.z+half}:{x0:a.x-half,x1:a.x+half,z0:Math.min(a.z,b.z),z1:Math.max(a.z,b.z)};
@@ -736,7 +793,7 @@ function polylineSlice(P,s0,s1){const out=[];let run=0;const pt=(i,s)=>{const [a
 export function roadGraph(map=MAP){
  let g=roadCache.get(map);if(g)return g;
  const nodes={},edges={},R=map.roads;
- for(const e of R.edges){if(!R.nodes[e.from]||!R.nodes[e.to])continue;const poly=roadPolyline(e,map);edges[e.id]={id:e.id,from:e.from,to:e.to,class:roadClassOf(e),speed:roadSpeed(e),width:e.width,surface:e.surface,closed:!!e.closed,poly,length:polylineLength(poly),splits:[]}}
+ for(const e of [...R.edges,...(R.links||[])]){if(!R.nodes[e.from]||!R.nodes[e.to])continue;const poly=roadPolyline(e,map);edges[e.id]={id:e.id,from:e.from,to:e.to,class:roadClassOf(e),speed:roadSpeed(e),width:e.width,surface:e.surface,closed:!!e.closed,poly,length:polylineLength(poly),splits:[]}}
  for(const [id,p] of Object.entries(R.nodes))nodes[id]={id,x:p.x,z:p.z,edges:[]};
  // T joins: an end node of A on the body of B (not at B's own ends) splits B there.
  for(const A of Object.values(edges)){const own=new Set([A.from,A.to]);
@@ -796,7 +853,7 @@ export function roadChunkPieces(map=MAP,{size=100,x0=-450,z0=-1200}={}){
 // Problems with the road data (empty when sound; validateMap includes them). Old edges stay valid with no new fields.
 export function roadProblems(map=MAP){
  const out=[],bad=m=>out.push(m),R=map.roads;if(!R)return out;
- for(const e of R.edges){
+ for(const e of [...R.edges,...(R.links||[])]){
   if(e.class!==undefined&&!(e.class in ROAD_CLASSES))bad(`road ${e.id} has an unknown class ${e.class}`);
   if(!R.nodes[e.from]||!R.nodes[e.to])continue;
   if(e.path&&(!Array.isArray(e.path)||e.path.some(p=>!Array.isArray(p)||p.length!==2||!p.every(Number.isFinite))))bad(`road ${e.id} has a bad path point`);
@@ -864,7 +921,7 @@ export function validateMap(map=MAP){
  // Landmarks and signs stand inside the zone they name; buildings face one of the four directions.
  {const ids=new Set();for(const item of [...(map.landmarks||[]),...(map.signs||[])]){
   if(ids.has(item.id))bad(`duplicate landmark or sign ${item.id}`);ids.add(item.id);
-  const zone=map.zones.find(z=>z.id===item.zone);if(!zone||item.x<zone.bounds.x0||item.x>zone.bounds.x1||item.z<zone.bounds.z0||item.z>zone.bounds.z1)bad(`${item.id} is not inside zone ${item.zone}`);
+  if(item.wild){const W=map.world||map.ground;if(item.zone!==undefined||item.x<W.x0||item.x>W.x1||item.z<W.z0||item.z>W.z1)bad(`${item.id} (wild) must lie inside the world and name no zone`)}else{const zone=map.zones.find(z=>z.id===item.zone);if(!zone||item.x<zone.bounds.x0||item.x>zone.bounds.x1||item.z<zone.bounds.z0||item.z>zone.bounds.z1)bad(`${item.id} is not inside zone ${item.zone}`)}
   if(item.prop!==undefined&&Math.abs(Math.sin(item.yaw*2))>1e-9)bad(`${item.id} must face north, east, south or west`);
   if(item.plot!==undefined){const plot=(map.reserved||[]).find(p=>p.id===item.plot);if(!plot)bad(`${item.id} names an unknown plot ${item.plot}`);else if(item.x<plot.x0||item.x>plot.x1||item.z<plot.z0||item.z>plot.z1)bad(`${item.id} is not inside its plot ${item.plot}`)}}}
  // The property registry: nothing enterable is left out, and a door rule is complete.
@@ -1057,6 +1114,37 @@ export function validateMap(map=MAP){
    if(p.person){if(!p.person.name)bad(`post ${p.id} names nobody`);else if(names.has(p.person.name))bad(`${p.person.name} holds two posts`);names.add(p.person.name);
     if(p.person.body!==undefined&&!bodies.includes(p.person.body))bad(`post ${p.id}'s person has an unknown body`)}}
   if((map.posts||[]).length&&!(map.exits||[]).length)bad('posts need a map exit for commuters')}
+ // RU1 weapon and fishing zones: valid rectangles inside the world, known kinds, unique ids; hunting grounds overlap neither each other nor a no-weapon zone (no-weapon zones may overlap each other: same rule); spawn and towns are no-weapon; spots and fishing rectangles stay out of hunting ground.
+ {const W=map.world||map.ground,Z=map.weaponZones||[],F=map.fishing,ids=new Set(),fin=Number.isFinite;
+  for(const w of Z){if(ids.has(w.id))bad(`duplicate weapon zone ${w.id}`);ids.add(w.id);
+   if(!['hunting','noWeapon'].includes(w.kind))bad(`weapon zone ${w.id} has an unknown kind ${w.kind}`);
+   if(!rectOk(w))bad(`weapon zone ${w.id} has invalid bounds`);else if(!inside(w,W))bad(`weapon zone ${w.id} reaches outside the world`);
+   if(w.kind==='hunting'){if(!(w.roadMargin>=100))bad(`hunting zone ${w.id} needs a road margin of at least 100 m`);
+    for(const k of w.keepOut||[])if(![k.x,k.z,k.r].every(fin)||!(k.r>0))bad(`hunting zone ${w.id} has a bad keep-out ${k.id}`)}
+   else if(w.roadMargin!==undefined||w.keepOut!==undefined)bad(`weapon zone ${w.id} is no-weapon and takes no road margin or keep-out`)}
+  for(const [i,a] of Z.entries())for(const b of Z.slice(i+1))if(rectOk(a)&&rectOk(b)&&overlaps(a,b)&&(a.kind==='hunting'||b.kind==='hunting'))bad(`weapon zones ${a.id} and ${b.id} overlap (a hunting ground may not overlap another zone)`);
+  if(Z.length){if(weaponZoneAt(map.spawn.x,map.spawn.z,map).kind!=='noWeapon')bad('spawn is not inside a no-weapon zone');
+   for(const t of map.towns||[]){const b=t.bounds;if(b&&weaponZoneAt((b.x0+b.x1)/2,(b.z0+b.z1)/2,map).kind!=='noWeapon')bad(`town ${t.id} centre is not inside a no-weapon zone`)}}
+  if(F){const sids=new Set(),hunts=Z.filter(w=>w.kind==='hunting'&&rectOk(w));
+   for(const r of F.rects||[]){if(!rectOk(r)||!inside(r,W))bad(`fishing area ${r.id} is not a rectangle inside the world`);else if(hunts.some(h=>overlaps(r,h)))bad(`fishing area ${r.id} overlaps a hunting zone`)}
+   for(const s of F.spots||[]){if(sids.has(s.id))bad(`duplicate fishing spot ${s.id}`);sids.add(s.id);
+    if(![s.x,s.z,s.r].every(fin)||!(s.r>0)||s.x<W.x0||s.x>W.x1||s.z<W.z0||s.z>W.z1)bad(`fishing spot ${s.id} is not a point with a radius inside the world`);
+    else if(hunts.some(h=>s.x>=h.x0&&s.x<=h.x1&&s.z>=h.z0&&s.z<=h.z1))bad(`fishing spot ${s.id} lies inside a hunting zone`)}
+   for(const k of F.water||[])if(!['river','sea','lake'].includes(k))bad(`fishing names an unknown water kind ${k}`)}}
+ // RU2 rescue points: unique ids, finite, inside the world, on dry ground (no water within 10 m), not on or within 1.5 m of a building footprint (the 300 m2 open-area test is safe-spot.js, at run time); edge bands: valid rectangles inside the wilds (north, west, east) and clear of every zone.
+ {const W=map.world||map.ground,R=map.rescuePoints||[],rids=new Set(),fin=Number.isFinite;
+  for(const p of R){if(rids.has(p.id))bad(`duplicate rescue point ${p.id}`);rids.add(p.id);
+   if(![p.x,p.z].every(fin)||p.x<W.x0||p.x>W.x1||p.z<W.z0||p.z>W.z1){bad(`rescue point ${p.id} is not a point inside the world`);continue}
+   if(map.wilds&&!(p.x>=map.wilds.x0&&p.x<=map.wilds.x1&&p.z>=map.wilds.z0&&p.z<=map.wilds.z1)&&!(p.x>=map.ground.x0&&p.x<=map.ground.x1&&p.z>=map.ground.z0&&p.z<=map.ground.z1))bad(`rescue point ${p.id} is outside the walkable ground`);
+   const wet=[[0,0],[10,0],[-10,0],[0,10],[0,-10]].some(([dx,dz])=>waterAt(p.x+dx,p.z+dz,map));
+   if(wet)bad(`rescue point ${p.id} is in or within 10 m of water`);
+   if(map.buildings.some(b=>{const f=footprint(b);return p.x>f.x0-1.5&&p.x<f.x1+1.5&&p.z>f.z0-1.5&&p.z<f.z1+1.5}))bad(`rescue point ${p.id} stands on or against a building`)}
+  if(R.length&&!R.some(p=>p.x===map.spawn.x&&p.z===map.spawn.z))bad('no rescue point at the spawn');
+  for(const b of map.scenery?.edgeBands||[]){const r={x0:b[0],x1:b[1],z0:b[2],z1:b[3]};
+   if(!rectOk(r)||!(b[4]>0)||!(b[5]>=0&&b[5]<=1))bad('an edge band is not a valid rectangle with spacing and chance');
+   else if(map.wilds&&!inside(r,map.wilds))bad('an edge band reaches outside the wilds');
+   else if(map.zones.some(z=>overlaps(r,z.bounds)))bad('an edge band lies on a zone');
+   else if(R.some(p=>p.x>=r.x0&&p.x<=r.x1&&p.z>=r.z0&&p.z<=r.z1))bad('an edge band covers a rescue point')}}
  for(const m of roadProblems(map))bad(m);
  return problems;
 }

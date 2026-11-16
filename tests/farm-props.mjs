@@ -2,8 +2,11 @@
 // Nothing here is placed in the map: sizes, ground, footprint, boxes, materials, draw calls and the animal clips only.
 import assert from 'node:assert/strict';
 import * as THREE from '../dist/vendor/three.module.js';
-import {PROPS} from '../dist/props-assets.js';
-import {propInfo,propGeometry,createProp} from '../dist/props.js';
+import {PROPS as CORE} from '../dist/props-assets.js';
+import {propInfo,propGeometry,createProp,ensureFarmProps} from '../dist/props.js';
+import {FARM_PROPS} from '../dist/props-assets-farm.js';
+await ensureFarmProps(); // the farm.* records are a lazy module (props.js)
+const PROPS={...CORE,...FARM_PROPS};
 const fade={apply:m=>m};
 // id: [source file, triangles, width range, depth range, height range, distinct colours, max collision boxes]
 const BUILDINGS={

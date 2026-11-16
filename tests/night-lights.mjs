@@ -74,7 +74,7 @@ for(const [model,cls] of Object.entries(CLASSES)){
  assert(VEHICLE_LAMPS[model],`${model} has its own lamp spots`);
  const p=lampPoints(model,{hx:cls.hx,hz:cls.hz});assert.equal(p.front.length,2);assert.equal(p.rear.length,2);
  for(const [x,y,z] of p.front){assert(Math.abs(x)<cls.hx&&Math.abs(x)>cls.hx*.3,`${model}: a headlamp each side, inside the width`);assert(z>cls.hz-.5&&z<cls.hz+.15,`${model}: at the nose (the off-road pickup's lamps sit on its slanted corners, 0.35 m back)`);assert(y>.4&&y<1.6,`${model}: at lamp height`)}
- for(const [x,y,z] of p.rear){assert(Math.abs(x)<cls.hx&&Math.abs(x)>cls.hx*.3);assert(z<-cls.hz+.3&&z>-cls.hz-.15,`${model}: tail lamps at the back`);assert(y>.4&&y<1.6)}
+ for(const [x,y,z] of p.rear){assert(Math.abs(x)<cls.hx&&Math.abs(x)>cls.hx*.3);assert(z<-cls.hz+(cls.group==='tractor'?.45:.3)&&z>-cls.hz-.15,`${model}: tail lamps at the back`);assert(y>.4&&y<1.6)}
  assert.equal(p.front[0][0],-p.front[1][0]);assert.equal(p.rear[0][0],-p.rear[1][0]);
 }
 {const p=lampPoints('some-npc-car',{hx:.9,hz:2.2,height:1.4});for(const [x,y,z] of [...p.front,...p.rear]){assert(Math.abs(x)<.9&&y>0&&y<1.4&&Math.abs(z)<2.3,'a model without its own entry gets lamps from its size')}assert(p.front[0][2]>0&&p.rear[0][2]<0)}

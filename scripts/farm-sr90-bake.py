@@ -1,5 +1,8 @@
 # sr90 textured assets (barns, houses, shed, trees): bake each face's colour from its texture into a vertex-colour attribute and render a preview.
-# Nothing is exported to the game from here; the result and the numbers are written up in notes/sr90-textured-assets.md.
+# The preview run exports nothing; the result and the numbers are written up in notes/sr90-textured-assets.md.
+# SR2 export: with the environment variable SR90_EXPORT=<dir> the run writes one flat-colour GLB per object instead of rendering (house_brick.glb, house_red.glb; faces fully below ground dropped,
+# footprint centre on x/z = 0, ground at z = 0, door side on -Y so it faces +z in the game; one flat material per baked colour, which scripts/build-props.mjs turns into vertex colours):
+#   $env:SR90_EXPORT='assets-src/Farm/sr90'; blender -b assets-src/Farm/list1_detailed_FARM.blend --python scripts/farm-sr90-bake.py -- <scratch dir> House_Brick House_Red
 #   blender -b assets-src/Farm/list1_detailed_FARM.blend --python scripts/farm-sr90-bake.py -- <out dir> [object ...]
 # Method: faces on the palette atlas (texture_0, a grid of flat colour cells) take the colour under their UV centroid (the same lossless conversion as scripts/farm-sr90.py);
 # faces on a tiled surface texture (wall planks, stone, shingles, aluminium, foliage) take that texture's mean colour (alpha-weighted for foliage), so one material = one flat colour;
@@ -41,7 +44,7 @@ def bake(ob):
             px = pixels(img); a = px[..., 3:4]; wsum = max(float(a.sum()), 1e-6); means[i] = (px[..., :3] * a).sum(axis=(0, 1)) / wsum
     atl = pixels(bpy.data.images['texture_0']); H, W = atl.shape[:2]
     at = me.color_attributes.new('Bake', 'BYTE_COLOR', 'CORNER')
-    used = {}
+    used = {}; polykeys = []
     for p in me.polygons:
         img, base = slot[p.material_index] if p.material_index < len(slot) else (None, (0.8, 0.8, 0.8))
         if p.material_index in means: c = means[p.material_index]
@@ -49,10 +52,43 @@ def bake(ob):
             u = sum(uvl[l].uv[0] for l in p.loop_indices) / p.loop_total; v = sum(uvl[l].uv[1] for l in p.loop_indices) / p.loop_total
             c = atl[min(H - 1, max(0, int(v * H))), min(W - 1, max(0, int(u * W))), :3]
         else: c = np.array(base)
-        lin = srgb2lin(c); key = tuple(int(round(float(x) * 255)) for x in np.clip(np.asarray(c), 0, 1)); used[key] = used.get(key, 0) + 1
+        lin = srgb2lin(c); key = tuple(int(round(float(x) * 255)) for x in np.clip(np.asarray(c), 0, 1)); used[key] = used.get(key, 0) + 1; polykeys.append(key)
         for l in p.loop_indices: at.data[l].color = (*lin, 1.0)
     me.color_attributes.active_color = at
+    ob['polykeys'] = polykeys
     return used
+
+def export_flat(ob, outdir, outname):
+    """Copy the baked object to a fresh mesh with one flat material per baked colour and write it as a GLB (see the header)."""
+    import bmesh
+    keys = [tuple(int(x) for x in k) for k in ob['polykeys']]; mw = ob.matrix_world.copy()
+    bm = bmesh.new(); bm.from_mesh(ob.data); bm.transform(mw); bm.faces.ensure_lookup_table()
+    palette = sorted(set(keys)); lay = bm.faces.layers.int.new('ck')
+    for f in bm.faces: f[lay] = palette.index(keys[f.index])
+    n0 = len(bm.faces)
+    cut = bmesh.ops.bisect_plane(bm, geom=list(bm.verts) + list(bm.edges) + list(bm.faces), plane_co=(0, 0, 0), plane_no=(0, 0, 1), clear_inner=True)   # ground = z 0: everything below it is buried, so it goes
+    loose = [v for v in bm.verts if not v.link_faces]
+    if loose: bmesh.ops.delete(bm, geom=loose, context='VERTS')
+    bm.faces.ensure_lookup_table(); kept = [palette[f[lay]] for f in bm.faces]; drop = range(n0 - len(bm.faces)) if n0 > len(bm.faces) else []
+    xs =[v.co.x for v in bm.verts]; ys = [v.co.y for v in bm.verts]; zs = [v.co.z for v in bm.verts]
+    cx = (min(xs) + max(xs)) / 2; cy = (min(ys) + max(ys)) / 2
+    bmesh.ops.translate(bm, verts=bm.verts, vec=(-cx, -cy, 0))
+    for f in bm.faces: f.material_index = 0
+    me = bpy.data.meshes.new(outname); bm.to_mesh(me); bm.free()
+    while me.color_attributes: me.color_attributes.remove(me.color_attributes[0])
+    order = sorted(set(kept), key=lambda k: -kept.count(k)); mats = []
+    for i, k in enumerate(order):
+        m = bpy.data.materials.new('%s_%02d_%02x%02x%02x' % (outname, i, *k)); m.use_nodes = True
+        b = m.node_tree.nodes['Principled BSDF']; b.inputs['Base Color'].default_value = (*srgb2lin(np.array(k) / 255.0), 1.0); b.inputs['Roughness'].default_value = 0.7
+        me.materials.append(m); mats.append(k)
+    for p, k in zip(me.polygons, kept): p.material_index = mats.index(k)
+    new = bpy.data.objects.new(outname, me); bpy.context.scene.collection.objects.link(new)
+    for o in bpy.context.scene.objects: o.select_set(False)
+    new.select_set(True); bpy.context.view_layer.objects.active = new
+    path = os.path.join(outdir, outname + '.glb')
+    bpy.ops.export_scene.gltf(filepath=path, export_format='GLB', use_selection=True, export_yup=True, export_apply=True, export_cameras=False, export_lights=False, export_texcoords=False, export_image_format='NONE')
+    d = (max(xs) - min(xs), max(ys) - min(ys), max(zs) - min(0, min(zs)))
+    print('EXPORT', outname, path, 'faces', len(me.polygons), 'faces removed by the ground cut (net)', len(drop), 'materials', len(mats), 'size x y z (m)', [round(x, 2) for x in d], 'lowest z kept', round(min(zs), 3))
 
 def render(ob, prefix):
     sc = bpy.context.scene
@@ -78,6 +114,7 @@ for n in NAMES:
     ob = bpy.data.objects[n]; used = bake(ob)
     top = sorted(used.items(), key=lambda kv: -kv[1])[:6]
     print('BAKE', n, 'faces', len(ob.data.polygons), 'distinct face colours', len(used), 'top', top)
-    render(ob, n)
+    if os.environ.get('SR90_EXPORT'): export_flat(ob, os.environ['SR90_EXPORT'], {'House_Brick': 'house_brick', 'House_Red': 'house_red'}.get(n, n.lower()))
+    else: render(ob, n)
     for o in bpy.data.objects:
         if o.type == 'MESH': o.hide_render = False

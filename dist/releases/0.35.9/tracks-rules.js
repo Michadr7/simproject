@@ -20,7 +20,7 @@ export const TRACK_SURFACE=Object.freeze({
  [S.GRASS]:{life:90,colour:'#4b6233',alpha:.35},
  [S.GRAVEL]:{life:60,colour:'#6f6a5e',alpha:.35}}); // gravel: a sensible default (short and pale)
 // Width of one wheel strip per class id (the flatbed's dual rears count as one wide strip). No entry (the forklift) means no tracks.
-export const TRACK_WIDTH=Object.freeze({shortbed:.2,worktruck:.24,offroad:.3,flatbed:.55,atv:.25});
+export const TRACK_WIDTH=Object.freeze({shortbed:.2,worktruck:.24,offroad:.3,flatbed:.55,atv:.25,tractor_juff:.35,tractor_kidbi:.38}); // FV1: lugged tractor tyres, 0.348 and 0.366 m wide (the rear tyres lay the track)
 export const widthOf=id=>TRACK_WIDTH[id]??0;
 export const trackOf=surface=>TRACK_SURFACE[surface]||null;
 // The mud carried on the tyres: metres of brown track still to lay. Full on mud or plowed ground, then it wears off by the distance driven.

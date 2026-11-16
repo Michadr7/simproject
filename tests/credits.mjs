@@ -1,5 +1,7 @@
 import assert from 'node:assert/strict';
-import {PROPS} from '../dist/props-assets.js';
+import {PROPS as CORE} from '../dist/props-assets.js';
+import {FARM_PROPS} from '../dist/props-assets-farm.js';
+const PROPS={...CORE,...FARM_PROPS};
 import {AXES} from '../dist/axe-assets.js';
 import {SAWS} from '../dist/saw-assets.js';
 import {FLATBED} from '../dist/flatbed-assets.js';

@@ -32,7 +32,8 @@ assert.equal(dial('nope',{}).outcome,'no-answer','an unknown number');assert.equ
  const opts=towOptions(p.vehicles,uid=>statusOf(p,uid,hoursNow(p)),v=>v.model.toUpperCase());
  assert.equal(opts.length,2);assert.equal(opts[0].inShop,true);assert.equal(opts[0].tow,null);assert.equal(towLabel(opts[0]),'In the shop');
  assert.equal(opts[1].inShop,false);assert(opts[1].tow>7000,'a fee in cents: '+opts[1].tow);assert(/^Tow to the repair shop · \$\d+\.\d\d$/.test(towLabel(opts[1])),towLabel(opts[1]));
- assert.equal(towLabel({inShop:false,tow:0}),'Tow · free this time');assert.deepEqual(towOptions([],()=>null,()=>''),[],'no vehicles, no choices')}
+ assert.equal(towLabel({inShop:false,tow:0}),'Tow · free this time');assert.equal(towLabel({inShop:false,tow:null}),'Already at the shop','PB3: null fee is not \.00');{const q={...p,garage:{...p.garage,shop:{}}},s=statusOf(q,'v1',hoursNow(q));assert.equal(s.tow,null,'PB3: parked in the bay: no quote');assert.equal(s.inShop,false)}
+ {const {pullOut}=await import('../dist/garage.js'),g=pullOut({cash:-500,routine:{minutes:600},housing:{day:3},garage:{hardLuckDay:null,shop:{}},vehicles:[{uid:'v1',model:'shortbed',x:135,z:-23,yaw:0,cond:0}]},'v1',{x:128,z:-30,yaw:1.5},{drivenUid:'v1',available:true});assert(!g.error&&g.free,'PB3: a free pull-out works with negative cash')}assert.deepEqual(towOptions([],()=>null,()=>''),[],'no vehicles, no choices')}
 
 // TR4 'Pull me out': offered on the tow line only with a Stuck or soft-ground vehicle under you (pull flag), never on a busy (on foot) line; $40 and half a game hour; free in hard luck; refused when broke or not stuck; the clock moves on.
 {const {pullLabel}=await import('../dist/phone-calls.js'),{pullOut,pullFee,BOG_PULL_CENTS,BOG_PULL_HOURS}=await import('../dist/garage.js'),{pullOutAvailable}=await import('../dist/surface-table.js');

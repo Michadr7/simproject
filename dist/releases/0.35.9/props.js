@@ -2,6 +2,12 @@
 // vertex colours, and collision boxes, all in metres with the ground at y = 0 and the prop centred on x = z = 0.
 import * as THREE from './vendor/three.module.js';
 import {PROPS} from './props-assets.js';
+// The farm.* records (about 8 MB) are a separate module, loaded on demand: wait ensureFarmProps() before placing or building any farm.* prop (props-assets-farm.js).
+let FARM=null,farmLoading=null;
+export const isFarmProp=id=>typeof id==='string'&&id.startsWith('farm.');
+export const farmPropsLoaded=()=>FARM!==null;
+export const ensureFarmProps=()=>FARM?Promise.resolve(FARM):(farmLoading||(farmLoading=import('./props-assets-farm.js').then(m=>(FARM=m.FARM_PROPS),e=>{farmLoading=null;throw e})));
+const record=id=>PROPS[id]||FARM?.[id];
 import {decode} from './nature.js';
 import {PLACEHOLDERS} from './placeholders.js';
 import {isRigged,riggedInfo,createRigged} from './rigged-props.js';
@@ -11,7 +17,7 @@ import {SHORTBED_INFO,buildShortbed} from './shortbed.js';
 const CUSTOM={flatbed:{info:FLATBED_INFO,build:buildFlatbed},shortbed:{info:SHORTBED_INFO,build:buildShortbed}};
 
 // A prop is a converted model (PROPS) or a placeholder (placeholders.js); both have width, depth, height, footprint, colliders and floor.
-export const propInfo=id=>{const p=PROPS[id]||CUSTOM[id]?.info||PLACEHOLDERS[id]||(isRigged(id)?riggedInfo(id):null);if(!p)throw new Error('Unknown prop '+id);return p}; // rigged props (rigged-props.js) answer from data too
+export const propInfo=id=>{const p=record(id)||CUSTOM[id]?.info||PLACEHOLDERS[id]||(isRigged(id)?riggedInfo(id):null);if(!p)throw new Error(isFarmProp(id)&&!FARM?'Farm prop '+id+' is not loaded yet: await ensureFarmProps() first':'Unknown prop '+id);return p}; // rigged props (rigged-props.js) answer from data too
 const geometries=new Map(),LINEAR=Float32Array.from({length:256},(_,i)=>{const c=i/255;return c<=.04045?c/12.92:Math.pow((c+.055)/1.055,2.4)});
 function buildGeometry(p){
  const geometry=new THREE.BufferGeometry();
@@ -36,6 +42,7 @@ export function wheelGeometry(id,i){
 // spots: [{x, z, y?, yaw?}] (y defaults to 0: callers add heightAt/floor heights themselves). The mesh does not cast shadows by default (small props; pass shadows:true for tall ones);
 // its colliders are not added here: they come from propInfo(id).colliders, placed by whoever owns the spots.
 export function createPropInstances(id,spots,fade,{shadows=false,geometry=null}={}){
+ if(isFarmProp(id)&&!FARM){const e=new THREE.InstancedMesh(new THREE.BufferGeometry(),new THREE.MeshBasicMaterial(),1);e.count=0;e.name='props-pending-'+id;return e} // not loaded yet: nothing to draw
  const material=propMaterial(id,fade); // flat-colour props (pallets, boxes) and textured ones (the kit's containers) alike
  const mesh=new THREE.InstancedMesh(geometry||propGeometry(id),material,Math.max(1,spots.length)),m=new THREE.Matrix4(),q=new THREE.Quaternion(),up=new THREE.Vector3(0,1,0),one=new THREE.Vector3(1,1,1),at=new THREE.Vector3();
  spots.forEach((s,i)=>{q.setFromAxisAngle(up,s.yaw||0);m.compose(at.set(s.x,s.y||0,s.z),q,one);mesh.setMatrixAt(i,m)});
@@ -53,12 +60,14 @@ function propMaterial(id,fade){
  return fade.apply(new THREE.MeshStandardMaterial({map,roughness:.9,side:THREE.DoubleSide}));
 }
 export function createProp(id,fade){
+ if(isFarmProp(id)&&!FARM){const g=new THREE.Group();g.name='prop-pending-'+id;g.userData.pending=true;return g} // not loaded yet: an empty group instead of a crash (await ensureFarmProps() to get the model)
  if(CUSTOM[id])return CUSTOM[id].build(fade);
  if(PLACEHOLDERS[id])return PLACEHOLDERS[id].build(fade);
  if(isRigged(id))return createRigged(id,fade); // a group, filled when the model has decoded (userData.ready)
  const material=propMaterial(id,fade);
  const mesh=new THREE.Mesh(propGeometry(id),material);mesh.name='prop-'+id;mesh.castShadow=mesh.receiveShadow=true;
  // wheels as children, each in a pivot at its axle (the pivot steers about y, the mesh inside spins about x): mesh.userData.wheels = [{pivot, spin, radius, front}]
- const wheels=propInfo(id).wheels;if(wheels){mesh.userData.wheels=wheels.map((w,i)=>{const pivot=new THREE.Group(),spin=new THREE.Mesh(wheelGeometry(id,i),material);pivot.position.set(...w.at);spin.castShadow=spin.receiveShadow=true;spin.name='wheel';pivot.add(spin);pivot.name='wheel-pivot';mesh.add(pivot);return {pivot,spin,radius:w.radius,front:w.front}})}
+ const info=propInfo(id);if(info.anchors)mesh.userData.anchors=info.anchors;if(info.nodes)mesh.userData.nodes=info.nodes; // FV1: the model's anchor_* points and node pivots (seat, hitch, hubs, steering wheel), in the prop's frame: for the seat pose, the hitch and the sounds
+ const wheels=info.wheels;if(wheels){mesh.userData.wheels=wheels.map((w,i)=>{const pivot=new THREE.Group(),spin=new THREE.Mesh(wheelGeometry(id,i),material);pivot.position.set(...w.at);spin.castShadow=spin.receiveShadow=true;spin.name='wheel';pivot.add(spin);pivot.name='wheel-pivot';mesh.add(pivot);return {pivot,spin,radius:w.radius,front:w.front}})}
  return mesh;
 }

@@ -51,7 +51,7 @@ for(const [x,z] of [[-35.1,-160],[-24.9,-160],[-100,-146],[100,-185],[0,-164],[2
 assert.deepEqual(MAP.reserved.map(p=>[p.id,p.kind,p.facing]),[['C1','commercial','north'],['C2','commercial','north'],['C3','commercial','north'],['C4','commercial','north'],['C5','commercial','north'],['C6','commercial','north'],['C7','commercial','north'],['C8','commercial','south'],['C9','commercial','south'],['C10','commercial','south'],['R1','residential','south'],['R2','residential','south'],['R3','residential','south'],['R4','residential','south'],['R5','residential','south'],['R6','residential','south'],['R7','residential','north'],['R8','residential','north'],['I1','industrial','north'],['I2','industrial','south'],['I3','industrial','north'],['I4','industrial','north'],['I5','industrial','east'],['I6','industrial','south']]);
 for(const plot of MAP.reserved){const want={commercial:'alder',residential:'cedar',industrial:'eastbank'}[plot.kind];for(const [x,z] of [[plot.x0,plot.z0],[plot.x1,plot.z1]])assert.equal(zoneAtPoint(x,z)?.id,want,`${plot.id} lies in ${want}`)}
 // Signposts: one for the fork and one for each new district.
-assert.deepEqual(MAP.signs.map(g=>g.id),['fork','alder-sign','cedar-sign','eastbank-sign','riden-deals-sign']);
+assert.deepEqual(MAP.signs.map(g=>g.id),['fork','alder-sign','cedar-sign','eastbank-sign','bay-road-sign','harbor-sign','quay-sign','ferry-sign','coast-sign','riden-deals-sign'] /* R4: five wild signs at Kaspian Bay */);
 assert.deepEqual(SHOPS,{market:{name:'Corner Market',x:19,z:-6.3},cafe:{name:'Alder Coffee',x:36,z:-6.3}});assert.deepEqual(MARKET,{name:'Corner Market',x:19,z:-6.3});assert.deepEqual([STUDIO.x,STUDIO.z],[1,-6.3]);
 assert.deepEqual(MAP.spawn,{x:-5,y:.2,z:15});assert.deepEqual(MAP.minimap.view,{x0:-200,x1:330,z0:-330,z1:110});assert.equal(MAP.buildings.length,9,'nine city buildings (the backdrop row is gone: Alder Center replaces it)');
 assert.deepEqual(MAP.buildings.filter(b=>b.shop).map(b=>[b.name,b.shop,b.x,b.z,b.w,b.d]),[['CORNER MARKET','market',19,-13.5,15,10],['ALDER COFFEE','cafe',36,-16,15,15]]);
@@ -81,7 +81,7 @@ const has=(problems,pattern)=>assert(problems.some(p=>pattern.test(p)),`expected
 assert(MAP.vehicles.every(v=>['dealership','online','both'].includes(v.sale)),'every vehicle model has a sale field');
 has(broken(m=>{delete m.vehicles[0].sale}),/needs a sale field/);has(broken(m=>{m.vehicles[0].sale='shop'}),/needs a sale field/);
 assert.deepEqual(broken(m=>{m.vehicles[1].sale='online';delete m.vehicles[1].home}),[],'an online-only model has no display slot and needs no home');
-has(broken(m=>{for(let i=0;i<9;i++)m.vehicles.push({...m.vehicles[0],id:'extra'+i})}),/lot has 9 bays but 13 models/);
+has(broken(m=>{for(let i=0;i<9;i++)m.vehicles.push({...m.vehicles[0],id:'extra'+i})}),/lot has 9 bays but 16 models/);
 has(broken(m=>{m.zones[2].bounds.x1=-30}),/zones county and farm overlap/);
 has(broken(m=>{m.zones[0].id='farm'}),/duplicate zone id/);
 has(broken(m=>{m.zones[3].bounds.x1=999}),/outside the ground/);

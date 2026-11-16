@@ -1,74 +1,69 @@
-import {ZONES,WALKABLE,DIRT_ROADS,FIELDS} from './world.js';
-import {MAP,riverPath} from './map-definition.js';
-import {terrain,MINIMAP_COLOUR} from './terrain.js';
-import {propInfo} from './props.js';
-import {heightAt} from './height.js';
-import {drawWaterLayer} from './water-chunks.js';
+import {ZONES} from './world.js';
+import {MAP} from './map-definition.js';
+import {DEV_MODE} from './dev-flag.js';
+import {sharedBake,relief,TILE_CACHE} from './map-bake.js';
+import {BASE_MPP,TILE_MPP,TILE_GUTTER,tilesFor,levelFor,cropWindow,cropSource,zoomTarget,footTarget,freshZoom,smoothZoom,lookAheadStep,edgeIndicator} from './map-view.js';
 
 // Whole-world map, north (-z) up: the city in the south, the river and bridge across the middle, Willow Fields (west) and Pine Ridge (east) north of it.
-// The static layer is drawn once (and again when a tree is felled); the
-// player and markers are drawn on top at ~12 fps.
+// MM3: the small corner map is now a LOCAL window: north up, centred on you (200 x 200, 150 m across on foot, wider when driving fast, shifted ahead of the car), never clamped at the world edge (dark fill + dashed border). The large mode (M key, phone GPS) still shows the whole view until MM6/MM7.
+// MM2: the ground, water, buildings, plots and trees are no longer painted here: they come from the shared bake (map-bake.js: a 2 m/px BASE image and 0.5 m tiles, baked in slices) and this file draws crops of it, then the labels, route, pin, markers and player at ~12 fps.
 const VIEW=MAP.minimap.view;
-// Relief shading (0.34): a brightness for a world point from the ground's height (heightAt): slopes that face the north-west light are brighter, the others darker, higher ground a little lighter and the river valley darker. 1 on flat ground.
-const shade=(h,gx,gz)=>h===0&&gx===0&&gz===0?1:Math.max(.55,Math.min(1.5,1+(gx+gz)*2.2+Math.max(0,h)*.018+Math.min(0,h)*.12));
-export function relief(x,z){const d=1.5,h=heightAt(x,z);if(h===0&&heightAt(x+d,z+d)===0&&heightAt(x-d,z-d)===0)return 1;return shade(h,(heightAt(x+d,z)-heightAt(x-d,z))/(2*d),(heightAt(x,z+d)-heightAt(x,z-d))/(2*d))}
-// The shade is worked out once on a coarse grid (SHADE_STEP metres) and sampled per pixel: calling heightAt five times for every pixel of the big map took about 2.6 s on a 2x display.
-const SHADE_STEP=4;let shadeGrid=null;
-function shadeAt(x,z){
- const gw=Math.ceil((VIEW.x1-VIEW.x0)/SHADE_STEP)+1,gh=Math.ceil((VIEW.z1-VIEW.z0)/SHADE_STEP)+1;
- if(!shadeGrid){const hs=new Float32Array(gw*gh),at=(i,j)=>hs[Math.max(0,Math.min(gh-1,j))*gw+Math.max(0,Math.min(gw-1,i))];shadeGrid=new Float32Array(gw*gh);
-  for(let j=0;j<gh;j++)for(let i=0;i<gw;i++)hs[j*gw+i]=heightAt(VIEW.x0+i*SHADE_STEP,VIEW.z0+j*SHADE_STEP);
-  for(let j=0;j<gh;j++)for(let i=0;i<gw;i++){const h=hs[j*gw+i],gx=(at(i+1,j)-at(i-1,j))/(2*SHADE_STEP),gz=(at(i,j+1)-at(i,j-1))/(2*SHADE_STEP);shadeGrid[j*gw+i]=shade(h,gx,gz)}}
- const fx=Math.max(0,Math.min(gw-1.001,(x-VIEW.x0)/SHADE_STEP)),fz=Math.max(0,Math.min(gh-1.001,(z-VIEW.z0)/SHADE_STEP)),i=Math.floor(fx),j=Math.floor(fz),u=fx-i,v=fz-j,o=j*gw+i;
- return (shadeGrid[o]*(1-u)+shadeGrid[o+1]*u)*(1-v)+(shadeGrid[o+gw]*(1-u)+shadeGrid[o+gw+1]*u)*v;
-}
-const SIZES={small:{w:200,h:163},large:{w:600,h:490}};
+export {relief};
+const SIZES={small:{w:200,h:200},large:{w:600,h:490}},EDGE='#141c19',JOB='#f2ca79';
 
-export function createMinimap(doc,{canvas,cityRoads=[],buildings=[],trees=()=>[]}){
- if(!canvas)return {update(){},toggle(){},invalidate(){},get large(){return false}};
- const dpr=Math.min(2,globalThis.devicePixelRatio||1);
- const layer=doc.createElement('canvas');
- let size='small',dirty=true,timer=0;
+export function createMinimap(doc,{canvas,cityRoads=[],buildings=[],trees=()=>[],startSize='small',fixedDpr=0,bake=null}){
+ if(!canvas)return {update(){},toggle(){},invalidate(){},invalidateAt(){},pick(){return null},get large(){return false}};
+ const dpr=fixedDpr||Math.min(2,globalThis.devicePixelRatio||1);
+ const B=bake||sharedBake(doc,{buildings,trees,onJob:DEV_MODE?i=>{if(i.ms>=25)console.debug('[map-bake]',i.kind,i.key,i.ms.toFixed(1)+' ms')}:null});
+ let size=startSize,dirty=true,timer=0,seen=-1,zs=freshZoom(),look={x:0,z:0},win=null;
  function resize(){
   const {w,h}=SIZES[size];
-  for(const c of [canvas,layer]){c.width=Math.round(w*dpr);c.height=Math.round(h*dpr)}
+  canvas.width=Math.round(w*dpr);canvas.height=Math.round(h*dpr);
   canvas.style.width=w+'px';canvas.style.height=h+'px';dirty=true;
  }
- const scale=()=>canvas.width/(VIEW.x1-VIEW.x0);
- const px=x=>(x-VIEW.x0)*scale(),pz=z=>(z-VIEW.z0)*scale();
- function rect(ctx,r,color){ctx.fillStyle=color;ctx.fillRect(px(r.x0),pz(r.z0),(r.x1-r.x0)*scale(),(r.z1-r.z0)*scale())}
- function drawStatic(){
-  const ctx=layer.getContext('2d'),k=scale();
-  ctx.setTransform(1,0,0,1,0,0);
-  ctx.fillStyle='#1d2b26';ctx.fillRect(0,0,layer.width,layer.height);
-  // The ground comes from the terrain mask (terrain.js): each pixel takes its cell's surface, or its zone's colour on walkable grass, or meadow.
-  {const t=terrain(),w=layer.width,h=layer.height,img=ctx.createImageData?.(w,h),rgb=c=>[parseInt(c.slice(1,3),16),parseInt(c.slice(3,5),16),parseInt(c.slice(5,7),16)];
-   const surfaceRgb=Object.fromEntries(Object.entries(MINIMAP_COLOUR).map(([k,c])=>[k,rgb(c)])),zoneRgb=MAP.zones.map(z=>rgb(z.color)),meadow=rgb('#3d5a3c');
-   if(img?.data)for(let y=0;y<h;y++)for(let x=0;x<w;x++){const wx=VIEW.x0+(x+.5)/k,wz=VIEW.z0+(y+.5)/k,c=t.index(wx,wz);let col=meadow;
-    if(c>=0){const s=t.surface[c];if(surfaceRgb[s])col=surfaceRgb[s];else if(t.walk[c]&&t.zone[c])col=zoneRgb[t.zone[c]-1]}
-    const o=(y*w+x)*4,s=shadeAt(wx,wz);img.data[o]=Math.max(0,Math.min(255,col[0]*s));img.data[o+1]=Math.max(0,Math.min(255,col[1]*s));img.data[o+2]=Math.max(0,Math.min(255,col[2]*s));img.data[o+3]=255}
-   if(img?.data)ctx.putImageData(img,0,0)}
-  drawWaterLayer(ctx,MAP,px,pz,k); // lakes, sea, falls and new-form rivers (W3); the old river is already in the terrain mask
-  for(const b of buildings)rect(ctx,{x0:b.x-b.hx,x1:b.x+b.hx,z0:b.z-b.hz,z1:b.z+b.hz},'#33383a');
-  // Buildings placed from models (houses, shops, barns, the sawmill): their footprints, turned to face the way they stand. Vehicles and yard props are left off.
-  ctx.fillStyle='#3f4548';for(const l of MAP.landmarks){if(l.decor)continue;const f=propInfo(l.prop).footprint,s=Math.round(Math.sin(l.yaw)),c=Math.round(Math.cos(l.yaw)),xs=[f.x0,f.x1].flatMap(x=>[f.z0,f.z1].map(z=>l.x+x*c+z*s)),zs=[f.x0,f.x1].flatMap(x=>[f.z0,f.z1].map(z=>l.z-x*s+z*c));
-   ctx.fillRect(px(Math.min(...xs)),pz(Math.min(...zs)),(Math.max(...xs)-Math.min(...xs))*k,(Math.max(...zs)-Math.min(...zs))*k)}
-  // Reserved plots: a coloured outline (and the id on the big map).
-  {const colour={residential:'#2fbf9f',commercial:'#b0529b',industrial:'#e0a02e'};ctx.lineWidth=Math.max(1,dpr);for(const plot of MAP.reserved){ctx.strokeStyle=colour[plot.kind];ctx.strokeRect(px(plot.x0),pz(plot.z0),(plot.x1-plot.x0)*k,(plot.z1-plot.z0)*k);if(size==='large'){ctx.fillStyle=colour[plot.kind];ctx.font=`${Math.round(11*dpr)}px Arial`;ctx.textAlign='center';ctx.fillText(plot.id,px((plot.x0+plot.x1)/2),pz((plot.z0+plot.z1)/2)+4*dpr)}}}
-  ctx.fillStyle='#1f3a22';
-  const r=Math.max(1,k*.55);
-  for(const t of trees())if(t.standing)ctx.fillRect(px(t.x)-r/2,pz(t.z)-r/2,r,r);
-  // Zone names.
+ let cur={x0:VIEW.x0,z0:VIEW.z0,k:1}; // the window on screen: its west/north edge in metres and device pixels per metre
+ const px=x=>(x-cur.x0)*cur.k,pz=z=>(z-cur.z0)*cur.k;
+ // The ground: BASE first (never blank), then the 0.5 m tiles that are ready on top when the map is finer than 1 m per device pixel.
+ function drawGround(ctx){
+  const w=canvas.width,h=canvas.height;
+  ctx.fillStyle=size==='small'?EDGE:'#1d2b26';ctx.fillRect(0,0,w,h);
+  const blit=(img,box,mpp,g)=>{const c=cropSource(win,box,mpp,w,h);if(c)ctx.drawImage(img,c.sx+g,c.sy+g,c.sw,c.sh,c.dx,c.dy,c.dw,c.dh)};
+  if(B.baseReady)blit(B.base,B.bounds,BASE_MPP,0);
+  if(levelFor(win.W,w)==='L0'){
+   const tiles=tilesFor(win,B.bounds);B.want(tiles,{x:win.cx,z:win.cz});
+   for(const t of tiles){const e=B.tile(t.key);if(e)blit(e.canvas,t,TILE_MPP,TILE_GUTTER)}}
+  else B.want([],{x:win.cx,z:win.cz});
+  if(size==='small'){const b=B.bounds;ctx.save();ctx.setLineDash([6*dpr,4*dpr]);ctx.strokeStyle='#c9d3c4aa';ctx.lineWidth=dpr;ctx.strokeRect(px(b.x0),pz(b.z0),(b.x1-b.x0)*cur.k,(b.z1-b.z0)*cur.k);ctx.restore()} // the edge of the mapped world
+  // Labels stay crisp at any zoom, so they are drawn here and not baked: zone names, and the plot ids on the big map.
+  if(size==='large'){const colour={residential:'#2fbf9f',commercial:'#b0529b',industrial:'#e0a02e'};ctx.fillStyle='#fff';ctx.font=`${Math.round(11*dpr)}px Arial`;ctx.textAlign='center';for(const plot of MAP.reserved){ctx.fillStyle=colour[plot.kind];ctx.fillText(plot.id,px((plot.x0+plot.x1)/2),pz((plot.z0+plot.z1)/2)+4*dpr)}}
   ctx.fillStyle='#ffffffcc';ctx.font=`${Math.round((size==='large'?13:8)*dpr)}px Arial`;ctx.textAlign='center';
   for(const zone of MAP.zones)ctx.fillText(ZONES[zone.id].label,px(zone.minimap.label.x),pz(zone.minimap.label.z));
-  dirty=false;
  }
- function update(dt,{player,heading,yaw,markers=[]}){
-  timer+=dt;if(timer<1/12&&!dirty)return;timer=0;
-  if(dirty)drawStatic();
-  const ctx=canvas.getContext('2d'),k=scale();
-  ctx.setTransform(1,0,0,1,0,0);ctx.drawImage(layer,0,0);
-  for(const m of markers){ctx.fillStyle=m.color;ctx.beginPath();ctx.arc(px(m.x),pz(m.z),Math.max(2.5*dpr,k*1.4),0,Math.PI*2);ctx.fill()}
+ // The GPS route (gps.js): a blue line from where you are along the points still ahead (route.points from index route.from, starting at route.start). Only a stroke of a few hundred points at 12 fps.
+ function drawRoute(ctx,route){const P=route.points;if(!P||P.length<2)return;const w=Math.max(2,(size==='large'?3.2:2.4)*dpr),m=20,vis=(ax,az,bx,bz)=>Math.max(ax,bx)>=win.x0-m&&Math.min(ax,bx)<=win.x1+m&&Math.max(az,bz)>=win.z0-m&&Math.min(az,bz)<=win.z1+m;ctx.lineJoin='round';ctx.lineCap='round';
+  for(const pass of [0,1]){ctx.strokeStyle=pass?'#4aa8ff':'#0b2a46';ctx.lineWidth=pass?w:w+2*dpr;ctx.beginPath();let ax=route.start[0],az=route.start[1],pen=false;
+   for(let i=route.from;i<P.length;i++){const bx=P[i][0],bz=P[i][1];if(vis(ax,az,bx,bz)){if(!pen){ctx.moveTo(px(ax),pz(az));pen=true}ctx.lineTo(px(bx),pz(bz))}else pen=false;ax=bx;az=bz}ctx.stroke()}}
+ // A target off the corner map: a chevron on the frame pointing at it, with the distance when it is far.
+ function chevron(ctx,ind,color){const u=6*dpr;ctx.save();ctx.translate(ind.x,ind.y);ctx.rotate(ind.angle);ctx.fillStyle=color;ctx.strokeStyle='#10130f';ctx.lineWidth=dpr;ctx.beginPath();ctx.moveTo(u,0);ctx.lineTo(-u*.7,-u*.8);ctx.lineTo(-u*.3,0);ctx.lineTo(-u*.7,u*.8);ctx.closePath();ctx.fill();ctx.stroke();ctx.restore();
+  if(ind.showDistance){const t=Math.round(ind.dist/10)*10+' m';ctx.font=`bold ${Math.round(9*dpr)}px Arial`;ctx.textAlign='center';ctx.lineWidth=3*dpr;ctx.strokeStyle='#10130f';ctx.fillStyle='#fff';const x=ind.x-Math.cos(ind.angle)*18*dpr,y=ind.y-Math.sin(ind.angle)*14*dpr+3*dpr;ctx.strokeText(t,x,y);ctx.fillText(t,x,y)}}
+ // The window for this frame: small = local (zoom eased by speed, centre shifted ahead), large = the whole view.
+ function setWindow(dt,player,heading,speed,driving){
+  const w=canvas.width,h=canvas.height;
+  if(size==='large'){const W=VIEW.x1-VIEW.x0;win=cropWindow((VIEW.x0+VIEW.x1)/2,VIEW.z0+W*h/w/2,W,w/h)}
+  else{zs=smoothZoom(zs,driving?zoomTarget(speed):footTarget(),dt);look=lookAheadStep(look,Math.sin(heading)*speed,Math.cos(heading)*speed,zs.W,dt,!driving);win=cropWindow((player?player.x:(VIEW.x0+VIEW.x1)/2)+look.x,(player?player.z:(VIEW.z0+VIEW.z1)/2)+look.z,zs.W,w/h)}
+  cur={x0:win.x0,z0:win.z0,k:w/win.W};
+ }
+ function update(dt,{player,heading,yaw,markers=[],route=null,pin=null,speed=0,driving=false}){
+  B.step(); // one sliced slice of baking per frame (3 ms at most, only while something is missing)
+  setWindow(dt,player,heading,speed,driving); // smoothing runs every frame, drawing only at ~12 fps
+  timer+=dt;if(timer<1/12&&!dirty&&seen===B.version)return;timer=0;seen=B.version;dirty=false;
+  const ctx=canvas.getContext('2d'),k=cur.k,small=size==='small',ev={cx:win.cx,cz:win.cz,mpp:win.W/canvas.width,w:canvas.width,h:canvas.height};
+  ctx.setTransform(1,0,0,1,0,0);drawGround(ctx);
+  if(route)drawRoute(ctx,route);
+  const pinInd=pin&&small?edgeIndicator(ev,pin.x,pin.z,10*dpr):null;
+  if(pin&&!pinInd){const x=px(pin.x),z=pz(pin.z),u=(size==='large'?6:4)*dpr;ctx.fillStyle='#ff5a4d';ctx.strokeStyle='#fff';ctx.lineWidth=dpr;ctx.beginPath();ctx.arc(x,z-u,u*.7,0,Math.PI*2);ctx.fill();ctx.stroke();ctx.beginPath();ctx.moveTo(x-u*.45,z-u*.55);ctx.lineTo(x,z);ctx.lineTo(x+u*.45,z-u*.55);ctx.fill()}
+  for(const m of markers){if(small&&m.color===JOB){const ind=edgeIndicator(ev,m.x,m.z,10*dpr);if(ind){chevron(ctx,ind,m.color);continue}}ctx.fillStyle=m.color;ctx.beginPath();ctx.arc(px(m.x),pz(m.z),Math.max(2.5*dpr,k*1.4),0,Math.PI*2);ctx.fill()}
+  if(pinInd)chevron(ctx,pinInd,'#ff5a4d');
   if(!player)return;
   const x=px(player.x),z=pz(player.z),u=(size==='large'?7:5)*dpr;
   // Camera view wedge (the camera looks along -sin(yaw), -cos(yaw)).
@@ -82,7 +77,10 @@ export function createMinimap(doc,{canvas,cityRoads=[],buildings=[],trees=()=>[]
  resize();
  return {
   update,
-  invalidate(){dirty=true},
+  invalidate(){B.invalidateAll();dirty=true}, // rebake everything
+  invalidateAt(x,z,r=3){B.invalidateAt(x,z,r);dirty=true}, // only what is under the circle (MM3 switches game.js to this)
+  // A click or tap on the canvas as a world point {x,z}, or null.
+  pick(clientX,clientY){const r=canvas.getBoundingClientRect();if(!r.width||!r.height)return null;const u=(clientX-r.left)/r.width,v=(clientY-r.top)/r.height;if(u<0||u>1||v<0||v>1)return null;if(size==='small'&&win)return {x:win.x0+u*win.W,z:win.z0+v*win.H};return {x:VIEW.x0+u*(VIEW.x1-VIEW.x0),z:VIEW.z0+v*(VIEW.z1-VIEW.z0)}},
   toggle(){size=size==='small'?'large':'small';canvas.classList.toggle('large',size==='large');resize()},
   get large(){return size==='large'}
  };

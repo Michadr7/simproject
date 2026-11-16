@@ -32,7 +32,30 @@ export const PAINT=Object.freeze({
   {id:'blue',name:'Sky blue',swatch:'#2a6fcf',hue:225,sat:1.1,val:1.05},
   {id:'orange',name:'Sunset orange',swatch:'#e8741b',hue:24,sat:1,val:1.15},
   {id:'black',name:'Black',swatch:'#202020',hue:null,sat:.1,val:.35},
-  {id:'white',name:'White',swatch:'#ececec',hue:null,sat:.06,val:1.9}]}
+  {id:'white',name:'White',swatch:'#ececec',hue:null,sat:.06,val:1.9}]},
+ // FV1, the farm tractors (one flat-colour mesh; the paint is a hue band like the worktruck's). The Hustler's own paint is blue (hue 231), the R75's red (hue 8); the R75's brown frame (hue 21) and tan rims sit outside its narrow band, the grey metal and black trim are below the saturation gate.
+ tractor_juff:{src:231,band:40,colours:[
+  {id:'blue',name:'Hustler blue',swatch:'#4d63e7',hue:null},
+  {id:'red',name:'Barn red',swatch:'#b3362b',hue:4,sat:1.2,val:.95},
+  {id:'green',name:'Meadow green',swatch:'#3f8a3c',hue:120,sat:1.1,val:.85},
+  {id:'orange',name:'Harvest orange',swatch:'#e0731c',hue:24,sat:1.4,val:1.1},
+  {id:'yellow',name:'Field yellow',swatch:'#e0b21d',hue:48,sat:1.4,val:1.05},
+  {id:'white',name:'White',swatch:'#e8e8e4',hue:null,sat:.08,val:1.1}]},
+ // A4, the ATV (the player's own model, 'Paint' material only on the plastics: fenders, tank cover, seat cowl; the file colour in the game's bytes is #8d9679, hue 79). The grey frame, black trim and rims are below the saturation gate, the red taillights (hue 358) are outside the band.
+ atv:{src:79,band:40,colours:[
+  {id:'olive',name:'Trail olive',swatch:'#8d9679',hue:null},
+  {id:'red',name:'Barn red',swatch:'#b3362b',hue:4,sat:1.7,val:1.2},
+  {id:'blue',name:'Work blue',swatch:'#2f5f9e',hue:228,sat:1.7,val:1},
+  {id:'yellow',name:'Site yellow',swatch:'#e0b21d',hue:48,sat:1.7,val:1.3},
+  {id:'black',name:'Black',swatch:'#222222',hue:null,sat:.1,val:.4},
+  {id:'white',name:'White',swatch:'#e8e8e4',hue:null,sat:.08,val:1.6}]},
+ tractor_kidbi:{src:8,band:12,colours:[
+  {id:'red',name:'Husky red',swatch:'#d12a0f',hue:null},
+  {id:'blue',name:'Ranch blue',swatch:'#2f5f9e',hue:215,sat:.9,val:.85},
+  {id:'green',name:'Forest green',swatch:'#3a7a3f',hue:122,sat:.9,val:.8},
+  {id:'orange',name:'Harvest orange',swatch:'#e0731c',hue:24,sat:1,val:1.15},
+  {id:'yellow',name:'Field yellow',swatch:'#e0b21d',hue:48,sat:1,val:1.2},
+  {id:'white',name:'White',swatch:'#e8e8e4',hue:null,sat:.08,val:1.3}]}
 });
 export const coloursOf=model=>PAINT[model]?.colours||[];
 export const defaultColour=model=>coloursOf(model)[0]?.id||null;

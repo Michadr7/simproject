@@ -143,7 +143,7 @@ export function pullOut(p,uid,dest,{drivenUid=null,available=false,now=hoursNow(
  if(!available)return fail('You are not stuck: there is nothing to pull you out of.');
  if(![dest?.x,dest?.z,dest?.yaw].every(Number.isFinite))return fail('There is no firm ground nearby to pull you to.');
  const hl=hardLuck(p),weekly=!hl&&pullFreeWeekly(p,now),free=hl||weekly,fee=free?0:BOG_PULL_CENTS;
- if((p.cash||0)<fee)return fail(`A pull-out costs ${cash(fee)}: you have ${cash(p.cash||0)}. Rock it with W and S, or wait a few seconds.`);
+ if(!free&&(p.cash||0)<fee)return fail(`A pull-out costs ${cash(fee)}: you have ${cash(p.cash||0)}. Rock it with W and S, or wait a few seconds.`);
  const moved={...v,x:+dest.x.toFixed(2),z:+dest.z.toFixed(2),yaw:+dest.yaw.toFixed(3)};
  let base={...p,cash:p.cash-fee,vehicles:owned(p).map(x=>x.uid===uid?moved:x)};
  if(weekly)base.garage={...garageOf(p),pullFreeAt:fixed3(now)};
@@ -156,5 +156,5 @@ export function statusOf(p,uid,now=hoursNow(p)){
  const v=find(p,uid);if(!v)return null;
  const cond=condOf(v),e=garageOf(p).shop[uid],b=bandOf(cond);
  const line=e?(now>=e.readyAt?`Repair done: ready to collect at the ${SHOP_NAME}.`:`In the shop: ready in ${hoursText(e.readyAt-now)}.`):`Condition ${percent(cond)}% (${b.label}).`;
- return {line,inShop:!!e,ready:!!e&&now>=e.readyAt,readyAt:e?.readyAt??null,tow:e?null:hardLuck(p)?0:towFee(v,bayPose())};
+ return {line,inShop:!!e,ready:!!e&&now>=e.readyAt,readyAt:e?.readyAt??null,tow:e||inBay(v)?null:hardLuck(p)?0:towFee(v,bayPose())};
 }

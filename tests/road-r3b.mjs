@@ -62,9 +62,9 @@ near(riverXAt(R,5),-333.73,.05,'the south reach at z 5 is at x -333.7 (a north-s
   eq([E('west-bank-lane').surface,E('p5-spur').surface,E('coast-link').surface,E('bay-front').surface],['gravel','gravel','asphalt','asphalt']);
   eq([G.edges['eden-spine'].speed,G.edges['bay-front'].speed,G.edges['eden-car-link'].speed,G.edges['p5-spur'].speed,G.edges['bay-road'].speed],[ROAD_CLASSES.rural,ROAD_CLASSES.street,ROAD_CLASSES.street,ROAD_CLASSES.gravel,ROAD_CLASSES.rural]);
   ok(MAP.roads.edges.filter(e=>/^(eden-spine|eden-haul|eden-car-link|west-bank-lane|bay-|estuary|coast|p5)/.test(e.id)).every(e=>e.wild),'every new road is a wild road');
-  // the network: the Ironwood end reaches every new road by road, except West Bank Lane, which leaves the west-hill relief track (a track, not a graph edge: R4/R5 may link them)
+  // the network: the Ironwood end reaches every new road by road (R4: West Bank Lane too, through the graph-only west-hill-link)
   for(const [to,must] of [['p6Gate',['estuary-road','bay-front','bay-road']],['haulGate',['eden-spine','eden-haul']],['edenGate',['eden-car-link','blackstone-access']],['p5Gate',['p5-spur','coast-link']],['crossWestEnd',['bay-cross-west']],['edenExit',['eden-spine']]]){const r=roadRoute({x:-55,z:6},to,MAP);ok(r,'Oak Street reaches '+to);for(const id of must)ok(r.edges.includes(id),`${to}: via ${id}`)}
-  eq(G.components.map(c=>c.length).sort((a,b)=>b-a)[1],2,'the second piece of the graph is West Bank Lane alone (2 nodes)');ok(roadRoute('westFork','p3Lane',MAP).length>400);
+  eq(G.components.length,1,'R4: one connected network (West Bank Lane is linked through west-hill-link)');ok(roadRoute('westFork','p3Lane',MAP).length>400);ok(roadRoute({x:-55,z:6},'p3Lane',MAP).edges.includes('west-hill-link'),'Oak Street reaches P3');
 }
 // the exit
 {const x=MAP.exits[0];eq([x.road,x.in[0],x.out.at(-1)],['eden-spine',[1082,65],[1082,71]],'the east exit is at x 1082 (lanes z 65 in, z 71 out)');ok(x.in.every(p=>p[1]===65)&&x.out.every(p=>p[1]===71)&&x.in.length===8&&x.out.length===7);

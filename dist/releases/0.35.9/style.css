@@ -150,8 +150,8 @@ body.creating #clockChip{display:none}
 @media(prefers-reduced-motion:reduce){#storeMessage{animation:none}}
 
 /* 0.22.0 the map is taller now */
-#clockChip{top:268px}
-@media(max-width:600px){#clockChip{top:222px}}
+#clockChip{top:305px}
+@media(max-width:600px){#clockChip{top:246px}}
 
 #credits .dialog{max-height:86vh;overflow:auto}#credits h2{font-size:28px;margin-top:8px}.credits-note{color:#d2cfc6;margin:6px 0 14px}#creditsList .credit{border-bottom:1px solid #ffffff14;padding:10px 0}#creditsList b{display:block;font-size:15px}#creditsList span{display:block;color:#d8d5cd;font-size:13px;margin-top:3px}#creditsList small{display:block;color:#b2ad9d;font-size:11px;letter-spacing:.4px;margin-top:3px}#creditsList a{color:#facd38}
 
@@ -403,3 +403,5 @@ body:has(#welcome:not([hidden])) :is(header .brand,.location,#objective,#hotbar,
 @keyframes vp-hit{0%{transform:scale(1.16) translateX(0);background:rgba(232,50,58,.6)}12%{transform:scale(1.16) translateX(-6px)}26%{transform:scale(1.12) translateX(6px)}40%{transform:scale(1.08) translateX(-4px)}55%{transform:scale(1.04) translateX(3px)}100%{transform:none;background:rgba(232,50,58,0)}}
 @media(prefers-reduced-motion:reduce){.vp-lamp[data-lamp=blink]{animation:none;outline:2px solid currentColor;outline-offset:1px}@keyframes vp-hit{0%{background:rgba(232,50,58,.5)}100%{background:rgba(232,50,58,0)}}#hitFlash.on{animation-duration:1.2s}}
 .call-icon{background:var(--honey);color:var(--ink)}.phone-call-line{margin:10px 0;font-size:14px;line-height:1.4}.phone-call-line[data-state=ringing]{color:#c9c5ba;font-style:italic}.phone-call-line[data-state=busy]{color:#f08080;font-weight:bold}.phone-hangup{background:#b3261e;color:#fff;margin-top:10px}#phoneCall .phone-accept{display:block;width:100%;margin:6px 0;text-align:left}
+/* GP1 GPS: the phone's GPS screen and the vehicle panel's turn row */
+.gps-map{display:block;width:100%!important;height:auto!important;border-radius:10px;border:1px solid #ffffff30;background:#171511;cursor:crosshair;touch-action:manipulation}.gps-status{margin:8px 0;font:600 13px/1.35 Arial,sans-serif}.gps-buttons{display:flex;gap:8px}.gps-buttons button{flex:1;padding:9px 6px}.gps-buttons button:disabled{opacity:.45}.vp-gps{display:flex;align-items:center;gap:8px;margin:0;font:600 13px/1.3 Arial,sans-serif;color:#7fc0ff}.vp-gps[hidden]{display:none}.vp-gps-arrow{font-size:20px;line-height:1;min-width:20px;text-align:center}

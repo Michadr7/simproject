@@ -33,7 +33,7 @@ const sumTriangles=parts=>Object.values(parts||{}).reduce((n,x)=>n+(x&&x.triangl
 // Returns [{id, name, kind, source, triangles, size, module, viewer}] where `viewer` says how the 3D viewer can build it: createProp, nature, glb, parts, none.
 export function describeModules(meta){
  const out=[];
- for(const [id,p] of Object.entries(meta.props||{}))out.push({id:'prop:'+id,gameId:id,name:nice(id),kind:'model',source:p.source,triangles:p.triangles??null,size:sizeOf(p),module:'props-assets.js',viewer:'createProp'});
+ for(const [id,p] of Object.entries(meta.props||{}))out.push({id:'prop:'+id,gameId:id,name:nice(id),kind:'model',source:p.source,triangles:p.triangles??null,size:sizeOf(p),module:id.startsWith('farm.')?'props-assets-farm.js':'props-assets.js',viewer:'createProp'});
  for(const [id,m] of Object.entries(meta.nature?.models||{}))out.push({id:'nature:'+id,gameId:id,name:treeName(id),kind:'model',source:m.source||'nature-assets.js',triangles:m.triangles??null,size:m.height!=null?{w:round((m.canopyRadius||0)*2),d:round((m.canopyRadius||0)*2),h:round(m.height)}:null,module:'nature-assets.js',viewer:'nature',creditKey:'nature/'+(m.source||'')});
  for(const [id,m] of Object.entries(meta.rigged||{}))out.push({id:'rigged:'+id,gameId:id,name:nice(id),kind:'model',source:m.source,triangles:m.triangles??m.report?.triangles??null,size:sizeOf(m),module:'rigged-assets.js',viewer:'glb',skinned:true,byModule:true});
  for(const [id,a] of Object.entries(meta.axes||{}))out.push({id:'axe:'+id,gameId:id,name:nice(id),kind:'model',source:a.source,triangles:a.triangles??null,size:sizeOf(a),module:'axe-assets.js',viewer:'mesh'});

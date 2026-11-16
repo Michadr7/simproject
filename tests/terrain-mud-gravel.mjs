@@ -33,7 +33,7 @@ assert.ok(FOOTING[S.MUD]!=null&&FOOTING[S.GRAVEL]!=null);
 for(const g of GROUPS){const d=SURFACE_SPEED_BY_GROUP[S.DIRT][g],v=SURFACE_SPEED_BY_GROUP[S.GRAVEL][g],r=SURFACE_SPEED_BY_GROUP[S.ROAD][g];assert.ok(v>=d&&v<=r,`gravel speed for ${g} is between dirt and road`);
  assert.ok(rollDragOf(S.GRAVEL,g)<=rollDragOf(S.DIRT,g)&&rollDragOf(S.GRAVEL,g)>=rollDragOf(S.ROAD,g));
  assert.ok(gripOf(S.GRAVEL,g)>=gripOf(S.DIRT,g)&&gripOf(S.GRAVEL,g)<=gripOf(S.ROAD,g),`gravel grip for ${g}`)}
-assert.deepEqual(SURFACE_SPEED_BY_GROUP[S.GRAVEL],{road:.9,offroad:1,heavy:.85,atv:1,fork:.6});
+assert.deepEqual(SURFACE_SPEED_BY_GROUP[S.GRAVEL],{road:.9,offroad:1,heavy:.85,atv:1,fork:.6,tractor:1});
 assert.equal(GRIP[S.GRAVEL],.85);assert.equal(ROLL_DRAG[S.GRAVEL],.2);
 assert.equal(surfaceSpeed(S.GRAVEL,CLASSES.shortbed),.9);assert.equal(surfaceSpeed(S.GRAVEL,{}),.9);
 

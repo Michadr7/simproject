@@ -6,6 +6,7 @@ import {clockText,formatClock} from './routine.js';
 import {weekday} from './housing.js';
 import {LISTED} from './ownership.js';
 import {MAP} from './map-definition.js';
+import {createPhoneGps} from './phone-gps.js';
 import {CLASSES} from './vehicle.js';
 import {GALLON,mph,fuelName,fuelText,priceLabel,canText} from './fuel.js';
 import {canOf} from './inventory.js';
@@ -17,7 +18,7 @@ import {statusOf,hoursNow} from './garage.js'; // VD4: the garage line on each v
 import {createPhoneCall} from './phone-call.js';
 
 // UI only: transactions and movement/cursor ownership stay in game.js.
-export function createPhone({document:doc,getState,canOpen,onOpen,onClose,onAccept,onRefresh,onHomeAction,onOrder,onOrderVehicle,onSetMain,isOnSite,onClockIn,onClockOut,onQuit,onCollect,onRead,onTow,pullInfo,onPull,inVehicle,audio}){
+export function createPhone({document:doc,getState,canOpen,onOpen,onClose,onAccept,onRefresh,onHomeAction,onOrder,onOrderVehicle,onSetMain,isOnSite,onClockIn,onClockOut,onQuit,onCollect,onRead,onTow,pullInfo,onPull,inVehicle,audio,gps}){
   const $=id=>doc.getElementById(id);
   let opened=false,screen='home',previousFocus=null;
   // unread counts come from the saved messages (messages.js): the phone button shows the total, each app icon its own, Messages the total again
@@ -25,7 +26,8 @@ export function createPhone({document:doc,getState,canOpen,onOpen,onClose,onAcce
   const badgeNow=()=>{const p=getState().progress,by=unreadByApp(p),total=unreadTotal(p),b=$('phoneButton');b.dataset.unread=total?String(Math.min(total,9)):'';b.classList.toggle('has-unread',total>0);
    for(const id of APP_IDS){const el=$('phoneBadge-'+id);if(!el)continue;const n=id==='messages'?total:(by[id]||0);el.hidden=!n;el.textContent=n>9?'9+':String(n)}};
   $('phoneOverlay').hidden=true;
-  const store=createPhoneStore({document:doc,getState,onOrderVehicle:(model,colour,home)=>onOrderVehicle?.(model,colour,home)||{error:'Ordering is not available.'},onOrder:(cart,home)=>onOrder?.(cart,home)||{error:'Ordering is not available.'},onSetMain:id=>onSetMain?.(id)||{error:'Not available.'},say:text=>{$('phoneMessage').textContent=text}});
+  const gpsUi=gps?createPhoneGps({document:doc,gps:gps.state,mapOptions:gps.mapOptions}):null;
+   const store=createPhoneStore({document:doc,getState,onOrderVehicle:(model,colour,home)=>onOrderVehicle?.(model,colour,home)||{error:'Ordering is not available.'},onOrder:(cart,home)=>onOrder?.(cart,home)||{error:'Ordering is not available.'},onSetMain:id=>onSetMain?.(id)||{error:'Not available.'},say:text=>{$('phoneMessage').textContent=text}});
   const jobs=createPhoneJobs({document:doc,getState,isOnSite:id=>isOnSite?.(id)??false,onClockIn:id=>onClockIn?.(id)||{error:'Not available.'},onClockOut:()=>onClockOut?.()||{error:'Not available.'},onQuit:id=>onQuit?.(id)||{error:'Not available.'},onCollect:id=>onCollect?.(id)||{error:'Not available.'},say:text=>{$('phoneMessage').textContent=text}});
   const call=createPhoneCall({document:doc,getState,inVehicle:()=>inVehicle?.()??false,onTow:uid=>{const r=onTow?.(uid)||{error:'Not available.'};refresh();return r},pullInfo:()=>pullInfo?.()||null,onPull:()=>{const r=onPull?.()||{error:'Not available.'};refresh();return r},audio}); // PH1: the Call app (a tow is called from here)
   const cards=CONTRACTS.map(job=>{
@@ -118,9 +120,9 @@ export function createPhone({document:doc,getState,canOpen,onOpen,onClose,onAcce
   }
   function showScreen(next){
     screen=next;
-    for(const name of ['home','messages','gigs','bank','homes','player','store','jobs','call'])$('phoneScreen-'+name).hidden=name!==screen;
-    $('phoneTitle').textContent=screen==='home'?'Your phone':({homes:'Housing'})[screen]||screen[0].toUpperCase()+screen.slice(1);
-    if(screen!=='store')store.reset();if(screen!=='jobs')jobs.reset();if(screen!=='call')call.reset();$('phoneHome').disabled=screen==='home';$('phoneBack').disabled=screen==='home';$('phoneMessage').textContent='';refresh();
+    for(const name of ['home','messages','gigs','bank','homes','player','store','jobs','call','gps'])$('phoneScreen-'+name).hidden=name!==screen;
+    $('phoneTitle').textContent=screen==='home'?'Your phone':({homes:'Housing',gps:'GPS'})[screen]||screen[0].toUpperCase()+screen.slice(1);
+    if(screen!=='store')store.reset();if(screen!=='jobs')jobs.reset();if(screen!=='call')call.reset();if(gpsUi){if(screen==='gps')gpsUi.show();else gpsUi.hide()}$('phoneHome').disabled=screen==='home';$('phoneBack').disabled=screen==='home';$('phoneMessage').textContent='';refresh();
     // opening an app reads its messages; Messages reads them all (the list was drawn first, so the unread ones still show as unread this once)
     if(screen==='messages'){renderMessages();onRead?.(null)}else if(screen!=='home')onRead?.(screen);
     badgeNow();
@@ -131,15 +133,15 @@ export function createPhone({document:doc,getState,canOpen,onOpen,onClose,onAcce
     $('phoneOverlay').hidden=false;showScreen('home');$('phoneApp-gigs').focus();
   }
   function close(){
-    if(!opened)return;call.reset();
+    if(!opened)return;call.reset();gpsUi?.hide();
     opened=false;$('phoneOverlay').hidden=true;onClose();
     previousFocus?.focus?.();
   }
-  for(const name of ['messages','gigs','bank','homes','player','store','jobs','call'])$('phoneApp-'+name).onclick=()=>showScreen(name);
+  for(const name of ['messages','gigs','bank','homes','player','store','jobs','call','gps'])if($('phoneApp-'+name))$('phoneApp-'+name).onclick=()=>showScreen(name);
   $('phoneHome').onclick=()=>showScreen('home');$('phoneBack').onclick=()=>{if(screen==='store'&&store.back())return;showScreen('home')};$('phoneClose').onclick=close;
   $('phoneButton').onclick=()=>opened?close():open();
   // A notification (the message itself is already saved: game.js notifyPhone): the button shakes (the class is taken off and put back so a second one shakes again) and the badges are redrawn. With the phone open, a message for the screen you are on is read at once.
   const btn=$('phoneButton'),badge=badgeNow;let ringTimer=null;
   function notify(app){if(opened){if(screen==='messages'){renderMessages();onRead?.(null)}else if(app&&screen===app)onRead?.(app);badge();return}badge();btn.classList.remove('ring');void btn.offsetWidth;btn.classList.add('ring');clearTimeout(ringTimer);ringTimer=setTimeout(()=>btn.classList.remove('ring'),900)}
-  return {open,notify,get unread(){return unreadTotal(getState().progress)},refreshBadges:badgeNow,close,toggle:()=>opened?close():open(),get isOpen(){return opened},showJobs(){if(opened&&screen==='jobs')jobs.render()}};
+  return {open,notify,get unread(){return unreadTotal(getState().progress)},refreshBadges:badgeNow,close,toggle:()=>opened?close():open(),get isOpen(){return opened},showJobs(){if(opened&&screen==='jobs')jobs.render()},gpsUpdate:(dt,view)=>gpsUi?.update(dt,view)};
 }
