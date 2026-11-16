@@ -11,7 +11,7 @@ export function parcelModelId(a){
  return PARCEL_MODELS[a.large?'large':'small'][(h>>>0)%7<2?1:0]; // about two in seven are the dirty carton
 }
 export const normalizeDrop=v=>v&&Number.isFinite(v.x)&&Number.isFinite(v.z)?{x:Math.max(-MAX_DROP,Math.min(MAX_DROP,v.x)),z:Math.max(-MAX_DROP,Math.min(MAX_DROP,v.z))}:null;
-export const parcelHeld=p=>!!p?.gigs?.active&&!p.gigs.active.drop;
+export const parcelHeld=p=>!!p?.gigs?.active&&!p.gigs.active.drop&&!p.gigs.active.needId;
 export const parcelDropped=p=>!!p?.gigs?.active?.drop;
 // Puts the box on the ground at {x,z}; the gig stays active. Returns {state,message} or {error}.
 export function dropParcel(p,at){

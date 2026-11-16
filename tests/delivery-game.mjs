@@ -70,7 +70,7 @@ const orderPallet=[{id:1,product:'planks',count:12,at:{fork:true},order:1}];
   pump(.6);assert(new RegExp('Unload order #1 here · 12 planks for Greenway Builders').test(prompt()),'the drop spot offers it: '+prompt());
   const pieces0=p().shift.pieces.deliveries||0;press('KeyE',1.2);
   assert.equal(list()[0].status,'done','delivered');assert.equal(p().shift.pieces.deliveries,pieces0+1,'counted as a delivery');assert.equal(planks(),0,'the planks left the bed');
-  assert(/delivered/.test(ids.get('jobToast').textContent+prompt()+''),'it says so');
+  assert(/delivered/.test(ids.get('jobToast').textContent+prompt()+'')||p().messages.some(m=>/delivered/.test(m.text)),'it says so (the toast or the saved phone message: a town-news toast from the daily tick can be on screen first)');
  }finally{g.close?.()}}
 
 // 2b) the truck has gone elsewhere: refused, nothing taken

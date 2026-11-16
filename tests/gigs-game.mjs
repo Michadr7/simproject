@@ -4,11 +4,15 @@ import {freshProgress,normalizeProgress,saveProgress,loadProgress} from '../dist
 import {normalizeGigs} from '../dist/gigs.js';
 import {advanceTime} from '../dist/routine.js';
 // The game's old gig hooks, on the new gigs: accept, walk to the stops, report back, get paid; saved and loaded; old active jobs dropped.
-let p=freshProgress();assert.equal(p.activeJob,null);assert.equal(CONTRACTS.length,4);
-const offers=availableContracts(p);assert(offers.length>=2&&offers.length<=4);assert(offers.every(o=>/^slot-\d$/.test(o.id)&&o.title&&o.reward>0&&o.terms));
+// W-D2: the board is the world's open needs. A clear-the-way need at the market (a chore: done where it is, no truck) stands in for the old hashed offers.
+const CLEAR={id:'clear|shop:market||6',kind:'clear',place:'shop:market',good:'',person:'',qty:1,filled:0,openedDay:6,dueDay:8,closedDay:-1,unitCents:800,claims:{},status:'open',origin:''};
+const withNeed=(P,needs=[CLEAR])=>({...P,needs,housing:{...P.housing,day:7},routine:{...P.routine,minutes:600}});
+let p=withNeed(freshProgress());assert.equal(p.activeJob,null);assert.equal(CONTRACTS.length,4);
+assert.deepEqual(availableContracts(freshProgress()),[],'no open need: nothing posted');
+const offers=availableContracts(p);assert(offers.length===1&&offers.every(o=>/^slot-\d$/.test(o.id)&&o.title&&o.reward>0&&o.terms));
 assert.equal(refreshGigBoard(p),p);
 assert(acceptContract(p,'bench-check').error);assert(acceptContract(p,'slot-9').error);
-const first=offers.find(o=>o.title.startsWith('Grocery'))||offers[0];
+const first=offers[0];
 const a=acceptContract(p,first.id);assert(a.state,JSON.stringify(a));p=a.state;
 assert.equal(p.activeJob.stage,'travel');assert(p.gigs.active);assert.deepEqual(availableContracts(p),[]);assert(acceptContract(p,offers.at(-1).id).error);
 assert(completeContract(p,{x:0,z:0}).error);
@@ -24,7 +28,7 @@ const cash=p.cash,done=completeContract(p,{x:stops.at(-1).x,z:stops.at(-1).z});
 assert(done.paid>0);assert.equal(done.state.cash,cash+done.paid);assert.equal(done.state.activeJob,null);assert.equal(done.state.gigs.completed,1);assert.equal(done.state.gigs.active,null);
 // the accepted slot is gone from the board; time moves it on
 assert(!availableContracts(done.state).some(o=>o.id===first.id)||gameMinutes(done.state)>=0);
-assert.equal(done.paid,first.reward,'the offer shows what you get');
+assert.equal(done.paid,first.reward,'the offer shows what you get');assert.equal(done.state.needs[0].status,'filled','the need is filled and pays once');assert.ok(done.state.npcs.noah.mood>p.npcs.noah.mood);
 // an old save's activeJob and cooldowns are cancelled without penalty
 const old=normalizeProgress({activeJob:{id:'bench-check',stage:'task'},cooldowns:{'bench-check':99999}});assert.equal(old.activeJob,null);assert.equal(old.gigs.active,null);
 assert.equal('cooldowns' in old||'gigBoard' in old,false,'the dead save fields are gone');assert.equal(old.messages.length,1,'one message tells the player');assert.equal(old.messages[0].text,'Your old gig was cancelled. New gigs are on the board.');assert.equal(old.messages[0].app,'gigs');assert.equal(old.messages[0].read,false);
@@ -35,7 +39,7 @@ assert.equal(normalizeProgress({gigs:{active:{type:'grocery',places:'x'},rep:-5}
 // rush: the hard limit ends it
 let r=freshProgress();const rush=availableContracts(r).find(o=>o.title.startsWith('Rush'));
 if(rush){r=acceptContract(r,rush.id).state;r=advanceTime(r,90);r=tickContract(r,{position:{x:9999,z:0},room:'street',dt:.03});assert.equal(r.activeJob,null);assert.equal(r.gigs.active,null)}
-const mk=marketContracts(freshProgress());assert(mk.every(o=>/^(Grocery|Doorstep)/.test(o.title)&&/Go to /.test(o.description)),'Noah offers grocery and parcel gigs with street names');assert.deepEqual(marketContracts(p),[],'nothing while a gig is active');
+const mk=marketContracts(withNeed(freshProgress()));assert.equal(mk.length,1,'Noah offers the board of needs');assert.equal(mk[0].title,'Clear the way');assert.deepEqual(marketContracts(freshProgress()),[]);assert.deepEqual(marketContracts(p),[],'nothing while a gig is active');
 // parcel: the door dialog offers three greetings; the right one tips in cents on top of the pay
 {const base=freshProgress(),mk=(type,places,start)=>({...base,gigs:{...base.gigs,rep:10,active:normalizeGigs({active:{type,client:'c1',id:7,places,start}}).active}});
  let pp=tickContract(mk('parcel',[{x:5,z:5}]),{position:{x:5,z:5},room:'street',dt:.03});assert.equal(pp.activeJob.stage,'return');assert(pp.activeJob.description.includes('Doorstep')||/knock|ring|step/.test(pp.activeJob.description),'the offer hints how to greet');
@@ -49,5 +53,5 @@ const mk=marketContracts(freshProgress());assert(mk.every(o=>/^(Grocery|Doorstep
  const best=fin(30),worse=fin(80);assert(best.paid>worse.paid,'a longer walk pays less: '+best.paid+' vs '+worse.paid);
  assert.equal(parFor(mk('round',[{x:10,z:0},{x:20,z:0},{x:30,z:0}])),0,'an old save without a start has no par');
  // accepting records where you stood
- const acc=acceptContract(freshProgress(),offers.find(o=>/Round/.test(o.title))?.id||'slot-0',{x:3,z:4});if(acc.state)assert.deepEqual({x:acc.state.gigs.active.start.x,z:acc.state.gigs.active.start.z},{x:3,z:4});}
+ const acc=acceptContract(withNeed(freshProgress()),offers[0].id,{x:3,z:4});assert(acc.state);assert.deepEqual({x:acc.state.gigs.active.start.x,z:acc.state.gigs.active.start.z},{x:3,z:4});}
 console.log('gigs-game ok');

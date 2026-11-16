@@ -1,16 +1,17 @@
 import assert from 'node:assert/strict';
 import {dropParcel,pickParcel,parcelHeld,parcelDropped,normalizeDrop,PARCEL_FIRST,PARCEL_HANDS} from '../dist/gig-parcel.js';
-import {acceptContract,tickContract,completeContract,dropGigParcel,pickGigParcel,availableContracts} from '../dist/gig-bridge.js';
-import {normalizeGigs,tickGig,completeGig,failGig} from '../dist/gigs.js';
+import {tickContract,completeContract,dropGigParcel,pickGigParcel,activeView} from '../dist/gig-bridge.js';
+import {normalizeGigs,tickGig,completeGig,failGig,boardFor,acceptGig} from '../dist/gigs.js';
 import {freshProgress,normalizeProgress,saveProgress,loadProgress} from '../dist/jobs.js';
 import {shoulderLog,takePlanks,pickUpPlanks} from '../dist/carry.js';
 // G2b: the gig parcel on the ground. Pure drop/pick, delivery needs the box in hand, saved with the gig, cleared when the gig ends, one thing in the hands.
 const fresh=freshProgress();assert.equal(parcelHeld(fresh),false);assert(dropParcel(fresh,{x:1,z:1}).error,'no gig, nothing to put down');assert(pickParcel(fresh).error);
-const offers=availableContracts(fresh),start=offers.find(o=>/Doorstep/.test(o.title))||offers[0];
-let p=acceptContract(fresh,start.id,{x:0,z:0}).state;assert(parcelHeld(p));assert.equal(p.gigs.active.drop,null);
+// W-D2: the normal board is the world's needs now, so the parcel is taken from the old hashed board (opts.hashed), with the derived activeJob view added like the bridge does
+const hb=boardFor(fresh,undefined,undefined,{hashed:true}),start={slot:(hb.find(s=>s.type==='parcel')||hb[0]).slot},take=(P,at=null)=>{const r=acceptGig(P,start.slot,undefined,undefined,at,{hashed:true});return r.error?r:{state:{...r.state,activeJob:activeView(r.state)}}};
+let p=take(fresh,{x:0,z:0}).state;assert(parcelHeld(p));assert.equal(p.gigs.active.drop,null);
 // drop sets the position, the gig stays active, the view says dropped
 const d=dropGigParcel(p,{x:12.5,z:-3});assert.equal(d.error,undefined);p=d.state;assert(parcelDropped(p)&&!parcelHeld(p));assert.deepEqual(p.gigs.active.drop,{x:12.5,z:-3});assert.equal(p.activeJob.dropped,true);assert(/E beside it/.test(d.message));
-assert(dropGigParcel(p,{x:1,z:1}).error,'already on the ground');assert(dropParcel(parcelHeld(fresh)?fresh:acceptContract(fresh,start.id).state,{x:NaN,z:2}).error,'junk spot refused');
+assert(dropGigParcel(p,{x:1,z:1}).error,'already on the ground');assert(dropParcel(parcelHeld(fresh)?fresh:take(fresh).state,{x:NaN,z:2}).error,'junk spot refused');
 // delivery refused while the box is on the ground: walking to every stop ticks nothing, completing is refused
 const stops=p.gigs.active.places;let q=p;for(const s of stops)q=tickContract(q,{position:{x:s.x,z:s.z},room:'street',dt:.03});assert.deepEqual(q.gigs.active.visited,stops.map(()=>false),'a box on the ground delivers nothing');assert.equal(q.activeJob.stage,'travel');
 let done=p;done={...done,gigs:{...done.gigs,active:{...done.gigs.active,visited:stops.map(()=>true),stage:stops.length}}};assert.equal(completeGig(done,100).error,PARCEL_FIRST);
@@ -29,7 +30,7 @@ assert.deepEqual(normalizeDrop({x:99999,z:-99999}),{x:2000,z:-2000});assert.equa
 // the gig ends, fails or is abandoned: the drop goes with the active gig
 assert.equal(failGig(dr).gigs.active,null);assert.equal(normalizeGigs({...dr.gigs,active:null}).active,null);
 // one thing in the hands: planks or a log cannot be picked up while the box is held, the box cannot be picked up with planks in hands
-const held=acceptContract(fresh,start.id).state;assert.equal(takePlanks({...held,belt:2}).error,PARCEL_HANDS);assert.equal(pickUpPlanks({...held,plankDrops:[{id:1,x:0,z:0,count:4,q:0}]},1).error,PARCEL_HANDS);assert.equal(shoulderLog({...held,logs:[{id:1,x:0,z:0}]},1).error,PARCEL_HANDS);
+const held=take(fresh).state;assert.equal(takePlanks({...held,belt:2}).error,PARCEL_HANDS);assert.equal(pickUpPlanks({...held,plankDrops:[{id:1,x:0,z:0,count:4,q:0}]},1).error,PARCEL_HANDS);assert.equal(shoulderLog({...held,logs:[{id:1,x:0,z:0}]},1).error,PARCEL_HANDS);
 assert(takePlanks({...dr,belt:2}).state,'with the box on the ground the hands are free');
 const full={...dr,carry:{kind:'planks',count:4}};assert(/hands are full/i.test(pickGigParcel(full).error),'cannot pick up the box with planks in hands');
 // G3b: the box is a real carton model (small for an ordinary gig, medium for a large one; clean or dirty by a fixed hash of client and id, never random)

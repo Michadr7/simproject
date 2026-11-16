@@ -2,7 +2,8 @@
 // game.js, phone.js and objective.js keep calling acceptContract, tickContract, completeContract, availableContracts and gigTarget; the new
 // rules live in gigs.js. progress.gigs.active is the truth; progress.activeJob is a derived VIEW of it (title, stage, locations), rebuilt after every change here.
 // The board is derived from counters, so refreshGigBoard has nothing to do. Walking types only: the vehicle types wait for the vehicle work.
-import {dropParcel,pickParcel} from './gig-parcel.js';import {boardFor,acceptGig,tickGig,completeGig,gigDone,typeById,payFor,doneTodayOf,noMoreWork,NO_MORE_WORK,townContext,gameMinutes,GIG_TYPES,BOARD_SLOTS,parRoute,doorChoices,doorHint} from './gigs.js';
+import {dropParcel,pickParcel} from './gig-parcel.js';import {boardFor,acceptGig,tickGig,completeGig,gigDone,typeById,payFor,doneTodayOf,noMoreWork,NO_MORE_WORK,townContext,gameMinutes,GIG_TYPES,BOARD_SLOTS,parRoute,doorChoices,doorHint,pickNeedHaul,deliverHaul,abandonGig,settleNeed,slotOffer,needOf,needReward,needsPickup,NO_WORK_POSTED,hasCrateBed} from './gigs.js';
+export {NO_WORK_POSTED,hasCrateBed};
 export {gameMinutes};
 const slotId=i=>'slot-'+i,slotOf=id=>/^slot-[0-3]$/.test(id)?+id.slice(5):-1;
 const point=pl=>({x:pl.x,y:.165,z:pl.z,room:pl.room||'street'});
@@ -13,13 +14,15 @@ export const atGigPoint=(position,room,point)=>room===point.room&&Math.hypot(pos
 export function activeView(p){
  const a=p.gigs?.active;if(!a)return null;const t=typeById(a.type),done=gigDone(p),next=a.places.find((_,i)=>!a.visited[i])||a.places.at(-1);
  const last=a.places.at(-1),now=gameMinutes(p);
- return {id:'gig-'+a.id,type:a.type,title:`${t.title} for ${nameOf(a.client)}`,description:stopsText(a.places)+' '+t.twist+'.'+doorHint(a.type,a.client,nameOf(a.client)),reward:payFor(a.type,100,doneTodayOf(p.gigs,now),p.gigs.rep,0,a.large,a.origin?a.parM:null,a.starter),mode:'delivery',
-  stage:done?'return':a.visited.some(Boolean)?'task':'travel',location:point(next),taskLocation:point(next),returnLocation:point(last),kind:a.type,stops:a.places.length,left:a.places.length-a.visited.filter(Boolean).length,done:a.visited.filter(Boolean).length,dueAt:a.dueAt,dropped:!!a.drop};
+ const need=!!a.needId,pick=needsPickup(a); // W-D2: a need gig reads its own title and text, pays by needPay, and its marker leads to the farm pile until the crates are on the truck
+ return {id:'gig-'+a.id,type:a.type,title:need?(a.needTitle||t.title):`${t.title} for ${nameOf(a.client)}`,description:need?(a.needText||'')+(pick?' Load the crates at the pile (E), then bring them to the market door.':a.haul>0?' Crates loaded: take them to the market door.':''):stopsText(a.places)+' '+t.twist+'.'+doorHint(a.type,a.client,nameOf(a.client)),reward:need?(needOf(p,a)?needReward(p,needOf(p,a),a.mode,a.parM,now):a.needReward||0):payFor(a.type,100,doneTodayOf(p.gigs,now),p.gigs.rep,0,a.large,a.origin?a.parM:null,a.starter),mode:'delivery',
+  stage:done?'return':a.visited.some(Boolean)?'task':'travel',location:pick?point(a.origin):point(next),taskLocation:point(next),returnLocation:point(last),kind:a.type,stops:a.places.length,left:a.places.length-a.visited.filter(Boolean).length,done:a.visited.filter(Boolean).length,dueAt:a.dueAt,dropped:!!a.drop};
 }
 const withView=p=>({...p,activeJob:activeView(p)});
 // What the board slot offers (the phone card reads title, description, reward, terms).
 function offer(p,s){
  const t=typeById(s.type),now=gameMinutes(p),large=s.large;
+ if(s.needId){const o=slotOffer(p,s,now);return {id:slotId(s.slot),title:s.title,description:s.description,reward:o.reward,terms:o.terms,mode:'delivery',blocked:s.blocked||''}} // W-D2: a world need
  return {id:slotId(s.slot),title:`${t.title} for ${s.clientName||nameOf(s.client)}`,description:stopsText(s.places)+' '+t.twist+'.'+doorHint(s.type,s.client,s.clientName||nameOf(s.client)),reward:payFor(s.type,100,doneTodayOf(p.gigs,now),p.gigs.rep,0,large,s.parM,s.starter),terms:t.limit?`${t.limit} min limit`:'No time limit',mode:'delivery'};
 }
 // Walking types only, until the vehicle gigs have their cargo and knock code.
@@ -38,7 +41,13 @@ export function acceptContract(p,id,position=null,opts={}){
  const r=acceptGig(p,i,gameMinutes(p),undefined,position&&Number.isFinite(position.x)&&Number.isFinite(position.z)?{x:position.x,z:position.z}:null,{starter});return r.error?r:{state:withView(r.state)};
 }
 // What Noah's counter offers: the grocery and parcel gigs of the board.
-export const marketContracts=p=>p.activeJob||p.gigs?.active?[]:liveBoard(p).filter(s=>s.type==='grocery'||s.type==='parcel').map(s=>offer(p,s));
+export const marketContracts=p=>p.activeJob||p.gigs?.active?[]:liveBoard(p).filter(s=>s.type==='grocery'||s.type==='parcel'||!!s.needId).map(s=>offer(p,s));
+// W-D2: the egg run. Load at the farm pile / hand over at the market door (gigs.js has the rules); the derived view is rebuilt after each.
+const view=r=>r.error?r:{...r,state:withView(r.state)};
+export const pickNeedCrates=(p,opts={})=>view(pickNeedHaul(p,gameMinutes(p),opts));
+export const deliverNeedCrates=(p,opts={})=>view(deliverHaul(p,gameMinutes(p),opts));
+export const abandonContract=p=>view(abandonGig(p));
+export const settleNeedGig=p=>{const r=settleNeed(p);return r.text?{...r,state:withView(r.state)}:r};
 export const gigTarget=job=>job.stage==='return'?job.returnLocation:job.location;
 export function tickContract(p,{position,room='street',dt=0,moving=false,distance=0}){
  if(!p.gigs?.active)return p;

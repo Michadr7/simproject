@@ -30,9 +30,9 @@ try{
   ids.get('phoneClose').click();
  // before its time nothing waits; a day later it is at the locker
  pump(1);assert.equal(scene().getObjectByName('parcel-locker').visible,true,'the locker is there for a tenant');
- GameState.progress={...p(),housing:{...p().housing,day:p().housing.day+1}};pump(2);
+ GameState.progress={...p(),housing:{...p().housing,day:p().housing.day+1},world:{...p().world,day:(p().world?.day||0)+1}};pump(2); // the world's own daily tick is not under test here: its town-news message would be a second unread one
  assert.equal(p().orders.queue.length,0);assert.equal(p().orders.drops[STUDIO_ID].reduce((n,l)=>n+l.qty,0),3,'three things wait at the studio locker');
- assert(/Your order has arrived/.test(ids.get('jobToast').textContent),'a toast says so: '+ids.get('jobToast').textContent);
+ assert(p().messages.some(m=>/Your order has arrived/.test(m.text)),'the phone says so (saved message: a town-news toast from the daily tick may be on screen first): '+ids.get('jobToast').textContent);
  // the phone notification: the button shakes and counts it, the Store icon shows its own count, and the message is kept; opening the phone does not clear it, opening the app does
  {const b=ids.get('phoneButton'),badge=id=>ids.get('phoneBadge-'+id);assert(b.classList.contains('ring')&&b.classList.contains('has-unread'),'the arrival shakes the phone button');assert.equal(b.dataset.unread,'1','and counts one unread');
   assert(p().messages.length===1&&p().messages[0].app==='store'&&/Your order has arrived/.test(p().messages[0].text)&&!p().messages[0].read,'saved as an unread Store message: '+JSON.stringify(p().messages));

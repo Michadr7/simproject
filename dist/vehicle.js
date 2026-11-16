@@ -8,6 +8,7 @@ import {speedFactor,gripOf,rollDragOf,sinkOf,FIRM_BELOW} from './surface-table.j
 import {normalizeFuelMgal} from './fuel.js';
 import {validColour,defaultColour} from './paint.js';
 import {normalizeCargo} from './cargo.js';
+import {slopeOf,applySlope,slopeSteer} from './slope-rules.js';
 
 export const PLAYER_RADIUS=.33; // what blocked() adds around every solid box: the hull points are inset by it, so the inflation lands exactly on the hull edge
 export const SAMPLE_GAP=.5; // metres between hull sample points (a 0.16 m sign post cannot slip between two: the gap must stay under 2 x 0.49 m)
@@ -30,7 +31,7 @@ export const CLASSES=Object.freeze({
  shortbed:makeClass({id:'shortbed',group:'road',tough:.58,tier:'low',mpg:5,name:'Kasumuchi S70',hx:1.105,hz:2.757,top:29,reverse:4,accel:1.5,brake:7,drag:.8,rMin:7.5,aLat:9,doorZ:.9,exhaust:{x:-.6,y:.29,z:-2.7}}), // the cheap starter shortbed (0.35.8): 65 mph at the top but 19 s to get there, 5 mpg (1.6 gal/mi), a gas hog; the exhaust is the model's anchor_exhaust
  offroad:makeClass({id:'offroad',group:'offroad',tough:.68,tier:'mid',mpg:14.5,name:'Pevrolet Off Road Pickup',hx:1.255,hz:2.8,top:26.8,reverse:6,accel:3.5,brake:9,drag:1,rMin:6.5,aLat:14,doorZ:.5,rough:.35,exhaust:{x:-.75,y:.42,z:-2.95}}), // mid tier: about 60 mph, nearly twice the mileage; grass, fields, paths and dirt cost it 35 points less speed (rough)
  // A4 (notes/atv-handling-design.md): the ATV, the player's own model (group 'atv': surface-table.js). One rider on the seat anchor (seats:1: no passenger door; E within 1.5 m mounts), top 15.6 m/s = 35 mph, 0 to top in 3.9 s, 4 gal (tankMgal 4000 in the map slot) at 20 mpg = 0.4 gal/mile; hull = the model's footprint (1.22 x 2.07 m); exhaust = the muffler tip (anchor_exhaust moved in build-props); own chase camera (4.2 m back, 1.9 m up). tough .6 is a first guess (A8).
- atv:makeClass({id:'atv',group:'atv',tough:.6,tier:'low',mpg:20,name:'Eden Trail ATV',hx:.61,hz:1.035,top:15.6,reverse:4,accel:4,brake:9,drag:1.2,rMin:4,aLat:9,doorZ:-.3,seat:{x:0,z:-.3},seats:1,hood:{x:0,y:.7,z:.55},camera:{back:4.2,up:1.9},steerMax:.52,exhaust:{x:-.28,y:.49,z:-1.035}}),
+ atv:makeClass({id:'atv',group:'atv',slope:true,tough:.6,tier:'low',mpg:20,name:'Eden Trail ATV',hx:.61,hz:1.035,top:15.6,reverse:4,accel:4,brake:9,drag:1.2,rMin:4,aLat:9,doorZ:-.3,seat:{x:0,z:-.3},seats:1,hood:{x:0,y:.7,z:.55},camera:{back:4.2,up:1.9},steerMax:.52,exhaust:{x:-.28,y:.49,z:-1.035}}),
  // FV1 (notes/farm-vehicles-design.md section 1): the two farm tractors, group 'tractor' (slow, walk through soft ground: surface-table.js). The model origin is the HULL CENTRE (axleZ: where the rear axle is from it, for the hitch and the wheels); one seat on the centre line (seats:1: no passenger door); the exhaust is a vertical stack (the model's anchor_exhaust); hitchRear = anchor_hitch_rear. Top speeds 6.3 and 7.2 m/s (14 and 16 mph): 0 to top in 3.5 s and 4.5 s.
  tractor_juff:makeClass({id:'tractor_juff',group:'tractor',tough:.35,tier:'low',mpg:6,name:'Hustler Compact',hx:.93,hz:1.575,top:6.3,reverse:3,accel:1.8,brake:6,drag:1.4,rMin:4.2,aLat:6,doorZ:-.6045,seat:{x:0,z:-.6045},seats:1,axleZ:-.935,hitchRear:{x:0,y:.576,z:-1.4545},exhaust:{x:-.319,y:2.296,z:.716,stack:true}}),
  tractor_kidbi:makeClass({id:'tractor_kidbi',group:'tractor',tough:.3,tier:'mid',mpg:5,name:'Husky R75 Tractor',hx:.99,hz:1.54,top:7.2,reverse:3,accel:1.6,brake:6,drag:1.4,rMin:4.8,aLat:6,doorZ:-.9239,seat:{x:0,z:-.9239},seats:1,axleZ:-.68,hitchRear:{x:.007,y:.262,z:-1.5145},exhaust:{x:.296,y:1.884,z:.769,stack:true}})
@@ -102,21 +103,22 @@ export function shoreGuard(s,v,cls,env){
 export const OFFROAD_DECEL=6; // m/s squared: how hard rough ground drags a vehicle that is faster than the ground allows
 export function stepVehicle(s,input,dt,cls,env){
  const ground=env.surface(s.x,s.z),surface=surfaceSpeed(ground,cls),group=cls.group||'road',grip=gripOf(ground,group,env.wet||0); // grip: 1 on tarmac; loose ground widens turns, lengthens braking and softens the launch (never a slide)
- const top=cls.top*surface,rev=cls.reverse*surface,accel=cls.accel*Math.max(.35,surface)*grip,brake=cls.brake*grip;
+ const sl=cls.slope?slopeOf(env):null,top=cls.top*surface*(sl?sl.top:1),rev=cls.reverse*surface,accel=cls.accel*Math.max(.35,surface)*grip,brake=cls.brake*grip*(sl?sl.brake:1); // A2: slope rules for classes with slope:true (env.grade, env.side; absent = flat)
  let v=s.speed;
  const throttle=clamp(input.throttle||0,-1,1);
  if(input.brake)v=toward(v,0,brake*1.5*dt);
  else if(throttle>0){v=v<-.3?toward(v,0,brake*dt):toward(v,top,accel*dt*(v<top?1:3))}
  else if(throttle<0){v=v>.3?toward(v,0,brake*dt):toward(v,-rev,accel*dt*(v>-rev?1:3))}
  else v=toward(v,0,(cls.drag+rollDragOf(ground,group))*dt); // coasting: rolling drag of the ground on top of the vehicle's own
+ if(sl)v=applySlope(s.speed,v,sl,dt,input.brake?brake*1.5:throttle===0?cls.drag+rollDragOf(ground,group):0); // A2: gravity along the heading; too steep = roll back, the throttle is ignored
  if(v>top)v=toward(v,top,OFFROAD_DECEL*dt); // leaving the road: rougher ground slows you down, firmly, to its own top speed
  if(v<-rev)v=toward(v,-rev,OFFROAD_DECEL*dt);
  // steering ramps to full in 0.4 s and back to centre in 0.3 s
  const sg=shoreGuard(s,v,cls,env);if(sg){const lim=SHORE_FLOOR+SHORE_K*sg.free;if(Math.abs(v)>lim)v=toward(v,Math.sign(v)*lim,SHORE_BRAKE*dt)} // RV1: soft turn-back from water and banks
- const want=clamp(sg?(input.steer||0)*(1-sg.c)+sg.turn*Math.min(1,.3+sg.c*2):(input.steer||0),-1,1),rate=(want===0?1/.3:1/.4)*dt;let steer=toward(s.steer,want,rate);
+ const want=clamp(sg?(input.steer||0)*(1-sg.c)+sg.turn*Math.min(1,.3+sg.c*2):(input.steer||0),-1,1),want0=sl?slopeSteer(want,sl):want,rate=(want0===0?1/.3:1/.4)*dt;let steer=toward(s.steer,want0,rate);
  // R(v) = max(Rmin, v^2 / aLat): fast corners are wider; yaw rate = steer x v / R (the sign of v makes reversing steer the right way round)
  const radius=Math.max(cls.rMin,v*v/(cls.aLat*grip)),yawRate=Math.abs(v)<.01?0:steer*v/radius;
- const yaw=s.yaw+yawRate*dt,mid=s.yaw+yawRate*dt/2,nx=s.x+sin(mid)*v*dt,nz=s.z+cos(mid)*v*dt;
+ const yaw=s.yaw+yawRate*dt,mid=s.yaw+yawRate*dt/2,sd=sl?sl.slide:0,nx=s.x+sin(mid)*v*dt+cos(yaw)*sd*dt,nz=s.z+cos(mid)*v*dt-sin(yaw)*sd*dt; // A2: over 18 degrees of side slope the pose slides downhill (left = (cos yaw, -sin yaw))
  const next={x:nx,z:nz,yaw,speed:v,steer};
  if(poseFree(next,cls,env))return {state:next,hit:false,impact:0,hitKind:null};
  // Blocked (C1, collision feel): go as far as the hull can, then slide along whatever is there; never a gap over a few millimetres and no sticking.

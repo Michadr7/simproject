@@ -54,7 +54,8 @@ export function createDriving({scene,surface,footing,baseBlocked,saved=[]}){
  };
  const fleet=MAP.vehicles.filter(v=>v.sale!=='online').map(spec=>build(spec,defaultColour(spec.model),true));
  const byId=new Map(fleet.map(f=>[f.spec.id,f])),others=skip=>fleet.filter(f=>f!==skip&&f.present).map(f=>({state:f.state,cls:f.cls}));
- const envFor=(f,people)=>({blocked:baseBlocked,surface,others:others(f),people});
+ const slopeEnv=f=>{if(!f.cls.slope)return null;const s=f.state,sy=Math.sin(s.yaw),cy=Math.cos(s.yaw),at=(lx,lz)=>{const x=s.x+lx*cy+lz*sy,z=s.z-lx*sy+lz*cy,d=deckAt(x,z);return d!==null?d:heightAt(x,z)},L=f.cls.hz,W=f.cls.hx;return {grade:Math.atan2(at(0,L)-at(0,-L),2*L)*180/Math.PI,side:Math.atan2(at(-W,0)-at(W,0),2*W)*180/Math.PI}}; // A2 (slope-rules.js): grade = uphill along the heading, side = ground falling to the left, both in degrees; only for classes with slope:true
+  const envFor=(f,people)=>({blocked:baseBlocked,surface,others:others(f),people,...slopeEnv(f)});
  let devCount=0,clock=0,events=[],driven=null,side='driver',lastHit=false,pulse=0,walker=null,pending=null,seatVec=new THREE.Vector3();
  const nearPoint=(f,p,side,reach)=>loadPoints(f.spec.model).some(pt=>pt.side===side&&(()=>{const w=toWorld(f.state,pt.x,pt.z);return Math.hypot(w.x-p.x,w.z-p.z)<=reach})());
  // An owned vehicle comes into the world at its saved pose (or, if that has become blocked, the nearest clear one: never stuck, never lost). A display vehicle standing where it is (you bought it there) is taken off the lot.

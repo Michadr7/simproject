@@ -372,9 +372,10 @@ const exits=[{id:'east',road:'eden-spine',in:[[1082,65],[1040,65],[600,65],[322,
 //   residents  people already known in town, one per flat in this order (the other flats are generated)
 // A new house with an NPC owner, or a new dwelling, fills itself by the same rules.
 const dwellings=[
- {id:'oak-apartments',name:'Oak Street Apartments',door:{x:1,z:-6.3},units:9,cars:3,residents:[
+ {id:'oak-apartments',name:'Oak Street Apartments',door:{x:1,z:-6.3},units:11,cars:3,residents:[
   {name:'Alex',body:'male',outfit:'Casual_2'},{name:'Sophie',body:'female',outfit:'Casual'},{name:'Robert',body:'male',outfit:'Suit'},{name:'Julia',body:'female',outfit:'Formal'},
-  {name:'Carlos',body:'male',outfit:'Worker'},{name:'Megan',body:'female',outfit:'Suit'},{name:'Elena',body:'female',outfit:'Formal'},{name:'Noah',body:'male',outfit:'Casual_2'}]}
+  {name:'Carlos',body:'male',outfit:'Worker'},{name:'Megan',body:'female',outfit:'Suit'},{name:'Elena',body:'female',outfit:'Formal'},{name:'Noah',body:'male',outfit:'Casual_2'},
+  {name:'Oscar Masic',body:'male',outfit:'Farmer'},{name:'Lincoln Brambly',body:'male',outfit:'Casual_Hoodie'},{name:'Brentster Lewis',body:'male',outfit:'Casual_2'}]}
 ];
 // Staffed posts: who a workplace needs and when. `at` names where the work is, exactly one of {shop}, {office}, {property}, {zone}, {plot}; `hours` are [from, to) in minutes since midnight
 // (inside one day: no post crosses midnight); `count` people (default 1); `person` names who holds it (a resident of that name gets it; otherwise they drive in from out of town);

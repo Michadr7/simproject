@@ -44,7 +44,7 @@ assert.equal(PROFILE_KEY,'edenridge.profile.v1');assert.equal(CHARACTER_KEY,'ede
  const big=memory();const name='B';writeStoredSave(big,{profile:{name,progress:{cash:1,homeNotices:['x'.repeat(400)]}},character:null});
  const one=JSON.stringify(readStoredSave(big)).length;assert(one*MAX_BACKUPS<MAX_BACKUP_BYTES,'normal saves always fit '+MAX_BACKUPS+' copies ('+one+' bytes each)');
  // storage full: oldest dropped until it fits, never an exception
- const tight=memory(3000);writeStoredSave(tight,player(1));for(let i=1;i<=5;i++){writeStoredSave(tight,player(i));const r=addBackup(tight,{reason:'play',now:i});assert(r.ok||r.why==='storage-full')}
+ const tight=memory(7000);/* W-D1: a normalised save now carries world/needs/npcs/standing (+1.9 KB), so the "tight" disk is 7000 bytes (was 3000) */writeStoredSave(tight,player(1));for(let i=1;i<=5;i++){writeStoredSave(tight,player(i));const r=addBackup(tight,{reason:'play',now:i});assert(r.ok||r.why==='storage-full')}
  assert(loadBackups(tight).length>=1&&loadBackups(tight).length<MAX_BACKUPS,'a full disk keeps fewer backups: '+loadBackups(tight).length);assert.equal(loadBackups(tight)[0].save.profile.progress.cash,5,'and the newest');}
 
 // Replace (import / restore): what was there is backed up first

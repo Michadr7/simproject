@@ -4,7 +4,9 @@
 import {townPopulation} from './population.js';
 import {dropSpot} from './orders.js';
 import {propertyById} from './properties.js';import {normalizeDrop,PARCEL_FIRST} from './gig-parcel.js';
-import {payFor as payGig,parMetres,meetsMinPar,canTakeMore,fatigueFactor,WALK_M_PER_GAME_MIN,FASTEST_M_PER_GAME_MIN} from './gig-pay.js'; // G-B (notes/gig-overhaul-design.md): pay, par, daily fatigue live in gig-pay.js
+import {payFor as payGig,parMetres,meetsMinPar,canTakeMore,fatigueFactor,WALK_M_PER_GAME_MIN,FASTEST_M_PER_GAME_MIN,HANDLING_C,MIN_PAR_M} from './gig-pay.js'; // G-B (notes/gig-overhaul-design.md): pay, par, daily fatigue live in gig-pay.js
+// W-D2 (notes/world-system-design.md, Needs -> gigs): the board of normal play is the world's open needs; a need gig claims its need, fills it on completion and is paid by needPay.
+import {needSlots,claim,fill,release,needPay,openNeeds,remainingOf,dayOf} from './needs.js';import {buy,deliver} from './world-state.js';import {CRATE_UNITS,PLACES as WORLD_PLACES,GOODS} from './world-goods.js';import {helped,gainStanding} from './npc-life.js';import {ROSTER} from './npc-roster.js';import {acceptsCrates} from './cargo.js';
 const T=(id,title,base,o={})=>Object.freeze({id,title,base,stops:1,rep:0,bed:false,limit:0,hard:false,...o});
 export const GIG_TYPES=Object.freeze([
  T('grocery','Grocery run',1200,{limit:60,twist:'Deliver within 60 game minutes'}),
@@ -14,8 +16,16 @@ export const GIG_TYPES=Object.freeze([
  T('fuel','Fuel rescue',1800,{rep:10,live:false,tip:[300,1000],twist:'Buy the fuel up front; the driver repays it plus a tip'}),
  T('fragile','Fragile haul',3500,{bed:true,live:false,twist:'Every hard knock breaks a piece'}),
  T('bulk','Bulk haul',4500,{bed:true,live:false,twist:'One long trip or two'}),
- T('chain','Chain errand',6000,{stops:3,rep:25,vehicle:true,live:false,limit:150,twist:'The supplier gave the wrong part'})
+ T('chain','Chain errand',6000,{stops:3,rep:25,vehicle:true,live:false,limit:150,twist:'The supplier gave the wrong part'}),
+ // W-D2: one type per need kind (handling fee from gig-pay HANDLING_C, one stop); only the needs board offers them (the hashed board skips `need` types). needPay does the real pay.
+ T('need-restock','Restock run',1200,{need:true,handling:HANDLING_C.vehicle,twist:'The shop is running low'}),T('need-harvest','Harvest run',1200,{need:true,handling:HANDLING_C.vehicle,twist:'Bring in the harvest'}),
+ T('need-errand','Neighbour errand',1000,{need:true,handling:HANDLING_C.walk,twist:'A neighbour needs a hand'}),T('need-clear','Clear the way',1000,{need:true,handling:HANDLING_C.walk,twist:'Something is in the way'}),
+ T('need-repair','Repair job',1000,{need:true,handling:HANDLING_C.walk,twist:'Something is broken'}),T('need-tend','Tend the animals',1000,{need:true,handling:HANDLING_C.walk,twist:'The animals need looking after'}),
+ T('need-tow','Tow job',1200,{need:true,handling:HANDLING_C.vehicle,twist:'A vehicle needs a tow'}),T('need-serve','Cover a shift',1000,{need:true,handling:HANDLING_C.walk,twist:'Someone has to serve'})
 ]);
+export const CHORE_KINDS=Object.freeze(['clear','repair','tend','tow','serve']);
+export const NEED_PLAYER='player',NO_WORK_POSTED='No work posted. Check back tomorrow.',NEEDS_TRUCK='Needs a truck';
+const NAMES=Object.freeze(Object.fromEntries(ROSTER.map(r=>[r.id,r.name])));
 export const typeById=id=>GIG_TYPES.find(t=>t.id===id)||null;
 export const BOARD_SLOTS=4,SLOT_LIFE=90,SLOT_STAGGER=22,RECENT_MAX=30,CLIENT_REST_DAYS=2,PAIR_REST_DAYS=1,LARGE_REP=40,LARGE_MUL_PCT=140;
 export const WORLD_SEED=7919; // the board hash uses this, never g.completed: every player in a world sees the same board
@@ -59,7 +69,8 @@ export function normalizeActive(v){
  const places=v.places.slice(0,3).map(pt);if(!places.length||places.some(x=>!x))return null;
  const origin=pt(v.origin),parM=origin&&Number.isFinite(v.parM)?int(v.parM,0,1e6):null,points=Array.isArray(v.points)?v.points.slice(0,3).map(pt):[];
  // origin null = an old save: the box counts as already picked up and the gig pays its old flat base (LEGACY_CAP_C).
- return {id:int(v.id,1,1e9,1),type:t.id,client:typeof v.client==='string'?v.client.slice(0,60):'',places,visited:places.map((_,i)=>v.visited?.[i]===true),stage:int(v.stage,0,places.length,0),startedAt:int(v.startedAt,0,1e9),dueAt:int(v.dueAt,0,1e9),quality:int(v.quality,0,100,100),knocks:int(v.knocks,0,100),metres:int(v.metres,0,1e6),tip:int(v.tip,0,100000),large:v.large===true,trips:int(v.trips,1,2,1),start:pt(v.start),drop:normalizeDrop(v.drop),
+ const need=t.need&&typeof v.needId==='string'&&v.needId?{needId:v.needId.slice(0,120),needGood:typeof v.needGood==='string'?v.needGood.slice(0,24):'',needQty:int(v.needQty,0,1000,0),needTitle:typeof v.needTitle==='string'?v.needTitle.slice(0,80):'',needText:typeof v.needText==='string'?v.needText.slice(0,240):'',haul:int(v.haul,0,1000,0),needReward:int(v.needReward,0,1e7,0),truck:typeof v.truck==='string'?v.truck.slice(0,40):''}:{}; // W-D2: a need gig keeps its need id, what it carries and in which truck
+ return {...need,id:int(v.id,1,1e9,1),type:t.id,client:typeof v.client==='string'?v.client.slice(0,60):'',places,visited:places.map((_,i)=>v.visited?.[i]===true),stage:int(v.stage,0,places.length,0),startedAt:int(v.startedAt,0,1e9),dueAt:int(v.dueAt,0,1e9),quality:int(v.quality,0,100,100),knocks:int(v.knocks,0,100),metres:int(v.metres,0,1e6),tip:int(v.tip,0,100000),large:v.large===true,trips:int(v.trips,1,2,1),start:pt(v.start),drop:normalizeDrop(v.drop),
   origin,parM,points:points.length===places.length&&!points.some(x=>!x)?points:places.map(x=>({...x})),mode:v.mode==='vehicle'?'vehicle':'walk',acceptedAt:int(v.acceptedAt,0,1e9,int(v.startedAt,0,1e9)),pickedAt:Number.isFinite(v.pickedAt)&&origin?int(v.pickedAt,0,1e9):null,onTimeMin:int(v.onTimeMin,0,1e6),starter:v.starter===true};
 }
 export function normalizeGigs(v){
@@ -100,7 +111,7 @@ export function parRoute(points,start){
  return best||{order:[],length:0};
 }
 // live:false types (the vehicle gigs and the fuel rescue) are defined but not offered until their code exists.
-const unlocked=(g,type,p)=>type.live!==false&&type.rep<=g.rep&&(!type.bed&&!type.vehicle||hasBed(p));
+const unlocked=(g,type,p)=>type.live!==false&&!type.need&&type.rep<=g.rep&&(!type.bed&&!type.vehicle||hasBed(p));
 const BED_MODELS=['worktruck','flatbed','shortbed','offroad'];
 export const hasBed=p=>(p.vehicles||[]).some(v=>BED_MODELS.includes(v.model)&&!v.loan);
 export const isLarge=(g,type)=>g.rep>=LARGE_REP&&type.stops>1;
@@ -110,6 +121,22 @@ export function routeOf(origin,places){
  return {points,parM:parMetres([origin,...points])};
 }
 const pairKey=(origin,places)=>origin.id+'>'+places.map(x=>x.id).join('+');
+// ---- W-D2: the needs board and the egg run. The world lives in progress.world, the need list in progress.needs; a claim is held under NEED_PLAYER.
+export const hasCrateBed=p=>(p.vehicles||[]).some(v=>!v.loan&&acceptsCrates(v.model)); // Hal's loan truck belongs to the starter story: it never carries need crates
+export const needsPickup=a=>!!a?.needId&&a.type==='need-restock'&&!!CRATE_UNITS[a.needGood]&&!(a.haul>0); // the crates are still at the farm
+export const cratesFor=(good,units)=>CRATE_UNITS[good]?Math.ceil(Math.max(0,units)/CRATE_UNITS[good]):0;
+export function needBoard(p,now=gameMinutes(p)){
+ const list=openNeeds(p.needs||[]).filter(n=>remainingOf(n)>0&&!n.claims[NEED_PLAYER]&&(n.dueDay+1)*1440>now);
+ // goods that must travel (restock, harvest, errand) need a route of at least the walking minimum par, like every board gig since G-B; a chore (clear, repair, tend, tow, serve) is done where it is. Places with only a placeholder point (sawmill, forest, warehouse: parM 0 to 45 m) therefore stay off the board until W-E gives them real points.
+ return needSlots(list,{names:NAMES},12).filter(s=>CHORE_KINDS.includes(s.kind)||s.parM>=MIN_PAR_M.walk).slice(0,BOARD_SLOTS).map((s,i)=>{const crate=s.type==='need-restock'&&!!CRATE_UNITS[s.good];return {...s,slot:i,mode:crate?'vehicle':s.mode,blocked:crate&&!hasCrateBed(p)?NEEDS_TRUCK:'',crates:crate?cratesFor(s.good,s.remaining):0}});
+}
+// What a need gig pays right now (the card shows it): needPay on a quality 100 on-time run. need = the live need record.
+export function needReward(p,need,mode,parM,now=gameMinutes(p)){
+ if(!need)return 0;return needPay(need,remainingOf(need),100,mode,parM,{day:dayOf(now),before:need.filled,doneToday:doneTodayOf(p.gigs,now),onTime:true}).total;
+}
+export const needOf=(p,a)=>a?.needId?(p.needs||[]).find(n=>n.id===a.needId)||null:null;
+const slotReward=(p,s,now)=>needReward(p,(p.needs||[]).find(n=>n.id===s.needId),s.mode,s.parM,now);
+export const slotOffer=(p,s,now=gameMinutes(p))=>({reward:slotReward(p,s,now),terms:s.blocked||`${s.remaining} ${s.good||'unit'}${s.crates?` (${s.crates} crate${s.crates===1?'':'s'})`:''} · due day ${s.expiresAt/1440}`});
 // The board: BOARD_SLOTS slots, each with its own expiry staggered by SLOT_STAGGER; never two of one type; a type you just finished is skipped.
 // Keyed on day/window/slot and WORLD_SEED only (not g.completed), so every player in a world sees the same board. Offers whose par is below MIN_PAR_M[mode] are dropped
 // (a different client/place/type is tried first); a pair (pickup to drop) done today rests PAIR_REST_DAYS; at the daily hard stop the board is empty.
@@ -117,6 +144,7 @@ const pairKey=(origin,places)=>origin.id+'>'+places.map(x=>x.id).join('+');
 export function boardFor(p,now=gameMinutes(p),ctx=townContext(),opts={}){
  const g=p.gigs||freshGigs(),starter=opts.starter===true,last=g.recent.at(-1)?.type,day=Math.floor(now/1440);
  if(!starter&&!canTakeMore(doneTodayOf(g,now)))return [];
+ if(!starter&&!opts.hashed)return needBoard(p,now); // W-D2: normal play posts the world's open needs, and nothing else (an empty board is fine); opts.hashed is the old derived board (tests only)
  const types=GIG_TYPES.filter(t=>unlocked(g,t,p)&&(!starter||STARTER_TYPES.includes(t.id))),origins=ctx.origins?.length?ctx.origins:DEFAULT_ORIGINS;
  const slots=[],usedT=new Set(),usedC=new Set();
  for(let i=0;i<BOARD_SLOTS;i++){
@@ -145,13 +173,19 @@ export function boardFor(p,now=gameMinutes(p),ctx=townContext(),opts={}){
 }
 export const starterBoard=(p,now,ctx)=>boardFor(p,now,ctx,{starter:true});
 // Noah's counter shows only the grocery and parcel gigs of the board.
-export const marketBoard=(p,now,ctx)=>boardFor(p,now,ctx).filter(s=>s.type==='grocery'||s.type==='parcel');
+export const marketBoard=(p,now,ctx)=>boardFor(p,now,ctx).filter(s=>s.type==='grocery'||s.type==='parcel'||!!s.needId);
 // opts.starter: take one of the starter gigs (exempt from the daily stop and minimum par). Records origin, ordered points, parM and acceptedAt on the active gig.
 export function acceptGig(p,slot,now=gameMinutes(p),ctx,start=null,opts={}){
  const g=p.gigs||freshGigs(),starter=opts.starter===true;
  if(g.active)return {error:'Finish your active gig before accepting another.'};
  if(!starter&&noMoreWork(p,now))return {error:NO_MORE_WORK};
- const s=boardFor(p,now,ctx,{starter}).find(x=>x.slot===slot);if(!s)return {error:'This gig is unavailable.'};
+ const s=boardFor(p,now,ctx,{starter,hashed:opts.hashed}).find(x=>x.slot===slot);if(!s)return {error:'This gig is unavailable.'};
+ if(s.needId){ // W-D2: a need gig claims its need (what is left of it) and keeps the need's id, title and text
+  if(s.blocked)return {error:s.blocked==='Needs a truck'?'This job needs a truck with a bed.':s.blocked};
+  const c=claim(p.needs||[],s.needId,NEED_PLAYER,s.remaining,now);if(c.error||c.claimed<1)return {error:c.error||'Already claimed by others.'};
+  const active=normalizeActive({id:g.nextId,type:s.type,client:s.client,places:s.places.map(pt),startedAt:now,acceptedAt:now,dueAt:0,large:false,start,origin:s.origin,parM:s.parM,points:s.points,mode:s.mode,onTimeMin:onTimeLimit(s.parM),starter:false,needId:s.needId,needGood:s.good,needQty:c.claimed,needTitle:s.title,needText:s.description,haul:0,truck:'',needReward:slotReward(p,s,now)});
+  return {state:{...p,needs:c.needs,gigs:{...g,active,nextId:g.nextId+1}}};
+ }
  const t=typeById(s.type),places=s.places.map(pt),active=normalizeActive({id:g.nextId,type:s.type,client:s.client,places,startedAt:now,acceptedAt:now,dueAt:t.limit?now+Math.max(t.limit,s.origin?limitFloor(s.parM):0):0,large:s.large,start,origin:s.origin,parM:s.parM,points:s.points,mode:s.mode,onTimeMin:onTimeLimit(s.parM),starter});
  return {state:{...p,gigs:{...g,active,nextId:g.nextId+1,taken:{...g.taken,[slot]:s.window}}}};
 }
@@ -168,7 +202,7 @@ const near=(pos,pl)=>Math.hypot(pos.x-pl.x,pos.z-pl.z)<=1.35;
 export function tickGig(p,{position,room='street',dt=0,moving=false,knock=0,metres=0,now=gameMinutes(p),requirePickup=false}={}){
  const g=p.gigs;if(!g?.active)return p;
  const a={...g.active,visited:[...g.active.visited]};a.knocks=Math.min(100,a.knocks+int(knock,0,10));a.metres=Math.min(1e6,a.metres+Math.max(0,Number.isFinite(metres)?metres:0));
- if(position&&!a.drop&&(!requirePickup||pickedUp(a)))for(let i=0;i<a.places.length;i++){
+ if(position&&!a.drop&&!needsPickup(a)&&(!requirePickup||pickedUp(a)))for(let i=0;i<a.places.length;i++){
   if(a.visited[i]||a.places[i].room!==room||!near(position,a.places[i]))continue;
   if(a.type!=='round'&&a.visited.slice(0,i).includes(false))continue;
   a.visited[i]=true;
@@ -192,6 +226,7 @@ export function failGig(p,now=gameMinutes(p),why='failed'){
 export function completeGig(p,now=gameMinutes(p),opts={}){
  const g=p.gigs,a=g?.active;if(!a)return {error:'You have no active gig.'};
  if(!gigDone(p))return {error:'Finish the marked stops first.'};if(a.drop)return {error:PARCEL_FIRST};
+ if(a.needId)return completeNeed(p,now,opts);
  const t=typeById(a.type),late=!!(t.limit&&a.dueAt&&now>a.dueAt);
  if(t.hard&&late)return {state:failGig(p,now,'late'),paid:0,failed:true};
  let overPct=0;if(a.type==='round'&&opts.par>0){const walked=Math.max(0,a.metres);overPct=Math.max(0,Math.round((walked/opts.par-1)*100))}
@@ -208,4 +243,50 @@ export function completeGig(p,now=gameMinutes(p),opts={}){
  const recent=[...g.recent,{type:a.type,at:now}].filter(r=>r.at>now-1440).slice(-RECENT_MAX);
  const pairsSeen=a.origin?{...g.pairsSeen,[pairKey(a.origin,a.places)]:day}:g.pairsSeen,count=a.starter?{doneDay:g.doneDay,doneToday:g.doneToday}:bumpDone(g,now);
  return {paid:pay,quality,tooFast,tip,state:{...p,cash:p.cash+pay,routine:{...p.routine,earned:(p.routine?.earned||0)+pay},gigs:{...g,active:null,rep:Math.min(100,rep),recent,completed:g.completed+1,clientsSeen:{...g.clientsSeen,[a.client]:day},pairsSeen,...count}}};
+}
+
+// ---- W-D2: finishing a need gig and the egg run's two handovers (all pure: state in, state out; game.js moves the crates on the truck).
+// The gig is over without paying (abandoned, or its need closed under it): the claim goes, goods the player carried go back to the source (never lost), no rep change.
+function giveBack(p,a){
+ let {world,needs}=p;
+ if(a.needId){needs=release(needs||[],a.needId,NEED_PLAYER);const n=(needs||[]).find(x=>x.id===a.needId);if(a.haul>0&&n?.origin&&world)world=deliver(world,n.origin,a.needGood,a.haul,null).world}
+ return {...p,world,needs,gigs:{...p.gigs,active:null}};
+}
+export function abandonGig(p){const a=p.gigs?.active;if(!a)return {error:'You have no active gig.'};return {state:giveBack(p,a),text:'You gave the job up.'}}
+// After the daily tick: a need gig whose need closed (expired, or the shelf recovered) ends. Returns {state, text?}.
+export function settleNeed(p){
+ const a=p.gigs?.active;if(!a?.needId)return {state:p};const n=needOf(p,a);if(n&&n.status==='open')return {state:p};
+ return {state:giveBack(p,a),text:`${a.needTitle||'The job'}: it was taken care of without you.`};
+}
+// E at the farm pile: take the goods out of the farm (the farm's stock goes DOWN now) and put them on the truck. opts {uid, maxUnits (what the bed holds)}.
+export function pickNeedHaul(p,now=gameMinutes(p),opts={}){
+ const a=p.gigs?.active;if(!a?.needId)return {error:'You have no job that needs loading.'};
+ if(a.type!=='need-restock'||!CRATE_UNITS[a.needGood])return {error:'Nothing to load for this job.'};if(a.haul>0)return {error:'Already loaded.'};
+ const need=needOf(p,a);if(!need||need.status!=='open')return {error:'That job is closed.'};
+ const src=need.origin,have=p.world?.stock?.[src]?.[a.needGood]||0;
+ if(have<1)return {error:a.needGood==='eggs'?'The coop is empty today.':'There is nothing to load today.'};
+ const room=Number.isFinite(opts.maxUnits)?Math.max(0,Math.floor(opts.maxUnits)):1e9,want=Math.min(a.needQty,remainingOf(need),room);
+ if(want<1)return {error:'The truck has no room for crates.'};
+ const b=buy(p.world,src,a.needGood,want);if(b.sold<1)return {error:'The coop is empty today.'};
+ const c=claim(p.needs,need.id,NEED_PLAYER,b.sold,now);if(c.error||c.claimed<1)return {error:c.error||'Already claimed by others.'};
+ const label=WORLD_PLACES[src]?.label||'the farm',left=b.world.stock[src][a.needGood],n=cratesFor(a.needGood,b.sold);
+ return {state:{...p,world:b.world,needs:c.needs,gigs:{...p.gigs,active:{...a,haul:b.sold,truck:typeof opts.uid==='string'?opts.uid.slice(0,40):'',pickedAt:now}}},units:b.sold,crates:n,left,message:`Loaded ${n} crate${n===1?'':'s'} (${b.sold} ${GOODS[a.needGood].unit}) · ${label} has ${left} left`};
+}
+// E at the market door with the truck beside it: hand the goods over and finish the gig (fill the need, pay, mood, standing).
+export function deliverHaul(p,now=gameMinutes(p),opts={}){
+ const a=p.gigs?.active;if(!a?.needId||a.type!=='need-restock'||!(a.haul>0))return {error:'You are not carrying anything for the shop.'};
+ return completeGig({...p,gigs:{...p.gigs,active:{...a,visited:a.visited.map(()=>true),stage:a.places.length}}},now,opts);
+}
+function completeNeed(p,now,opts={}){
+ const g=p.gigs,a=g.active,day=dayOf(now),need=needOf(p,a);
+ if(!need||need.status!=='open')return {state:giveBack(p,a),paid:0,failed:true,closed:true};
+ const crate=a.type==='need-restock'&&!!CRATE_UNITS[a.needGood];if(crate&&!(a.haul>0))return {error:'Load the goods first.'};
+ const r=fill(p.needs,p.world,need.id,NEED_PLAYER,crate?a.haul:a.needQty,now,{carried:crate});if(r.units<1)return {error:'Nothing could be delivered.'};
+ let world=r.world;const left=crate?a.haul-r.units:0;if(left>0&&need.origin)world=deliver(world,need.origin,a.needGood,left,null).world; // what the shelf could not take goes back to the farm
+ const elapsed=now-(a.pickedAt??a.acceptedAt),onTime=elapsed<=(a.onTimeMin||onTimeLimit(a.parM)),pay=needPay(need,r.units,100,a.mode,a.parM,{day,before:need.filled,doneToday:doneTodayOf(g,now),generosity:opts.generosity||0,onTime,elapsedMin:elapsed});
+ const npcs=p.npcs&&p.npcs[a.client]?{...p.npcs,[a.client]:helped(p.npcs[a.client],day)}:p.npcs,standing=a.client?gainStanding(p.standing,a.client,1,day):p.standing;
+ const recent=[...g.recent,{type:a.type,at:now}].filter(x=>x.at>now-1440).slice(-RECENT_MAX),filled=r.needs.find(x=>x.id===need.id)?.status==='filled';
+ return {paid:pay.total,quality:100,tooFast:pay.tooFast,tip:pay.tip,units:r.units,needFilled:filled,client:a.client,
+  state:{...p,cash:p.cash+pay.total,routine:{...p.routine,earned:(p.routine?.earned||0)+pay.total},world,needs:r.needs,npcs,standing,
+   gigs:{...g,active:null,rep:Math.min(100,g.rep+2),recent,completed:g.completed+1,clientsSeen:{...g.clientsSeen,[a.client]:day},pairsSeen:a.origin?{...g.pairsSeen,[pairKey(a.origin,a.places)]:day}:g.pairsSeen,...bumpDone(g,now)}}};
 }

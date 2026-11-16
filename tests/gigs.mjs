@@ -1,5 +1,7 @@
 import assert from 'node:assert/strict';
-import {DOOR_STYLES,doorStyle,doorTip,doorHint,doorChoices,GIG_TYPES,payFor,parRoute,normalizeGigs,boardFor,acceptGig,tickGig,completeGig,failGig,gigDone,freshGigs,qualityFor,gameMinutes,marketBoard,doneTodayOf,bumpDone,dayKey,noMoreWork,NO_MORE_WORK,starterBoard,pickUpGig,pickedUp,atPickup,onTimeLimit,limitFloor,STARTER_MIN_PAY_C,WORLD_SEED,normalizeActive,routeOf,repMulFor} from '../dist/gigs.js';
+import {DOOR_STYLES,doorStyle,doorTip,doorHint,doorChoices,GIG_TYPES,payFor,parRoute,normalizeGigs,boardFor as boardForReal,acceptGig as acceptGigReal,tickGig,completeGig,failGig,gigDone,freshGigs,qualityFor,gameMinutes,doneTodayOf,bumpDone,dayKey,noMoreWork,NO_MORE_WORK,starterBoard,pickUpGig,pickedUp,atPickup,onTimeLimit,limitFloor,STARTER_MIN_PAY_C,WORLD_SEED,normalizeActive,routeOf,repMulFor} from '../dist/gigs.js';
+// W-D2: the normal board is now the world's needs (tests/needs-loop.mjs). The old hashed board still exists behind opts.hashed, and these tests keep covering its rules (pay, fatigue, pickup, pair rest, starter).
+const boardFor=(p,t,c,o={})=>boardForReal(p,t,c,{hashed:true,...o}),acceptGig=(p,s,n,c,st,o={})=>acceptGigReal(p,s,n,c,st,{hashed:true,...o}),marketBoard=(p,t,c)=>boardFor(p,t,c).filter(s=>s.type==='grocery'||s.type==='parcel');
 import {payFor as payGig,minElapsed,fatigueFactor,MIN_PAR_M,HANDLING_C,MAX_GIGS_PER_DAY,basePay} from '../dist/gig-pay.js';
 import {acceptContract,availableContracts} from '../dist/gig-bridge.js';
 import {freshProgress} from '../dist/jobs.js';
@@ -27,7 +29,7 @@ assert.equal(new Set(b1.map(s=>s.type)).size,3);
 for(let t=0;t<3000;t+=37){const b=boardFor(p,t);assert(b.every(s=>['grocery','parcel','rush'].includes(s.type)),'rep 0 types only: '+t);assert.equal(new Set(b.map(s=>s.type)).size,b.length);assert(b.every(s=>s.expiresAt>t&&s.expiresAt-t<=90));assert.equal(new Set(b.map(s=>s.client)).size,b.length)}
 assert.equal(boardFor(p,600).length,3);// only 3 types at rep 0, so 3 slots
 const exp=boardFor(p,600).map(s=>s.expiresAt);assert.equal(new Set(exp).size,exp.length);
-const rich={...p,gigs:{...p.gigs,rep:30},vehicles:[{uid:'v1',model:'worktruck'}]};const types=new Set();for(let t=0;t<4000;t+=30)for(const s of boardFor(rich,t))types.add(s.type);assert.deepEqual([...types].sort(),GIG_TYPES.filter(t=>t.live!==false).map(t=>t.id).sort());
+const rich={...p,gigs:{...p.gigs,rep:30},vehicles:[{uid:'v1',model:'worktruck'}]};const types=new Set();for(let t=0;t<4000;t+=30)for(const s of boardFor(rich,t))types.add(s.type);assert.deepEqual([...types].sort(),GIG_TYPES.filter(t=>t.live!==false&&!t.need).map(t=>t.id).sort());
 const mid={...p,gigs:{...p.gigs,rep:10}};const midT=new Set();for(let t=0;t<4000;t+=30)for(const s of boardFor(mid,t))midT.add(s.type);assert(midT.has('round')&&!midT.has('fuel')&&!midT.has('fragile')&&!midT.has('chain'));
 assert(marketBoard(p,600).every(s=>s.type==='grocery'||s.type==='parcel'));
 // the last finished type is not offered
@@ -129,4 +131,6 @@ assert.equal(onTimeLimit(300),Math.ceil(300/9*2+10));assert.equal(onTimeLimit(0)
  const ok=acceptGig(stopped,sb[0].slot,600,undefined,null,{starter:true});assert.equal(ok.error,undefined);assert.equal(ok.state.gigs.active.starter,true);
  let sst=ok.state;for(const pl of sst.gigs.active.places)sst=tickGig(sst,{position:{x:pl.x,z:pl.z},now:601});const fin=completeGig(sst,601);assert(!fin.tooFast);assert(fin.paid>=STARTER_MIN_PAY_C);assert.equal(fin.state.gigs.doneToday,10,'a starter gig does not count');assert.equal(fin.state.gigs.completed,1);
  const viaBridge=acceptContract(stopped,'slot-'+sb[0].slot,null,{starter:true});assert(viaBridge.state&&viaBridge.state.gigs.active.starter);assert.equal(acceptContract(stopped,'slot-0').error,NO_MORE_WORK);}
+// W-D2: normal play posts needs only; with no open need the board is empty, and the starter board is still the hashed grocery/parcel one
+{assert.deepEqual(boardForReal(p,600),[],'no open needs: an empty board');assert.deepEqual(boardForReal(p,600,undefined,{hashed:true}),b1);assert(starterBoard(p,600).length>0);assert(!GIG_TYPES.filter(t=>!t.need).some(t=>t.id.startsWith('need-')))}
 console.log('gigs ok');
