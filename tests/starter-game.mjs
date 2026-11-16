@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import {freshProgress,normalizeProgress} from '../dist/jobs.js';
-import {PLACES,BEATS,fresh,applyStory,startLoan,ensureLoan,halTalk,buyFromHal,halHere,knockQuality,cratePay,aimPoint,starterObjective,skipStarter,SKIP_SALE_PRICE,LOAN_FUEL_MGAL,CRATE_REACH,MARKET_REACH} from '../dist/starter.js';
+import {STARTER_EPOCH,alreadyHoused,PLACES,BEATS,fresh,applyStory,startLoan,ensureLoan,halTalk,buyFromHal,halHere,knockQuality,cratePay,aimPoint,starterObjective,skipStarter,SKIP_SALE_PRICE,LOAN_FUEL_MGAL,CRATE_REACH,MARKET_REACH} from '../dist/starter.js';
 import {vehicleCount,vehicleCapacity,loanUidOf,parkingAim,STUDIO_ID,VEHICLE_PRICE} from '../dist/orders.js';
 import {isWalkable} from '../dist/world.js';
 import {MAP} from '../dist/map-definition.js';
@@ -42,7 +42,7 @@ assert.equal(vehicleCount(p),0);assert.equal(loanUidOf(p),L.vehicle.uid);assert.
 {const back=normalizeProgress(JSON.parse(JSON.stringify(p)));assert.equal(back.vehicles.length,1,'the loan survives a save');assert.equal(back.starter.loanUid,L.vehicle.uid);assert.equal(vehicleCount(back),0)}
 // a broken save (story step no longer allows a loan) loses the truck: nobody keeps a free extra truck
 {const bad=JSON.parse(JSON.stringify(p));bad.starter.step=2;const back=normalizeProgress(bad);assert.equal(back.vehicles.length,0);assert.equal(back.starter.loanUid,null);
- const gone=JSON.parse(JSON.stringify(p));gone.starter={step:10,done:true,loanUid:L.vehicle.uid};assert.equal(normalizeProgress(gone).vehicles.length,0)}
+ const gone=JSON.parse(JSON.stringify(p));gone.starter={epoch:STARTER_EPOCH,step:10,done:true,loanUid:L.vehicle.uid};assert.equal(normalizeProgress(gone).vehicles.length,0)}
 assert.equal(ensureLoan(p),null,'no second truck while the loan exists');
 assert(halTalk(p).text.includes('Four crates')&&halTalk(p).choices.length===0);
 
@@ -62,7 +62,9 @@ assert.equal(vehicleCapacity(p),1);assert.equal(vehicleCount(p),0);
 
 // ---- the gift needs room: the loan becomes yours only if the studio has a free place
 {const full={...p,vehicles:[...p.vehicles,{uid:'v90',model:'worktruck',colour:'white',x:100,z:50,yaw:0,fuelMgal:1000}]};
- assert.equal(vehicleCount(full),1);const no=applyStory(full,'slept');assert(no.error&&no.soft,'no room: soft refusal');assert(/place to park/.test(no.error));assert.equal(full.starter.step,9)}
+ assert.equal(vehicleCount(full),1);const no=applyStory(full,'slept');assert(no.progress&&!no.error,'S-RESET: no room never stalls the story');assert(no.removed&&!no.moved,'Hal takes his truck back');assert(!no.progress.vehicles.some(v=>v.uid===L.vehicle.uid)&&no.progress.vehicles.length===1,'the loan is gone, the players own vehicle stays');assert(no.progress.starter.done&&no.progress.starter.loanUid===null);assert(/no room/i.test(no.text));assert(halTalk(no.progress).choices.some(c=>c.id==='buy'),'Hal sells the truck later');
+ // an owner of a Shortbed already: the same, with the other message
+ const dup=applyStory({...p,vehicles:[...p.vehicles,{uid:'v91',model:'shortbed',colour:'white',x:100,z:50,yaw:0,fuelMgal:1000}],housing:{...p.housing,rented:true}},'slept');assert(dup.progress&&dup.removed&&/already have a Shortbed/.test(dup.text));assert.equal(dup.progress.vehicles.length,1);assert.equal(dup.progress.vehicles[0].uid,'v91');assert(buyFromHal(dup.progress).error,'already has one')}
 r=applyStory(p,'slept');assert(r.progress&&!r.error);const q=r.progress,aim=parkingAim(STUDIO_ID);
 assert(q.starter.done);assert.equal(q.starter.step,10);assert.equal(q.starter.loanUid,null);assert.equal(vehicleCount(q),1,'now it counts as yours');assert.equal(loanUidOf(q),null);
 assert.deepEqual(r.moved,{uid:L.vehicle.uid,pose:{x:+aim.x.toFixed(2),z:+aim.z.toFixed(2),yaw:+aim.yaw.toFixed(3)}});assert.equal(q.vehicles.find(v=>v.uid===L.vehicle.uid).x,r.moved.pose.x);
@@ -74,8 +76,8 @@ assert.match(halTalk(q).text,/Come by some mornings/);assert.equal(halTalk(q).ch
 {let s=freshProgress();s={...s,starter:{...fresh(),step:5,quality:100}};const e=ensureLoan(s);assert(e&&e.progress.starter.loanUid===e.vehicle.uid&&e.vehicle.x===PLACES.farmTruck.x);assert.equal(ensureLoan(e.progress),null);assert.equal(vehicleCount(e.progress),0)}
 assert.equal(ensureLoan({...freshProgress(),starter:fresh()}),null,'not before beat 5');
 
-// ---- an old save is skipped (no story), Hal sells the Shortbed at the store price
-{const raw={...JSON.parse(JSON.stringify(freshProgress())),cash:5,completed:2};delete raw.starter;const old=normalizeProgress(raw); // a save from before the story has no starter fieldassert(old.starter.skipped&&old.starter.done);assert(applyStory(old,'read-message').error);assert.equal(old.starter.loanUid,null);
+// ---- a skipped save: no story, Hal sells the Shortbed at the store price
+{const raw={...JSON.parse(JSON.stringify(freshProgress())),cash:5,completed:2};delete raw.starter;const old={...normalizeProgress(raw),starter:skipStarter()};assert(old.starter.skipped&&old.starter.done&&old.starter.epoch===STARTER_EPOCH);assert(applyStory(old,'read-message').error);assert.equal(old.starter.loanUid,null); // a save from before the story has no starter fieldassert(old.starter.skipped&&old.starter.done);assert(applyStory(old,'read-message').error);assert.equal(old.starter.loanUid,null);
  const t=halTalk(old);assert(t.choices.some(c=>c.id==='buy')&&t.text.includes('$500'));assert.equal(SKIP_SALE_PRICE,VEHICLE_PRICE.shortbed);
  const poor={...old,cash:SKIP_SALE_PRICE-1,housing:{...old.housing,rented:true}};assert(buyFromHal(poor).error,'not enough cash');
  const homeless=buyFromHal({...old,cash:SKIP_SALE_PRICE*2});assert(/no room/i.test(homeless.error),'a place at home is needed');
@@ -93,6 +95,20 @@ assert(Math.abs(turnToward(0,0,1,1))<1e-9&&Math.abs(turnToward(0,1,0,1)-Math.PI/
  hal.update(.016,{x:0,z:0},true);assert.equal(group.visible,false);assert.equal(updates,0,'far away: hidden and not animated');
  const near={x:PLACES.hal.x+3,z:PLACES.hal.z};hal.update(.016,near,true);assert(group.visible&&hal.visible);assert.equal(updates,1);const g0=groundCalls;for(let i=0;i<63;i++)hal.update(.016,near,true);assert(groundCalls-g0<=2,'ground height not read every frame');assert(Math.abs(group.rotation.y-Math.PI/2)<.3,'he turned toward the player');
  hal.update(.016,near,false);assert.equal(group.visible,false);assert(HAL_VIEW>=40)}
+// ---- S-RESET: the one-time reset of old saves; careers, cash and everything else survive; a second load does not reset again
+{const raw=JSON.parse(JSON.stringify(freshProgress()));raw.cash=123456;raw.completed=40;raw.careers={ridgeline:{hired:true,rank:3,rep:50,shifts:7,lastShiftDay:4,granted:[],owed:[]}};raw.housing={...raw.housing,rented:true};raw.vehicles=[{uid:'v7',model:'shortbed',colour:'white',x:3,z:4,yaw:0,fuelMgal:9000}];
+ for(const old of [{step:10,done:true,skipped:true},{step:10,done:true},undefined]){const save=JSON.parse(JSON.stringify(raw));if(old)save.starter=old;else delete save.starter;
+  const a=normalizeProgress(save);assert.deepEqual(a.starter,fresh(),'reset to step 0 with the epoch stamped');assert.equal(a.starter.skipped,false);assert.equal(a.cash,123456,'cash kept');assert.equal(a.completed,40);assert.deepEqual(a.careers,raw.careers,'careers kept');assert.equal(a.housing.rented,true);assert.equal(a.vehicles.length,1,'an owned truck kept');
+  const b=normalizeProgress(JSON.parse(JSON.stringify(a)));assert.deepEqual(b.starter,a.starter);const adv=applyStory(a,'read-message').progress;const c=normalizeProgress(JSON.parse(JSON.stringify(adv)));assert.equal(c.starter.step,1,'a second load does not reset the progress made since')}
+ // an old save in the middle of the story loses only Hal's loan truck, keeps everything else
+ {const mid=JSON.parse(JSON.stringify(p));mid.starter={step:6,loanUid:L.vehicle.uid,quality:90};mid.cash=777;const back=normalizeProgress(mid);assert.equal(back.starter.step,0);assert.equal(back.starter.loanUid,null);assert(!back.vehicles.some(v=>v.uid===L.vehicle.uid),'the old loan truck is gone');assert.equal(back.cash,777)}
+ // a save with an active gig still loads, and the gig is untouched
+ {const g=JSON.parse(JSON.stringify(freshProgress()));g.cash=4000;g.starter={step:10,done:true};g.gigs={...g.gigs,active:{id:5,type:'parcel',client:'noah',places:[{x:10,z:10}],reward:900,stage:'travel',startedAt:600,acceptedAt:600,dueAt:0,large:false,drop:null}};const back=normalizeProgress(g);assert.deepEqual(back.starter,fresh());assert(back.gigs.active&&back.gigs.active.id===5,'the active gig survives the reset');assert.equal(back.cash,4000)}
+ // an already-renting player does not stall at beat 9 (rent) or at the end (sleep)
+ {let s=normalizeProgress(JSON.parse(JSON.stringify({...freshProgress(),housing:{...freshProgress().housing,rented:true}})));s={...s,starter:{...s.starter,step:8}};assert(alreadyHoused(s));const rr=applyStory(s,'rented');assert(rr.progress,JSON.stringify(rr));assert.equal(rr.progress.starter.step,9);
+  const full=ensureLoan(rr.progress);assert(full,'the loan truck appears at beat 9');const z=applyStory(full.progress,'slept');assert(z.progress&&z.progress.starter.done,'sleep finishes the story')}
+ // the skip option still works for a reset player with progress, and stamps the epoch
+ {const sk=skipStarter();assert.equal(sk.epoch,STARTER_EPOCH);const back=normalizeProgress({...JSON.parse(JSON.stringify(raw)),starter:sk});assert.deepEqual(back.starter,sk,'a skipped story is kept on the next load')}}
 assert.equal(BEATS.length,10);assert(CRATE_REACH>0&&MARKET_REACH>CRATE_REACH);
 // G3b: the egg crates are a real cargo piece on the loan truck's deck (storyDeck is what game.js asks every frame)
 {const {storyDeck,storyPalletHidden,STORY_CRATES}=await import('../dist/starter.js'),{countOf,hasCrates,addPlanks,slotPositions}=await import('../dist/cargo.js');

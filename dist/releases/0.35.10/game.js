@@ -1,5 +1,5 @@
 import {createStoreUI} from './store.js';
-import {createWorld,zoneAt,isWalkableLive as isWalkable,footingAt,standHeight,worldLayout,setGroundQuality} from './world.js';
+import {createWorld,zoneAt,isWalkableLive as isWalkable,footingAt,standHeight,worldLayout,setGroundQuality} from './world.js';import {makeWindClock,advanceWindClock,windSample,makeWind} from './wind.js';const windClock=makeWindClock(),windNow=makeWind();
 import {isMarked,LANDING,treeFelled,stackLog,planksMilled,stockOf,takeLogFromPile,inLumberyard,deliverPlanks,LUMBERYARD,logGathered,stumpCleared,saplingPlanted,racksOf,RACK_CAP,stackPlanks,takeFromRack,forkUsed,forkLoadOf} from './forest.js';
 import * as forklift from './forklift.js';
 import {createTreeMarks,createLandingRing,createStockPiles} from './marks.js';
@@ -908,7 +908,7 @@ const canvas=$('world');const look=createLookControls(canvas,document,()=>active
 $('retryCapture').onclick=()=>{pause(false);look.retry()};
 canvas.addEventListener('wheel',e=>{e.preventDefault();if(active&&!modal&&!creatorOpen&&!editorHook){const delta=e.deltaY*(e.deltaMode===1?16:e.deltaMode===2?innerHeight:1);zoomTarget=THREE.MathUtils.clamp(zoomTarget+delta*.008,3,driving.active?Math.max(12,driving.cameraZoom()*1.4):12)}},{passive:false});
 document.querySelectorAll('[data-key]').forEach(b=>{b.onpointerdown=e=>{e.preventDefault();keys.pressPointer(e.pointerId,b.dataset.key);b.setPointerCapture(e.pointerId)};b.onpointerup=b.onpointercancel=b.onlostpointercapture=e=>keys.releasePointer(e.pointerId)});$('touchE').onclick=()=>interact();
-function applyQuality(value){const high=value==='high';setGroundQuality(high);renderer.setPixelRatio(Math.min(devicePixelRatio,high?1.6:1));renderer.shadowMap.enabled=high;scene.traverse(m=>{if(m.material)m.material.needsUpdate=true});renderer.setSize(innerWidth,innerHeight)}
+function applyQuality(value){const high=value==='high';setGroundQuality(high);world.setCoverTier(high?'high':'low');renderer.setPixelRatio(Math.min(devicePixelRatio,high?1.6:1));renderer.shadowMap.enabled=high;scene.traverse(m=>{if(m.material)m.material.needsUpdate=true});renderer.setSize(innerWidth,innerHeight)}
 $('quality').onchange=()=>{$('menuQuality').value=$('quality').value;$('menuQuality').onchange()}; // the main menu's setting saves and applies it
 window.addEventListener('resize',()=>{camera.aspect=innerWidth/innerHeight;camera.updateProjectionMatrix();renderer.setSize(innerWidth,innerHeight)});
 
@@ -1171,7 +1171,7 @@ function updateZones(dt){
  world.targetCell=world.updateGrid(me.position,me.rotation.y,gridOn&&outdoors&&active&&!modal&&zone!=='city');
  world.fade.uniforms.uFadeEnabled.value=outdoors?1:0;
  fadeTarget.set(me.position.x,me.position.y+1.5,me.position.z);
- world.update(dt,camera,fadeTarget);sawmillCtl?.update(dt);syncSawmill();if(sawmillCtl?.ready)audio.update({listener:{x:me.position.x,z:me.position.z},blade:{at:sawmillCtl.bladePoint,level:sawmillCtl.speed,sawing:sawmillCtl.sawing},belt:{at:sawmillCtl.beltPoint,level:sawmillCtl.beltLevel}});
+ advanceWindClock(windClock,dt);world.setWind(windSample(windClock.t,windNow,windClock.weather));world.update(dt,camera,fadeTarget);sawmillCtl?.update(dt);syncSawmill();if(sawmillCtl?.ready)audio.update({listener:{x:me.position.x,z:me.position.z},blade:{at:sawmillCtl.bladePoint,level:sawmillCtl.speed,sawing:sawmillCtl.sawing},belt:{at:sawmillCtl.beltPoint,level:sawmillCtl.beltLevel}});
  const markers=[];
  if(outdoors){const job=GameState.progress.activeJob;if(job&&gigMarker.visible)markers.push({x:gigMarker.position.x,z:gigMarker.position.z,color:'#f2ca79'});if(marker.visible)markers.push({x:marker.position.x,z:marker.position.z,color:'#d4e7b3'});for(const v of driving.fleet)if(v.present&&!v.display&&!v.dev&&v!==driving.active)markers.push({x:v.state.x,z:v.state.z,color:'#6fb7ff'})} // your own vehicles show on the minimap in blue
  const p=outdoors?me.position:shop?SHOPS[shop]:STUDIO;

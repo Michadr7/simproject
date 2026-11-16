@@ -1,6 +1,6 @@
 // "A Hand for Hal" (notes/gigs-starter-design.md section 2): the starter story as pure state. Money is integer cents.
-// progress.starter = {step 0..10, done, skipped, quality 0..100, fuelGiven, loanUid, loaded, noteGiven, gigDone}. step n = n beats finished.
-// Old saves (any progress already made) are {done:true, skipped:true} so nobody playing is pulled into the tutorial.
+// progress.starter = {epoch, step 0..10, done, skipped, quality 0..100, fuelGiven, loanUid, loaded, noteGiven, gigDone}. step n = n beats finished.
+// S-RESET (owner decision 2026-11-17): STARTER_EPOCH is the version of the story. A save whose starter has a different (or no) epoch gets a FRESH starter once (step 0, epoch stamped); jobs, careers, cash and everything else stay. Raise the number to reset everyone again.
 // Places are data (G3: the porch, Hal, crate pile and farm truck pose are chosen and a test checks them against the terrain mask and the farm buildings; the studio parking pose is orders.js parkingAim).
 export const PLACES=Object.freeze({
  spawn:{x:-5,z:15},market:{x:19,z:-6.3},oakStreet18:{x:3.8,z:-7},farmhouse:{x:-62,z:-236.5},gas:{x:156.5,z:-8.25},apartments:{x:1,z:-6.3},ridgeline:{x:81.5,z:58.3},
@@ -23,12 +23,12 @@ export const BEATS=Object.freeze([
  B('sleep','Keep her','Hal gives you the truck. Sleep in the studio to end the day.','slept','apartments')
 ]);
 const DONE=Object.freeze({groceries:'Sophie thanks you and the groceries are delivered.',food:'Fed and watered. Off to the farm.',farm:'Hal pays you for the groceries. His truck waits in the yard: more soon.'});
-export const fresh=()=>({step:0,done:false,skipped:false,quality:100,fuelGiven:false,loanUid:null,loaded:false,noteGiven:false,gigDone:false});
+export const STARTER_EPOCH=1;
+export const fresh=()=>({epoch:STARTER_EPOCH,step:0,done:false,skipped:false,quality:100,fuelGiven:false,loanUid:null,loaded:false,noteGiven:false,gigDone:false});
 const int=(v,lo,hi,d=0)=>Number.isFinite(v)?Math.max(lo,Math.min(hi,Math.floor(v))):d;
-// An old save: anything done already. p is the progress being normalised (partly built is fine).
-const hasProgress=p=>!!p&&((p.completed||0)>0||(p.cash||0)>0||(p.vehicles?.length||0)>0||!!p.housing?.rented||Object.keys(p.properties||{}).length>0||Object.keys(p.careers||{}).length>0);
+// A starter of another epoch (an old save, done or skipped or not, or none at all) restarts at step 0; nothing else in the progress is touched here. p is unused: it stays in the signature for callers.
 export function normalizeStarter(v,p){
- if(!v||typeof v!=='object')return hasProgress(p)?{...fresh(),step:10,done:true,skipped:true}:fresh();
+ if(!v||typeof v!=='object'||v.epoch!==STARTER_EPOCH)return fresh();
  const s=fresh();s.step=int(v.step,0,10);s.done=v.done===true||s.step===10;s.skipped=v.skipped===true;
  if(s.done)s.step=10;
  s.quality=int(v.quality,0,100,100);s.fuelGiven=v.fuelGiven===true;s.loaded=v.loaded===true;s.noteGiven=v.noteGiven===true;s.gigDone=v.gigDone===true;
@@ -37,6 +37,8 @@ export function normalizeStarter(v,p){
 }
 export const skipStarter=()=>({...fresh(),step:10,done:true,skipped:true});
 // The objective card and the tracker's story row read this. aim is a PLACES key.
+// S-RESET: a beat whose end is already true must not wait. Step 8 (rent): a rented studio or any home you hold completes it at once (game.js storyTick fires 'rented'). Beat 9 (sleep) fires after any sleep, anywhere, and the truck handover above never blocks. The gig beat is NOT skipped.
+export const alreadyHoused=p=>!!p&&!!p.starter&&!p.starter.done&&p.starter.step===8&&(!!p.housing?.rented||Object.keys(p.properties||{}).length>0);
 // The truck beats (5, 6 and 10) need the short flatbed, which is not built yet: until VEHICLE_BEATS_READY the story pauses after beat 4 and the card goes back to the normal text.
 export const VEHICLE_BEATS_READY=true;
 export function starterObjective(p,{vehicleReady=VEHICLE_BEATS_READY}={}){
@@ -60,7 +62,6 @@ export function advanceStarter(p,event,data={}){
  }
  const beat=BEATS[step];
  if(!beat||beat.event!==event)return {error:'That does not fit this step.'};
- if(event==='slept'&&s.loanUid&&vehicleCount(p)>=vehicleCapacity(p))return {error:'Hal: she needs a place to park. Free a space at home first, then sleep. (You hold '+vehicleCount(p)+' of '+vehicleCapacity(p)+' vehicles.)',soft:true};
  if(event==='delivered-crates'&&!s.loaded)return {error:'Load the crates first.'};
  if(event==='delivered-crates'){const q=int(data.quality,0,100,100);return {state:next({step:step+1,quality:q,loaded:false}),message:`Noah paid for the eggs (quality ${q}%).`,cash:cratePay(q)};}
  const o={step:step+1};
@@ -91,9 +92,11 @@ const money=c=>'$'+(c/100).toFixed(c%100?2:0);
 export function applyStory(p,event,data={}){
  const r=advanceStarter(p,event,data);if(r.error)return r;
  const cash=r.cash||0,loan=p.starter.loanUid;
- let progress={...p,starter:r.state,cash:p.cash+cash,routine:{...p.routine,earned:(p.routine?.earned||0)+cash}},moved=null;
- if(event==='slept'&&loan){const aim=parkingAim(STUDIO_ID),i=progress.vehicles.findIndex(v=>v.uid===loan);if(aim&&i>=0){const v={...progress.vehicles[i],x:+aim.x.toFixed(2),z:+aim.z.toFixed(2),yaw:+aim.yaw.toFixed(3)};progress={...progress,vehicles:progress.vehicles.map((o,j)=>j===i?v:o)};moved={uid:loan,pose:{x:v.x,z:v.z,yaw:v.yaw}}}}
- return {progress,text:r.message+(cash?' | +'+money(cash):''),moved};
+ let progress={...p,starter:r.state,cash:p.cash+cash,routine:{...p.routine,earned:(p.routine?.earned||0)+cash}},moved=null,removed=false,said=null;
+ // S-RESET: the gift truck is only given when it fits. A player who already has a Shortbed, or has no free place at home, never stalls here: Hal takes his truck back and the story ends (he sells it later: buyFromHal).
+ if(event==='slept'&&loan){const others=(progress.vehicles||[]).filter(v=>v.uid!==loan),dup=others.some(v=>v.model==='shortbed'),room=vehicleCount(p)<vehicleCapacity(p);if(dup||!room){progress={...progress,vehicles:others};removed=true;said=dup?'Hal: you already have a Shortbed, so I will take mine back. Thanks for the help.':'Hal: there is no room for her at home, so I will keep her in the yard. Buy her from me when you have space.'}}
+ if(event==='slept'&&loan&&!removed){const aim=parkingAim(STUDIO_ID),i=progress.vehicles.findIndex(v=>v.uid===loan);if(aim&&i>=0){const v={...progress.vehicles[i],x:+aim.x.toFixed(2),z:+aim.z.toFixed(2),yaw:+aim.yaw.toFixed(3)};progress={...progress,vehicles:progress.vehicles.map((o,j)=>j===i?v:o)};moved={uid:loan,pose:{x:v.x,z:v.z,yaw:v.yaw}}}}
+ return {progress,text:(said||r.message)+(cash?' | +'+money(cash):''),moved,removed};
 }
 // Beat 4: Hal lends the truck in the farm yard (a normal vehicle entry; starter.loanUid says it is his) and pays for the groceries.
 export function startLoan(p){
@@ -118,7 +121,7 @@ export function halTalk(p){
   if(s.step===5)return {text:'Hal: She is nearly dry. I left cash for gas: the pump is in Eastbank.',choices:[]};
   return {text:s.step===9?'Hal: Studio 2B needs a place for her to sleep. Then she is yours.':'Hal: Walt at the Ridgeline office is expecting my note. Take a gig if you want the money.',choices:[]};
  }
- if(s?.skipped||!has)return {text:s?.skipped?'Hal: No story for you, then. But I will sell you the truck for '+price+': she runs fine.':'Hal: Come by some mornings, I will have work.',choices:has?[]:s?.skipped?[{id:'buy',label:'Buy the truck · '+price}]:[]};
+ if(s?.skipped||!has)return {text:s?.skipped?'Hal: No story for you, then. But I will sell you the truck for '+price+': she runs fine.':s?.done&&!has?'Hal: The flatbed is still in my yard if you have room for her. '+price+', and she runs fine.':'Hal: Come by some mornings, I will have work.',choices:has?[]:(s?.skipped||s?.done)?[{id:'buy',label:'Buy the truck · '+price}]:[]};
  return {text:'Hal: Come by some mornings, I will have work.',choices:[]};
 }
 // Buying the truck from Hal (skippers and old saves): the Shortbed's store price, a place at home needed, parked in the farm yard.

@@ -8,7 +8,7 @@ import {terrain,SURFACE,FOOTING,roadCenterline} from './terrain.js';
 import {lampSpots} from './streetfurniture.js';
 import {markingBars,townSpots,FOUNTAIN,BUS_STOP} from './town.js';
 import {propInfo,createProp} from './props.js';
-import {chunkKey,chunkIndex,chunkRange,worldRange,createChunkIndex,maskTile,chunkBounds} from './chunks.js';import {digGrid,groundRects,dugMeshData} from './dug-ground.js';import {createChunkView} from './chunks-view.js';import {waterChunkMesh} from './water-chunks.js';import {createEastbank} from './eastbank.js';import {createSceneOverlay} from './scene-overlay.js';
+import {chunkKey,chunkIndex,chunkRange,worldRange,createChunkIndex,maskTile,chunkBounds} from './chunks.js';import {digGrid,groundRects,dugMeshData} from './dug-ground.js';import {createChunkView} from './chunks-view.js';import {waterChunkMesh} from './water-chunks.js';import {createEastbank} from './eastbank.js';import {createSceneOverlay} from './scene-overlay.js';import {createCoverView} from './ground-cover-view.js';import {footprintRects} from './cover-sampler.js';
 
 // ─── Layout (pure data, safe to import from rules and tests) ──────────────────
 // The city keeps its original footprint. Oak Farms lies west of it, Alder Woods east.
@@ -453,8 +453,8 @@ export function createWorld(scene,{label,cullRadius,streaming=false}={}){
  const landmarks=MAP.landmarks.map(l=>{
   const info=propInfo(l.prop),mesh=createProp(l.prop,fade);mesh.position.set(l.x,heightAt(l.x,l.z),l.z);mesh.rotation.y=l.yaw;group.add(mesh);
   const cos=Math.round(Math.cos(l.yaw)),sin=Math.round(Math.sin(l.yaw)),turned=sin!==0;
-  for(const b of info.colliders)colliders.box(l.x+b.x*cos+b.z*sin,l.z-b.x*sin+b.z*cos,turned?b.hz:b.hx,turned?b.hx:b.hz);
-  return {id:l.id,mesh,x:l.x,z:l.z,yaw:l.yaw,floor:info.floors||info.floor||null,radius:Math.hypot(info.width,info.depth)/2};
+  const boxes=info.colliders.map(b=>colliders.box(l.x+b.x*cos+b.z*sin,l.z-b.x*sin+b.z*cos,turned?b.hz:b.hx,turned?b.hx:b.hz));
+  return {id:l.id,mesh,boxes,hidden:false,x:l.x,z:l.z,yaw:l.yaw,floor:info.floors||info.floor||null,radius:Math.hypot(info.width,info.depth)/2};
  });
  for(const sign of MAP.signs){
   const post=new THREE.Mesh(new THREE.BoxGeometry(.18,3.4,.18),timber);post.position.set(sign.x,1.7,sign.z);post.castShadow=true;post.name='sign-post';group.add(post);colliders.circle(sign.x,sign.z,.16);
@@ -558,7 +558,7 @@ export function createWorld(scene,{label,cullRadius,streaming=false}={}){
  const MAX_LOG_INSTANCES=96;
  const logMesh=new THREE.InstancedMesh(new THREE.CylinderGeometry(.12,.12,1.15,8).rotateZ(Math.PI/2),new THREE.MeshStandardMaterial({map:nature.logBark,color:'#d2b080',roughness:1}),MAX_LOG_INSTANCES);
  logMesh.count=0;logMesh.castShadow=logMesh.receiveShadow=true;logMesh.frustumCulled=false;logMesh.name='ground-logs';group.add(logMesh);
- let clock=0,chunkView=null,edgeHills=null;
+ let clock=0,chunkView=null,edgeHills=null,cover=null;
  if(streaming){ // chunk streaming (F1): the 5 x 5 chunks round the spawn are built here, behind the loading screen; world.update() keeps the ring loaded from then on
   const gmat={asphalt:groundLayer(asphalt,-.045),driveway:groundLayer(new THREE.MeshStandardMaterial({color:'#8f9396',roughness:.95}),-.05),path:groundLayer(new THREE.MeshStandardMaterial({color:'#b9b3a4',roughness:.9}),-.049)};
   const groundChunk=slice=>{const b=gb.get(slice.key);if(!b)return null;const set=new THREE.Group();set.name='ground-'+slice.key;
@@ -566,11 +566,20 @@ export function createWorld(scene,{label,cullRadius,streaming=false}={}){
    if(b.dashes.length){const marks=new THREE.InstancedMesh(new THREE.BoxGeometry(.18,.02,2.2),lineMaterial,b.dashes.length);b.dashes.forEach((d,i)=>marks.setMatrixAt(i,m4.compose(v.set(d.x,d.y,d.z),q.setFromAxisAngle(yAxis,d.yaw),s.set(1,1,1))));marks.computeBoundingSphere();marks.name='road-lines-'+slice.key;set.add(marks)}
    return set.children.length?set:null};
   chunkView=createChunkView({index:createChunkIndex({layout,fences:segments,range:worldRange()}),colliders,scene:group,map:MAP,build:{dug:slice=>dugMesh(chunkBounds(slice.i,slice.j),'dug-'+slice.key),water:slice=>waterChunkMesh(THREE,water,MAP,slice.i,slice.j),fences:slice=>slice.fences.length?fenceSet(slice.fences.map(e=>e.item)):null,ground:groundChunk},onFade:screenFade});
+  // GD5 ground cover: a view per world; the chunk view only tells it which masks are live. The models (cover-assets.js, 0.3 MB) load lazily, so startup does not grow; update() builds one stage per frame near the player.
+  cover=createCoverView({THREE,heightAt,seed:WORLD_SEED,rects:footprintRects(MAP.buildings,MAP.landmarks.map(l=>({x:l.x,z:l.z,yaw:l.yaw,footprint:propInfo(l.prop).footprint})))});
+  chunkView.on('build',c=>cover.onChunk({key:c.key,i:c.i,j:c.j,bounds:c.slice.bounds},{surfaceAt:(x,z)=>c.tile.surfaceAt(x,z)||chunkView.surfaceAt(x,z),biomeAt:(x,z)=>{const zn=c.tile.zoneAt(x,z);return zn&&zn.id==='forest'?'forest':zn&&zn.id==='farm'?'farm':'open'}}));
+  chunkView.on('dispose',c=>cover.onChunkGone(c.key));
+  import('./cover-assets.js').then(a=>cover.setAssets({atlas:a.COVER_ATLAS,models:a.COVER_MODELS})).catch(e=>console.warn('ground cover models not loaded',e));
   chunkView.ensure(MAP.spawn.x,MAP.spawn.z,2);walkSource=chunkView;
  }
  return {
   group,layout,trees,fade,addBroadleaves,eastbank,chunks:chunkView,ensure:(x,z,radius=1)=>chunkView?chunkView.ensure(x,z,radius):{built:0,ready:true,ms:0},
   blocked:(x,z)=>colliders.blocked(x,z),
+  // GD5: the wind of this frame (a wind.js windSample result) for the cover shader; the tier follows applyQuality ('high' or 'low'); stats for tests and the debug hook.
+  setWind:w=>cover?.setWind(w),setCoverTier:t=>cover?.setTier(t),coverStats:()=>cover?cover.stats():null,coverView:cover,
+  // Hide or show a landmark prop and its colliders (the Hal egg pallet while the crates are on the truck).
+  setLandmarkVisible(id,v){const l=landmarks.find(e=>e.id===id);if(!l)return false;l.hidden=!v;l.mesh.visible=!!v;for(const b of l.boxes)b.active=!!v;return true},
   // The height of a deck or platform under the point (a building's raised floor), or null on open ground.
   floorAt(x,z){for(const l of landmarks){if(!l.floor)continue;const cos=Math.round(Math.cos(l.yaw)),sin=Math.round(Math.sin(l.yaw)),dx=x-l.x,dz=z-l.z,lx=dx*cos-dz*sin,lz=dx*sin+dz*cos;for(const f of [].concat(l.floor))if(lx>=f.x0&&lx<=f.x1&&lz>=f.z0&&lz<=f.z1)return f.y}return null},
   // What is drawn: trees in the draw lists and the triangles they cost (for tests and the debug hook). setViewer places the view without a camera.
@@ -618,10 +627,11 @@ export function createWorld(scene,{label,cullRadius,streaming=false}={}){
   update(dt,camera,fadeTarget){
    fade.update(camera,fadeTarget);refreshView(camera,fadeTarget);
    if(fountainParts){townTime+=dt;fountainParts.jet.scale.y=1+.14*Math.sin(townTime*3.1);fountainParts.jet.position.y=3.15+.08*Math.sin(townTime*3.1);fountainParts.water.material.opacity=.86+.04*Math.sin(townTime*1.7)}
-   for(const l of landmarks)l.mesh.visible=Math.hypot(fadeTarget.x-l.x,fadeTarget.z-l.z)<viewDistance+l.radius; // far buildings are not drawn
+   for(const l of landmarks)l.mesh.visible=!l.hidden&&Math.hypot(fadeTarget.x-l.x,fadeTarget.z-l.z)<viewDistance+l.radius; // far buildings are not drawn
    eastbank.update(fadeTarget.x,fadeTarget.z); // far yards are not drawn
    if(!edgeHills)edgeHills=group.getObjectByName('distant-hills');if(edgeHills)edgeHills.position.set(fadeTarget.x-Math.max(GROUND.x0,Math.min(GROUND.x1,fadeTarget.x)),0,fadeTarget.z-Math.max(GROUND.z0,Math.min(GROUND.z1,fadeTarget.z))); // F2: the horizon ring stays put over the old ground and slides with you beyond it (no jump), so it is still a horizon in the new world
    chunkView?.update(fadeTarget.x,fadeTarget.z); // keeps the chunk ring loaded (2 ms budget a frame)
+   cover?.update(fadeTarget.x,fadeTarget.z,dt,group); // GD5: ground cover near the player, at most one build stage a frame
    clock+=dt;if(ring.visible)ring.scale.setScalar(1+.07*Math.sin(clock*6));
    let changed=false;
    for(const t of trees.values()){

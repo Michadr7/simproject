@@ -1,7 +1,7 @@
 // Boots the real packaged game (the release dist/index.html points at) in Node with a synthetic DOM and a renderer stub, like startup.mjs.
 // Not a test itself: it lives in tests/support so run-tests.mjs (which only reads tests/*.mjs) leaves it alone.
 import {mkdtemp,readFile,writeFile,cp,rm} from 'node:fs/promises';
-import {tmpdir} from 'node:os';import './unref-game-timers.mjs';import {join,resolve} from 'node:path';import {pathToFileURL} from 'node:url';
+import {skipStarter} from '../../dist/starter.js';import {tmpdir} from 'node:os';import './unref-game-timers.mjs';import {join,resolve} from 'node:path';import {pathToFileURL} from 'node:url';
 
 export class El extends EventTarget{
  constructor(tag='div'){super();this.tag=tag;this.hidden=false;this.value='';this.children=[];this.dataset={};this.style={setProperty(){}};{const set=new Set();this.classList={add:(...n)=>n.forEach(x=>set.add(x)),remove:(...n)=>n.forEach(x=>set.delete(x)),toggle:(n,force)=>{const on=force===undefined?!set.has(n):!!force;on?set.add(n):set.delete(n);return on},contains:n=>set.has(n)}}this.selectors=new Map()}
@@ -24,7 +24,7 @@ export async function bootGame({position=null,play=true,editRelease=async()=>{},
  doc.getElementById=id=>ids.get(id)||null;doc.createElement=tag=>{const e=new El(tag);created.push(e);return e};doc.body=new El();doc.querySelectorAll=()=>[];doc.hidden=false;
  const win=new EventTarget();win.matches=()=>false;const store=new Map();
  store.set('edenridge.character.v1',JSON.stringify({version:1,appearance:{name:'Tester'}}));
- store.set('edenridge.progress.v1',JSON.stringify({version:1,progress:{cash:1000,completed:0,phase:'available',...(position?{position}:{}),...progress}}));
+ store.set('edenridge.progress.v1',JSON.stringify({version:1,progress:{cash:1000,completed:0,phase:'available',starter:skipStarter(),...(position?{position}:{}),...progress}}));
  let nextFrame;Object.assign(globalThis,{document:doc,window:win,localStorage:{getItem:k=>store.get(k)||null,setItem:(k,v)=>store.set(k,v),removeItem:k=>store.delete(k)},innerWidth:1400,innerHeight:900,devicePixelRatio:1,requestAnimationFrame:fn=>{nextFrame=fn}});
  await import(pathToFileURL(join(dir,'game.js')).href);
  const {GameState}=await import(pathToFileURL(join(dir,'state.js')).href);

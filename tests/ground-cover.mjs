@@ -72,7 +72,8 @@ assert.ok(Math.abs(per100('grass')-36)/36<.12,'grass per 100 m2 '+per100('grass'
 // every tier: kinds, cap, scale of density
 const stats={};for(const t of ['low','medium','high']){const l=coverFor(1,1,9,flat(SURF.GRASS),{tier:t});stats[t]=coverStats(l);assert.ok(l.length<=COVER_TIER[t].chunkCap,t+' within the cap');for(const e of l)assert.ok(COVER_TIER[t].kinds.includes(e.kind),t+' only draws its kinds');assert.ok(stats[t].drawCalls<=stats[t].kindDrawCalls*COVER_TIER[t].variants,t+' draws per kind within variants')}
 assert.ok(stats.low.total<stats.medium.total+stats.high.total&&stats.low.total<stats.high.total);assert.ok(Math.abs(stats.low.byKind.grass/(stats.high.byKind.grass)-.4)<.06,'low tier grass is about .4 of high: '+stats.low.byKind.grass/stats.high.byKind.grass);
-assert.ok(stats.high.total<=COVER_TIER.high.chunkCap&&stats.high.drawCalls<=22,'high: draw calls per chunk '+stats.high.drawCalls);
+assert.ok(stats.high.total<=COVER_TIER.high.chunkCap&&stats.high.drawCalls<=11,'high: draw calls per chunk '+stats.high.drawCalls); // GD5: ONE model variant per kind (draw-call budget: at most 11 per chunk, 44 for 4 chunks)
+ assert.strictEqual(COVER_TIER.high.variants,1,'GD5: one variant per kind on High');assert.ok(coverFor(1,1,9,flat(SURF.GRASS),{tier:'high'}).every(e=>e.variant===0&&e.model===COVER_RULES[e.kind].models[0]),'every instance uses the first model of its kind');
 assert.ok(stats.medium.drawCalls<=3&&stats.low.drawCalls===1,'low is one draw, medium at most three');
 // hard cap: a tiny cap keeps the big rare kinds first and thins grass; deterministic
 const capped=coverFor(0,0,seed,flat(SURF.GRASS),{tier:'high',cap:300}),capped2=coverFor(0,0,seed,flat(SURF.GRASS),{tier:'high',cap:300});assert.equal(capped.length,300);assert.deepEqual(capped,capped2);assert.deepEqual(capped.map(e=>e.kind).slice(0,1),[COVER_ORDER.find(k=>cnt(coverFor(0,0,seed,flat(SURF.GRASS),{tier:'high'}),k)>0)],'big kinds come first');

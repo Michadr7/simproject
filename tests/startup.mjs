@@ -1,4 +1,5 @@
 import {addItem,hotbarItems} from '../dist/inventory.js';
+import {skipStarter} from '../dist/starter.js'; // S-RESET: a save with progress and no current-epoch starter now starts the story; this test is not about the story
 import * as THREE from '../dist/vendor/three.module.js';
 // Exercise the real game startup and UI with a synthetic DOM and GPU-only renderer stub.
 import {mkdtemp,readFile,writeFile,cp,mkdir,rm} from 'node:fs/promises';
@@ -19,7 +20,7 @@ for(const saved of [false,true]){
  await writeFile(join(dir,'vendor/three.module.js'),`export * from '${threeURL}';export class WebGLRenderer{constructor(){this.shadowMap={}}setPixelRatio(){}setSize(){}setViewport(){}clear(){}render(scene,camera){if(scene.name!=='menu-scene')globalThis.__renders=(globalThis.__renders||0)+1;globalThis.__renderScene=scene;globalThis.__renderCamera=camera}}`);
  const ids=new Map([...html.matchAll(/id="([^"]+)"/g)].map(m=>[m[1],new El(m[1]==='characterName'?'input':'div')]));
  const doc=new EventTarget();doc.getElementById=id=>ids.get(id)||null;doc.createElement=tag=>new El(tag);doc.body=new El();doc.querySelectorAll=()=>[];doc.hidden=false;
- const win=new EventTarget();win.matches=()=>false;const store=new Map();if(saved){store.set('edenridge.character.v1',JSON.stringify({version:1,appearance:{name:'Michadr'}}));store.set('edenridge.progress.v1',JSON.stringify({version:1,progress:{cash:11200,completed:5,phase:'available',position:{x:1,z:-6.3}}}))}
+ const win=new EventTarget();win.matches=()=>false;const store=new Map();if(saved){store.set('edenridge.character.v1',JSON.stringify({version:1,appearance:{name:'Michadr'}}));store.set('edenridge.progress.v1',JSON.stringify({version:1,progress:{cash:11200,completed:5,phase:'available',starter:skipStarter(),position:{x:1,z:-6.3}}}))}
  let nextFrame;Object.assign(globalThis,{document:doc,window:win,localStorage:{getItem:k=>store.get(k)||null,setItem:(k,v)=>store.set(k,v)},innerWidth:1400,innerHeight:900,devicePixelRatio:1,requestAnimationFrame:fn=>{nextFrame=fn}});
  const originalSocket=globalThis.WebSocket;
  class FakeSocket extends EventTarget {

@@ -19,6 +19,7 @@ assert.equal(p.activeJob.stage,'return');assert.deepEqual(gigTarget(p.activeJob)
 // saved mid-gig and loaded again
 let raw;const storage={getItem:()=>raw,setItem:(k,v)=>raw=v};saveProgress(storage,p);const back=loadProgress(storage);assert.equal(back.activeJob.stage,'return');assert.equal(back.gigs.active.id,p.gigs.active.id);
 assert(completeContract(p,{x:stops.at(-1).x+30,z:0}).error,'must be at the contact');
+p=advanceTime(p,Math.ceil((p.gigs.active.parM||0)/16.4)+1);// a finish faster than the walking pace pays only the handling fee
 const cash=p.cash,done=completeContract(p,{x:stops.at(-1).x,z:stops.at(-1).z});
 assert(done.paid>0);assert.equal(done.state.cash,cash+done.paid);assert.equal(done.state.activeJob,null);assert.equal(done.state.gigs.completed,1);assert.equal(done.state.gigs.active,null);
 // the accepted slot is gone from the board; time moves it on
@@ -33,7 +34,7 @@ assert.equal(normalizeProgress(JSON.parse(JSON.stringify(old))).messages.length,
 assert.equal(normalizeProgress({gigs:{active:{type:'grocery',places:'x'},rep:-5}}).activeJob,null);
 // rush: the hard limit ends it
 let r=freshProgress();const rush=availableContracts(r).find(o=>o.title.startsWith('Rush'));
-if(rush){r=acceptContract(r,rush.id).state;r=advanceTime(r,30);r=tickContract(r,{position:{x:9999,z:0},room:'street',dt:.03});assert.equal(r.activeJob,null);assert.equal(r.gigs.active,null)}
+if(rush){r=acceptContract(r,rush.id).state;r=advanceTime(r,90);r=tickContract(r,{position:{x:9999,z:0},room:'street',dt:.03});assert.equal(r.activeJob,null);assert.equal(r.gigs.active,null)}
 const mk=marketContracts(freshProgress());assert(mk.every(o=>/^(Grocery|Doorstep)/.test(o.title)&&/Go to /.test(o.description)),'Noah offers grocery and parcel gigs with street names');assert.deepEqual(marketContracts(p),[],'nothing while a gig is active');
 // parcel: the door dialog offers three greetings; the right one tips in cents on top of the pay
 {const base=freshProgress(),mk=(type,places,start)=>({...base,gigs:{...base.gigs,rep:10,active:normalizeGigs({active:{type,client:'c1',id:7,places,start}}).active}});

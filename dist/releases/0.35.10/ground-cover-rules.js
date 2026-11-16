@@ -7,7 +7,7 @@ export const SURF=Object.freeze({GRASS:1,STREET:2,ROAD:3,DIRT:4,PAVEMENT:5,WATER
 export const COVER_TIER=Object.freeze({
  low:{density:.4,near:12,far:20,kinds:['grass'],variants:1,chunkCap:1500},
  medium:{density:.65,near:20,far:32,kinds:['grass','fern','crop'],variants:1,chunkCap:6250},
- high:{density:1,near:40,far:60,kinds:['grass','tallgrass','clover','fern','flower','bush','pebble','rock','mushroom','reed','crop'],variants:2,chunkCap:15000}});
+ high:{density:1,near:40,far:60,kinds:['grass','tallgrass','clover','fern','flower','bush','pebble','rock','mushroom','reed','crop'],variants:1,chunkCap:15000}});
 export const COVER_FOG_CAP=64; // no kind reaches past this (fog starts 65 m)
 export const COVER_ORDER=['bush','rock','mushroom','flower','fern','reed','pebble','clover','tallgrass','crop','grass']; // output order and cap priority: big and rare first, the dense grass is thinned first
 // Rule fields: cell = jitter-grid cell in metres (max possible density = 100/cell^2 per 100 m2); surf = density per 100 m2 by surface id (High); biome = multiplier by biome name from sampler.biomeAt; maxSlope = rise/run; roadMin/buildMin/waterMin = metres clear of road edge, building and water; waterBand = [lo,hi] metres from water (reeds); macro = [lo,hi] smoothstep window on the ground macro noise (meadow patches); clump 0..1 = how strongly a 14 m noise bunches the density; scale = range on the model's native size; reach = multiplier on the tier reach; models = MegaKit glTF names (null = code-made fallback, the kit has no reeds or crop).
