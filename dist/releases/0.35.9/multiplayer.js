@@ -1,4 +1,5 @@
-import {hello,validRoom,REFUSED} from './relay-protocol.js';
+// The multiplayer client: connects to the relay, sends position and (as host) the game clock, and reports other players, the host and the host's clock (MP-CLOCK, session-clock.js).
+import {hello,validRoom,REFUSED,validClockMessage} from './relay-protocol.js';
 import {VERSION} from './version.js';
 
 const validPlayer = p => typeof p?.id === 'string' && p.position &&
@@ -8,6 +9,7 @@ export class MultiplayerClient {
   constructor() {
     this.socket = null;
     this.id = null; // Connection identity, separate from the saved profile ID.
+    this.hostId = null; // the lobby's host (its oldest player, set by the relay); the host's game clock is the session clock (session-clock.js)
     this.lobby = null; // the hosted lobby's code; null on a local relay
     this.refused = null; // why the relay last turned us away (REFUSED in relay-protocol.js), until the next connect
     this.rejoinUrl = null; // where to reconnect after a drop: a created lobby (/relay/new) becomes its code's address once welcomed
@@ -24,6 +26,10 @@ export class MultiplayerClient {
   onPlayerLeft(cb) { return this.on('playerLeft', cb); }
   // In a room with the server: sleeping never moves the clock then (sleep.js).
   get online() { return this.socket?.readyState === 1 && !!this.id; }
+  // True for the lobby's host (and while not online, so a lone game is its own host).
+  get isHost() { return !this.id || !this.hostId || this.hostId === this.id; }
+  onHost(cb) { return this.on('host', cb); }
+  onClock(cb) { return this.on('clock', cb); }
   onConnected(cb) { return this.on('connected', cb); }
   onDisconnected(cb) { return this.on('disconnected', cb); }
   // The relay said no (old game, full lobby, unknown code). Fired before 'disconnected'.
@@ -48,6 +54,7 @@ export class MultiplayerClient {
       if (message?.type === 'welcome' && typeof message.id === 'string') {
         this.id = message.id;
         this.lobby = typeof message.lobby === 'string' ? message.lobby : null;
+        this.hostId = typeof message.host === 'string' ? message.host : null;
         if (this.lobby) this.rejoinUrl = url.replace(/\/relay\/[^/]*$/, '/relay/' + this.lobby);
         this.emit('connected', message.id);
       } else if (message?.type === 'refused') {
@@ -55,6 +62,10 @@ export class MultiplayerClient {
         this.emit('refused', this.refused);
       } else if (['playerJoined', 'playerMoved'].includes(message?.type) && validPlayer(message) && message.id !== this.id) {
         this.emit(message.type, message);
+      } else if (message?.type === 'host' && typeof message.id === 'string' && this.id) {
+        this.hostId = message.id; this.emit('host', message.id);
+      } else if (message?.type === 'clock' && validClockMessage(message) && this.id && this.hostId !== this.id) {
+        this.emit('clock', {day: message.day, minutes: message.minutes});
       } else if (message?.type === 'playerLeft' && typeof message.id === 'string') {
         this.emit('playerLeft', message.id);
       }
@@ -63,7 +74,7 @@ export class MultiplayerClient {
     socket.addEventListener('close', () => {
       if (this.socket !== socket) return;
       const wasIn = !!this.id;
-      this.socket = null; this.id = null; this.lobby = null;
+      this.socket = null; this.id = null; this.lobby = null; this.hostId = null;
       this.emit('disconnected');
       this.emit('dropped', {wasIn, refused: this.refused});
     });
@@ -75,9 +86,15 @@ export class MultiplayerClient {
     this.socket.send(JSON.stringify({type: 'position', position: {x: position.x, y: position.y, z: position.z}, room}));
     return true;
   }
+  // The host's game clock (the relay ignores it from anyone else).
+  sendClock(message) {
+    if (this.socket?.readyState !== 1 || !this.id || !this.isHost || !validClockMessage(message)) return false;
+    this.socket.send(JSON.stringify({type: 'clock', day: message.day, minutes: message.minutes}));
+    return true;
+  }
   disconnect() {
     const socket = this.socket;
-    this.socket = null; this.id = null; this.lobby = null;
+    this.socket = null; this.id = null; this.lobby = null; this.hostId = null;
     if (socket) { socket.close(); this.emit('disconnected'); }
   }
 }

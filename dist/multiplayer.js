@@ -1,3 +1,4 @@
+// The multiplayer client: connects to the relay, sends position and (as host) the game clock, and reports other players, the host and the host's clock (MP-CLOCK, session-clock.js).
 import {hello,validRoom,REFUSED,validClockMessage} from './relay-protocol.js';
 import {VERSION} from './version.js';
 

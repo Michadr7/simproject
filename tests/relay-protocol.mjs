@@ -33,7 +33,7 @@ const out=[],closed=[];let n=0,clock=0;
 const lobby=createLobby({send:(p,m)=>out.push([p,m]),close:(p,code,reason)=>closed.push([p,code,reason]),newId:()=>'id'+(++n),now:()=>clock,maxPlayers:2,code:'ABCDEF'});
 const said=p=>out.filter(([q])=>q===p).map(([,m])=>m);
 lobby.receive('a',JSON.stringify(hello('0.34.2')));
-assert.deepEqual(said('a')[0],{type:'welcome',id:'id1',protocol:PROTOCOL,lobby:'ABCDEF',max:2});
+assert.deepEqual(said('a')[0],{type:'welcome',id:'id1',protocol:PROTOCOL,lobby:'ABCDEF',max:2,host:'id1'}); // host: the first player in the lobby (MP-CLOCK)
 lobby.receive('b',JSON.stringify(hello('0.34.2')));
 assert.equal(said('b').find(m=>m.type==='playerJoined').id,'id1','late joiner sees the first');
 assert.equal(said('a').find(m=>m.type==='playerJoined').id,'id2');
@@ -47,7 +47,7 @@ assert.deepEqual(moved,{id:'id1',position:{x:1,y:2,z:3},room:'house:cedar-1'},'o
 assert.deepEqual(said('b'),[{type:'playerMoved',...moved}]);assert.equal(said('a').length,0,'not echoed');
 assert.equal(lobby.receive('a',JSON.stringify({type:'position',position:{x:1e9,y:0,z:0}})),null);
 assert.equal(lobby.receive('a',JSON.stringify({type:'position',position:{x:0,y:0,z:0},room:'roof'})),null);
-out.length=0;assert(lobby.leave('a'));assert.deepEqual(said('b'),[{type:'playerLeft',id:'id1'}]);assert(!lobby.leave('a'));
+out.length=0;assert(lobby.leave('a'));assert.deepEqual(said('b'),[{type:'playerLeft',id:'id1'},{type:'host',id:'id2'}],'the next oldest player is told it is the host');assert(!lobby.leave('a'));
 // Restored after hibernation: the players are there, and a newcomer sees them
 const woke=createLobby({send:(p,m)=>out.push([p,m]),close(){},newId:()=>'new',restore:[{peer:'x',id:'old',position:{x:1,y:0,z:1},room:'cafe'}]});
 out.length=0;woke.receive('y',JSON.stringify(hello('0.34.2')));

@@ -53,7 +53,7 @@ import {acceptContract,completeContract,tickContract,gigTarget,atGigPoint,refres
 import {GameState,initializeState,setMePosition,tickLife,setStatDrainMultiplier} from './state.js';
 import {needsEffects} from './life.js';
 import {loadProfile,saveProfile,wipePlayerKeys} from './profile.js';
-import {MultiplayerClient} from './multiplayer.js';
+import {MultiplayerClient} from './multiplayer.js';import {makeSessionClock,canSync,syncAdvance,SYNC_WARNING,VISIT_NOTE} from './session-clock.js';const sessionClock=makeSessionClock(); // the session game clock (session-clock.js): equals the saved clock alone or as host, follows the host's when you join
 import {createMainMenu,relayBase,refusalText,loadSettings} from './main-menu.js';import {createSaveMenu} from './save-menu.js';import {createCloud,PUSH_EVERY_MS} from './cloud-save.js';import {createAccountMenu} from './account-menu.js';import {normalizeLobbyCode,REFUSED} from './relay-protocol.js';
 import {findNearestClearSpot,MAX_SEARCH,OPEN_AREA} from './safe-spot.js';
 import {createHouseSigns} from './house-signs.js';
@@ -852,7 +852,7 @@ function updateWork(dt){
  workMarker.visible=false;drinkCup.visible=shop==='cafe'&&GameState.progress.cafe.stage==='serve';
  const dest=targetFor(GameState.progress),route=routeFor(GameState.progress),carrying=GameState.progress.phase==='carrying';
  $('housingStatus').textContent=GameState.progress.housing.rented?'Studio 2B · Bills due '+money(totalDue(GameState.progress.housing))+' · next in '+dueIn(GameState.progress.housing)+' days':'No home · Studio move-in $90.00';
- $('clockStatus').textContent=weekday(GameState.progress.housing.day)+' · '+clockText(GameState.progress.routine)+' · Week '+weekNumber(GameState.progress.housing.day);$('clockChip').textContent=weekday(GameState.progress.housing.day).slice(0,3)+' · '+clockText(GameState.progress.routine);$('earningsStatus').textContent='Earned today '+money(GameState.progress.routine.earned);
+ $('clockStatus').textContent=weekday(hudDay())+' · '+formatClock(hudMinutes())+' · Week '+weekNumber(hudDay())+hudTag();$('clockChip').textContent=weekday(hudDay()).slice(0,3)+' · '+formatClock(hudMinutes());$('earningsStatus').textContent='Earned today '+money(GameState.progress.routine.earned);
  $('needsStatus').textContent='Food '+Math.round(GameState.progress.life.food)+'% · Thirst '+Math.round(GameState.progress.life.thirst)+'% · Energy '+Math.round(GameState.progress.life.energy)+'%';
  $('needsStatus').dataset.depleted=String(GameState.progress.life.food===0||GameState.progress.life.thirst===0);
  renderVitals(GameState.progress.life);
@@ -1438,6 +1438,28 @@ multiplayer.onDropped(({wasIn,refused})=>{showLobby();if(!$('welcome').hidden)re
  toast(reconnectTries?'Still trying to reach the lobby…':'Lost the connection to the lobby. Reconnecting…');
  setTimeout(()=>{if(!multiplayer.socket)multiplayer.connect(url)},RECONNECT_MS[reconnectTries++]);
 });
+// MP-CLOCK (session-clock.js): a joiner uses the host's game clock. The HUD and sky read the session clock while you follow the host; 'visit' leaves your saved day and time (and so crops, rent, pet and gig timers) still, 'sync' moves them along.
+function hudDay(){return sessionClock.following?sessionClock.day:GameState.progress.housing.day}function hudMinutes(){return sessionClock.following?sessionClock.minutes:GameState.progress.routine.minutes}function hudTag(){return sessionClock.following&&sessionClock.mode==='visit'?' · Visiting':''}
+let clockChoice=null,clockSendNow=false; // clockChoice = {key,mode}: what this player picked for this lobby, kept for the session only
+function sessionStep(step){const P=GameState.progress,sc=sessionClock;
+ if(sc.mode==='local'){const next=advanceTime(P,step*.5);sc.setLocal(next.housing.day,next.routine.minutes);return next}
+ sc.advance(step);
+ if(sc.mode==='sync'){const d=sc.abs-gameMinutes(P);return d>0?advanceTime(P,d):P}
+ return P} // 'visit': nothing of the saved clock moves
+function clockDialog(step){$('clockChoice').hidden=step==='none';$('clockAsk').hidden=step!=='ask';$('clockWarn').hidden=step!=='warn'}
+function chooseClock(mode){clockDialog('none');sessionClock.setMode(mode);clockChoice={key:multiplayer.rejoinUrl||'',mode};toast(mode==='sync'?'Your save now follows the host\'s clock.':'Visiting: your own day and time wait for you.')}
+function askClockChoice(){const P=GameState.progress,ok=canSync(gameMinutes(P),sessionClock.abs),add=Math.round(syncAdvance(gameMinutes(P),sessionClock.abs));
+ $('clockHost').textContent='Host time: day '+sessionClock.day+', '+formatClock(sessionClock.minutes)+'.';$('clockVisitNote').textContent=VISIT_NOTE;$('clockWarnText').textContent=SYNC_WARNING+(add>=60?' About '+Math.round(add/60)+' game hours will pass for you.':'');
+ $('clockSync').disabled=!ok;$('clockSyncNote').textContent=ok?'':'The host\'s day is earlier than your save, so syncing would turn your calendar back. You can only visit.';
+ clockDialog('ask');$('clockVisit').focus()}
+$('clockVisit').onclick=()=>chooseClock('visit');$('clockSync').onclick=()=>{clockDialog('warn');$('clockSyncGo').focus()};$('clockSyncGo').onclick=()=>chooseClock('sync');$('clockSyncBack').onclick=()=>{clockDialog('ask');$('clockVisit').focus()};
+$('clockChoice').addEventListener('keydown',e=>{if(e.key==='Escape'){e.preventDefault();if(!$('clockWarn').hidden){clockDialog('ask');$('clockVisit').focus()}else chooseClock('visit')}});
+multiplayer.onConnected(()=>{sessionClock.setHost(multiplayer.isHost);if(multiplayer.isHost){sessionClock.setMode('local');clockSendNow=true}});
+multiplayer.onHost(()=>{const was=sessionClock.isHost;sessionClock.setHost(multiplayer.isHost);if(multiplayer.isHost&&!was){clockDialog('none');if(!sessionClock.synced)sessionClock.setMode('local');clockSendNow=true;toast('You are the host now: your clock is the session clock.')}});
+multiplayer.onClock(m=>{if(sessionClock.isHost)return;const first=!sessionClock.synced;if(first&&sessionClock.mode==='local')sessionClock.setMode('visit');sessionClock.receiveHost(m);
+ if(first){if(clockChoice&&clockChoice.key===(multiplayer.rejoinUrl||''))chooseClock(clockChoice.mode);else askClockChoice()}});
+multiplayer.onPlayerJoined(()=>{if(sessionClock.isHost)clockSendNow=true});
+multiplayer.onDisconnected(()=>{clockDialog('none');sessionClock.reset();sessionClock.setLocal(GameState.progress.housing.day,GameState.progress.routine.minutes)});
 // Main menu (main-menu.js). Play is offline; Host and Join open a connection first and start the game once the server has answered.
 const mainMenu=createMainMenu({$,storage:{getItem:k=>localStorage.getItem(k),setItem:(k,v)=>localStorage.setItem(k,v)},connect:url=>multiplayer.connect(url),disconnect:()=>multiplayer.disconnect(),onConnected:cb=>multiplayer.onConnected(cb),onDisconnected:cb=>multiplayer.onDisconnected(cb),onRefused:cb=>multiplayer.onRefused(cb),needUpdate:()=>updateNotice.announce(LOBBY_UPDATE),relay:relayBase(typeof location!=='undefined'?location:null),play:startGame,applyQuality,openCredits:()=>openCredits('menu')});
 // Settings > Your save (save-menu.js): export, import, backups. A replaced save reloads the page with persist() locked, or pagehide would write the old game back.
@@ -1463,6 +1485,7 @@ function updateMultiplayer(now,moving,dt){
  // Also send the final stopped position and door/reset teleports, at the same cap.
  if(networkTimer>=50&&(moving||changed))sendLocalPosition();
  for(const mesh of Object.values(remoteMeshes))updateRemotePlayer(mesh,dt);
+ if(sessionClock.dueBroadcast(dt,clockSendNow)){clockSendNow=false;multiplayer.sendClock(sessionClock.hostMessage())} // the host's game clock, every 30 s and when someone joins
 }
 
 let prev=performance.now(),frames=0,elapsed=0,menuDrawn=false,stuckTime=0;
@@ -1481,7 +1504,7 @@ function stepWorld(step){
    driveSave+=step;if(driveSave>=5){driveSave=0;persist()}}
  }else if(active&&!modal&&!actionBusy()&&!putting){let f=Number(keys.has('KeyW')||keys.has('ArrowUp'))-Number(keys.has('KeyS')||keys.has('ArrowDown')),s=Number(keys.has('KeyD')||keys.has('ArrowRight'))-Number(keys.has('KeyA')||keys.has('ArrowLeft'));let len=Math.hypot(f,s);if(len){f/=len;s/=len;const fx=moveFx(),speed=(fx.sprint&&(keys.has('ShiftLeft')||keys.has('ShiftRight'))?8.2:4.5)*fx.speed,dx=(-Math.sin(yaw)*f+Math.cos(yaw)*s)*speed*step,dz=(-Math.cos(yaw)*f-Math.sin(yaw)*s)*speed*step;if(!blocked(me.position.x+dx,me.position.z))me.position.x+=dx;if(!blocked(me.position.x,me.position.z+dz))me.position.z+=dz;const angle=Math.atan2(dx,dz);me.rotation.y+=Math.atan2(Math.sin(angle-me.rotation.y),Math.cos(angle-me.rotation.y))*(1-Math.exp(-step*24));phase+=step*speed*2.0;pressed=true}}
  const movedStep=Math.hypot(me.position.x-startX,me.position.z-startZ),moving=pressed&&movedStep>.000001,running=moving&&moveFx().sprint&&(keys.has('ShiftLeft')||keys.has('ShiftRight'));
- if(active&&!modal&&!document.hidden){GameState.progress=expireCafe(advanceTime(GameState.progress,step*.5));const oldStage=GameState.progress.activeJob?.stage;
+ if(active&&!modal&&!document.hidden){GameState.progress=expireCafe(sessionStep(step));const oldStage=GameState.progress.activeJob?.stage;
 const load=Math.max(1,carryEffects(GameState.progress.carry).load);
 tickLife(step,moving,running,load);if(passT===null&&sleepElapsed===null&&needsEffects(GameState.progress.life).passOut)startPassOut();
 GameState.progress=tickContract(GameState.progress,{position:me.position,room:currentRoom(),dt:step,moving,paused:!!consuming,running,distance:movedStep});
@@ -1517,7 +1540,7 @@ zoom=THREE.MathUtils.lerp(zoom,zoomTarget,1-Math.exp(-view*10));
 
 look.tick(view);
 if(worldPanel?.actor&&!$('dialog').hidden){const actor=worldPanel.actor,pa=getMeWorldPosition(new THREE.Vector3()),pb=actor.getWorldPosition(new THREE.Vector3()),mid=pa.clone().add(pb).multiplyScalar(.5);const angle=Math.atan2(pa.x-pb.x,pa.z-pb.z);actor.rotation.y=angle;me.rotation.y=angle+Math.PI;worldPlayer.position.copy(mid);if(shop)shops[shop].camera(worldPlayer,angle+.45,.32,5.8,view);else updateCamera(worldPlayer,angle+.45,.32,5.8,view)}else if(shop){getMeWorldPosition(worldPlayer.position);shops[shop].camera(worldPlayer,yaw,pitch,zoom,view);}else if(inside)(home.camera||indoorCamera)(me,yaw,pitch,zoom,view);else{camera.position.sub(shake.off);updateCamera(me,yaw,pitch,zoom,view);applyShake(view)}
-sky.update(GameState.progress.routine.minutes,{target:inside||shop?null:me.position,indoors:!!shop});if(inside)renderer.toneMappingExposure=INDOOR_EXPOSURE;else shadows.update({sky:sky.state(),outdoors:!shop,indoors:!!shop,low:mainMenu.settings.quality!=='high',centre:me.position}); // shadows.js: the shadow box snaps to texels and fades at low sun (High), patches under people and vehicles (Low). Before that: the sun or moon follows the player outdoors; rooms stay day-bright for now
+sky.update(sessionClock.following?sessionClock.minutes:GameState.progress.routine.minutes,{target:inside||shop?null:me.position,indoors:!!shop});if(inside)renderer.toneMappingExposure=INDOOR_EXPOSURE;else shadows.update({sky:sky.state(),outdoors:!shop,indoors:!!shop,low:mainMenu.settings.quality!=='high',centre:me.position}); // shadows.js: the shadow box snaps to texels and fades at low sun (High), patches under people and vehicles (Low). Before that: the sun or moon follows the player outdoors; rooms stay day-bright for now
 if(!driving.driving)lightMode='auto';if(GameState.progress.properties!==lightsHeldFor){lightsHeldFor=GameState.progress.properties;lightsHeld=heldIds(GameState.progress)}
 if(!inside)nightLights.update(view,{sky:sky.state(),high:mainMenu.settings.quality==='high',held:lightsHeld,vehicles:[driving.driving?{key:'own',mesh:driving.active.mesh,model:driving.active.spec.model,use:'driver',mode:lightMode,own:true}:null,{key:'customer-truck',mesh:customerTruck.mesh,model:'flatbed',use:customerTruck.phase==='in'||customerTruck.phase==='out'?'driver':'parked'},{key:'dock-truck',mesh:dockTruck.mesh,model:'flatbed',use:dockTruck.phase==='in'||dockTruck.phase==='out'?'driver':'parked'}]}); // lamps, windows and vehicle lamps follow the picture's time (night-lights.js); a parked vehicle is dark
 
