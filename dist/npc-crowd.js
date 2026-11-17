@@ -12,12 +12,13 @@ export const DRAW_HYSTERESIS=10; // someone already drawn stays until this much 
 export const POOL=9;            // characters shared by everyone who is not one of the six (6 + 9 = 15 skinned characters at most)
 export const ROUTES_PER_FRAME=1; // route searches per frame (a search is a few milliseconds at worst)
 export const PERSONAL_SPACE=1.1; // a person steps aside when the player is closer than this
+export const SEPARATION=.8;       // metres: two drawn people are never closer than this (drawing only: the plan does not change)
 const TURN_RATE=8;               // 1/s: how fast the heading eases to the path direction
 const HIDE_Y=-50;
 const wrap=a=>{while(a>Math.PI)a-=2*Math.PI;while(a<-Math.PI)a+=2*Math.PI;return a};
 
 export function createNpcCrowd({scene,createCharacter,outfit,population,schedule,pedestrians=[],blocked,cost=null,groundAt=null,map=MAP,radius=DRAW_RADIUS,pool=POOL,exclude=[],planOf=null}){
- const bounds=map.playable,points=new Map(),routes=new Map();let budget=ROUTES_PER_FRAME,hidden=false;
+ const bounds=map.playable,points=new Map(),routes=new Map(),placedX=[],placedZ=[];let budget=ROUTES_PER_FRAME,hidden=false;
  const point=place=>{if(!points.has(place))points.set(place,placePoint(place,map));return points.get(place)};
  const route=(from,to)=>{const key=from+'>'+to;if(routes.has(key))return routes.get(key);
   const a=point(from),b=point(to);if(!a||!b){routes.set(key,null);return null}
@@ -35,8 +36,11 @@ export function createNpcCrowd({scene,createCharacter,outfit,population,schedule
   if(p.moving&&Number.isFinite(p.yaw))e.yaw+=wrap(p.yaw-e.yaw)*(1-Math.exp(-dt*TURN_RATE));
   // step aside from the player (drawing only: the plan does not change)
   const dx=x-player.x,dz=z-player.z,d=Math.hypot(dx,dz),push=d<PERSONAL_SPACE&&d>.01?(PERSONAL_SPACE-d)/d:0,k=1-Math.exp(-dt*6);
-  e.ox+=(dx*push-e.ox)*k;e.oz+=(dz*push-e.oz)*k;
-  const px=x+e.ox,pz=z+e.oz;g.position.set(px,groundAt?groundAt(px,pz):.165,pz);g.rotation.y=e.yaw;
+  // keep apart from the people already placed this frame (flatmates with the same job and the same minute walk the exact same route and stood on top of each other)
+  let wx=dx*push,wz=dz*push;
+  for(let i=0;i<placedX.length;i++){const sx=x-placedX[i],sz=z-placedZ[i],sd=Math.hypot(sx,sz);if(sd<SEPARATION){if(sd>.05){const m=(SEPARATION-sd)/sd;wx+=sx*m;wz+=sz*m}else{wx+=Math.cos(e.yaw)*SEPARATION;wz-=Math.sin(e.yaw)*SEPARATION}}}
+  e.ox+=(wx-e.ox)*k;e.oz+=(wz-e.oz)*k;
+  const px=x+e.ox,pz=z+e.oz;placedX.push(px);placedZ.push(pz);g.position.set(px,groundAt?groundAt(px,pz):.165,pz);g.rotation.y=e.yaw;
   avatar.setMotion(p.moving?WALK_SPEED:0);avatar.update(dt);
  }
  function hide(e){
@@ -47,7 +51,7 @@ export function createNpcCrowd({scene,createCharacter,outfit,population,schedule
   entries,slots,get routeCount(){return routes.size},
   // time: {day, minute} from the game clock. Call once per frame while the player is outdoors.
   update(dt,player,time){
-   budget=ROUTES_PER_FRAME;hidden=false;
+   budget=ROUTES_PER_FRAME;hidden=false;placedX.length=0;placedZ.length=0;
    for(const e of entries){
     const plan=planOf?planOf(e.person.id,time.day):schedule.planOf(e.person.id,time.day);if(!plan)continue;
     personPose(e.pose,plan,time.minute,ctx);
