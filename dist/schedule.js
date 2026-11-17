@@ -8,7 +8,10 @@
 import {MAP} from './map-definition.js';
 import {hashOf,tripOf,isAway} from './population.js';
 
-export const ACTS=['sleep','home','travel','work','shop','away'];
+export const ACTS=['sleep','home','travel','work','shop','away','outside']; // outside: out in the open at `place` (the front door, or the street in front of a shop): drawn, standing about (0.35.14, NPC-VISIBLE)
+export const STROLL_REACH=25;  // game minutes: a stroll to a shop front is never further than this on foot
+export const STROLL_SPAN=40;   // a stroll's wait at the shop front is 10 to 49 minutes
+export const LAST_STROLL=1080; // nobody sets out on a stroll after 6 PM
 export const DAY=1440;
 const LAST_ERRAND=1290; // nobody sets out on an errand that would end after 9:30 PM
 const ERRAND_REACH=45;  // nor to a shop more than this many game minutes away
@@ -30,7 +33,10 @@ export function dayPlan(person,day,ctx={}){
    if(out<=ERRAND_REACH&&arrive>=opens&&leave<=closes&&leave+minutesTo(shop,person.home)<=LAST_ERRAND){go(shop);stay(leave,'shop');return true}}
   return false};
  const shopOrder=salt=>Object.keys(map.shops).sort((a,b)=>today(salt,a)-today(salt,b)||(a<b?-1:1));
- const toBed=wake=>{go(person.home);stay(Math.max(now+45,Math.min(1380,wake+960)),'home');stay(DAY,'sleep')}; // about eight hours before the next waking, and never straight from the door to bed
+ // NPC-VISIBLE: a short walk to the front of a nearest-first shop (on foot only), a wait there outside, and the walk home; people are drawn on streets only on trips, so this puts them in the open
+ const stroll=salt=>{if(here!==person.home||isAway(here)||now>LAST_STROLL)return false;for(const id of shopOrder(salt)){const shop='shop:'+id,t=trip(here,shop,person);if(t.mode==='walk'&&t.minutes<=STROLL_REACH&&now+2*t.minutes+10+STROLL_SPAN<=LAST_STROLL+60){const home=here;go(shop);stay(now+10+today(salt,'wait')%STROLL_SPAN,'outside');go(home);return true}}return false};
+ const sitOut=(salt,min=45,span=75)=>{if(here===person.home&&!isAway(person.home)&&now<1320)stay(now+min+today(salt,'sit')%span,'outside')}; // out at the front door (the plan is 'home' again after it)
+ const toBed=wake=>{go(person.home);stroll('eve');const bed=Math.max(now+45,Math.min(1380,wake+960));if(bed-now>=70)sitOut('door');stay(bed,'home');stay(DAY,'sleep')}; // about eight hours before the next waking, and never straight from the door to bed
 
  if(!person.resident){ // a commuter: off the map except for the shift
   const [from,to]=person.hours,arrive=from-5-today('early')%10;
@@ -49,8 +55,9 @@ export function dayPlan(person,day,ctx={}){
   const wake=420+h('wake')%90;
   stay(wake,'sleep');
   if(today('am')%2===0){stay(540+today('am-at')%60,'home');if(errand(shopOrder('am'),'am'))go(person.home)}
+  stay(Math.max(now,690+h('noon')%60),'home');if(today('noon')%3!==0){if(!stroll('noon'))sitOut('noon-door')}else sitOut('noon-door'); // about 11:30: out for a stroll, or out at the door
   if(today('pm')%2===0){stay(Math.max(now+30,900+today('pm-at')%120),'home');if(errand(shopOrder('pm'),'pm'))go(person.home)}
-  go(person.home);stay(Math.max(now+45,1290+h('bed')%60),'home');stay(DAY,'sleep');
+  go(person.home);sitOut('pm-door');stay(Math.max(now+45,1290+h('bed')%60),'home');stay(DAY,'sleep');
  }
  if(now<DAY)stay(DAY,here===person.home?rest:'travel');
  return blocks;

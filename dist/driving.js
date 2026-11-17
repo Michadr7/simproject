@@ -29,7 +29,10 @@ function fillerMarker(fuel){
  const cap=make(new THREE.CircleGeometry(.14,20));cap.name='filler-cap';cap.position.set(fuel.port.x+side*.04,fuel.port.y??.95,fuel.port.z);cap.rotation.y=side*Math.PI/2;
  const halo=make(new THREE.RingGeometry(.17,.24,24));halo.name='filler-halo';halo.position.copy(cap.position);halo.rotation.y=cap.rotation.y;
  const ring=make(new THREE.RingGeometry(.3,.45,32));ring.name='filler-ground';ring.rotation.x=-Math.PI/2;ring.position.set(fuel.port.x+side*.95,.06,fuel.port.z);
- group.add(cap,halo,ring);return group;
+ // the ground ring is a dim track; a bright arc fills it as the tank fills (setFill(0..1), 48 steps so the geometry is rebuilt at most 48 times a fill)
+ const fill=make(new THREE.RingGeometry(.3,.45,2,1,0,.01));fill.name='filler-fill';fill.rotation.x=-Math.PI/2;fill.position.set(ring.position.x,.065,ring.position.z);fill.visible=false;let lastStep=-1;
+ group.userData.setFill=f=>{const q=Math.round(Math.max(0,Math.min(1,Number.isFinite(f)?f:0))*48);if(q===lastStep)return;lastStep=q;fill.visible=q>0;if(q>0){fill.geometry.dispose();fill.geometry=new THREE.RingGeometry(.3,.45,Math.max(2,q),1,Math.PI/2,q/48*Math.PI*2)}};
+ group.add(cap,halo,ring,fill);return group;
 }
 const SOLID={apply:material=>material}; // no sightline fade for vehicles
 export const STEER_ANGLE=.5; // radians of wheel turn at full lock (visual)
@@ -148,7 +151,7 @@ const tilt=f=>{const s=f.state,sy=Math.sin(s.yaw),cy=Math.cos(s.yaw),at=(lx,lz)=
   // Meshes follow the states (every frame; a parked vehicle just stays where it is).
   // Shows the filler markers (while a nozzle is in your hand): every present vehicle's cap pulses in its own fuel colour, bright if the nozzle in hand is the right fuel and dim if it is not.
   showFillers(show,nozzleFuel=null){for(const f of fleet){if(!f.marker)continue;f.marker.visible=!!show&&f.present&&f!==driven;f.markerBright=nozzleFuel===null||nozzleFuel===f.spec.fuel.type}},
-  update(dt){pulse+=dt;tracks.update(dt);if(pending){pending.t-=dt;if(pending.t<=0){const run=pending.then;pending=null;run()}}for(const f of fleet){f.mesh.visible=f.present;if(f.cond>=1000&&f.hit.some(v=>v>0))f.hit=noHit();if(f.present&&((f.lookCond??1000)!==f.cond||f.lookHit!==f.hit)){f.lookCond=f.cond;f.lookHit=f.hit;applyLook(f.mesh,{...lookOf(f.cond),hit:hitLook(f.hit,f.cond)},f.spec.model,[f.cls.hx,f.cls.hz])} /* VD3: wear and cracks follow the condition (uniforms only, on change) */ if(f.marker&&f.marker.visible){const k=(f.markerBright?.8:.3)*(.6+.4*Math.sin(pulse*6));for(const part of f.marker.children)part.material.opacity=k}
+  update(dt){pulse+=dt;tracks.update(dt);if(pending){pending.t-=dt;if(pending.t<=0){const run=pending.then;pending=null;run()}}for(const f of fleet){f.mesh.visible=f.present;if(f.cond>=1000&&f.hit.some(v=>v>0))f.hit=noHit();if(f.present&&((f.lookCond??1000)!==f.cond||f.lookHit!==f.hit)){f.lookCond=f.cond;f.lookHit=f.hit;applyLook(f.mesh,{...lookOf(f.cond),hit:hitLook(f.hit,f.cond)},f.spec.model,[f.cls.hx,f.cls.hz])} /* VD3: wear and cracks follow the condition (uniforms only, on change) */ if(f.marker&&f.marker.visible){const k=(f.markerBright?.8:.3)*(.6+.4*Math.sin(pulse*6));for(const part of f.marker.children)part.material.opacity=part.name==='filler-ground'?k*.4:part.name==='filler-fill'?Math.min(1,k+.2):k;f.marker.userData.setFill?.(f.fuelMgal/f.spec.fuel.tankMgal)}
    const s=f.state,accel=dt>0?(s.speed-f.lastSpeed)/dt:0,lateral=s.speed*(Math.abs(s.speed)<.01?0:s.steer*s.speed/Math.max(f.cls.rMin,s.speed*s.speed/f.cls.aLat));f.lastSpeed=s.speed;
    const k=1-Math.exp(-dt*8);const g=tilt(f);f.pitch+=(clamp(-.01*accel,-.04,.04)+g.pitch-f.pitch)*k;f.roll+=(clamp(.012*lateral,-.05,.05)+g.roll-f.roll)*k;f.dynPitch=f.pitch-g.pitch;f.dynRoll=f.roll-g.roll;
    f.y+=(footing(s.x,s.z)-f.y)*(1-Math.exp(-dt*10));place(f);layTracks(f);

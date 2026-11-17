@@ -149,3 +149,9 @@ assert.equal(onTimeLimit(300),Math.ceil(300/9*2+10));assert.equal(onTimeLimit(0)
 // W-D2: normal play posts needs only; with no open need the board is empty, and the starter board is still the hashed grocery/parcel one
 {assert.deepEqual(boardForReal(p,600),[],'no open needs: an empty board');assert.deepEqual(boardForReal(p,600,undefined,{hashed:true}),b1);assert(starterBoard(p,600).length>0);assert(!GIG_TYPES.filter(t=>!t.need).some(t=>t.id.startsWith('need-')))}
 console.log('gigs ok');
+
+// Starter gig beat: the phone must offer the two starter gigs at story steps 6 and 7 (the normal board is the needs list and is empty for a new player), and accept works there
+{const {availableContracts:avail,acceptContract:acc}=await import('../dist/gig-bridge.js'),{freshProgress:fresh0}=await import('../dist/jobs.js');
+ const p0=fresh0();assert.equal(avail(p0).length,0,'a new player has no normal gigs');
+ const p7={...p0,starter:{...p0.starter,step:7}},offers=avail(p7);assert.equal(offers.length,2,'two starter gigs at the gig beat');assert.ok(!acc(p7,offers[0].id,{x:0,z:0}).error,'a starter gig can be accepted');
+ assert.equal(avail({...p7,starter:{...p7.starter,gigDone:true}}).length,0,'no starter gigs once one is done')}

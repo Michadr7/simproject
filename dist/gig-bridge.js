@@ -33,9 +33,11 @@ export const starterContracts=p=>p.activeJob||p.gigs?.active?[]:liveBoard(p,{sta
 export const CONTRACTS=Object.freeze([0,1,2,3].map(i=>Object.freeze({id:slotId(i),title:'Gig',description:'',reward:0,terms:'',mode:'delivery'})));
 export const contractById=id=>CONTRACTS.find(c=>c.id===id);
 export const refreshGigBoard=progress=>progress;
-export const availableContracts=p=>p.activeJob||p.gigs?.active?[]:liveBoard(p).map(s=>offer(p,s));
+// The story's gig beat (starter.js steps 6 and 7, until a gig is done): the phone shows the two starter gigs, not the open-needs board (which is empty for a new player: W-D2 made the normal board the needs list and nothing asked for the starter board).
+export const starterGigBeat=p=>{const s=p?.starter;return !!s&&!s.done&&(s.step===6||s.step===7)&&!s.gigDone};
+export const availableContracts=p=>p.activeJob||p.gigs?.active?[]:starterGigBeat(p)?starterContracts(p):liveBoard(p).map(s=>offer(p,s));
 export function acceptContract(p,id,position=null,opts={}){
- const i=slotOf(id),starter=opts?.starter===true;if(i<0)return {error:'This gig is unavailable.'};
+ const i=slotOf(id),starter=opts?.starter===true||(opts?.starter===undefined&&starterGigBeat(p));if(i<0)return {error:'This gig is unavailable.'};
  if(!starter&&noMoreWork(p))return {error:NO_MORE_WORK}; // the daily hard stop (the board is empty then too)
  if(!liveBoard(p,{starter}).some(s=>s.slot===i))return {error:'This gig is unavailable.'};
  const r=acceptGig(p,i,gameMinutes(p),undefined,position&&Number.isFinite(position.x)&&Number.isFinite(position.z)?{x:position.x,z:position.z}:null,{starter});return r.error?r:{state:withView(r.state)};

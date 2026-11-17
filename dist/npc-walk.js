@@ -78,12 +78,14 @@ export const INDOOR_KINDS=['shop','office','property','dwelling']; // acts at th
 // 'walk' (on foot: walking until they arrive), 'stand' (outdoors at their place), 'hidden' (indoors, in a car, or off the map)
 export function presenceOf(block){
  if(block.act==='travel')return block.mode==='drive'?'hidden':'walk';
+ if(block.act==='outside')return 'stand'; // out in the open (schedule.js 'outside'), even at a shop or a front door
  if(block.act==='sleep'||block.act==='home'||block.act==='away')return 'hidden';
  return INDOOR_KINDS.includes(placeKind(block.place))?'hidden':'stand';
 }
 // The index of the plan block a minute falls in (the plan covers 0 to 1440; blockAt in schedule.js builds an object, this does not).
 export function blockIndex(plan,minute){
- const m=((minute%1440)+1440)%1440;for(let i=0;i<plan.length;i++)if(m>=plan[i].from&&m<plan[i].to)return i;return plan.length-1;
+ const m=minute>=0&&minute<1440?minute:((minute%1440)+1440)%1440; // no +1440 for an in-range time: it rounds 910.9999999999998 up to 911 and picks the next block
+ for(let i=0;i<plan.length;i++)if(m>=plan[i].from&&m<plan[i].to)return i;return plan.length-1;
 }
 // Where a person is: fills out {state, x, z, yaw, moving, walked}. ctx: point(place)->{x,z}|null, route(from,to)->route|null (null: not worked out yet, or no such trip), both injected.
 // yaw is NaN when they stand (keep the last heading). state 'hidden' leaves x and z alone.
@@ -92,6 +94,6 @@ export function personPose(out,plan,minute,ctx){
  if(kind==='hidden')return out;
  if(kind==='stand'){const p=ctx.point(b.place);if(p){out.state='stand';out.x=p.x;out.z=p.z}return out}
  const route=ctx.route(b.origin,b.place);if(!route)return out;
- const m=((minute%1440)+1440)%1440,elapsed=(m-b.from)*SECONDS_PER_MINUTE,duration=(b.to-b.from)*SECONDS_PER_MINUTE,d=walkDistance(route.length,elapsed,duration);
+ const m=minute>=0&&minute<1440?minute:((minute%1440)+1440)%1440,elapsed=(m-b.from)*SECONDS_PER_MINUTE,duration=(b.to-b.from)*SECONDS_PER_MINUTE,d=walkDistance(route.length,elapsed,duration);
  routePoint(route,d,out);out.state='walk';out.moving=d<route.length;out.walked=d;if(!out.moving)out.yaw=NaN;return out;
 }

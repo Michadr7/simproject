@@ -22,7 +22,7 @@ export const AFTERNOON=720;              // rain drops errands that start after 
 export const OUTING_TRIP_MIN=15,MARKET_STAY=30,DELIVERY_AT=600,DELIVERY_DAY=2,VISIT_AT=1020,VISIT_SPREAD=120,VISIT_STAY=45;
 export const NEED_EVERY_DAYS=8,NEED_DUE_DAYS=3;
 export const RAIN_WORDS=Object.freeze(['rain','storm','snow']);
-const ACTS=['sleep','home','travel','work','shop','away'];
+const ACTS=['sleep','home','travel','work','shop','away','outside']; // keep equal to schedule.js ACTS
 // ---- helpers
 const hash=(...a)=>{let h=2166136261;for(const ch of a.join('|')){h^=ch.codePointAt(0);h=Math.imul(h,16777619)}h^=h>>>16;h=Math.imul(h,0x85ebca6b);h^=h>>>13;h=Math.imul(h,0xc2b2ae35);h^=h>>>16;return h>>>0};
 const int=(v,lo,hi,d=0)=>Number.isFinite(v)?Math.max(lo,Math.min(hi,Math.floor(v))):d;

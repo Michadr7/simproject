@@ -2,7 +2,7 @@
 // people sleep, shop only while the shop is open, and are where the plan says; the town's schedule answers "who is here now".
 import assert from 'node:assert/strict';
 import {MAP} from '../dist/map-definition.js';
-import {buildPopulation,isAway,tripOf} from '../dist/population.js';
+import {buildPopulation,isAway,tripOf,placePoint} from '../dist/population.js';
 import {dayPlan,blockAt,stateAt,createSchedule,ACTS,DAY} from '../dist/schedule.js';
 
 const town=buildPopulation(),DAYS=[...Array(21).keys()].map(d=>d+1);
@@ -71,3 +71,7 @@ const atHome=town.people.find(p=>p.resident&&!p.work);assert.equal(new Set(DAYS.
   if(p.post){const b=blockAt(plan,p.hours[0]);assert.equal(b.act,'work',`${p.name} still arrives on time with slower travel`)}}}
 
 console.log(`schedule tests passed: ${town.people.length} people over ${DAYS.length} days, least sleep ${sleepLeast} minutes, ${errands} shop visits`);
+
+// NPC-VISIBLE: residents spend part of the day out in the open (front door, or the street in front of a shop), and every outside block is somewhere that exists
+{const pop2=buildPopulation();let outside=0,total=0,blocks=0;for(const p of pop2.people){if(!p.resident)continue;for(let d=1;d<=14;d++){for(const b of dayPlan(p,d)){total+=b.to-b.from;if(b.act==='outside'){outside+=b.to-b.from;blocks++;assert.ok(placePoint(b.place),`${p.id}: outside at a place with no point`)}}}}
+ assert.ok(outside/total>=.06,`residents are outside at least 6% of the day (${(100*outside/total).toFixed(1)}%)`);assert.ok(blocks>50);console.log(`outside: ${(100*outside/total).toFixed(1)}% of residents' day in ${blocks} blocks`)}
