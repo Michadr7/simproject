@@ -62,7 +62,7 @@ assert.equal(tickTargetDay(at(base,5,299)),4);assert.equal(tickTargetDay(at(base
 
 // ---- W-A2 supply: the bakery and the sawmill feed their shops, conserved (removed from the producer)
 {const w0=normalizeWorld(null,7,100);for(const s of SUPPLY){assert.ok(PLACES[s.from]&&PLACES[s.to]&&PLACES[s.from].goods[s.good]&&PLACES[s.to].goods[s.good],s.from+'>'+s.to)}
- const dry={...w0,stock:{...w0.stock,'shop:market':{...w0.stock['shop:market'],bread:0},'shop:cafe':{...w0.stock['shop:cafe'],bread:0},'property:eastbank-supply':{...w0.stock['property:eastbank-supply'],planks:0}}};
+ const dry={...w0,stock:{...w0.stock,'shop:market':{...w0.stock['shop:market'],bread:0},'shop:cafe':{...w0.stock['shop:cafe'],bread:0},'property:eastbank-supply':{...w0.stock['property:eastbank-supply'],planks:0},'property:sawmill':{...w0.stock['property:sawmill'],planks:60}}}; // P-B wiring: a fresh sawmill (the yard) is empty: give it planks to ship
  const w=worldTick(dry,101,{});
  const bakery0=dry.stock['property:alder-bakery'].bread,bakery1=w.stock['property:alder-bakery'].bread,made=w.last.produced.bread||0;
  assert.equal(w.stock['shop:market'].bread,6);assert.equal(w.stock['shop:cafe'].bread,3);assert.equal(w.last.supplied.bread,9);

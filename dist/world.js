@@ -131,7 +131,7 @@ export const cuttableTreeAt=key=>worldLayout().cuttableByKey.get(key)||null;
 // ─── Collisions: spatial hash of trunks and fence rails ───────────────────────
 const BUCKET=4,PLAYER_RADIUS=.33;
 // Every collider belongs to the chunk its centre is in (`c.chunk`). With streaming on (`stream()`), only colliders of LIVE chunks count: the rest have `off` set (kept in the buckets, skipped by blocked(),
-// so a chunk coming back is one flag per collider). `active` stays the tree-felling flag. remove(c) takes a collider out for good.
+// so a chunk coming back is one flag per collider). `active` stays the tree-felling flag; `mutable` marks a collider play can switch (blockedAll counts it as built). remove(c) takes a collider out for good.
 export function createColliders(){
  const buckets=new Map(),keyOf=(bx,bz)=>bx+':'+bz,byChunk=new Map();let live=null;
  const own=c=>{const {i,j}=chunkIndex(c.x,c.z),k=chunkKey(i,j);c.chunk=k;c.off=live?!live.has(k):false;if(!byChunk.has(k))byChunk.set(k,new Set());byChunk.get(k).add(c);return c};
@@ -144,15 +144,19 @@ export function createColliders(){
   stream(on=true){live=on?new Set():null;for(const set of byChunk.values())for(const c of set)c.off=!!live},
   setChunkLive(key,on){if(!live)return 0;if(on)live.add(key);else live.delete(key);const set=byChunk.get(key);if(set)for(const c of set)c.off=!on;return set?set.size:0},
   countIn:key=>byChunk.get(key)?.size||0,
-  blocked(x,z){
-   const bx=Math.floor(x/BUCKET),bz=Math.floor(z/BUCKET);
-   for(let dx=-1;dx<=1;dx++)for(let dz=-1;dz<=1;dz++)for(const c of buckets.get(keyOf(bx+dx,bz+dz))||[]){
-    if(!c.active||c.off)continue;
-    if(c.circle?Math.hypot(x-c.x,z-c.z)<c.r+PLAYER_RADIUS:Math.abs(x-c.x)<c.hx+PLAYER_RADIUS&&Math.abs(z-c.z)<c.hz+PLAYER_RADIUS)return true;
-   }
-   return false;
-  }
+  blocked(x,z){return scan(x,z,false)},
+  // blockedAll: the same test over EVERY collider, whatever chunks are streamed in (`off` ignored), and with the colliders that change in play (`mutable`: a choppable tree,
+  // a landmark that can be hidden) always counted as built. It never reads streaming or play state, so it answers the same on every machine and every save (the NPC route table, game.js npcStaticBlocked).
+  blockedAll(x,z){return scan(x,z,true)},
  };
+ function scan(x,z,all){
+  const bx=Math.floor(x/BUCKET),bz=Math.floor(z/BUCKET);
+  for(let dx=-1;dx<=1;dx++)for(let dz=-1;dz<=1;dz++)for(const c of buckets.get(keyOf(bx+dx,bz+dz))||[]){
+   if(all?!c.active&&!c.mutable:!c.active||c.off)continue;
+   if(c.circle?Math.hypot(x-c.x,z-c.z)<c.r+PLAYER_RADIUS:Math.abs(x-c.x)<c.hx+PLAYER_RADIUS&&Math.abs(z-c.z)<c.hz+PLAYER_RADIUS)return true;
+  }
+  return false;
+ }
 }
 
 // ─── 3D construction ──────────────────────────────────────────────────────────
@@ -413,7 +417,7 @@ export function createWorld(scene,{label,cullRadius,streaming=false}={}){
  const tilt=new THREE.Quaternion(),yaw=new THREE.Quaternion(),axis=new THREE.Vector3();
  layout.cuttable.forEach((t,i)=>{
   const g=cutGroups.get(cutModels[i]),entry=addEntry(g,t,tints[i%4]);
-  const state={...t,index:i,model:g.id,meshes:g.meshes,entry,get slot(){return entry.slot},standing:true,stage:'mature',collider:colliders.circle(t.x,t.z,g.info.trunkRadius*t.scale+.04,t.key),anim:null};
+  const state={...t,index:i,model:g.id,meshes:g.meshes,entry,get slot(){return entry.slot},standing:true,stage:'mature',collider:Object.assign(colliders.circle(t.x,t.z,g.info.trunkRadius*t.scale+.04,t.key),{mutable:true}),anim:null};
   trees.set(t.key,state);poseTree(state);stumps.setMatrixAt(i,hidden);
  });
  // Which trees are in the meshes: those within the view distance of the player; trees farther than 30 m (choppable pines: 70 m) also have to be in front
@@ -453,7 +457,7 @@ export function createWorld(scene,{label,cullRadius,streaming=false}={}){
  const landmarks=MAP.landmarks.map(l=>{
   const info=propInfo(l.prop),mesh=createProp(l.prop,fade);mesh.position.set(l.x,heightAt(l.x,l.z),l.z);mesh.rotation.y=l.yaw;group.add(mesh);
   const cos=Math.round(Math.cos(l.yaw)),sin=Math.round(Math.sin(l.yaw)),turned=sin!==0;
-  const boxes=info.colliders.map(b=>colliders.box(l.x+b.x*cos+b.z*sin,l.z-b.x*sin+b.z*cos,turned?b.hz:b.hx,turned?b.hx:b.hz));
+  const boxes=info.colliders.map(b=>Object.assign(colliders.box(l.x+b.x*cos+b.z*sin,l.z-b.x*sin+b.z*cos,turned?b.hz:b.hx,turned?b.hx:b.hz),{mutable:true})); // mutable: setLandmarkVisible switches them
   return {id:l.id,mesh,boxes,hidden:false,x:l.x,z:l.z,yaw:l.yaw,floor:info.floors||info.floor||null,radius:Math.hypot(info.width,info.depth)/2};
  });
  for(const sign of MAP.signs){
@@ -575,7 +579,7 @@ export function createWorld(scene,{label,cullRadius,streaming=false}={}){
  }
  return {
   group,layout,trees,fade,addBroadleaves,eastbank,chunks:chunkView,ensure:(x,z,radius=1)=>chunkView?chunkView.ensure(x,z,radius):{built:0,ready:true,ms:0},
-  blocked:(x,z)=>colliders.blocked(x,z),
+  blocked:(x,z)=>colliders.blocked(x,z),blockedStatic:(x,z)=>colliders.blockedAll(x,z), // blockedStatic: every collider as built, never streaming or play state (createColliders blockedAll)
   // GD5: the wind of this frame (a wind.js windSample result) for the cover shader; the tier follows applyQuality ('high' or 'low'); stats for tests and the debug hook.
   setWind:w=>cover?.setWind(w),setCoverTier:t=>cover?.setTier(t),coverStats:()=>cover?cover.stats():null,coverView:cover,
   // Hide or show a landmark prop and its colliders (the Hal egg pallet while the crates are on the truck).

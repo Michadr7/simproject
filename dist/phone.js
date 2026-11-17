@@ -19,7 +19,7 @@ import {createPhoneCall} from './phone-call.js';
 import {createPhonePeople} from './phone-people.js'; // W-D3: the People app (the named people you have met)
 
 // UI only: transactions and movement/cursor ownership stay in game.js.
-export function createPhone({document:doc,getState,canOpen,onOpen,onClose,onAccept,onRefresh,onHomeAction,onOrder,onOrderVehicle,onSetMain,isOnSite,onClockIn,onClockOut,onQuit,onCollect,onRead,onTow,pullInfo,onPull,inVehicle,audio,gps}){
+export function createPhone({document:doc,getState,canOpen,onOpen,onClose,onAccept,onRefresh,onHomeAction,onOrder,onOrderVehicle,onSetMain,isOnSite,onClockIn,onClockOut,onQuit,onCollect,onRead,onGiveUp,onTow,pullInfo,onPull,inVehicle,audio,gps}){
   const $=id=>doc.getElementById(id);
   let opened=false,screen='home',previousFocus=null;
   // unread counts come from the saved messages (messages.js): the phone button shows the total, each app icon its own, Messages the total again
@@ -97,6 +97,7 @@ export function createPhone({document:doc,getState,canOpen,onOpen,onClose,onAcce
     $('phoneEnergyMeter').value=progress.life.energy;$('phoneFoodMeter').value=progress.life.food;
     $('phoneThirst').textContent=Math.round(progress.life.thirst)+' / 100';$('phoneThirstMeter').value=progress.life.thirst;
     $('phoneActiveJob').textContent=progress.activeJob?`Active: ${progress.activeJob.title}. ${progress.activeJob.pickup?'Pick up the parcel at '+(progress.activeJob.pickupName||'the pickup point')+'.':'Follow the gold marker.'}`:available.size?'No upfront energy charge. Offers refresh every 30 game minutes.': 'No offers right now. Check back after the board refreshes.';
+    {const g=$('phoneGiveUp');if(g){if(!g.onclick)g.onclick=()=>{if(!g._ask){g._ask=true;g.textContent='Tap again to give up';setTimeout(()=>{g._ask=false;g.textContent='Give up this gig'},4000);return}g._ask=false;g.textContent='Give up this gig';const r=onGiveUp?.()||{error:'Not available.'};$('phoneMessage').textContent=r.error||r.message||'';refresh()};g.hidden=!progress.activeJob}} // FIX-R2: a gig you cannot finish (lost the truck) no longer blocks the board
     for(const {h,status,buttons} of homeCards){
       const held=progress.properties?.[h.id],renting=held?.tenure==='rent',owning=held?.tenure==='own';
       status.textContent=owning?'You own this home.':renting?(held.rentDue?`Rent overdue: ${money(held.rentDue)}.`:`Renting · rent due in ${Math.max(0,held.nextBillDay-progress.housing.day)} days.`):'For rent or sale.';

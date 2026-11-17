@@ -17,7 +17,12 @@ import {SHORTBED_INFO,buildShortbed} from './shortbed.js';
 const CUSTOM={flatbed:{info:FLATBED_INFO,build:buildFlatbed},shortbed:{info:SHORTBED_INFO,build:buildShortbed}};
 
 // A prop is a converted model (PROPS) or a placeholder (placeholders.js); both have width, depth, height, footprint, colliders and floor.
-export const propInfo=id=>{const p=record(id)||CUSTOM[id]?.info||PLACEHOLDERS[id]||(isRigged(id)?riggedInfo(id):null);if(!p)throw new Error(isFarmProp(id)&&!FARM?'Farm prop '+id+' is not loaded yet: await ensureFarmProps() first':'Unknown prop '+id);return p}; // rigged props (rigged-props.js) answer from data too
+// Audit C1: the baked colliders come from a 0.5 m grid that rounds the far side up (the taxi's box was 0.24 m wider than the car), so a person could not squeeze between a parked taxi and a truck. Each box is clipped to the prop's footprint once (a box wholly outside the footprint is kept as it is).
+const CLIPPED=new WeakMap();
+const clipToFootprint=p=>{const f=p?.footprint;if(!f||!Array.isArray(p.colliders)||!p.colliders.length)return p;let c=CLIPPED.get(p);if(c)return c;
+ const cols=p.colliders.map(b=>{const x0=Math.max(b.x-b.hx,f.x0),x1=Math.min(b.x+b.hx,f.x1),z0=Math.max(b.z-b.hz,f.z0),z1=Math.min(b.z+b.hz,f.z1);return x1>x0&&z1>z0?{...b,x:(x0+x1)/2,z:(z0+z1)/2,hx:(x1-x0)/2,hz:(z1-z0)/2}:b});
+ c={...p,colliders:cols};CLIPPED.set(p,c);return c};
+export const propInfo=id=>{const r=record(id),p=r||CUSTOM[id]?.info||PLACEHOLDERS[id]||(isRigged(id)?riggedInfo(id):null);if(!p)throw new Error(isFarmProp(id)&&!FARM?'Farm prop '+id+' is not loaded yet: await ensureFarmProps() first':'Unknown prop '+id);return r?clipToFootprint(p):p}; // rigged props (rigged-props.js) answer from data too
 const geometries=new Map(),LINEAR=Float32Array.from({length:256},(_,i)=>{const c=i/255;return c<=.04045?c/12.92:Math.pow((c+.055)/1.055,2.4)});
 function buildGeometry(p){
  const geometry=new THREE.BufferGeometry();

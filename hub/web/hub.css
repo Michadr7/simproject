@@ -335,6 +335,9 @@ html.opening .nav li:nth-child(2){animation-delay:.04s}html.opening .nav li:nth-
 .cm-warn{display:block;margin-left:26px}
 .cm-out s{color:var(--dim)}
 .cm-actions{display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin:10px 0 4px}.cm-actions[hidden]{display:none}
+/* Commit page without the endless scroll: each file list scrolls inside its own box, and the action buttons stay pinned to the bottom of the screen */
+.cm-files{max-height:min(46vh,22rem);overflow:auto;padding-right:6px}
+.cm-actions{position:sticky;bottom:calc(var(--bot-h,0px) + 8px);z-index:5;background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:10px 12px}
 .tool-res.warn{color:var(--watch)}
 .view>div>textarea{width:100%;background:var(--panel2);color:var(--ink);border:1px solid var(--line);border-radius:10px;padding:9px 11px;font:14px var(--sans);resize:vertical;margin:6px 0}
 /* Hub v2 V4: the Assets page. Six stage cells (the three you set by hand are marked), the Add asset form, rows with a stage pill, new files, recent changes with Undo. */

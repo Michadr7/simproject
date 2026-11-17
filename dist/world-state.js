@@ -26,7 +26,7 @@ const freshTown=()=>Object.fromEntries(Object.keys(REGIONS).map(r=>[r,{prosperit
 // A saved world (or anything: garbage, an old save without one) -> a valid world. Unknown places and goods are dropped, numbers are clamped. `day` is where a fresh world starts, so it does not catch up 14 days.
 export function normalizeWorld(raw,seed=0,day=0){
  const r=raw&&typeof raw==='object'&&!Array.isArray(raw)?raw:{};
- const sd=isInt(r.seed)?r.seed:(isInt(seed)?seed:0),dy=isInt(r.day)&&r.day>=0?r.day:(isInt(day)&&day>=0?day:0);
+ const sd=isInt(r.seed)?r.seed:(isInt(seed)?seed:0),dy=isInt(r.day)&&r.day>=0?Math.min(r.day,100000):(isInt(day)&&day>=0?day:0);
  const stock=freshStock(sd),use={},town=freshTown();
  for(const id of PLACE_IDS)for(const [good,d] of Object.entries(PLACES[id].goods)){
   const v=r.stock?.[id]?.[good];if(isInt(v))stock[id][good]=clamp(v,0,d.max);
@@ -36,7 +36,7 @@ export function normalizeWorld(raw,seed=0,day=0){
   if(Array.isArray(t.history))town[id].history=t.history.filter(isInt).map(n=>clamp(n,0,150)).slice(-HISTORY_DAYS)}
  const nd=r.truck?.nextDay;
  const pump={gas:0,diesel:0};for(const f of Object.keys(pump)){const v=r.pump?.[f];if(isInt(v))pump[f]=clamp(v,0,MGAL_PER_GAL-1)}
- return {v:WORLD_VERSION,seed:sd,day:dy,stock,use,town,pump,truck:{nextDay:isInt(nd)&&nd>=0?nd:dy+TRUCK.firstOffset+hashOf(sd,'truck')%3},last:null};
+ return {v:WORLD_VERSION,seed:sd,day:dy,stock,use,town,pump,truck:{nextDay:isInt(nd)&&nd>=0?Math.min(nd,dy+TRUCK.everyDays):dy+TRUCK.firstOffset+hashOf(sd,'truck')%3},last:null};
 }
 const copy=w=>({...w,stock:Object.fromEntries(Object.entries(w.stock).map(([k,v])=>[k,{...v}])),use:Object.fromEntries(Object.entries(w.use||{}).map(([k,v])=>[k,{...v}])),
  town:Object.fromEntries(Object.entries(w.town).map(([k,v])=>[k,{...v,history:[...v.history]}])),truck:{...w.truck},pump:{...(w.pump||{gas:0,diesel:0})}});

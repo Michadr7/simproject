@@ -2,7 +2,7 @@
 // game.js, phone.js and objective.js keep calling acceptContract, tickContract, completeContract, availableContracts and gigTarget; the new
 // rules live in gigs.js. progress.gigs.active is the truth; progress.activeJob is a derived VIEW of it (title, stage, locations), rebuilt after every change here.
 // The board is derived from counters, so refreshGigBoard has nothing to do. Walking types only: the vehicle types wait for the vehicle work.
-import {dropParcel,pickParcel} from './gig-parcel.js';import {boardFor,acceptGig,tickGig,completeGig,gigDone,typeById,payFor,doneTodayOf,noMoreWork,NO_MORE_WORK,townContext,gameMinutes,GIG_TYPES,BOARD_SLOTS,parRoute,doorChoices,doorHint,pickNeedHaul,deliverHaul,abandonGig,settleNeed,slotOffer,needOf,needReward,needsPickup,NO_WORK_POSTED,hasCrateBed,atPickup,pickedUp,pickUpGig} from './gigs.js';
+import {dropParcel,pickParcel} from './gig-parcel.js';import {PARCEL_PIECES_ENABLED,removeParcelPieces,fromLegacyParcel,toLegacyCarry} from './cargo-items.js';import {boardFor,acceptGig,tickGig,completeGig,gigDone,typeById,payFor,doneTodayOf,noMoreWork,NO_MORE_WORK,townContext,gameMinutes,GIG_TYPES,BOARD_SLOTS,parRoute,doorChoices,doorHint,pickNeedHaul,deliverHaul,abandonGig,settleNeed,slotOffer,needOf,needReward,needsPickup,NO_WORK_POSTED,hasCrateBed,atPickup,pickedUp,pickUpGig} from './gigs.js';
 export {NO_WORK_POSTED,hasCrateBed};
 export {gameMinutes};
 const slotId=i=>'slot-'+i,slotOf=id=>/^slot-[0-3]$/.test(id)?+id.slice(5):-1;
@@ -48,7 +48,7 @@ export const marketContracts=p=>p.activeJob||p.gigs?.active?[]:liveBoard(p).filt
 const view=r=>r.error?r:{...r,state:withView(r.state)};
 export const pickNeedCrates=(p,opts={})=>view(pickNeedHaul(p,gameMinutes(p),opts));
 export const deliverNeedCrates=(p,opts={})=>view(deliverHaul(p,gameMinutes(p),opts));
-export const abandonContract=p=>view(abandonGig(p));
+export const abandonContract=(p,pieces=PARCEL_PIECES_ENABLED)=>view(abandonGig(p,pieces)); // the gig's parcel piece goes with it (hands and every bed) when pieces are on
 export const settleNeedGig=p=>{const r=settleNeed(p);return r.text?{...r,state:withView(r.state)}:r};
 export const gigTarget=job=>job.stage==='return'?job.returnLocation:job.location;
 export function tickContract(p,{position,room='street',dt=0,moving=false,distance=0}){
@@ -62,16 +62,16 @@ export const parFor=p=>{const a=p.gigs?.active;return a?.type==='round'&&a.start
 // The parcel's door dialog: null for any other gig, else the client's name and the three ways to greet them (each with the tip it earns).
 export const gigDoor=p=>{const a=p.gigs?.active,choices=doorChoices(a);return choices?{name:nameOf(a.client),text:'You are at the door. How do you greet '+nameOf(a.client)+'?',choices}:null};
 // X and E on the parcel: the pure drop/pick, with the derived activeJob view rebuilt (tickContract would keep a stale one).
-export const dropGigParcel=(p,at)=>{const r=dropParcel(p,at);return r.error?r:{...r,state:withView(r.state)}};
-export const pickGigParcel=p=>{const r=pickParcel(p);return r.error?r:{...r,state:withView(r.state)}};
+export const dropGigParcel=(p,at,pieces=PARCEL_PIECES_ENABLED)=>{const r=dropParcel(p,at);if(r.error)return r;const a=p.gigs.active;return {...r,state:withView(pieces?removeParcelPieces(r.state,a.id):r.state)}}; // pieces: the parcel in the hands becomes the ground drop
+export const pickGigParcel=(p,pieces=PARCEL_PIECES_ENABLED)=>{const r=pickParcel(p);if(r.error)return r;const item=pieces?fromLegacyParcel(r.state.gigs.active):null;return {...r,state:withView(item?{...r.state,carry:toLegacyCarry(item)}:r.state)}}; // pieces: the picked-up parcel is in the hands as a piece
 // G-D: E at the pickup point (within PICKUP_RADIUS_M, same room) takes the box; the on-time and too-fast clocks start now. gigPickupHere is what the world prompt asks.
 export const gigPickupHere=(p,position,room='street')=>{const a=p.gigs?.active;return !!a&&!a.needId&&atPickup(a,position,room)};
-export function pickUpGigBox(p,position,room='street'){
+export function pickUpGigBox(p,position,room='street',pieces=PARCEL_PIECES_ENABLED){
  if(!gigPickupHere(p,position,room))return {error:'You are not at the pickup point.'};
  if(p.carry)return {error:'Your hands are full. Put it down first (X).'};
- const r=pickUpGig(p,gameMinutes(p));return r.error?r:{state:withView(r.state),message:'You pick up the parcel. The clock is running.'};
+ const r=pickUpGig(p,gameMinutes(p));if(r.error)return r;const item=pieces?fromLegacyParcel(r.state.gigs.active):null;return {state:withView(item?{...r.state,carry:toLegacyCarry(item)}:r.state),message:'You pick up the parcel. The clock is running.'};
 }
-export function completeContract(p,position,room='street',tip=0){
+export function completeContract(p,position,room='street',tip=0,pieces=PARCEL_PIECES_ENABLED){
  const job=activeView(p);if(!job||job.stage!=='return'||!atGigPoint(position,room,job.returnLocation))return {error:'Complete the task and return to the marked contact first.'};
- const r=completeGig(p,gameMinutes(p),{tip,par:parFor(p)});return r.error?r:{state:withView(r.state),paid:r.paid};
+ const r=completeGig(p,gameMinutes(p),{tip,par:parFor(p),pieces});return r.error?r:{state:withView(r.state),paid:r.paid,failed:!!r.failed,closed:!!r.closed};
 }

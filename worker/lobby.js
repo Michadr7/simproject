@@ -50,7 +50,8 @@ export class Lobby{
  rules(){
   if(this.lobby)return this.lobby;
   const restore=[];
-  for(const ws of this.ctx.getWebSockets()){const a=ws.deserializeAttachment();if(a?.id)restore.push({peer:ws,id:a.id,position:a.position,room:a.room});if(a?.code)this.code=a.code}
+  for(const ws of this.ctx.getWebSockets()){const a=ws.deserializeAttachment();if(a?.id)restore.push({peer:ws,id:a.id,position:a.position,room:a.room,joinedAt:Number.isFinite(a.joinedAt)?a.joinedAt:0});if(a?.code)this.code=a.code}
+  restore.sort((x,y)=>x.joinedAt-y.joinedAt); // audit C10: getWebSockets() order is not promised to be join order, and the first player is the host; sockets saved before this change have joinedAt 0 and keep their relative order (the sort is stable)
   this.lobby=createLobby({
    code:this.code,restore,newId:()=>crypto.randomUUID(),
    send:(ws,message)=>{try{ws.send(JSON.stringify(message))}catch{}},
@@ -82,7 +83,7 @@ export class Lobby{
   const lobby=this.rules();
   const view=lobby.receive(ws,data);
   // Keep each player's latest state on its socket, so a wake-up from hibernation restores it.
-  if(view)try{ws.serializeAttachment({code:this.code,...view})}catch{}
+  if(view)try{const was=ws.deserializeAttachment();ws.serializeAttachment({code:this.code,joinedAt:Number.isFinite(was?.joinedAt)?was.joinedAt:Date.now(),...view})}catch{}
  }
  async webSocketClose(ws,code){await this.gone(ws);try{ws.close(code===1005||code===1006?1000:code)}catch{}}
  async webSocketError(ws){await this.gone(ws)}

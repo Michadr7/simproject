@@ -7,7 +7,8 @@ export const HEAVY_TEXT='Heavy load: the ATV is slower.';
 export const MASS_KG=Object.freeze({log:40,plank:6,crate:12,parcelSmall:3,parcelMedium:6});
 export const loadFactor=massKg=>{const m=Number.isFinite(massKg)&&massKg>0?massKg:0;return Math.max(MIN_FACTOR,1-DRAG_PER_KG*m)};
 export const isHeavy=massKg=>loadFactor(massKg)<HEAVY_BELOW;
-// kg on a bed: cargo.js pieces {k:'log'} | {k:'planks',n} | {k:'crate'}
-export const cargoMassKg=cargo=>{let kg=0;if(cargo)for(const p of cargo)kg+=p.k==='planks'?(p.n||0)*MASS_KG.plank:p.k==='crate'?MASS_KG.crate:p.k==='log'?MASS_KG.log:0;return kg};
+// kg on a bed: cargo.js pieces {k:'log'} | {k:'planks',n} | {k:'crate'} | {k:'parcel',g,m,l?} | {k:'box'}
+export const BOX_KG=5; // a generic box (cargo-items.js)
+export const cargoMassKg=cargo=>{let kg=0;if(Array.isArray(cargo))for(const p of cargo)if(p)kg+=p.k==='planks'?(p.n||0)*MASS_KG.plank:p.k==='crate'?MASS_KG.crate:p.k==='log'?MASS_KG.log:p.k==='parcel'?(p.l?MASS_KG.parcelMedium:MASS_KG.parcelSmall):p.k==='box'?BOX_KG:0;return kg};
 // kg of the gig parcel a rider has stowed: a large gig is the medium carton, an ordinary one the small carton (gig-parcel.js)
 export const parcelMassKg=active=>!active?0:active.large?MASS_KG.parcelMedium:MASS_KG.parcelSmall;

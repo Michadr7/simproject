@@ -10,6 +10,8 @@ import {normalizeWorld,catchUp,visitCounts,pumpAvailMgal,pumpSell,TICK_MINUTE,CA
 import {normalizeNeeds,needsFrom,expire,PLACE_POINTS,newsText} from './needs.js';
 import {PALLET_LINK,PLACES,PUMP_PLACE,SOLD_OUT_TEXT} from './world-goods.js';
 import {totalPlanks} from './pallets.js';
+import {strollDemand} from './stroll-visits.js';
+import {normalizeYard,trickle,YARD_MAX_PLANKS} from './sawmill-yard.js';
 
 export {TICK_MINUTE,CATCH_UP_MAX,SOLD_OUT_TEXT};
 export const SICK_FARM_HEALTH=.5; // Hal sick: the farm makes half (owner answer 3)
@@ -23,8 +25,8 @@ export function tickTargetDay(progress){
 export const worldDue=(progress,authority=true)=>authority&&!!progress?.world&&tickTargetDay(progress)>progress.world.day;
 
 const clamp=(v,a,b)=>Math.min(b,Math.max(a,v));
-// errand visits per place for one day, from every person's day plan (the same for everyone; memoised by the caller)
-const demandFor=day=>visitCounts(townPopulation().people,day,dayPlan);
+// visits per place for one day, from every person's day plan (the same for everyone; memoised by the caller): errands plus strolls that end at an open shop front (N2, stroll-visits.js: a stroll into a shop is a real shop visit)
+const demandFor=day=>strollDemand(townPopulation().people,day,dayPlan,visitCounts,MAP);
 
 // Copy the Ridgeline pallets' planks into the world's warehouse place (the pallets are the truth). A save with no Ridgeline company yet keeps the world's number.
 function mirrorPallets(world,progress){
@@ -33,6 +35,12 @@ function mirrorPallets(world,progress){
  const n=clamp(totalPlanks(company),0,d.max);
  return {...world,stock:{...world.stock,[PALLET_LINK.place]:{...world.stock[PALLET_LINK.place],[PALLET_LINK.good]:n}}};
 }
+
+// P-B wiring (notes/planks-economy-design.md): ONE plank source at the sawmill. The player-fed yard (progress.sawmillYard) IS the sawmill's stock; the world place has no rate.
+// yardOf: the saved yard, or (a progress that has none yet) a yard holding the world's sawmill planks, so nothing is lost or made. The trickle (6 a day) runs once per ticked day (idempotent, sawmill-yard.js).
+export const SAWMILL_PLACE='property:sawmill';
+export const yardOf=(progress,world)=>progress?.sawmillYard&&typeof progress.sawmillYard==='object'?normalizeYard(progress.sawmillYard):normalizeYard({planks:Number(world?.stock?.[SAWMILL_PLACE]?.planks)||0});
+const setSawmill=(world,n)=>({...world,stock:{...world.stock,[SAWMILL_PLACE]:{...world.stock[SAWMILL_PLACE],planks:n}}});
 
 // The tick. Returns a NEW progress with world, needs, npcs changed (the same object when nothing is due). dayNow = tickTargetDay(progress) unless a test passes one.
 // ctx (all optional): {seed, events(day)->[{kind,at}], weather(day), keeperOf, placePoint}.
@@ -47,6 +55,8 @@ export function runWorldDay(progress,dayNow=tickTargetDay(progress),ctx={}){
  // 2. the world: production, supply, truck, consumption by the errand visits of every person's day plan
  const memo=new Map(),counts=d=>{if(!memo.has(d))memo.set(d,demandFor(d));return memo.get(d)};
  world=mirrorPallets(world,P);
+ let yard=yardOf(P,world);for(let d=first;d<=dayNow;d++)yard=trickle(yard,d); // P-B: the day's trickle goes into the yard, then the yard is the world's sawmill stock for the supply run
+ world=setSawmill(world,Math.min(yard.planks,YARD_MAX_PLANKS));
  world=catchUp(world,from,dayNow,{demand:(place,d)=>counts(d)[place]||0,farmHealth:d=>halSick[d]?SICK_FARM_HEALTH:1,events:ctx.events}).world;
  // 3. needs: past-due ones close (a late fill, the keeper's mood), then the new day's needs open
  let needs=normalizeNeeds(P.needs);
@@ -58,8 +68,9 @@ export function runWorldDay(progress,dayNow=tickTargetDay(progress),ctx={}){
    if(s.reason==='sick'&&r.home){sickNpcs.push({id,home:r.home,good:'bread',qty:1,origin:'shop:market'});continue}
    if((s.kind==='restock'||s.kind==='harvest')&&!PLACES[s.place]?.goods[s.good])continue; // needs.js reads the place's target for these kinds: only goods the world really holds
    if(PLACE_POINTS[s.place]||ctx.placePoint?.(s.place))needSeeds.push({kind:s.kind,place:s.place,good:s.good,person:s.person,qty:s.qty,dueIn:Math.max(1,s.dueDay-dayNow)})}} // seeds for places with no point on the map would only fill the board
- needs=needsFrom(world,dayNow,{needs,sickNpcs,needSeeds,events:ctx.events,keeperOf:ctx.keeperOf,placePoint:ctx.placePoint});
- return {...P,world,needs,npcs};
+ needs=needsFrom(world,dayNow,{needs,sickNpcs,needSeeds,boardOnly:true,events:ctx.events,keeperOf:ctx.keeperOf,placePoint:ctx.placePoint});
+ yard=normalizeYard({...yard,planks:world.stock[SAWMILL_PLACE].planks}); // what the supply (and any late restock from the sawmill) took leaves the yard: conserved
+ return {...P,world,needs,npcs,sawmillYard:yard};
 }
 
 // ---- pump hooks (stage W-D1, fuel.js stays as it is): game.js asks how much a pump can still sell, clips the sale to it, then reports what was sold.

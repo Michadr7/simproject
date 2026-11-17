@@ -35,7 +35,7 @@ export const PLACES=Object.freeze({
  'zone:forest':Object.freeze({id:'zone:forest',label:'Pine Ridge logging',kind:'producer',region:'eastbank',hours:[360,1080],goods:Object.freeze({
   logs:g(60,150,60,{rate:16})})}),
  'property:sawmill':Object.freeze({id:'property:sawmill',label:'Sawmill',kind:'producer',region:'eastbank',hours:[360,1080],goods:Object.freeze({  // map-definition.js:304
-  planks:g(60,160,60,{rate:24})})}),
+  planks:g(60,160,0)})}), // P-B wiring: no rate (the world mints nothing here). This stock IS the player-fed yard (progress.sawmillYard, sawmill-yard.js): world-tick.js copies the yard in before the day's supply and back after; the yard's daily trickle (6) is the only free supply
  'office:ridgeline-warehouse':Object.freeze({id:'office:ridgeline-warehouse',label:'Ridgeline Warehouse',kind:'depot',region:'eastbank',hours:[360,1080],goods:Object.freeze({ // map-definition.js:359
   planks:g(60,200,60,{daily:10})})}),
  'property:eastbank-supply':Object.freeze({id:'property:eastbank-supply',label:'Eastbank Building Supplier',kind:'shop',region:'eastbank',hours:[420,1020],goods:Object.freeze({ // map-definition.js:308

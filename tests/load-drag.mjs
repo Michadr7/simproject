@@ -49,9 +49,9 @@ assert.equal(capacity('flatbed','log'),24);assert.equal(capacity('shortbed','cra
 
 // a stowed parcel: the saved state is the same as a held one, so it survives enter, exit, save and delivery
 const base={carry:null,gigs:{active:{id:7,client:'Ann',large:false,drop:null}}};
-assert(parcelHeld(base)&&canStow('atv')&&!canStow('shortbed')&&stowed(base,'atv')&&!stowed(base,'flatbed'));
+assert(parcelHeld(base)&&canStow('atv')&&canStow('shortbed')&&canStow('worktruck')&&canStow('flatbed')&&!canStow('sedan')&&stowed(base,'atv')&&stowed(base,'shortbed')&&!stowed(base,'sedan'));
 assert.equal(mountError(base,'atv'),null,'the ATV takes the parcel');
-assert.equal(mountError(base,'shortbed'),PARCEL_HANDS,'other vehicles still refuse it');
+assert.equal(mountError(base,'shortbed'),null,'a truck bed takes the parcel (the Kasumuchi S70 refused it before)');assert.equal(mountError(base,'shortbed',[{k:'crate'}]),RACK_BUSY,'a loaded bed refuses the parcel');assert.equal(mountError(base,'sedan'),PARCEL_HANDS,'a car without a bed still refuses it');
 assert.match(mountError({...base,carry:{kind:'log'}},'atv'),/hands are full/);
 assert.equal(mountError(base,'atv',[{k:'log'}]),RACK_BUSY,'a loaded rack refuses the stowed parcel');assert.equal(mountError(base,'atv',[]),null);assert.equal(mountError({carry:null,gigs:{active:null}},'atv',[{k:'log'}]),null,'no parcel: cargo does not block mounting');
 assert.equal(mountError({carry:null,gigs:{active:null}},'shortbed'),null);

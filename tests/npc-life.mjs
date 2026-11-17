@@ -124,3 +124,6 @@ assert.deepEqual(L.namedPlan(fresh.hal,3,world,[]),[]);assert.deepEqual(L.namedP
 // source scan
 for(const f of ['npc-life.js','npc-roster.js']){const src=fs.readFileSync(new URL('../dist/'+f,import.meta.url),'utf8');const code=src.replace(/\/\/.*$/gm,'');assert.ok(!/Math\.random|Date\.now/.test(code),f);assert.ok(!/\b(document|window|THREE)\b/.test(code),f);assert.ok(src.split('\n')[0].startsWith('// '+f+':'),f)}
 console.log('PASS npc-life: roster, tiers, +3/day standing cap, sickness band, Oscar/Lincoln/Brentster rules, canVisit, namedPlan, visits, needs, determinism');
+
+// NPC-VISIBLE: a homebody (Oscar) never strolls or sits out at his door
+{const popO=buildPopulation(),po=personById(popO,byId('oscar').personId);let outside=0;for(let d=1;d<=30;d++)outside+=L.namedPlan({...fresh.oscar},d,{seed:'s'},dayPlan(po,d)).filter(b=>b.act==='outside').length;assert.equal(outside,0,'Oscar stays in')}

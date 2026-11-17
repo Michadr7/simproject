@@ -99,4 +99,6 @@ for(const f of ['world-goods.js','world-state.js']){const src=fs.readFileSync(ne
  const total=performance.now()-t0;assert.ok(w.day===164&&Object.keys(w.stock).length===PLACE_IDS.length);assert.ok(total/ticks<20);
  const t1=performance.now();for(let i=0;i<1000;i++)worldTick(w,165+i,{demand:()=>5});const pure=(performance.now()-t1)/1000;
  console.log(`people ${pop.people.length}; day-plan scan ${(visitsMs/ticks).toFixed(2)} ms/day; whole tick incl. scan ${(total/ticks).toFixed(2)} ms; pure worldTick ${pure.toFixed(3)} ms`)}
+// audit C8: a saved supply-truck day far in the future is capped (the truck would never come); audit C/F8 (jobs.js): a world day ahead of the clock is pulled back so the world ticks again
+{const w=normalizeWorld({v:1,seed:1,day:10,truck:{nextDay:9e15}},1,10);assert.ok(w.truck.nextDay<=10+TRUCK.everyDays,'truck day capped: '+w.truck.nextDay);const w2=normalizeWorld({day:9e15},1,10);assert.ok(w2.day<=100000,'huge world day clamped')}
 console.log('PASS world-state: determinism, run-out + price cap, delivery, conservation, truck, catch-up 14, normalize, prosperity floor, price band, stockAt, no clock/chance');

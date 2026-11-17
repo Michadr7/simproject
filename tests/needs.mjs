@@ -80,6 +80,14 @@ assert.equal(many.filter(n=>n.status==='open').length,MAX_OPEN_NEEDS);
 assert.equal(new Set(many.map(n=>n.kind+n.place+n.good)).size,many.length,'one per kind+place+good');
 assert.ok(many.every(n=>KINDS.includes(n.kind)));
 assert.deepEqual(many,needsFrom(wc,DAY,{needSeeds:[{kind:'tend',place:F,qty:1},{kind:'serve',place:'shop:cafe',qty:1}],sickNpcs:[{id:'walt',home:'house:oak-4'}],events:d=>[{kind:'tree-down',at:'zone:forest'}]}),'same order every time');
+// FIX-R2 boardOnly: a harvest (no distance) and a sick errand (home has no point) never open; an egg restock still does
+{const wb=base();wb.stock[F].eggs=120;const b=needsFrom(wb,DAY,{boardOnly:true,sickNpcs:[{id:'walt',home:'house:oak-4'}]});assert.ok(!b.some(n=>n.kind==='harvest'||n.kind==='errand'),'invisible needs are not opened');
+ const low=base();assert.equal(eggs(needsFrom(low,DAY,{boardOnly:true})).length,1,'a boardable restock opens')}
+// audit A F5: the pallet-linked warehouse planks never become a board restock (the pallets are the truth; a gig delivery would vanish at the daily tick)
+{const ww=base();ww.stock['office:ridgeline-warehouse'].planks=0;ww.stock['property:sawmill'].planks=60; // P-B wiring: a fresh sawmill yard is empty, so give the source planks
+assert.ok(needsFrom(ww,DAY,{}).some(n=>n.place==='office:ridgeline-warehouse'&&n.good==='planks'),'without boardOnly the warehouse restock still opens');assert.ok(!needsFrom(ww,DAY,{boardOnly:true}).some(n=>n.place==='office:ridgeline-warehouse'&&n.good==='planks'),'boardOnly: no pallet-linked restock')}
+// audit A F3: the cafe's egg slot is not titled 'for the market'
+{const wc=base();wc.stock['shop:cafe'].eggs=0;const cn=needsFrom(wc,DAY,{}).find(n=>n.place==='shop:cafe'&&n.good==='eggs');if(cn){const sl=needToSlot(cn,{});assert.ok(!/market/i.test(sl.title),'cafe title: '+sl.title)}}
 // kinds from ctx: errand + clear + harvest
 const wh=base();wh.stock[F].eggs=120;
 const kinds=needsFrom(wh,DAY,{sickNpcs:[{id:'walt',home:'house:oak-4',good:'bread',qty:2}],events:[{kind:'tree-down',at:'zone:forest'},{kind:'nonsense',at:'x'}]});

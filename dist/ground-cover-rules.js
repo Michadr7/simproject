@@ -50,11 +50,8 @@ export function lodKeep(kind,dist,tier){const R=coverReach(kind,tier);return 1-s
 export const lodScale=(kind,dist,tier)=>Math.min(1,lodKeep(kind,dist,tier)*2);
 export const lodVisible=(kind,dist,tier,rank)=>rank<lodKeep(kind,dist,tier);
 // The deterministic placement for one chunk. chunkX, chunkZ = chunk indices (origin chunkX*100 unless opts.bounds {x0,z0,x1,z1} is given, as chunks.js chunkBounds). sampler = {surfaceAt(x,z), slopeAt, roadDist, buildingDist, waterDist, biomeAt}, all optional. Returns [{kind,model,variant,x,z,scale,yaw,tint:[r,g,b],rank,phase}] grouped in COVER_ORDER, at most the tier's chunkCap, identical for the same arguments. Cells are a global grid, so a neighbour chunk agrees along the border.
-export function coverFor(chunkX,chunkZ,seed,sampler,opts){opts=opts||{};const tier=tierOf(opts.tier),T=COVER_TIER[tier];
- const b=opts.bounds||{x0:chunkX*COVER_CHUNK,z0:chunkZ*COVER_CHUNK,x1:(chunkX+1)*COVER_CHUNK,z1:(chunkZ+1)*COVER_CHUNK};
- if(!Number.isFinite(b.x0)||!Number.isFinite(b.z0)||!Number.isFinite(b.x1)||!Number.isFinite(b.z1)||b.x1<=b.x0||b.z1<=b.z0)return [];
- const sd=Number.isFinite(seed)?Math.floor(seed)|0:0,s=sampler||DEF_SAMPLER,groups=[];
- for(const kind of COVER_ORDER){if(!T.kinds.includes(kind))continue;const r=COVER_RULES[kind],ki=COVER_KINDS.indexOf(kind),dmax=maxDensity(kind),nv=Math.max(1,Math.min(r.models.length,T.variants)),list=[],cell=r.cell;
+export function coverGroup(kind,b,sd,s,T){
+ const r=COVER_RULES[kind],ki=COVER_KINDS.indexOf(kind),dmax=maxDensity(kind),nv=Math.max(1,Math.min(r.models.length,T.variants)),list=[],cell=r.cell;
   const i0=Math.floor(b.x0/cell),i1=Math.ceil(b.x1/cell),j0=Math.floor(b.z0/cell),j1=Math.ceil(b.z1/cell);
   const bound=Math.max(...Object.values(r.surf))*Math.max(1,...Object.values(r.biome))*(1+r.clump)*T.density/dmax; // cheap pre-filter: most candidates stop here, before any sampler call
   for(let j=j0;j<j1;j++)for(let i=i0;i<i1;i++){const u=cellRand(i,j,ki*7+1,sd);if(u>=bound)continue;
@@ -62,9 +59,19 @@ export function coverFor(chunkX,chunkZ,seed,sampler,opts){opts=opts||{};const ti
    const p=densityAt(kind,x,z,s)*T.density/dmax;if(!(u<p))continue;
    const v=Math.min(nv-1,Math.floor(cellRand(i,j,ki*7+4,sd)*nv)),n=valueNoise(x/9+17.3,z/9+4.1),sc=(r.scale[0]+(r.scale[1]-r.scale[0])*cellRand(i,j,ki*7+5,sd))*(.88+.24*n),tone=groundTone(x,z,0),m=macroAt(x,z),hue=(cellRand(i,j,ki*7+6,sd)-.5)*.12;
    list.push({kind,model:r.models[v],variant:v,x,z,scale:sc,yaw:cellRand(i,j,ki*7+7,sd)*Math.PI*2,tint:[tone*(1+.08*m+hue),tone*(1+hue*.5),tone*(1-.08*m-hue)],rank:cellRand(i,j,ki*7+8,sd),phase:cellRand(i,j,ki*7+9,sd)*Math.PI*2})}
-  groups.push(list)}
- let room=Math.min(T.chunkCap,Number.isFinite(opts.cap)?Math.max(0,Math.floor(opts.cap)):Infinity),out=[];
+  return list}
+
+export function coverMerge(groups,T,opts){opts=opts||{};
+let room=Math.min(T.chunkCap,Number.isFinite(opts.cap)?Math.max(0,Math.floor(opts.cap)):Infinity),out=[];
  for(const list of groups){if(room<=0)break;if(list.length<=room){for(const e of list)out.push(e);room-=list.length}else{const keep=list.slice().sort((a,c)=>a.rank-c.rank).slice(0,room);keep.sort((a,c)=>a.x-c.x||a.z-c.z);for(const e of keep)out.push(e);room=0}}
  return out}
+
+// The same placement as a job: step() places ONE kind (so the view can spread a chunk over several frames), done says when every kind has had its turn, result() merges and caps. coverFor runs the whole job at once.
+export function coverJob(chunkX,chunkZ,seed,sampler,opts){opts=opts||{};const tier=tierOf(opts.tier),T=COVER_TIER[tier];
+ const b=opts.bounds||{x0:chunkX*COVER_CHUNK,z0:chunkZ*COVER_CHUNK,x1:(chunkX+1)*COVER_CHUNK,z1:(chunkZ+1)*COVER_CHUNK};
+ const bad=!Number.isFinite(b.x0)||!Number.isFinite(b.z0)||!Number.isFinite(b.x1)||!Number.isFinite(b.z1)||b.x1<=b.x0||b.z1<=b.z0;
+ const sd=Number.isFinite(seed)?Math.floor(seed)|0:0,s=sampler||DEF_SAMPLER,groups=[],kinds=bad?[]:COVER_ORDER.filter(k=>T.kinds.includes(k));let i=0;
+ return {get done(){return i>=kinds.length},step(){if(i<kinds.length)groups.push(coverGroup(kinds[i++],b,sd,s,T))},result(){return bad?[]:coverMerge(groups,T,opts)}}}
+export function coverFor(chunkX,chunkZ,seed,sampler,opts){const j=coverJob(chunkX,chunkZ,seed,sampler,opts);while(!j.done)j.step();return j.result()}
 // Cost summary of a placement: instance count per kind and the draw calls if the view makes one InstancedMesh per (kind, model) per chunk.
 export function coverStats(list){const byKind={},draws=new Set();for(const e of list){byKind[e.kind]=(byKind[e.kind]||0)+1;draws.add(e.kind+'|'+e.model)}return {total:list.length,byKind,drawCalls:draws.size,kindDrawCalls:Object.keys(byKind).length}}

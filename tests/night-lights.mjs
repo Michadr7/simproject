@@ -162,7 +162,7 @@ assert.deepEqual(spotlightPlan({high:true,on:false,level:1,present:false}),{pres
  try{
   g.pump(1);const scene=g.scene(),sprites=scene.getObjectByName('night-sprites'),ground=scene.getObjectByName('night-ground'),heads=scene.getObjectByName('street-lamp-heads');
   assert(sprites&&ground&&heads,'the world scene has the night lights');
-  const lights=()=>{let n=0;scene.traverse(o=>{if(o.isLight)n++});return n},objects=()=>{let n=0;scene.traverse(()=>n++);return n},at=m=>{S.progress.routine.minutes=m;g.pump(.2)};
+  const lights=()=>{let n=0;scene.traverse(o=>{if(o.isLight)n++});return n},objects=()=>{let n=0;const walk=o=>{if(o.isSkinnedMesh||o.name==='CharacterArmature')return;n++;for(const c of o.children)walk(c)};walk(scene);return n} /* the pooled crowd characters re-skin as different people come into range (male and female rigs differ by 17 marker nodes): not counted (audit B3) */,at=m=>{S.progress.routine.minutes=m;g.pump(.2)};
   const flatsLit=()=>{let n=0;scene.traverse(o=>{if(o.material?.name==='city-window-lit')n++});return n},keys=()=>g.ids.get('vpKeys').children.map(r=>r.children.map(c=>c.textContent).join(' '));
   const press=code=>{g.send('keydown',code);g.send('keyup',code);g.pump(.3)};
   at(720);const noonObjects=objects();

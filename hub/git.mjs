@@ -15,6 +15,8 @@ const BRANCH=/^[A-Za-z0-9][A-Za-z0-9._/-]{0,100}$/;
 export const safeBranch=b=>typeof b==='string'&&BRANCH.test(b)&&!b.includes('..')&&!b.endsWith('/')&&!b.endsWith('.lock');
 const same=(a,b)=>a.length===b.length&&a.every((x,i)=>x===b[i]);
 const goodPaths=a=>a.length>0&&a.every(p=>plainPath(p)&&!forbiddenReason(p));
+export const CMD_CHARS=20000;
+export const batches=(paths,max=CMD_CHARS)=>{const out=[];let cur=[],n=0;for(const p of paths){if(cur.length&&n+p.length+1>max){out.push(cur);cur=[];n=0}cur.push(p);n+=p.length+1}if(cur.length)out.push(cur);return out};
 
 // The whole command list. READ shapes may also run synchronously (they are quick and only look).
 const READ=[
@@ -27,6 +29,7 @@ const READ=[
 const WRITE=[
  a=>a[0]==='add'&&a[1]==='--'&&goodPaths(a.slice(2)),
  a=>a[0]==='commit'&&a[1]==='-F'&&typeof a[2]==='string'&&a[2].length>0&&a[3]==='--'&&goodPaths(a.slice(4)),
+ a=>a.length===5&&a[0]==='commit'&&a[1]==='-F'&&typeof a[2]==='string'&&a[2].length>0&&/^--pathspec-from-file=.+/.test(a[3])&&a[4]==='--pathspec-file-nul', // a long list (a release folder): the paths go through a temp file, not the command line (Windows stops at about 32 000 characters)
  a=>same(a,['reset','--soft','HEAD~1']),
  a=>a.length===3&&a[0]==='push'&&a[1]==='origin'&&safeBranch(a[2])];
 export const isReadCommand=a=>Array.isArray(a)&&a.every(x=>typeof x==='string')&&READ.some(f=>f(a));
@@ -72,12 +75,16 @@ export function createGit({root,gitPath=findGit(),timeoutMs=READ_LIMIT_MS,pushMs
   onRemote(){const r=readSync(['branch','-r','--contains','HEAD']);return r.ok?lines(r.stdout).length>0:true},
   // the commits on this branch that origin/<branch> does not have: [{id, subject}], or {error} when the remote branch is not known here
   ahead(b){if(!safeBranch(b))return {error:'branch'};const r=readSync(['log',`origin/${b}..HEAD`,'--format=%h%x09%s']);return r.ok?{commits:lines(r.stdout).map(l=>{const [id,...s]=l.split('\t');return {id,subject:s.join('\t')}})}:{error:'no-remote'}},
-  async add(paths){const r=await run(['add','--',...paths]);return r.ok?{ok:true}:{ok:false,text:tail(r.stderr)||'git could not stage the files'}},
+  // Windows refuses a command line over about 32 000 characters, so a long list goes in batches of at most 20 000 characters.
+  async add(paths){for(const chunk of batches(paths)){const r=await run(['add','--',...chunk]);if(!r.ok)return {ok:false,text:tail(r.stderr)||'git could not stage the files'}}return {ok:true}},
   // The message goes through a temp file (never the command line), written without a BOM and removed afterwards.
   async commit(message,paths){
    const file=path.join(os.tmpdir(),`hub-commit-${randomBytes(6).toString('hex')}.txt`);
    try{fs.writeFileSync(file,String(message).replace(/\r\n/g,'\n').replace(/\s+$/,'')+'\n','utf8');
-    const r=await run(['commit','-F',file,'--',...paths]);
+    let pf=null,r;
+    if(Array.isArray(paths)&&paths.join(' ').length>CMD_CHARS&&goodPaths(paths)){pf=path.join(os.tmpdir(),`hub-paths-${randomBytes(6).toString('hex')}.txt`);fs.writeFileSync(pf,paths.join('\0'),'utf8');r=await run(['commit','-F',file,'--pathspec-from-file='+pf,'--pathspec-file-nul'])}
+    else r=await run(['commit','-F',file,'--',...paths]);
+    if(pf)try{fs.unlinkSync(pf)}catch{}
     if(r.ok)return {ok:true};
     const e=tail(r.stderr+' '+r.stdout);
     return {ok:false,text:/please tell me who you are|unable to auto-detect email|empty ident/i.test(r.stderr)?'Git has no name or email set for this project. Commit once from GitHub Desktop, or set them, then try again.':e||'git did not make the commit'}

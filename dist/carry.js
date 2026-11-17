@@ -1,15 +1,20 @@
 // What the player carries, the sawmill belt and planks put down. Pure transactions: (progress, ...) -> {state, message} or {error}. Saved as three additive progress fields (no schema change):
-//   carry:      null | {kind:'log'} (on the shoulder) | {kind:'planks', count:1..4} (in the hands). One thing at a time. A carried log is NOT in the bag.
+//   carry:      null | {kind:'log'} (on the shoulder) | {kind:'planks', count:1..4} (in the hands) | {kind:'crate'|'box'} | {kind:'parcel',gig,model,large?} (cargo redesign). One thing at a time. A carried log is NOT in the bag.
 //   belt:       0..4, the stacks of 4 planks on the sawmill's conveyor. Where they sit is derived (they ride to the end stop), so nothing per plank is saved.
 //   plankDrops: [{id,x,z,count,q}] planks put down on the ground (q: quarter turns, 0..3), at most 12 stacks; they never expire and block like a low box.
+//   crateDrops: optional [{id,x,z,k:'crate'|'box',q}] crates and boxes put down on the ground (C-B), at most 12, same rules as plankDrops.
 // A log put into the saw counts as a stack on the belt at once (the cut animation is cosmetic), so a save or a reload mid-cut loses nothing.
 import {MAX_LOGS,nextLogIdFor} from './grid.js';
 import {isWalkable} from './world.js';
-import {freshStats} from './skills.js';import {parcelHeld,PARCEL_HANDS} from './gig-parcel.js';
+import {freshStats} from './skills.js';import {parcelHeld,PARCEL_HANDS,PARCEL_DEFAULT} from './gig-parcel.js';
 
 export const BELT_SLOTS=4,PLANKS_PER_STACK=4,MAX_PLANK_DROPS=12;
 // What carrying does to the body: a log slows you to 80%, planks to 85%; no sprinting while carrying; stamina drains 1.5x (log) or 1.25x (planks). Dropped stacks never expire.
-export const carryEffects=carry=>carry?.kind==='log'?{speed:.8,sprint:false,load:1.5}:carry?.kind==='planks'?{speed:.85,sprint:false,load:1.25}:{speed:1,sprint:true,load:1};
+// Cargo redesign (C-B): the ONE table of hands numbers per carry kind (cargo-items.js handsRule reads it): a crate walks at 60% (no sprint, 1.5x stamina), the parcel and a box at 90%.
+export const HANDS_SPEED=Object.freeze({log:.8,planks:.85,crate:.6,parcel:.9,box:.9});
+export const HANDS_LOAD=Object.freeze({log:1.5,planks:1.25,crate:1.5,parcel:1.1,box:1.1});
+export const CARRY_KINDS=Object.freeze(['log','planks','crate','parcel','box']);
+export const carryEffects=carry=>{const k=typeof carry?.kind==='string'&&Object.prototype.hasOwnProperty.call(HANDS_SPEED,carry.kind)?carry.kind:null;return k?{speed:HANDS_SPEED[k],sprint:false,load:HANDS_LOAD[k]}:{speed:1,sprint:true,load:1}};
 // Items lie on whatever they were put down on: the deck height under them (null on open ground) plus the item's own rest height.
 export const restHeight=(floor,base)=>(Number.isFinite(floor)?floor:0)+base;
 export const LOG_REST=.12,PLANK_REST=.06,PLANK_LENGTH=1.2; // PLANK_LENGTH: metres, one length for every plank stack (belt, ground, hands)
@@ -30,7 +35,14 @@ export const plankBox=(d,size)=>{const odd=(d.q||0)%2===1;return {x:d.x,z:d.z,hx
 export const quarterOf=yaw=>((Math.round(yaw/(Math.PI/2))%4)+4)%4;
 const minutesOf=p=>((p.housing?.day||1)-1)*1440+(p.routine?.minutes||0);
 
-export const normalizeCarry=v=>v?.kind==='log'?{kind:'log'}:v?.kind==='planks'&&Number.isSafeInteger(v.count)&&v.count>=1&&v.count<=PLANKS_PER_STACK?{kind:'planks',count:v.count}:null;
+// carry: null | {kind:'log'} | {kind:'planks',count} | {kind:'crate'} | {kind:'box'} | {kind:'parcel',gig,model,large?} (the last three are the cargo redesign: one thing in the hands)
+export const normalizeCarry=v=>{
+ if(!v||typeof v!=='object')return null;
+ if(v.kind==='log'||v.kind==='crate'||v.kind==='box')return {kind:v.kind};
+ if(v.kind==='planks')return Number.isSafeInteger(v.count)&&v.count>=1&&v.count<=PLANKS_PER_STACK?{kind:'planks',count:v.count}:null;
+ if(v.kind==='parcel'&&Number.isSafeInteger(v.gig)&&v.gig>=1&&v.gig<=1e9)return {kind:'parcel',gig:v.gig,model:typeof v.model==='string'&&v.model&&v.model.length<=64?v.model:PARCEL_DEFAULT,...(v.large===true?{large:true}:{})};
+ return null;
+};
 export const normalizeBelt=v=>Number.isSafeInteger(v)?Math.max(0,Math.min(BELT_SLOTS,v)):0;
 export function normalizePlankDrops(value){
  const out=[],seen=new Set();
@@ -85,4 +97,26 @@ export function pickUpPlanks(progress,id){
  if(progress.carry||parcelHeld(progress))return {error:progress.carry?HANDS:PARCEL_HANDS};
  const drop=(progress.plankDrops||[]).find(d=>d.id===id);if(!drop)return {error:'Those planks are gone.'};
  return {state:{...progress,carry:{kind:'planks',count:drop.count},plankDrops:progress.plankDrops.filter(d=>d.id!==id)},message:`You pick up ${drop.count} planks. Press X to put them down.`};
+}
+// C-B (cargo redesign): a crate or a box put down on the ground. Saved as the optional progress field crateDrops: [{id,x,z,k:'crate'|'box',q}] (q: quarter turns), at most MAX_CRATE_DROPS; they never expire and block like a low box (CRATE_SIZE is the footprint at q 0).
+// Like planks, a put-down ALWAYS works: at the limit the oldest one on the ground is cleared away, so full hands are never a dead end.
+export const MAX_CRATE_DROPS=12,CRATE_SIZE=Object.freeze({x:.58,z:.38});
+export function normalizeCrateDrops(value){
+ const out=[],seen=new Set();
+ for(const r of Array.isArray(value)?value:[]){
+  if(!r||!Number.isSafeInteger(r.id)||r.id<1||seen.has(r.id)||(r.k!=='crate'&&r.k!=='box')||!Number.isFinite(r.x)||!Number.isFinite(r.z)||!isWalkable(r.x,r.z))continue;
+  seen.add(r.id);out.push({id:r.id,x:r.x,z:r.z,k:r.k,q:Number.isSafeInteger(r.q)?((r.q%4)+4)%4:0});
+ }
+ return out.slice(0,MAX_CRATE_DROPS);
+}
+export function putDownCrate(progress,at){
+ const k=progress.carry?.kind;if(k!=='crate'&&k!=='box')return {error:'You are not carrying a crate.'};
+ let drops=progress.crateDrops||[],cleared=false;while(drops.length>=MAX_CRATE_DROPS){const oldest=drops.reduce((a,d)=>d.id<a.id?d:a,drops[0]);drops=drops.filter(d=>d!==oldest);cleared=true}
+ const id=1+Math.max(0,...drops.map(d=>d.id));
+ return {state:{...progress,carry:null,crateDrops:[...drops,{id,x:at.x,z:at.z,k,q:Number.isSafeInteger(at.q)?((at.q%4)+4)%4:0}]},message:cleared?`You put the ${k} down. The oldest one on the ground was cleared away to make room.`:`You put the ${k} down.`};
+}
+export function pickUpCrate(progress,id){
+ if(progress.carry||parcelHeld(progress))return {error:progress.carry?HANDS:PARCEL_HANDS};
+ const drop=(progress.crateDrops||[]).find(d=>d.id===id);if(!drop)return {error:'That crate is gone.'};
+ return {state:{...progress,carry:{kind:drop.k},crateDrops:progress.crateDrops.filter(d=>d.id!==id)},message:`You pick up the ${drop.k}. It is heavy: you walk slowly. Press X to put it down.`};
 }

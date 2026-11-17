@@ -4,7 +4,7 @@ import assert from 'node:assert/strict';
 import {MAP} from '../dist/map-definition.js';
 import {buildPopulation,placePoint,WALK_SPEED,tripOf} from '../dist/population.js';
 import {dayPlan,createSchedule} from '../dist/schedule.js';
-import {makeRoute,findRoute,walkDistance,routePoint,presenceOf,blockIndex,personPose,SECONDS_PER_MINUTE} from '../dist/npc-walk.js';
+import {makeRoute,findRoute,walkDistance,routePoint,presenceOf,blockIndex,personPose,SECONDS_PER_MINUTE,PACE_STEP,freeReach} from '../dist/npc-walk.js';
 
 // 1. along a route: monotone, ends and stops, never turns back
 const L=makeRoute([{x:0,z:0},{x:10,z:0},{x:10,z:20}]);
@@ -84,4 +84,15 @@ assert.equal(new Set(names).size,names.length,'unique names');
 assert.deepEqual(buildPopulation().people.map(p=>p.name),names,'deterministic');
 for(const n of ['Alex','Sophie','Robert','Julia','Carlos','Megan'])assert.ok(names.some(x=>x.split(' ')[0]===n),n+' is a person of the town (the pedestrian avatars are driven by their plan)');
 assert.equal(SECONDS_PER_MINUTE,2);
+// NPC-VISIBLE: someone out in the open paces (steps out and back along the street): it stays within PACE_STEP of their point, starts and ends on it, never jumps, and is deterministic
+{const ctxP={point:()=>({x:10,z:5}),route:()=>null},planP=[{from:100,to:160,act:'outside',place:'dwelling:x'}],o={state:'',x:0,z:0,yaw:NaN,moving:false,walked:0};let prev=null,mv=0,far=0;
+ for(let m=100;m<160;m+=0.02){personPose(o,planP,m,ctxP);assert.equal(o.state,'stand');assert.equal(o.z,5);far=Math.max(far,Math.abs(o.x-10));if(prev!==null)assert.ok(Math.abs(o.x-prev)<.2,'no jump');if(m===100)assert.equal(o.x,10,'starts on the point');if(o.moving)mv++;prev=o.x}
+ assert.ok(far>1&&far<=PACE_STEP+1e-9,'paces '+far);assert.ok(mv>0,'walks while stepping');personPose(o,planP,159.999,ctxP);assert.ok(Math.abs(o.x-10)<.05,'ends on the point')}
+// audit B8: pacing is clipped at the first blocked sample; with a wall 1 m to the right the person never goes past it, a blocked start stays put, and freeReach has the expected values
+{const wall=(x,z)=>(x>11.0&&x<12)||(x<9&&x>8),o={state:'',x:0,z:0,yaw:NaN,moving:false,walked:0},planP=[{from:100,to:160,act:'outside',place:'dwelling:b8'}];
+ assert.equal(freeReach(null,0,0,1,0,2.4),2.4);assert.equal(freeReach(wall,10,5,1,0,2.4),.8);assert.equal(freeReach(wall,10,5,-1,0,2.4),.8);assert.equal(freeReach(wall,11.5,5,1,0,2.4),0,'a blocked start does not pace');
+ for(const dirTest of [1,-1]){let hmax=-1e9,hmin=1e9;const ctxW={point:()=>({x:10,z:5}),route:()=>null,paceReach:(pl,x,z,dir)=>freeReach(wall,x,z,dir,0,PACE_STEP)};
+  for(let m=100;m<160;m+=0.02){personPose(o,planP,m,ctxW);hmax=Math.max(hmax,o.x);hmin=Math.min(hmin,o.x);assert.ok(!wall(o.x,o.z),'never inside the wall at x='+o.x)}
+  assert.ok(hmax<=11.0+1e-9&&hmin>=9-1e-9,'clipped at the walls: '+hmin+'..'+hmax);void dirTest}
+ const shut={point:()=>({x:10,z:5}),route:()=>null,paceReach:()=>0};for(let m=100;m<160;m+=0.5){personPose(o,planP,m,shut);assert.equal(o.x,10);assert.equal(o.moving,false)}}
 console.log(`PASS npc-walk: ${pop.people.length} people, ${walkers} walking blocks over 4 days, ${JSON.stringify(seen)} poses sampled`);

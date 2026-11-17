@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict';
-import {dropParcel,pickParcel,parcelHeld,parcelWaiting,parcelDropped,normalizeDrop,PARCEL_FIRST,PARCEL_HANDS,mountError,stowed} from '../dist/gig-parcel.js';
+import {dropParcel,pickParcel,parcelTaken as parcelHeld,parcelWaiting,parcelDropped,normalizeDrop,PARCEL_FIRST,PARCEL_HANDS,mountError,stowed} from '../dist/gig-parcel.js';
+// C-B (cargo redesign, switch ON): the picked-up parcel is a real piece in progress.carry, so "held" here means parcelTaken (in the hands or on a bed); the hands are blocked by progress.carry ('Your hands are full').
 import {tickContract,completeContract,dropGigParcel,pickGigParcel,activeView,pickUpGigBox,gigPickupHere} from '../dist/gig-bridge.js';
 import {normalizeGigs,tickGig,completeGig,failGig,boardFor,acceptGig} from '../dist/gigs.js';
 import {freshProgress,normalizeProgress,saveProgress,loadProgress} from '../dist/jobs.js';
@@ -19,7 +20,7 @@ const hb=boardFor(fresh,undefined,undefined,{hashed:true}),start={slot:(hb.find(
  // the pickup point: too far refused, close accepted, hands full refused
  assert(!gigPickupHere(a0,{x:o.x+5,z:o.z},'street'));assert(pickUpGigBox(a0,{x:o.x+5,z:o.z}).error);assert(pickUpGigBox({...a0,carry:{kind:'planks',count:4}},{x:o.x,z:o.z}).error);assert(!gigPickupHere(a0,{x:o.x,z:o.z},'cafe'),'wrong room');
  const k=pickUpGigBox(a0,{x:o.x+1.5,z:o.z+.5},'street');assert.equal(k.error,undefined);const a1=k.state;assert(parcelHeld(a1)&&!parcelWaiting(a1));assert(a1.gigs.active.pickedAt>=a0.gigs.active.acceptedAt,'the clocks start now');assert.equal(a1.activeJob.pickup,false);assert(!gigPickupHere(a1,{x:o.x,z:o.z}),'only once');assert(pickUpGigBox(a1,{x:o.x,z:o.z}).error);
- assert(mountError(a1,'sedan'),'held: no car');assert.equal(mountError(a1,'atv'),null);assert(stowed(a1,'atv'),'the ATV rack takes it after pickup');assert.equal(takePlanks({...a1,belt:2}).error,PARCEL_HANDS);
+ assert(mountError(a1,'sedan'),'held: no car');assert.equal(mountError(a1,'atv'),null);assert.equal(a1.carry?.kind,'parcel','after pickup the parcel is a piece in the hands');assert(!stowed(a1,'atv'),'the old flag rack is only for old saves: the piece rides as cargo');assert.match(takePlanks({...a1,belt:2}).error,/hands are full/);
  const dd=dropGigParcel(a1,{x:3,z:3});assert.equal(dd.error,undefined);
  // the stops now tick
  let q1=a1;for(const s of far)q1=tickContract(q1,{position:{x:s.x,z:s.z},room:'street',dt:.03});assert.equal(q1.activeJob.stage,'return');
@@ -49,7 +50,8 @@ assert.deepEqual(normalizeDrop({x:99999,z:-99999}),{x:2000,z:-2000});assert.equa
 // the gig ends, fails or is abandoned: the drop goes with the active gig
 assert.equal(failGig(dr).gigs.active,null);assert.equal(normalizeGigs({...dr.gigs,active:null}).active,null);
 // one thing in the hands: planks or a log cannot be picked up while the box is held, the box cannot be picked up with planks in hands
-const held=take(fresh).state;assert.equal(takePlanks({...held,belt:2}).error,PARCEL_HANDS);assert.equal(pickUpPlanks({...held,plankDrops:[{id:1,x:0,z:0,count:4,q:0}]},1).error,PARCEL_HANDS);assert.equal(shoulderLog({...held,logs:[{id:1,x:0,z:0}]},1).error,PARCEL_HANDS);
+const held=take(fresh).state;assert.match(takePlanks({...held,belt:2}).error,/hands are full/);assert.match(pickUpPlanks({...held,plankDrops:[{id:1,x:0,z:0,count:4,q:0}]},1).error,/hands are full/);assert.match(shoulderLog({...held,logs:[{id:1,x:0,z:0}]},1).error,/hands are full/);
+{const flag={...held,carry:null};assert.equal(takePlanks({...flag,belt:2}).error,PARCEL_HANDS,'an old-save flag parcel (no piece) still blocks with its own words')}
 assert(takePlanks({...dr,belt:2}).state,'with the box on the ground the hands are free');
 const full={...dr,carry:{kind:'planks',count:4}};assert(/hands are full/i.test(pickGigParcel(full).error),'cannot pick up the box with planks in hands');
 // G3b: the box is a real carton model (small for an ordinary gig, medium for a large one; clean or dirty by a fixed hash of client and id, never random)

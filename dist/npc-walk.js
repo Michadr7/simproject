@@ -87,12 +87,27 @@ export function blockIndex(plan,minute){
  const m=minute>=0&&minute<1440?minute:((minute%1440)+1440)%1440; // no +1440 for an in-range time: it rounds 910.9999999999998 up to 911 and picks the next block
  for(let i=0;i<plan.length;i++)if(m>=plan[i].from&&m<plan[i].to)return i;return plan.length-1;
 }
+// Someone out in the open (act 'outside') does not freeze: a slow pace along the street, a few steps one way, a wait, back again (a pure function of the time; each person has their own timing and direction).
+// Cycle of PACE_CYCLE seconds: wait, walk PACE_STEP m, wait, walk back, wait. Writes the offset into out.x and out.z and sets moving and yaw while a step is taken.
+export const PACE_CYCLE=14,PACE_STEP=2.4;
+function pace(out,b,minute,ctx){
+ let h=b.from*31;for(let i=0;i<b.place.length;i++)h=(h*33+b.place.charCodeAt(i))%9973;
+ const e=(minute-b.from)*SECONDS_PER_MINUTE-(h%5),left=(b.to-minute)*SECONDS_PER_MINUTE,dir=h%2?1:-1,s=e<0?0:e%PACE_CYCLE,leg=PACE_STEP/WALK_SPEED; // leg: seconds a step takes; they start (and, easing in the last 3 s, end) at the block's own point so nobody jumps
+ const reach=ctx&&ctx.paceReach?ctx.paceReach(b.place,out.x,out.z,dir):PACE_STEP; // audit B8: how far the street is clear that way (a wall or a parked vehicle stops the step short; 0 = stay put)
+ if(!(reach>.05)){return}
+ let at=0,going=0; // at: 0..1 of the way to the far end; going: +1 out, -1 back, 0 waiting
+ if(s<4)at=0;else if(s<4+leg){going=1;at=(s-4)/leg}else if(s<8+leg)at=1;else if(s<8+2*leg){going=-1;at=1-(s-8-leg)/leg}else at=0;
+ out.x+=dir*Math.min(reach,PACE_STEP)*at*Math.min(1,left/3);
+ if(going&&left>3){out.moving=true;out.yaw=going*dir>0?Math.PI/2:-Math.PI/2}
+}
+// How far (metres, at most max) a person can walk from (x,z) along (dx,dz) (a unit vector) before the first blocked sample (every step m). 0 when the start itself is blocked. Pure, no allocation.
+export function freeReach(blocked,x,z,dx,dz,max,step=.4){if(!blocked)return max;if(blocked(x,z))return 0;let d=0;while(d<max){const n=Math.min(max,d+step);if(blocked(x+dx*n,z+dz*n))return d;d=n}return max}
 // Where a person is: fills out {state, x, z, yaw, moving, walked}. ctx: point(place)->{x,z}|null, route(from,to)->route|null (null: not worked out yet, or no such trip), both injected.
 // yaw is NaN when they stand (keep the last heading). state 'hidden' leaves x and z alone.
 export function personPose(out,plan,minute,ctx){
  const b=plan[blockIndex(plan,minute)],kind=presenceOf(b);out.moving=false;out.yaw=NaN;out.state='hidden';
  if(kind==='hidden')return out;
- if(kind==='stand'){const p=ctx.point(b.place);if(p){out.state='stand';out.x=p.x;out.z=p.z}return out}
+ if(kind==='stand'){const p=ctx.point(b.place);if(p){out.state='stand';out.x=p.x;out.z=p.z;if(b.act==='outside')pace(out,b,minute,ctx)}return out}
  const route=ctx.route(b.origin,b.place);if(!route)return out;
  const m=minute>=0&&minute<1440?minute:((minute%1440)+1440)%1440,elapsed=(m-b.from)*SECONDS_PER_MINUTE,duration=(b.to-b.from)*SECONDS_PER_MINUTE,d=walkDistance(route.length,elapsed,duration);
  routePoint(route,d,out);out.state='walk';out.moving=d<route.length;out.walked=d;if(!out.moving)out.yaw=NaN;return out;

@@ -5,6 +5,7 @@ import {recordPiece} from './shift.js';
 import {parcelHeld,PARCEL_HANDS} from './gig-parcel.js'; // G3b: no rack or pile pick-up while the gig box is in your arms
 import {RACK_IDS,reachableByHand} from './warehouse-layout.js';
 import {PALLET_CAP,racksMap,forkCount,addToRack,takeFromRackCell,useForkPlanks} from './pallets.js';
+import {intakePlan,payFor,RACK_CELL_PAY} from './warehouse-intake.js'; // P-C wiring: the intake rules plan a hand stack and the cell pay is PAY.rackCell (plank-economy.js)
 
 export const EMPLOYER='ridgeline';
 export const BLOCKS_X=5,BLOCKS_Z=2,MARKED_PER_DAY=2;
@@ -48,16 +49,17 @@ export const rackPlanks=(progress,id=EMPLOYER)=>Object.values(racksOf(progress,i
 // planks stacked by hand filled a cell to the cap: the Stack task piece, once per cell per shift (moving planks back and forth cannot be farmed). Moving a pallet with the forklift is not stacking and pays nothing.
 const filledPay=(moved,slot,put,pays=true)=>{
  if(!pays||!moved.shift||(moved.shift.stacked||[]).includes(slot))return {state:moved,finished:[],filled:true,put,message:`Rack ${slot} is full: ${RACK_CAP} planks.`};
- const r=recordPiece({...moved,shift:{...moved.shift,stacked:[...(moved.shift.stacked||[]),slot].slice(-120)}},'racks',1);return {state:r.state,finished:r.finished,filled:true,put,message:done(r,`Rack ${slot} is full: ${RACK_CAP} planks · $5.00.`)}};
+ const r=recordPiece({...moved,shift:{...moved.shift,stacked:[...(moved.shift.stacked||[]),slot].slice(-120)}},'racks',1);return {state:r.state,finished:r.finished,filled:true,put,message:done(r,`Rack ${slot} is full: ${RACK_CAP} planks · $${(RACK_CELL_PAY/100).toFixed(2)}.`)}};
 export function stackPlanks(progress,slot){
- if(!onShift(progress))return {error:'Clock in to stack planks for Ridgeline Timber.'};
+ // FIX (audit B1): stacking is allowed off shift too (it just pays nothing: filledPay needs a shift), so planks in your hands are never stuck inside the warehouse
  if(progress.carry?.kind!=='planks')return {error:'Carry planks to stack them: take a stack from a rack.'};
  if(!RACK_IDS.includes(slot))return {error:'There is no such rack.'};
  if(!reachableByHand(slot))return {error:'Too high to reach by hand: the upper shelves need a forklift.'};
  const cur=racksOf(progress)[slot]||0;if(RACK_CAP-cur<=0)return {error:`Rack ${slot} is full.`};
- const r=addToRack(coOf(progress),slot,progress.carry.count);if(!r.put)return {error:'The warehouse has no room for another pallet.'};
+ const plan=intakePlan(racksOf(progress),Math.min(progress.carry.count,RACK_CAP-cur),{handOnly:true,slot}); // P-C: only what fits in THIS cell is offered, so the plan touches this cell only and the rest stays in your hands
+ const r=addToRack(coOf(progress),slot,plan.stored);if(!r.put)return {error:'The warehouse has no room for another pallet.'}; // the pallets stay the truth (world-tick mirrorPallets)
  const left=progress.carry.count-r.put,moved=setCo({...progress,carry:left>0?{...progress.carry,count:left}:null},r.company);
- if(cur+r.put<RACK_CAP)return {state:moved,finished:[],filled:false,put:r.put,message:`Rack ${slot}: ${cur+r.put} / ${RACK_CAP} planks.`};
+ if(cur+r.put<RACK_CAP||!payFor(r.put,plan.fullCellsBefore,plan.fullCells))return {state:moved,finished:[],filled:false,put:r.put,message:`Rack ${slot}: ${cur+r.put} / ${RACK_CAP} planks.`};
  return filledPay(moved,slot,r.put);
 }
 // Planks out of a floor-level rack cell (picking an order): a stack of up to four into your hands. The game offers it only while one of your orders still needs planks.

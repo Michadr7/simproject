@@ -219,7 +219,7 @@ body:has(#welcome:not([hidden])) :is(#minimap,#vitals,#statusDock,#clockChip),bo
 .phone-swatch.selected{border-color:#fff;box-shadow:0 0 0 2px rgba(255,255,255,.35)}
 .phone-swatch.soldout{opacity:.3;cursor:not-allowed}
 
-/* ── Honeycomb scheme (0.34): black and honey yellow. The teal and green UI colours above were remapped to black and honey; this block adds the tokens, the hexagon motif (a faint honeycomb on the panels, hexagonal app icons, chamfered buttons) and the gold accents. ── */
+/* â”€â”€ Honeycomb scheme (0.34): black and honey yellow. The teal and green UI colours above were remapped to black and honey; this block adds the tokens, the hexagon motif (a faint honeycomb on the panels, hexagonal app icons, chamfered buttons) and the gold accents. â”€â”€ */
 :root{--honey:#f5c518;--honey-pale:#ffe48a;--honey-deep:#b8860b;--ink:#0c0b08;--ink-2:#17150f;--ink-3:#221f16;--comb:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='56' height='100'%3E%3Cpath d='M28 66L0 50L0 16L28 0L56 16L56 50L28 66L28 100M28 0L28 34L0 50L0 84L28 100L56 84L56 50L28 34' fill='none' stroke='%23f5c518' stroke-opacity='.07' stroke-width='1.4'/%3E%3C/svg%3E");--hex:polygon(50% 0,100% 25%,100% 75%,50% 100%,0 75%,0 25%);--chamfer:polygon(9px 0,calc(100% - 9px) 0,100% 9px,100% calc(100% - 9px),calc(100% - 9px) 100%,9px 100%,0 calc(100% - 9px),0 9px)}
 aside,#vitals,.dialog,#prompt,.vehicle-panel,#wallet,#jobToast,#inventoryOverlay .inventory-panel,.menu-panel,.creator-panel{background-image:var(--comb);background-size:56px 100px}
 .phone-device::before{content:"";position:absolute;inset:0;background:var(--comb);background-size:56px 100px;opacity:.9;pointer-events:none}
@@ -244,7 +244,7 @@ aside,#vitals,.dialog,#prompt,.vehicle-panel,#wallet,#jobToast,#inventoryOverlay
 .phone-home-note{margin-top:30px}
 .inventory-shell,.store-panel{background-image:var(--comb);background-size:56px 100px}
 
-/* ── Store categories, vehicle pictures, phone Back and Home, honey dropdowns (0.34) ── */
+/* â”€â”€ Store categories, vehicle pictures, phone Back and Home, honey dropdowns (0.34) â”€â”€ */
 select{appearance:none;-webkit-appearance:none;background:var(--ink-2) url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8'%3E%3Cpath d='M1 1l5 5 5-5' fill='none' stroke='%23f5c518' stroke-width='2'/%3E%3C/svg%3E") no-repeat right 12px center;color:#f1eee2;border:1px solid #f5c51866;border-radius:0;clip-path:var(--chamfer);padding:9px 34px 9px 12px;font:inherit;font-size:13px;cursor:pointer}
 select:hover,select:focus-visible{border-color:var(--honey);outline:none;background-color:var(--ink-3)}
 select option{background:var(--ink-2);color:#f1eee2}
@@ -267,7 +267,7 @@ select:disabled{opacity:.45;cursor:default}
 select,.phone-nav button{border:0;box-shadow:inset 0 0 0 1px #f5c51888}
 select:hover,select:focus-visible,.phone-nav button:hover:not(:disabled){box-shadow:inset 0 0 0 1px var(--honey)}
 
-/* ── Main menu in the honeycomb look (0.34): chamfered buttons, a honey Play button, the version beside the kicker ── */
+/* â”€â”€ Main menu in the honeycomb look (0.34): chamfered buttons, a honey Play button, the version beside the kicker â”€â”€ */
 .menu-button{border:0;border-radius:0;clip-path:polygon(14px 0,calc(100% - 14px) 0,100% 50%,calc(100% - 14px) 100%,14px 100%,0 50%);box-shadow:inset 0 0 0 1px #f5c51877;background:#100f0cd9;padding:15px 30px;transition:background .12s,color .12s}
 .menu-button:hover,.menu-button:focus-visible{background:#f5c51822;box-shadow:inset 0 0 0 1px var(--honey)}
 .menu-play{background:var(--honey);color:var(--ink);box-shadow:none}
@@ -409,3 +409,4 @@ body:has(#welcome:not([hidden])) :is(header .brand,.location,#objective,#hotbar,
 #clockChoice{z-index:400;justify-content:center;background:#14120fcc}#clockChoice .dialog{width:min(440px,100%);max-width:440px;padding:28px}#clockChoice h2{font-size:28px;margin:8px 0}#clockChoice button{display:block;width:100%;margin-top:10px}#clockChoice .clock-note{color:#d2cfc6;font-size:13px;margin:6px 0 14px}#clockChoice button:disabled{opacity:.5;cursor:not-allowed}#clockChoice button:focus-visible{outline:3px solid #facd38;outline-offset:2px}
 /* People app (W-D3) */
 .people-icon{background:var(--honey);color:var(--ink)}#phonePeople h3{margin:4px 0 2px;font-size:16px}#phonePeople .phone-message{margin:0 0 8px}#phonePeople .phone-accept{margin-top:10px}
+

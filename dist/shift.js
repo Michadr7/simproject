@@ -5,6 +5,7 @@
 import {MAP} from './map-definition.js';
 import {employerById,careerOf,employerName,taskKinds,changeRep} from './careers.js';
 import {normalizeTruck} from './customers.js';
+import {PAY} from './plank-economy.js'; // P-C wiring: a full rack cell pays PAY.rackCell (the planks chain's one table)
 
 export const OFF_SITE_LIMIT=60,MIN_COUNTED_SHIFT=60,STUBS_KEPT=7;
 // Task kinds: the piece they count and the amounts handed out (picked by counters, so a save always gets the same day). Placeholders.
@@ -22,7 +23,7 @@ export const TASKS=Object.freeze({
  replant:{piece:'saplings',amounts:[6,10],label:n=>`Plant ${n} saplings in a cleared block`}
 });
 // Piece pay in cents. Placeholders (DESIGN 4.15 K): the finished planks pay the most.
-export const PIECE_PAY=Object.freeze({trees:300,stray:75,logs:25,gathered:25,stumps:150,planks:0,delivered:100,shipped:50,racks:500,orders:800,deliveries:2500,saplings:50}); // trees: a marked pine felled; stray: an unmarked one; logs: stacked at the landing; planks: milled (counted, paid on delivery); delivered: a plank at the lumberyard
+export const PIECE_PAY=Object.freeze({trees:300,stray:75,logs:25,gathered:25,stumps:150,planks:0,delivered:100,shipped:50,racks:PAY.rackCell,orders:800,deliveries:2500,saplings:50}); // trees: a marked pine felled; stray: an unmarked one; logs: stacked at the landing; planks: milled (counted, paid on delivery); delivered: a plank at the lumberyard
 export const BONUS_PER_RANK=2500;
 export const REP={allTasks:5,fullShift:2,unfinishedTask:-2};
 export const taskText=t=>TASKS[t.kind].label(t.target);

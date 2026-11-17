@@ -22,5 +22,7 @@ export function poseFor(p,{seated=false,parcelInHands=false,freeArms=true}={}){
  if(seated)return null;
  const kind=p?.carry?.kind;
  if(kind==='planks'||kind==='log')return freeArms?kind:null;
+ if(kind==='crate'||kind==='box')return freeArms&&!p?.equipped?'box':null; // audit minor (C-B): a crate or a box in the arms is the same belly hold (game.js draws it outdoors only)
+ if(kind==='parcel')return parcelInHands&&!p?.equipped?'box':null; // the gig parcel as a piece in the hands (progress.carry)
  return parcelInHands&&!p?.carry&&!p?.equipped?'box':null; // a tool in the hand (axe, nozzle) owns the right arm: no box pose then
 }

@@ -134,7 +134,7 @@ function merge(blocks){const out=[];for(const b of blocks){const p=out[out.lengt
 function dropErrands(plan,fromMinute){
  const out=[];
  for(let i=0;i<plan.length;i++){const b=plan[i],a=out[out.length-1],c=plan[i+1];
-  if(b.act==='travel'&&c&&c.act==='shop'&&c.place===b.place&&c.from>=fromMinute&&plan[i+2]&&plan[i+2].act==='travel'&&plan[i+2].origin===c.place){
+  if(b.act==='travel'&&c&&(c.act==='shop'||c.act==='outside')&&c.place===b.place&&c.from>=fromMinute&&plan[i+2]&&plan[i+2].act==='travel'&&plan[i+2].origin===c.place){
    const back=plan[i+2],X=b.origin,Y=back.place;
    if(X===Y)out.push({from:b.from,to:back.to,act:a&&a.place===X&&a.act!=='travel'?a.act:'home',place:X});
    else out.push({from:b.from,to:back.to,act:'travel',place:Y,origin:X,mode:b.mode||'walk'});
@@ -175,7 +175,7 @@ export function namedPlan(npc,day,world,basePlan){
  if(!plan0||!r)return plan0||[];
  if(isSick(npc,d))return sickPlan(plan0);
  let plan=plan0;const trip=typeof w.trip==='function'?w.trip:()=>OUTING_TRIP_MIN;
- if(r.homebody||npc.mood<SKIP_ERRANDS_BELOW)plan=dropErrands(plan,0);
+ if(r.homebody||npc.mood<SKIP_ERRANDS_BELOW){plan=dropErrands(plan,0);const home=plan[0].place;plan=merge(plan.map(b=>b.act==='outside'&&b.place===home?{...b,act:'home'}:b))} // no strolls and no sitting out at the door (NPC-VISIBLE): Oscar stays in
  else if(typeof w.weather==='function'&&RAIN_WORDS.includes(w.weather(d)))plan=dropErrands(plan,AFTERNOON);
  const role=dayRole(npc.id,d);
  if(role==='delivery'&&!r.homebody&&npc.mood>=SKIP_ERRANDS_BELOW)plan=outing(plan,DELIVERY_AT+hash(w.seed??0,npc.id,'deliv',d)%30,w.marketPlace||'shop:market',MARKET_STAY,'work',trip);

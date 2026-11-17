@@ -102,6 +102,17 @@ for(const good of [r('status','--porcelain=v1','-z','--untracked-files=all'),r('
 for(const bad of [r('add','-A'),r('add','.'),r('add','--','.claude/x'),r('add','--','../x'),r('add','--'),r('add','-A','--','a'),r('commit','-m','x'),r('commit','--amend','-F','m','--','a'),r('commit','-F','m'),r('commit','-F','m','--'),r('commit','-F','m','--','.env'),r('commit','-a','-F','m','--','a'),r('commit','--no-verify','-F','m','--','a'),r('push'),r('push','origin'),r('push','--force','origin','main'),r('push','origin','main','--force'),r('push','-f','origin','main'),r('push','origin','+main'),r('push','origin','main:other'),r('push','origin','--delete','main'),r('push','origin','main','extra'),r('push','upstream','main'),r('push','origin','-u'),r('push','--force-with-lease','origin','main'),r('push','origin','a..b'),r('push','origin','x.lock'),r('fetch'),r('fetch','origin'),r('pull'),r('merge','main'),r('rebase','main'),r('reset','--hard'),r('reset','--hard','HEAD~1'),r('reset','--soft','HEAD~2'),r('reset','HEAD~1'),r('clean','-fd'),r('checkout','main'),r('checkout','--','a'),r('restore','a'),r('stash'),r('config','user.name','x'),r('remote','add','x','y'),r('log','origin/main..HEAD'),r('log','-p'),r('status'),r('log','origin/-x..HEAD','--format=%h%x09%s'),r(),r(7)]
  )assert.ok(!isAllowed(bad),'refused: '+JSON.stringify(bad));
 assert.ok(!isAllowed('push origin main')&&!isAllowed(null)&&!isAllowed(undefined)&&!isAllowed({}));
+// a long list (a release folder is 200+ files, the whole tree can be thousands): Windows stops a command line at about 32 000 characters, so add goes in batches and commit goes through a paths file
+{const {batches,CMD_CHARS}=await import('../hub/git.mjs');
+ const many=Array.from({length:3000},(_,i)=>`dist/releases/0.35.18/some/folder/file-number-${i}.js`);
+ const bs=batches(many);assert.ok(bs.length>1,'a long list is split');assert.deepEqual(bs.flat(),many,'nothing lost, same order');assert.ok(bs.every(b=>b.join(' ').length<=CMD_CHARS),'each batch fits the command line');
+ const calls=[];const fake=(exe,args,opts,cb)=>{calls.push(args);cb(null,'','')};
+ const g=createGit({root:'C:\\x',gitPath:'git.exe',execFileFn:fake});
+ assert.deepEqual(await g.add(many),{ok:true});assert.equal(calls.length,bs.length);assert.ok(calls.every(a=>a[0]==='add'&&a[1]==='--'&&a.join(' ').length<30000),'every add fits');
+ calls.length=0;assert.deepEqual(await g.commit('msg',many),{ok:true});assert.equal(calls.length,1);const a=calls[0];
+ assert.ok(isAllowed(a),'the paths-file commit is an allowed shape');assert.equal(a.length,5);assert.ok(a[3].startsWith('--pathspec-from-file=')&&a[4]==='--pathspec-file-nul');assert.ok(a.join(' ').length<1000,'the long list is not on the command line');
+ assert.ok(!isAllowed(['commit','-F','m.txt','--pathspec-from-file=p.txt']),'without the NUL flag it is refused');
+ calls.length=0;await g.commit('msg',['a.txt']);assert.deepEqual(calls[0].slice(3),['--','a.txt'],'a short list keeps the old shape')}
 assert.ok(isReadCommand(['status','--porcelain=v1','-z','--untracked-files=all'])&&!isReadCommand(['add','--','a']),'only looking commands may run synchronously');
 assert.ok(safeBranch('main')&&safeBranch('feature/a-b_c.1')&&!safeBranch('-x')&&!safeBranch('a b')&&!safeBranch('a..b')&&!safeBranch('+main')&&!safeBranch('')&&!safeBranch('HEAD:x')&&!safeBranch(null));
 { // the file itself holds no other command, in code (comments and the plain-words messages are not code)
@@ -293,7 +304,8 @@ else{
   assert.equal((await call('POST',url,{origin:null,body})).status,403,url+': no Origin');
   assert.equal((await call('POST',url,{origin:'http://evil.example',body})).status,403,url+': another site, even with the token');
   assert.equal((await call('POST',url,{ct:'text/plain',body})).status,415,url+': not JSON');
-  assert.equal((await call('POST',url,{body:'x'.repeat(70000),json:false})).status,413,url+': too large');
+  assert.equal((await call('POST',url,{body:'x'.repeat(url==='/api/commit'?1100000:70000),json:false})).status,413,url+': too large (the commit press may be up to 1 MB, the others 64 KB)');
+  if(url==='/api/commit')assert.notEqual((await call('POST',url,{body:'x'.repeat(200000),json:false})).status,413,'a long list of picked files (200 KB) is not refused for size');
   assert.equal((await call('POST',url,{body:'{no',json:false})).status,400,url+': broken JSON');
   assert.equal((await call('POST',url,{token:null,body})).status,403,url+': no token');
   assert.equal((await call('POST',url,{token:'0'.repeat(48),body})).status,403,url+': wrong token')}

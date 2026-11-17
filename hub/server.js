@@ -37,7 +37,7 @@ import {parseRunBlock,quickFix} from './runplan.js';
 import {JOB_ID} from './jobs.js';
 import {HUB_VERSION} from './web/shell.js';
 
-export const MAX_BODY=64*1024,MAX_RUN_ANSWER=8000;
+export const MAX_BODY=64*1024,MAX_RUN_ANSWER=8000,MAX_COMMIT_BODY=1024*1024; // the commit press sends every picked path (a release folder alone is 200+ files), so it gets 1 MB; everything else stays at 64 KB
 const TYPES={'.html':'text/html; charset=utf-8','.js':'text/javascript; charset=utf-8','.css':'text/css; charset=utf-8','.json':'application/json; charset=utf-8','.png':'image/png','.jpg':'image/jpeg','.jpeg':'image/jpeg','.glb':'model/gltf-binary','.gltf':'model/gltf+json','.bin':'application/octet-stream'};
 export const typeOf=file=>TYPES[path.extname(file).toLowerCase()]||'application/octet-stream';
 
@@ -146,7 +146,7 @@ export function activityOf(runs=null,chat=null,{root=null,now=Date.now(),jobs=nu
  return {enabled:!!(runs&&chat),jobRunning,...buildActivity({chat:chat?chat.view():null,chatFeed:chat?chat.feed(0):null,runs:list,runFeed,job:jr?{key:jr.key,label:jr.label}:null,now,gauge:root?gaugeOf(gaugesOf(root,now)):null,life:root?lifeOf(root):null})}}
 
 // Reads a request body up to MAX_BODY bytes: resolves to a string, or null when it is too big (the rest is drained and dropped).
-const readBody=req=>new Promise(ok=>{let size=0,chunks=[],big=false;req.on('data',c=>{size+=c.length;if(size>MAX_BODY)big=true;else chunks.push(c)});req.on('end',()=>ok(big?null:Buffer.concat(chunks).toString('utf8')));req.on('error',()=>ok(null))});
+const readBody=(req,limit=MAX_BODY)=>new Promise(ok=>{let size=0,chunks=[],big=false;req.on('data',c=>{size+=c.length;if(size>limit)big=true;else chunks.push(c)});req.on('end',()=>ok(big?null:Buffer.concat(chunks).toString('utf8')));req.on('error',()=>ok(null))});
 
 // runs: the run controller from hub/runs.js, or null (the default) when runs are not switched on: every run POST then answers 503 and the lists are empty.
 // jobs: the job runner (hub/job-runner.mjs) or null. restart: () => {error} or {go}, given by the program that can end this process (hub/hub-cli.mjs), or null.
@@ -173,8 +173,9 @@ export function createHubServer({root,port=0,runs=null,chat=null,jobs=null,commi
     // the write guard: a same-origin page sending JSON, nothing else
     if(!originHost)return json(403,{error:'origin required'});
     if(!/^application\/json\s*(;|$)/i.test(req.headers['content-type']||''))return json(415,{error:'content type must be application/json'});
-    if(Number(req.headers['content-length']||0)>MAX_BODY){req.resume();return json(413,{error:'body too large'})}
-    const text=await readBody(req);if(text===null)return json(413,{error:'body too large'});
+    const bodyLimit=r.api==='commit-do'?MAX_COMMIT_BODY:MAX_BODY;
+    if(Number(req.headers['content-length']||0)>bodyLimit){req.resume();return json(413,{error:'body too large'})}
+    const text=await readBody(req,bodyLimit);if(text===null)return json(413,{error:'body too large'});
     let b;try{b=JSON.parse(text)}catch{return json(400,{error:'body is not JSON'})}
     if(!b||typeof b!=='object'||Array.isArray(b))return json(400,{error:'body must be an object'});
     if(r.api==='assets-add'||r.api==='assets-stage'||r.api==='assets-file'||r.api==='records-undo'){

@@ -26,6 +26,8 @@ assert.deepEqual(normalizeStarter('junk',{}),fresh());
 const order=['read-message','delivered','ate','arrived','delivered-crates','refuelled','note-given','gig-done','rented','slept'];
 let p=P(fresh()),cash=0;
 assert.equal(starterObjective(p).aim,'market');
+// the groceries beat leads to the market until the bag is in your hands, then to 18 Oak Street
+{const gi=BEATS.findIndex(b=>b.id==='groceries'),gs={...fresh(),step:gi};assert.equal(starterObjective({starter:gs,phase:'idle'}).aim,'market','before the pickup the arrow points at the market');assert.equal(starterObjective({starter:gs,phase:'carrying'}).aim,'oakStreet18','carrying: the arrow points at the delivery')}
 for(let i=0;i<10;i++){
  for(const wrong of ['slept','read-message','nonsense','rented'])if(wrong!==order[i]&&!(i>=6&&i<=7&&['note-given','gig-done'].includes(wrong))&&!(i===4&&wrong==='loaded'))assert(advanceStarter(p,wrong).error,`step ${i} refuses ${wrong}`);
  if(i===4){assert(advanceStarter(p,'delivered-crates',{quality:50}).error);const l=advanceStarter(p,'loaded');p=P(l.state);assert(advanceStarter(p,'loaded').error)}

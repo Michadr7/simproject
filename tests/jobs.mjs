@@ -22,4 +22,6 @@ assert.equal(loadProgress({getItem:()=>'{'}).cash,0);
 assert.equal(loadProgress({getItem(){throw Error('blocked')}}).phase,'available');
 assert.equal(saveProgress({setItem(){throw Error('quota')}},state),false);
 assert.equal(money(1200),'$12.00');
+// audit F8: a saved world day ahead of the clock is pulled back (it would never tick again)
+{const fp=freshProgress(),n=normalizeProgress({...fp,world:{v:1,seed:1,day:5000}});assert.ok(n.world.day<=Math.max(0,n.housing.day),'world day not ahead of the clock: '+n.world.day+' vs housing day '+n.housing.day)}
 console.log('Job flow, proximity checks, one-time wages, route cycling, resume, corrupt saves and blocked storage passed.');

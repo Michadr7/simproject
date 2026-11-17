@@ -127,12 +127,12 @@ export function createCharacter(input){
  // can close around the handle. `curl` on hold() is how far the hand closes (0 open, 1 fully closed).
  const idleFingers=new Map(),gripFingers=new Map();
  // Held-item orientation override (a carry pose), a second hand on the handle, and a forward/back lean of the spine.
- let alignDir=null,alignAmount=0,twoHandWeight=0,leanAngle=0,crouchDrop=0;const handCurl={R:0,L:0},bodyHome=new Map(),twoHandL={target:new T.Vector3(),weight:0},wantAlign=new T.Quaternion(); // crouchDrop: metres the hips are lowered; bodyHome remembers the animated position of the Body bone so it can be put backconst twoHandL={target:new T.Vector3(),weight:0},wantAlign=new T.Quaternion();
+ let alignDir=null,alignAmount=0,twoHandWeight=0,leanAngle=0,crouchDrop=0;const handCurl={R:0,L:0},bodyHome=new Map(),twoHandL={target:new T.Vector3(),weight:0},wantAlign=new T.Quaternion(); // crouchDrop: metres the hips are lowered; bodyHome remembers the animated position of the Body bone so it can be put back
 
  // ── Rig and parts ─────────────────────────────────────────────────────────
  function build(){
   memo.clear();
-  if(kinds.model){group.remove(kinds.model);kinds.mixer.stopAllAction()}
+  if(kinds.model){for(const mesh of kinds.meshes||[])for(const m of [].concat(mesh.material))if(m.userData?.cloned)m.dispose();kinds.skeleton?.dispose?.();kinds.mixer.stopAllAction();kinds.mixer.uncacheRoot?.(kinds.model);group.remove(kinds.model)} // audit B4: a body swap (pooled crowd characters) used to leak the old cloned materials and the bone texture
   const set=assets[appearance.body],model=new T.Group();model.scale.setScalar(MODEL_SCALE);model.position.y=SOLE_LIFT;group.add(model);
   const root=set.rigRoot.clone(true),byName=new Map();root.traverse(o=>byName.set(o.name,o));
   const bones=set.bones.map(b=>byName.get(b.name));

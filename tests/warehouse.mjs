@@ -37,6 +37,8 @@ assert(/Too high/.test(stackPlanks({...racked({}),carry:{kind:'planks',count:4}}
 {const box={gigs:{active:{id:1,drop:null}}};assert.equal(takeFromRack(racked({'D1-1':10},box),'D1-1').error,PARCEL_HANDS,'G3b: the gig box in hand: no planks from the rack');assert.match(takeFromRack(racked({'D1-1':10},{...box,carry:{kind:'planks',count:2}}),'D1-1').error,/hands are full/);assert(takeFromRack(racked({'D1-1':10},{gigs:{active:{id:1,drop:{x:1,z:1}}}}),'D1-1').state,'the box on the ground: free hands')}
 {let p=racked({'D1-1':10});let r=takeFromRack(p,'D1-1');assert(!r.error);p=r.state;assert.deepEqual(p.carry,{kind:'planks',count:4},'a stack of four');assert.equal(racksOf(p)['D1-1'],6,'from the pallet in the rack');
  assert(/Carry planks/.test(stackPlanks(racked({}),'A1-1').error),'empty hands cannot stack');assert(/no such rack/.test(stackPlanks(p,'Z9').error));
+ // audit B1: off shift the planks still go onto a rack (no pay), so they are never stuck in your hands
+ {const off=stackPlanks({...racked({}),shift:null,carry:{kind:'planks',count:4}},'A1-1');assert.ok(!off.error,'off shift: stacking works');assert.equal(off.put,4);assert.equal(off.state.carry,null)}
  r=stackPlanks(p,'A1-1');p=r.state;assert.equal(racksOf(p)['A1-1'],4);assert.equal(p.carry,null);assert.equal(r.filled,false);assert(/4 \/ 40/.test(r.message));
  // fill a bay to 40: it counts as a rack once, pays, and finishes the task
  let q=racked({'D1-1':40,'B2-1':4});for(let i=0;i<9;i++){q=takeFromRack(q,'D1-1').state;const s=stackPlanks(q,'B2-1');q=s.state;if(i<8)assert.equal(s.filled,false);else{assert.equal(s.filled,true);assert(/Task done/.test(s.message),s.message)}}

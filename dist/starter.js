@@ -44,7 +44,7 @@ export const VEHICLE_BEATS_READY=true;
 export function starterObjective(p,{vehicleReady=VEHICLE_BEATS_READY}={}){
  const s=p?.starter;if(!s||s.done||(!vehicleReady&&s.step>=4))return null;
  if(s.step===6||s.step===7){const left=BEATS.filter(b=>(b.event==='note-given'&&!s.noteGiven)||(b.event==='gig-done'&&!s.gigDone));const b=left[0];return b?{title:b.title,text:b.text,aim:b.place}:null}
- const b=BEATS[s.step];return b?{title:b.title,text:b.text,aim:b.id==='crates'&&!s.loaded?'crates':b.place}:null;
+ const b=BEATS[s.step];return b?{title:b.title,text:b.text,aim:b.id==='crates'&&!s.loaded?'crates':b.id==='groceries'&&p.phase!=='carrying'?'market':b.place}:null; // the groceries beat points at the market until the bag is in your hands (it used to point at 18 Oak Street from the start)
 }
 // Pay for the egg crates (beat 5): $40 at 100% quality, at least $28.
 export const cratePay=q=>2800+Math.floor(1200*int(q,0,100,100)/100);
