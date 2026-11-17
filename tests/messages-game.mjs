@@ -33,5 +33,10 @@ try{
  ids.get('phoneBack').click();ids.get('phoneApp-jobs').click();city().notify('jobs','Order #3 is staged');assert.equal(p().messages[0].read,true,'a message for the app you are looking at is read at once');ids.get('phoneClose').click();
  // nothing was lost: six, then the two staged messages
  assert.equal(p().messages.length,8);
+ // FIX-R1: every phone app icon in index.html is wired (a new icon without an onclick was a dead button), and Contacts opens its screen
+ {const {readFileSync}=await import('node:fs'),html=readFileSync('dist/index.html','utf8'),appIds=[...html.matchAll(/id="(phoneApp-[a-z]+)"/g)].map(m=>m[1]);
+  assert(appIds.length>=10&&appIds.includes('phoneApp-people'),'found the app icons: '+appIds.join());
+  for(const id of appIds)assert.equal(typeof ids.get(id).onclick,'function',id+' has an onclick');
+  btn.click();ids.get('phoneHome').click();ids.get('phoneApp-people').click();assert.equal(ids.get('phoneScreen-people').hidden,false,'Contacts screen is shown');assert.equal(ids.get('phoneTitle').textContent,'Contacts');assert.equal(ids.get('phoneScreen-home').hidden,true);ids.get('phoneClose').click()}
  console.log('PASS messages-game.mjs: every notification is saved with its app and time; the phone button and each app icon count the unread ones; opening the phone clears nothing, opening an app reads its messages, Messages lists everything newest first and reads it all, a tap opens the app; a message for the app you are on is read at once; toasts wait their turn (three newest) instead of overwriting.');
 }finally{g.close?.()}

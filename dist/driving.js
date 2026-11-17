@@ -11,8 +11,8 @@ import {CLASSES,freshVehicle,stepVehicle,poseFree,findSafePose,findFirmPose,exit
 import {normalizeFuelMgal,burnMgal} from './fuel.js';
 import {defaultColour} from './paint.js';
 import {applyPaint,applyLook} from './paint-shader.js';
-import {normalizeCargo,loadOf,loadPoints,LOAD_REACH,hasBed,BEDS} from './cargo.js';
-import {createCargoView} from './cargo-view.js';
+import {normalizeCargo,loadOf,loadPoints,LOAD_REACH,hasBed,usesLoadDrag,BEDS} from './cargo.js';
+import {createCargoView} from './cargo-view.js';import {loadFactor,cargoMassKg} from './load-drag.js';
 import {withLoad} from './vehicle.js';
 import {stepBog,freshBog,topFactor,sinkOf,gripOf,BOG_WARN,FIRM_BELOW} from './surface-table.js';import {sprayOf,SPIN_SPEED,SPIN_THROTTLE} from './debris.js';import {slipOf} from './vehicle-sounds.js'; // TR6: wheel spray and tyre sounds
 import {createTracks} from './tracks.js';import {widthOf,trackAt,carryAfter,stepWheel,freshWheel,TRACK_MIN_SPEED,TRACK_LIFT} from './tracks-rules.js';import {SURFACE} from './terrain.js'; // TR5: tyre tracks
@@ -55,6 +55,7 @@ export function createDriving({scene,surface,footing,baseBlocked,saved=[]}){
  const fleet=MAP.vehicles.filter(v=>v.sale!=='online').map(spec=>build(spec,defaultColour(spec.model),true));
  const byId=new Map(fleet.map(f=>[f.spec.id,f])),others=skip=>fleet.filter(f=>f!==skip&&f.present).map(f=>({state:f.state,cls:f.cls}));
  const slopeEnv=f=>{if(!f.cls.slope)return null;const s=f.state,sy=Math.sin(s.yaw),cy=Math.cos(s.yaw),at=(lx,lz)=>{const x=s.x+lx*cy+lz*sy,z=s.z-lx*sy+lz*cy,d=deckAt(x,z);return d!==null?d:heightAt(x,z)},L=f.cls.hz,W=f.cls.hx;return {grade:Math.atan2(at(0,L)-at(0,-L),2*L)*180/Math.PI,side:Math.atan2(at(-W,0)-at(W,0),2*W)*180/Math.PI}}; // A2 (slope-rules.js): grade = uphill along the heading, side = ground falling to the left, both in degrees; only for classes with slope:true
+  const massDrag=(f,c)=>{if(!usesLoadDrag(f.spec.model))return c;const kg=cargoMassKg(f.cargo)+(f.stowKg||0);if(kg<=0)return c;const lf=loadFactor(kg),o=Object.assign(f.dragCls||(f.dragCls={}),c);o.top=Math.min(c.top,f.cls.top*lf);o.accel=Math.min(c.accel,f.cls.accel*lf);return o}; // ATV-STOW (load-drag.js): kg on the bed plus a stowed parcel slow top speed and acceleration; the stronger of this and withLoad wins, one reused object (no per-frame allocation)
   const envFor=(f,people)=>({blocked:baseBlocked,surface,others:others(f),people,...slopeEnv(f)});
  let devCount=0,clock=0,events=[],driven=null,side='driver',lastHit=false,pulse=0,walker=null,pending=null,seatVec=new THREE.Vector3();
  const nearPoint=(f,p,side,reach)=>loadPoints(f.spec.model).some(pt=>pt.side===side&&(()=>{const w=toWorld(f.state,pt.x,pt.z);return Math.hypot(w.x-p.x,w.z-p.z)<=reach})());
@@ -112,7 +113,7 @@ const tilt=f=>{const s=f.state,sy=Math.sin(s.yaw),cy=Math.cos(s.yaw),at=(lx,lz)=
   // The muffler tip of a vehicle in the world (x, y, z) and the way the pipe points (dx, dz: straight back), for the smoke.
   exhaust(f=driven){if(!f||!f.cls.exhaust)return null;const e=f.cls.exhaust,w=toWorld(f.state,e.x,e.z);return e.stack?{x:w.x,y:f.y+e.y,z:w.z,dx:0,dz:0,up:true}:{x:w.x,y:f.y+e.y,z:w.z,dx:-Math.sin(f.state.yaw),dz:-Math.cos(f.state.yaw)}}, // a stack (the flatbed) points up
   door(){return driven?doorPoint(driven.state,driven.cls,side):null},
-  enter(id,seat='driver'){const f=byId.get(id);if(!f||driven)return false;driven=f;side=seat;f.lastSpeed=f.state.speed=0;f.state.steer=0;f.engine=freshEngine(f.cond,clock);(f.doorHold=f.doorHold||{driver:0,passenger:0})[seat]=f.doorOpen?.[seat]>=1?.8:1.2;return true}, // the door stays open while you sit down, then shuts (already open from doorThen: 0.8 s more; called straight: it must swing open first)
+  enter(id,seat='driver',stowKg=0){const f=byId.get(id);if(!f||driven)return false;driven=f;side=seat;f.stowKg=stowKg;f.lastSpeed=f.state.speed=0;f.state.steer=0;f.engine=freshEngine(f.cond,clock);(f.doorHold=f.doorHold||{driver:0,passenger:0})[seat]=f.doorOpen?.[seat]>=1?.8:1.2;return true}, // the door stays open while you sit down, then shuts (already open from doorThen: 0.8 s more; called straight: it must swing open first)
   // Doors first (the shortbed): the door on that side opens, and 	hen runs when it is open (0.875 s plus a beat): you get in or out through an open door. False if the vehicle has no doors (the caller carries on at once); a second call while waiting does nothing.
   doorThen(id,seat,then){const f=id?byId.get(id):driven;if(!f||!f.mesh.userData.doors)return false;if(pending)return true;(f.doorHold=f.doorHold||{driver:0,passenger:0})[seat]=SHORTBED_DOOR_SECONDS+.5;pending={t:SHORTBED_DOOR_SECONDS+.1,then};return true},
   // Where the occupant's hips are (world x, y, z) and the heading, for a vehicle that shows you seated (the shortbed: its seats anchor); null otherwise.
@@ -122,11 +123,11 @@ const tilt=f=>{const s=f.state,sy=Math.sin(s.yaw),cy=Math.cos(s.yaw),at=(lx,lz)=
   // A5: hand targets (player frame) for a rider astride a vehicle with a merged handlebar: [['R',{x,y,z}],['L',{x,y,z}]] or null.
   riderHands(hipsHeight){const m=driven?.mesh.userData;if(!m?.riderHands||side!=='driver')return null;const an=m.anchors,g=m.grip,pv=m.nodes[g.pivot],st=driven.state.steer;return [['R',riderHand(an.anchor_hands_R,pv,st,g,m.seats.driver,hipsHeight)],['L',riderHand(an.anchor_hands_L,pv,st,g,m.seats.driver,hipsHeight)]]},
   // Get out: your own door, else the other side, behind, in front (`free(x, z)` is the game's blocked() inverted). Returns the point, or null (the caller then uses its safe-spot search).
-  leave(free){if(!driven)return null;const f=driven,p=exitPoint(f.state,f.cls,free,side);(f.doorHold=f.doorHold||{driver:0,passenger:0})[side]=.9;driven=null;f.state.speed=0;f.state.steer=0;return p},
+  leave(free){if(!driven)return null;const f=driven,p=exitPoint(f.state,f.cls,free,side);(f.doorHold=f.doorHold||{driver:0,passenger:0})[side]=.9;driven=null;f.stowKg=0;f.state.speed=0;f.state.steer=0;return p},
   // One slice of driving (dt <= 1/30 s). input: {throttle, steer, brake}; people: [{x, z, r}] pedestrians. A passenger does not steer: the vehicle stands still.
   step(dt,input,people=[]){if(!driven||side!=='driver')return null;const f=driven,fuelled=!!f.spec.fuel;clock+=dt;
    const eng=engineStep(f.engine,{cond:f.cond,throttle:input.throttle||0,now:clock});f.engine=eng.engine;if(eng.event)events.push({type:eng.event,id:f.spec.id,seconds:eng.event==='crank'?+(f.engine.readyAt-clock).toFixed(2):0}); // stalled, cranking or wrecked: no throttle (the vehicle coasts to a stop; E always gets you out)
-   const run=f.engine.mode==='run',load=loadOf(f.spec.model,f.cargo),hurt=withDamage(withLoad(f.cls,load),f.cond),k=topFactor(f.bog),dmg=k<1?{...hurt,top:hurt.top*k,reverse:hurt.reverse*k}:hurt,cut=!run||(fuelled&&f.fuelMgal<=0), // an empty tank: no throttle too
+   const run=f.engine.mode==='run',load=loadOf(f.spec.model,f.cargo),hurt=withDamage(massDrag(f,withLoad(f.cls,load)),f.cond),k=topFactor(f.bog),dmg=k<1?{...hurt,top:hurt.top*k,reverse:hurt.reverse*k}:hurt,cut=!run||(fuelled&&f.fuelMgal<=0), // an empty tank: no throttle too
     inp={...input,throttle:cut?0:input.throttle,steer:pulledSteer(input.steer,dmg.pull,f.pullSide,f.state.speed)},before=f.state,b=stepBog(f.bog,{throttle:inp.throttle,speed:f.state.speed,surface:surface(f.state.x,f.state.z),group:f.cls.group,load,dt,bogMul:f.cls.bogMul}),r=stepVehicle(f.state,inp,dt,dmg,envFor(f,people));f.bog=b;if(b.event)events.push({type:b.event==='stuck'?'bog':'unbog',id:f.spec.id});f.state=r.state;lastHit=r.hit; // TR4: the bog meter (surface-table.js) reads the state before the step; Stuck scales the top speed (eased) inside the step
    if(r.hit)crash(f,r,before.speed);
    if(fuelled){f.burn+=burnMgal(Math.hypot(r.state.x-before.x,r.state.z-before.z),f.cls.gallonsPerMile*(1+.3*load)*(run?dmg.burnMul??1:0));const whole=Math.floor(f.burn);f.burn-=whole;f.fuelMgal=Math.max(0,f.fuelMgal-whole)}

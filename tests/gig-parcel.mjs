@@ -1,13 +1,32 @@
 import assert from 'node:assert/strict';
-import {dropParcel,pickParcel,parcelHeld,parcelDropped,normalizeDrop,PARCEL_FIRST,PARCEL_HANDS} from '../dist/gig-parcel.js';
-import {tickContract,completeContract,dropGigParcel,pickGigParcel,activeView} from '../dist/gig-bridge.js';
+import {dropParcel,pickParcel,parcelHeld,parcelWaiting,parcelDropped,normalizeDrop,PARCEL_FIRST,PARCEL_HANDS,mountError,stowed} from '../dist/gig-parcel.js';
+import {tickContract,completeContract,dropGigParcel,pickGigParcel,activeView,pickUpGigBox,gigPickupHere} from '../dist/gig-bridge.js';
 import {normalizeGigs,tickGig,completeGig,failGig,boardFor,acceptGig} from '../dist/gigs.js';
 import {freshProgress,normalizeProgress,saveProgress,loadProgress} from '../dist/jobs.js';
 import {shoulderLog,takePlanks,pickUpPlanks} from '../dist/carry.js';
 // G2b: the gig parcel on the ground. Pure drop/pick, delivery needs the box in hand, saved with the gig, cleared when the gig ends, one thing in the hands.
 const fresh=freshProgress();assert.equal(parcelHeld(fresh),false);assert(dropParcel(fresh,{x:1,z:1}).error,'no gig, nothing to put down');assert(pickParcel(fresh).error);
 // W-D2: the normal board is the world's needs now, so the parcel is taken from the old hashed board (opts.hashed), with the derived activeJob view added like the bridge does
-const hb=boardFor(fresh,undefined,undefined,{hashed:true}),start={slot:(hb.find(s=>s.type==='parcel')||hb[0]).slot},take=(P,at=null)=>{const r=acceptGig(P,start.slot,undefined,undefined,at,{hashed:true});return r.error?r:{state:{...r.state,activeJob:activeView(r.state)}}};
+const hb=boardFor(fresh,undefined,undefined,{hashed:true}),start={slot:(hb.find(s=>s.type==='parcel')||hb[0]).slot},takeRaw=(P,at=null)=>{const r=acceptGig(P,start.slot,undefined,undefined,at,{hashed:true});return r.error?r:{state:{...r.state,activeJob:activeView(r.state)}}},take=(P,at=null)=>{const r=takeRaw(P,at);if(r.error)return r;const k=pickUpGigBox(r.state,r.state.gigs.active.origin,r.state.gigs.active.origin.room);return k.error?r:{state:k.state}}; // G-D: take = accept and pick the box up at the origin (the old "box in hand at once" tests); takeRaw = just accepted
+// G-D pickup step: accepting leaves the box at the origin
+{const a0=takeRaw(fresh,{x:0,z:0}).state,o=a0.gigs.active.origin;assert(o&&a0.gigs.active.pickedAt===null,'a board gig has an origin and no pickedAt');assert(!parcelHeld(a0),'accepting does not put the box in the hands');assert(parcelWaiting(a0)&&!parcelDropped(a0));
+ assert.equal(a0.activeJob.pickup,true);assert.deepEqual([a0.activeJob.location.x,a0.activeJob.location.z],[o.x,o.z],'the marker points at the pickup first');assert(/^Pick up the parcel at /.test(a0.activeJob.description));
+ assert(dropGigParcel(a0,{x:1,z:1}).error,'nothing to put down before pickup');assert.equal(mountError(a0,'sedan'),null,'vehicles are allowed before pickup');assert.equal(takePlanks({...a0,belt:2}).error,undefined,'planks are allowed before pickup');
+ assert(stowed(a0,'atv')===false,'nothing rides on the ATV rack before pickup');
+ // walking to every stop ticks nothing before pickup, and completing is refused
+ const far=a0.gigs.active.places;let q0=a0;for(const s of far)q0=tickContract(q0,{position:{x:s.x,z:s.z},room:'street',dt:.03});assert.deepEqual(q0.gigs.active.visited,far.map(()=>false),'no stop ticks before pickup');
+ assert(completeGig({...a0,gigs:{...a0.gigs,active:{...a0.gigs.active,visited:far.map(()=>true),stage:far.length}}},100).error,'no payout before pickup');
+ // the pickup point: too far refused, close accepted, hands full refused
+ assert(!gigPickupHere(a0,{x:o.x+5,z:o.z},'street'));assert(pickUpGigBox(a0,{x:o.x+5,z:o.z}).error);assert(pickUpGigBox({...a0,carry:{kind:'planks',count:4}},{x:o.x,z:o.z}).error);assert(!gigPickupHere(a0,{x:o.x,z:o.z},'cafe'),'wrong room');
+ const k=pickUpGigBox(a0,{x:o.x+1.5,z:o.z+.5},'street');assert.equal(k.error,undefined);const a1=k.state;assert(parcelHeld(a1)&&!parcelWaiting(a1));assert(a1.gigs.active.pickedAt>=a0.gigs.active.acceptedAt,'the clocks start now');assert.equal(a1.activeJob.pickup,false);assert(!gigPickupHere(a1,{x:o.x,z:o.z}),'only once');assert(pickUpGigBox(a1,{x:o.x,z:o.z}).error);
+ assert(mountError(a1,'sedan'),'held: no car');assert.equal(mountError(a1,'atv'),null);assert(stowed(a1,'atv'),'the ATV rack takes it after pickup');assert.equal(takePlanks({...a1,belt:2}).error,PARCEL_HANDS);
+ const dd=dropGigParcel(a1,{x:3,z:3});assert.equal(dd.error,undefined);
+ // the stops now tick
+ let q1=a1;for(const s of far)q1=tickContract(q1,{position:{x:s.x,z:s.z},room:'street',dt:.03});assert.equal(q1.activeJob.stage,'return');
+ // save and load keep pickedAt and the waiting box
+ let raw2;const st2={getItem:()=>raw2,setItem:(kk,v)=>raw2=v};saveProgress(st2,a1);assert.equal(loadProgress(st2).gigs.active.pickedAt,a1.gigs.active.pickedAt);saveProgress(st2,a0);const l0=loadProgress(st2);assert.equal(l0.gigs.active.pickedAt,null);assert(parcelWaiting(l0)&&!parcelHeld(l0));
+ // an old gig (no origin) is picked up at once, like before
+ const old0={...a0,gigs:{...a0.gigs,active:{...a0.gigs.active,origin:null,pickedAt:null}}};assert(parcelHeld(old0)&&!parcelWaiting(old0));assert.equal(activeView(old0).pickup,false);assert.equal(pickUpGigBox(old0,{x:0,z:0}).error!==undefined,true);}
 let p=take(fresh,{x:0,z:0}).state;assert(parcelHeld(p));assert.equal(p.gigs.active.drop,null);
 // drop sets the position, the gig stays active, the view says dropped
 const d=dropGigParcel(p,{x:12.5,z:-3});assert.equal(d.error,undefined);p=d.state;assert(parcelDropped(p)&&!parcelHeld(p));assert.deepEqual(p.gigs.active.drop,{x:12.5,z:-3});assert.equal(p.activeJob.dropped,true);assert(/E beside it/.test(d.message));

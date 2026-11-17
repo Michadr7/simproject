@@ -3,10 +3,10 @@
 // ctx = {clients:[{id,name}], places:[{id,x,z,room}]}; the default is built lazily from the town (population.js + orders.js dropSpot).
 import {townPopulation} from './population.js';
 import {dropSpot} from './orders.js';
-import {propertyById} from './properties.js';import {normalizeDrop,PARCEL_FIRST} from './gig-parcel.js';
+import {propertyById} from './properties.js';import {normalizeDrop,PARCEL_FIRST,PARCEL_PICKUP_FIRST} from './gig-parcel.js';
 import {payFor as payGig,parMetres,meetsMinPar,canTakeMore,fatigueFactor,WALK_M_PER_GAME_MIN,FASTEST_M_PER_GAME_MIN,HANDLING_C,MIN_PAR_M} from './gig-pay.js'; // G-B (notes/gig-overhaul-design.md): pay, par, daily fatigue live in gig-pay.js
 // W-D2 (notes/world-system-design.md, Needs -> gigs): the board of normal play is the world's open needs; a need gig claims its need, fills it on completion and is paid by needPay.
-import {needSlots,claim,fill,release,needPay,openNeeds,remainingOf,dayOf} from './needs.js';import {buy,deliver} from './world-state.js';import {CRATE_UNITS,PLACES as WORLD_PLACES,GOODS} from './world-goods.js';import {helped,gainStanding} from './npc-life.js';import {ROSTER} from './npc-roster.js';import {acceptsCrates} from './cargo.js';
+import {needSlots,claim,fill,release,needPay,openNeeds,remainingOf,dayOf} from './needs.js';import {buy,deliver} from './world-state.js';import {CRATE_UNITS,PLACES as WORLD_PLACES,GOODS} from './world-goods.js';import {helped,gainStanding} from './npc-life.js';import {ROSTER} from './npc-roster.js';import {acceptsCrates,takesCrateGigs} from './cargo.js';
 const T=(id,title,base,o={})=>Object.freeze({id,title,base,stops:1,rep:0,bed:false,limit:0,hard:false,...o});
 export const GIG_TYPES=Object.freeze([
  T('grocery','Grocery run',1200,{limit:60,twist:'Deliver within 60 game minutes'}),
@@ -122,7 +122,7 @@ export function routeOf(origin,places){
 }
 const pairKey=(origin,places)=>origin.id+'>'+places.map(x=>x.id).join('+');
 // ---- W-D2: the needs board and the egg run. The world lives in progress.world, the need list in progress.needs; a claim is held under NEED_PLAYER.
-export const hasCrateBed=p=>(p.vehicles||[]).some(v=>!v.loan&&acceptsCrates(v.model)); // Hal's loan truck belongs to the starter story: it never carries need crates
+export const hasCrateBed=p=>(p.vehicles||[]).some(v=>!v.loan&&takesCrateGigs(v.model)); // Hal's loan truck belongs to the starter story: it never carries need crates
 export const needsPickup=a=>!!a?.needId&&a.type==='need-restock'&&!!CRATE_UNITS[a.needGood]&&!(a.haul>0); // the crates are still at the farm
 export const cratesFor=(good,units)=>CRATE_UNITS[good]?Math.ceil(Math.max(0,units)/CRATE_UNITS[good]):0;
 export function needBoard(p,now=gameMinutes(p)){
@@ -195,20 +195,20 @@ export const atPickup=(a,position,room='street')=>!!a?.origin&&a.pickedAt==null&
 export const pickedUp=a=>!!a&&(!a.origin||a.pickedAt!=null);
 export function pickUpGig(p,now=gameMinutes(p)){
  const a=p.gigs?.active;if(!a)return {error:'You have no active gig.'};if(pickedUp(a))return {error:'Already picked up.'};
- return {state:{...p,gigs:{...p.gigs,active:{...a,pickedAt:now}}}};
+ return {state:{...p,gigs:{...p.gigs,active:{...a,pickedAt:now,dueAt:a.dueAt?now+Math.max(0,a.dueAt-(a.acceptedAt??now)):0}}}}; // FIX-R1: the deadline runs from the pickup, same total allowance
 }
 const near=(pos,pl)=>Math.hypot(pos.x-pl.x,pos.z-pl.z)<=1.35;
 // Per frame: knocks and metres add up, and the player reaching a place ticks it off (round of three: any order, the rest in order). Only the pure state moves; completeGig pays.
 export function tickGig(p,{position,room='street',dt=0,moving=false,knock=0,metres=0,now=gameMinutes(p),requirePickup=false}={}){
  const g=p.gigs;if(!g?.active)return p;
  const a={...g.active,visited:[...g.active.visited]};a.knocks=Math.min(100,a.knocks+int(knock,0,10));a.metres=Math.min(1e6,a.metres+Math.max(0,Number.isFinite(metres)?metres:0));
- if(position&&!a.drop&&!needsPickup(a)&&(!requirePickup||pickedUp(a)))for(let i=0;i<a.places.length;i++){
+ if(position&&!a.drop&&!needsPickup(a)&&(!requirePickup||a.needId||pickedUp(a)))for(let i=0;i<a.places.length;i++){
   if(a.visited[i]||a.places[i].room!==room||!near(position,a.places[i]))continue;
   if(a.type!=='round'&&a.visited.slice(0,i).includes(false))continue;
   a.visited[i]=true;
  }
  a.stage=a.visited.filter(Boolean).length;
- if(typeById(a.type).hard&&a.dueAt&&now>a.dueAt)return failGig({...p,gigs:{...g,active:a}},now,'late');
+ if(typeById(a.type).hard&&a.dueAt&&pickedUp(a)&&now>a.dueAt)return failGig({...p,gigs:{...g,active:a}},now,'late');
  return {...p,gigs:{...g,active:a}};
 }
 // The parcel's door (design section 3): the client likes one of three ways of being greeted; the gig text hints which; the right answer tips 200 to 800 cents, the others tip nothing.
@@ -225,7 +225,7 @@ export function failGig(p,now=gameMinutes(p),why='failed'){
 // opts.tip: the dialog's tip in cents (clamped to the type's range); par: par route length for the round.
 export function completeGig(p,now=gameMinutes(p),opts={}){
  const g=p.gigs,a=g?.active;if(!a)return {error:'You have no active gig.'};
- if(!gigDone(p))return {error:'Finish the marked stops first.'};if(a.drop)return {error:PARCEL_FIRST};
+ if(!gigDone(p))return {error:'Finish the marked stops first.'};if(a.drop)return {error:PARCEL_FIRST};if(!a.needId&&!pickedUp(a))return {error:PARCEL_PICKUP_FIRST};
  if(a.needId)return completeNeed(p,now,opts);
  const t=typeById(a.type),late=!!(t.limit&&a.dueAt&&now>a.dueAt);
  if(t.hard&&late)return {state:failGig(p,now,'late'),paid:0,failed:true};

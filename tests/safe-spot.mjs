@@ -70,4 +70,11 @@ const real=(extra=[])=>(x,z)=>!isWalkable(x,z)||world.blocked(x,z)||extra.some(b
  const car=real([{x:-6,z:13.9,hx:2.2,hz:.95}]);let t0=performance.now();for(let i=0;i<10;i++)findNearestClearSpot(car,MAP.spawn.x,MAP.spawn.z);
  var rescueMs=(performance.now()-t0)/10;assert(rescueMs<50,`a rescue on the real map takes ${rescueMs.toFixed(1)} ms`);
 }
+{ // FIX-R1: every default gig pickup point can be used: some clear standing spot lies within PICKUP_RADIUS_M of it (the E prompt needs you within 2 m)
+ const {DEFAULT_ORIGINS,PICKUP_RADIUS_M}=await import('../dist/gigs.js');
+ for(const o of DEFAULT_ORIGINS){let found=null;
+  for(let r=0;r<=PICKUP_RADIUS_M&&!found;r+=.25)for(let i=0;i<(r?16:1)&&!found;i++){const a=i/16*Math.PI*2,x=o.x+Math.cos(a)*r,z=o.z+Math.sin(a)*r;if(!real()(x,z))found={x,z,r}}
+  assert(found,`gig origin ${o.id} (${o.x}, ${o.z}) is inside a collider or off the walkable mask: no standing spot within ${PICKUP_RADIUS_M} m`);
+  assert(!real()(found.x,found.z)&&Math.hypot(found.x-o.x,found.z-o.z)<=PICKUP_RADIUS_M)}
+}
 console.log(`Safe spot: the nearest clear spot (already-fine points kept, car and wall cases, closed courtyards refused, big enclosures allowed, search limits, one call per candidate), the 0.31 parked-car spawn on the real map (${rescueMs.toFixed(1)} ms) and clear answers across the map passed.`);

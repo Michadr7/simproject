@@ -13,7 +13,7 @@ const B=(id,title,text,event,place,cash=0)=>Object.freeze({id,title,text,event,p
 export const BEATS=Object.freeze([
  B('message','Check your phone','A message from Noah: come by the market, he could use a hand.','read-message','market'),
  B('groceries','Sophie\'s groceries','Carry Sophie\'s groceries from the market to 18 Oak Street.','delivered','oakStreet18',300),
- B('food','Eat something first','Noah says Hal Brennan needs someone. Buy food and a water, and eat one: it is a long walk.','ate','market'),
+ B('food','Eat something first','Noah needs a delivery taken to Hal Brennan, and it is a long walk. Buy a food and a water at the Corner Market, and eat one before you set off.','ate','market'),
  B('farm','Walk to Willow Farmhouse','Take Hal his groceries. The arrow leads the way.','arrived','farmhouse',2500),
  B('crates','Eggs for Noah','Load four egg crates on Hal\'s flatbed and drive them to the market. Hard knocks cost quality.','delivered-crates','market'),
  B('fuel','Fill up','The tank is nearly empty. Hal left cash for gas: fill up at the pump.','refuelled','gas',3200),

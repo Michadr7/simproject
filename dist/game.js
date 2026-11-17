@@ -8,6 +8,7 @@ import {createCargoUI} from './cargo-ui.js';
 import {scheduleTruck,truckOf,truckWaiting,truckDue,truckArrived,loadFromHands,loadFromStock,loadFromBed,sendOff,BAY as TRUCK_BAY} from './customers.js';
 import {createCustomerTruck} from './customer-truck.js';
 import {heightAt} from './height.js';
+import {kindOf as beaconKindOf,colourFor as beaconColour,fadeFor as beaconFade,FLASH_SECONDS} from './beacon-style.js';
 import {slabOutline,cornerRegion} from './junctions.js';
 import {hire,quit,collectOwed,employerName,careerOf,promote,nextRank,ownerOf,employerById,storeItems,storeLine,buyFromCompany,changeRep} from './careers.js';
 import {tickSupply,supplyOf,returnPlanks} from './supply.js';
@@ -50,7 +51,7 @@ import {DEV_MODE} from './dev-flag.js';import {VERSION} from './version.js';impo
 import {createInventoryUI} from './inventory-ui.js';
 import {addItem,useItem,unequipItem,hasItem,hotbarItems,equipTool,sellLogs,canOf,setCan} from './inventory.js';
 import {createPhone} from './phone.js';import {createGps} from './gps.js';
-import {acceptContract,completeContract,tickContract,gigTarget,atGigPoint,refreshGigBoard,gameMinutes,marketContracts,gigDoor,dropGigParcel,pickGigParcel,pickNeedCrates,deliverNeedCrates,settleNeedGig,NO_WORK_POSTED} from './gig-bridge.js';import {parcelHeld as parcelHeldRaw,PARCEL_HANDS,parcelModelId,PARCEL_DEFAULT} from './gig-parcel.js';import {createProp} from './props.js';import {createHal} from './hal.js';import {storyDeck,storyPalletHidden,halHere,applyStory,alreadyHoused,startLoan,ensureLoan,halTalk,buyFromHal,knockQuality,aimPoint,CRATE_REACH,MARKET_REACH,advanceStarter,starterObjective,skipStarter,PLACES as STORY_PLACES,SKIP_SALE_PRICE} from './starter.js';
+import {acceptContract,completeContract,tickContract,gigTarget,atGigPoint,refreshGigBoard,gameMinutes,marketContracts,gigDoor,dropGigParcel,pickGigParcel,pickNeedCrates,deliverNeedCrates,settleNeedGig,NO_WORK_POSTED,pickUpGigBox,gigPickupHere} from './gig-bridge.js';import {parcelHeld as parcelHeldRaw,parcelWaiting,PARCEL_HANDS,parcelModelId,PARCEL_DEFAULT,mountError,canStow,STOW_TOAST,UNSTOW_TOAST} from './gig-parcel.js';import {createProp} from './props.js';import {createHal} from './hal.js';import {storyDeck,storyPalletHidden,halHere,applyStory,alreadyHoused,startLoan,ensureLoan,halTalk,buyFromHal,knockQuality,aimPoint,CRATE_REACH,MARKET_REACH,advanceStarter,starterObjective,skipStarter,PLACES as STORY_PLACES,SKIP_SALE_PRICE} from './starter.js';
 import {GameState,initializeState,setMePosition,tickLife,setStatDrainMultiplier} from './state.js';
 import {needsEffects} from './life.js';
 import {loadProfile,saveProfile,wipePlayerKeys} from './profile.js';
@@ -81,7 +82,7 @@ import {sleepThrough,passOutThrough,PASS_OUT_ONLINE_SECONDS} from './sleep.js';
 import {createFuelStation} from './fuel-station.js';
 import {worldDue,runWorldDay,pumpGate,pumpSold,SOLD_OUT_TEXT,newsFor} from './world-tick.js'; // W-D1: the daily world tick at 05:00 and the pump stock
 import {stockAt,priceOf} from './world-state.js';import {PLACES as WORLD_PLACES,GOODS as WORLD_GOODS,CRATE_UNITS} from './world-goods.js';import {moodLine} from './npc-life.js';import {openTalk,talkOutcome,registerTalk,knock,flatDoors,topicsFor,pagedChoices,createRosterPlanner,rosterByPersonId} from './npc-dialogue.js';import {ROSTER as NPC_ROSTER,byId as npcById} from './npc-roster.js';const parcelHeld=p=>parcelHeldRaw(p)&&!p.gigs.active.needId; // a need gig has no box in the hands (gig-parcel.js counts every active gig as a box): the egg run drives, the crates ride on the truck
-import {addCrates as addNeedCrates,removeCrates as removeNeedCrates,capacity as crateCapacity,acceptsCrates} from './cargo.js'; // W-D2: the egg run, the shelves, Noah's mood line
+import {addCrates as addNeedCrates,removeCrates as removeNeedCrates,capacity as crateCapacity,acceptsCrates,takesCrateGigs,usesLoadDrag,BEDS} from './cargo.js';import {loadFactor,isHeavy,cargoMassKg,parcelMassKg,HEAVY_TEXT} from './load-drag.js'; // W-D2: the egg run, the shelves, Noah's mood line
 import {sell,fillCan,pour,canText,CAN_CAPACITY_MGAL,STEP_MGAL,FLOW_MGAL_PER_S,REACH_M,USE_RANGE_M,fuelText,fuelTitle,fuelName,gallons} from './fuel.js';
 import * as THREE from './vendor/three.module.js';
 import { createCameraController } from './camera.js';
@@ -448,7 +449,7 @@ function notifyPhone(app,text){
  queueToast(text);phone?.notify(app);audio.ping();
 }
 function toast(text){showToast(text,4500)}
-function takeGig(id){const r=acceptContract(GameState.progress,id,me.position);if(r.error){toast(r.error);return}GameState.progress=r.state;persist();toast('Gig accepted · '+GameState.progress.activeJob.title+' · Follow the gold marker')}
+function takeGig(id){const r=acceptContract(GameState.progress,id,me.position);if(r.error){toast(r.error);return}GameState.progress=r.state;persist();toast('Gig accepted · '+GameState.progress.activeJob.title+' · '+(GameState.progress.activeJob.pickup?'Go and pick up the parcel first':'Follow the gold marker'))}
 // The starter story (starter.js, "A Hand for Hal"): events move it on; the truck beats wait for the short flatbed.
 let storyKnocks=0; // counted crashes of the loan truck while the egg crates are on it (not saved: a reload mid-drive forgives them)
 function storyEvent(event,data){const r=applyStory(GameState.progress,event,data);if(r.error){if(r.soft)notifyPhone('player',r.error);return false}GameState.progress=r.progress;if(r.moved)driving.place(r.moved.uid,r.moved.pose);if(r.removed)driving.sync(r.progress.vehicles);notifyPhone('player',r.text);persist();return true}
@@ -481,7 +482,7 @@ let needCrateUid='';
 function syncNeedCargo(){const a=GameState.progress.gigs?.active,h=a?.needId&&a.haul>0&&a.truck?a:null; // every frame, cheap: the crates of the loaded run sit on the truck's deck; they leave with the gig
  if(h){needCrateUid=h.truck;const f=driving.byId.get(h.truck);if(!f)return;const want=Math.ceil(h.haul/(CRATE_UNITS[h.needGood]||1)),bed=driving.cargoOf(h.truck);if(countOf(bed,'crate')===want)return;const r=addNeedCrates(removeNeedCrates(bed).cargo,f.spec.model,want);if(!r.error)driving.setCargo(h.truck,r.cargo)}
  else if(needCrateUid){const f=driving.byId.get(needCrateUid);if(f){const bed=driving.cargoOf(needCrateUid);if(hasCrates(bed))driving.setCargo(needCrateUid,removeNeedCrates(bed).cargo)}needCrateUid=''}}
-function crateTruckNear(pt,r){let best=null;for(const v of GameState.progress.vehicles||[]){if(v.loan||!acceptsCrates(v.model))continue;const f=driving.byId.get(v.uid);if(!f)continue;const d=Math.hypot(f.state.x-pt.x,f.state.z-pt.z);if(d<r&&(!best||d<best.d))best={uid:v.uid,model:v.model,d}}return best}
+function crateTruckNear(pt,r){let best=null;for(const v of GameState.progress.vehicles||[]){if(v.loan||!takesCrateGigs(v.model))continue;const f=driving.byId.get(v.uid);if(!f)continue;const d=Math.hypot(f.state.x-pt.x,f.state.z-pt.z);if(d<r&&(!best||d<best.d))best={uid:v.uid,model:v.model,d}}return best}
 function needCandidates(add,p,s){const a=p.gigs?.active;if(!a?.needId||a.type!=='need-restock'||!CRATE_UNITS[a.needGood]||(!s.done&&s.step===4))return;const C=STORY_PLACES.crates,M=STORY_PLACES.market; // the story's own crate beat (step 4) keeps its prompts
  if(!(a.haul>0))add('need-load',C,()=>new THREE.Vector3(C.x,1.3,C.z),'Load the crates onto the truck',needLoad,2.6);
  else add('need-drop',M,()=>new THREE.Vector3(M.x,1.3,M.z),'Hand the crates to Noah',needDrop,3.2)}
@@ -492,8 +493,8 @@ function needLoad(){const C=STORY_PLACES.crates,t=crateTruckNear(C,CRATE_REACH);
 function needDrop(){const a=GameState.progress.gigs?.active,M=STORY_PLACES.market,f=a?.truck&&driving.byId.get(a.truck);
  if(!shopOpen('market',GameState.progress.routine)){toast('The market has closed for today.');return}
  if(!f||Math.hypot(f.state.x-M.x,f.state.z-M.z)>=MARKET_REACH){toast('Bring the truck to the market first.');return}
- const r=deliverNeedCrates(GameState.progress,{});if(r.error){toast(r.error);return}const label=(WORLD_GOODS[a.needGood]?.label||'goods').toLowerCase();GameState.progress=r.state;syncNeedCargo();persist();
- toast(`Delivered ${r.units} ${WORLD_GOODS[a.needGood]?.unit||'unit'} of ${label} · ${money(r.paid)} earned`+(r.tooFast?' (handling only: too fast)':''));notifyPhone('gigs',r.needFilled?`Noah: the ${label} shelf is stocked again. Thank you.`:`Noah: thanks for the ${label}.`)}function storyCandidates(add){const p=GameState.progress,s=p.starter;if(!s||inside||shop)return;needCandidates(add,p,s);
+ const r=deliverNeedCrates(GameState.progress,{});if(r.error){toast(r.error);return}const label=(WORLD_GOODS[a.needGood]?.label||'goods').toLowerCase();GameState.progress=r.state;syncNeedCargo();persist();flashDone();
+ toast(`Delivered${r.units} ${WORLD_GOODS[a.needGood]?.unit||'unit'} of ${label} · ${money(r.paid)} earned`+(r.tooFast?' (handling only: too fast)':''));notifyPhone('gigs',r.needFilled?`Noah: the ${label} shelf is stocked again. Thank you.`:`Noah: thanks for the ${label}.`)}function storyCandidates(add){const p=GameState.progress,s=p.starter;if(!s||inside||shop)return;needCandidates(add,p,s);
  if(hal.visible&&halHere(p))add('hal',{x:hal.x,z:hal.z},()=>entityPoint(hal.group),'Talk to Hal',()=>{recordTalk('hal');talkHal()},2.4);
  if(s.done||s.step!==4)return;const C=STORY_PLACES.crates,M=STORY_PLACES.market;
  if(!s.loaded)add('story-load',C,()=>new THREE.Vector3(C.x,1.3,C.z),'Load the egg crates onto the truck',()=>{if(!loanNear(C,CRATE_REACH)){toast('Park the truck beside the crates first.');return}{const lu=GameState.progress.starter?.loanUid,bed=lu?driving.cargoOf(lu):null;if(bed?.length&&!hasCrates(bed)){toast('Clear the timber off the deck first.');return}}storyKnocks=0;storyEvent('loaded')},2.6);
@@ -515,7 +516,7 @@ function showDialog(kicker,title,text,tag,action,label){
 function finishJob(action){
  if(action==='pickup'&&!shopOpen('market',GameState.progress.routine)){toast('The market has closed for today.');return}
  const result=transactJob(GameState.progress,action,me.position,{shop});if(result.error){toast(result.error);return}
- GameState.progress=result.state;persist();$('dialog').hidden=true;clearWorldPanel();modal=false;keys.clear();if(action==='deliver')storyEvent('delivered');
+ GameState.progress=result.state;persist();$('dialog').hidden=true;clearWorldPanel();modal=false;keys.clear();if(action==='deliver'){storyEvent('delivered');flashDone()}
  toast(result.paid?`${money(result.paid)} earned · delivery completed`:'Order collected. Follow the marker to your customer.');
 }
 function enterHome(target=studioHome){target.room.frontDoor?.snap(false);  if(target.kind==='studio'&&!GameState.progress.housing.rented)return;persist();home=target;home.room.setFloor?.(0);inside=true;if(home.kind==='house')zoom=zoomTarget=9;home.room.scene.add(player);setMePosition(home.ENTRY.x,.02,home.ENTRY.z);yaw=0;pitch=home.kind==='house'?.85:.4;camera.position.set(home.ENTRY.x,3,home.ENTRY.z+5.5);$('dialog').hidden=true;clearWorldPanel();modal=false;keys.clear();
@@ -628,10 +629,11 @@ function candidates(){const all=[],add=(id,point,anchor,label,run,range=1.5,key)
   if(st){if(floor===0)add('up',{x:st.x,z:st.footZ},()=>worldPoint({x:st.x,y:1.4,z:st.footZ}),'Go upstairs',()=>changeFloor(1),1.5);else add('down',{x:st.x,z:st.topZ},()=>worldPoint({x:st.x,y:1.4+up,z:st.topZ}),'Go downstairs',()=>changeFloor(0),1.5)}
   return all}
  const gig=GameState.progress.activeJob;{const dr=GameState.progress.gigs?.active?.drop;if(dr&&Math.hypot(dr.x-me.position.x,dr.z-me.position.z)<2.6)add('parcel-pick',{x:dr.x,z:dr.z},()=>new THREE.Vector3(dr.x,.6+heightAt(dr.x,dr.z)+(world.floorAt(dr.x,dr.z)??0),dr.z),'Pick up the parcel',pickUpParcel,1.8)}
+ {const ga=GameState.progress.gigs?.active;if(ga&&gigPickupHere(GameState.progress,me.position,currentRoom()))add('gig-pickup',{x:ga.origin.x,z:ga.origin.z},()=>new THREE.Vector3(ga.origin.x,.6+heightAt(ga.origin.x,ga.origin.z)+(world.floorAt(ga.origin.x,ga.origin.z)??0),ga.origin.z),'Pick up the parcel',pickUpGigAtOrigin,2)} // G-D: the box waits at the pickup point until E
  if(gig?.stage==='return'&&gig.dropped)add('phone-gig-wait',gig.returnLocation,()=>new THREE.Vector3(gig.returnLocation.x,1.4,gig.returnLocation.z),'Pick up the parcel first',()=>toast('Your parcel is on the ground. Pick it up first.'));else if(gig?.stage==='return')add('phone-gig',gig.returnLocation,()=>new THREE.Vector3(gig.returnLocation.x,1.4,gig.returnLocation.z),'Report back · collect '+money(gig.reward),()=>{
-   const dd=gigDoor(GameState.progress);if(dd){showWorld(()=>new THREE.Vector3(gig.returnLocation.x,1.4,gig.returnLocation.z),dd.name,dd.text,dd.choices.map(c=>({label:c.label,run:()=>{closeWorldDialog();const r=completeContract(GameState.progress,me.position,'street',c.tip);if(r.error){toast(r.error);return}GameState.progress=r.state;persist();storyEvent('gig-done');toast('Gig complete, '+money(r.paid)+' earned'+(c.tip?' (tip '+money(c.tip)+')':''))}})));return}const result=completeContract(GameState.progress,me.position);
+   const dd=gigDoor(GameState.progress);if(dd){showWorld(()=>new THREE.Vector3(gig.returnLocation.x,1.4,gig.returnLocation.z),dd.name,dd.text,dd.choices.map(c=>({label:c.label,run:()=>{closeWorldDialog();const r=completeContract(GameState.progress,me.position,'street',c.tip);if(r.error){toast(r.error);return}GameState.progress=r.state;persist();storyEvent('gig-done');flashDone();toast('Gig complete, '+money(r.paid)+' earned'+(c.tip?' (tip '+money(c.tip)+')':''))}})));return}const result=completeContract(GameState.progress,me.position);
    if(result.error){toast(result.error);return}
-   GameState.progress=result.state;persist();storyEvent('gig-done');toast('Gig complete · '+money(result.paid)+' earned');
+   GameState.progress=result.state;persist();storyEvent('gig-done');flashDone();toast('Gig complete · '+money(result.paid)+' earned');
  },1.35);
 
  add('home',{x:STUDIO.x,z:-8.1},()=>new THREE.Vector3(1,1.5,-8.15),GameState.progress.housing.rented?'Enter your studio':'View studio listing',()=>{if(GameState.progress.housing.rented)enterHome();else showWorld(()=>new THREE.Vector3(1,1.6,-8.15),'Studio 2B · To let','Furnished studio. $90 move-in includes a $30 deposit and the first week’s $60 rent. Utilities start at $7 per week.',[{label:'Rent studio · $90',run:()=>changeHousing('rent')}])},2.8);
@@ -813,13 +815,15 @@ function driveEvent(e){const f=driving.byId.get(e.id);if(!f)return;const nm=f.sp
 function applyShake(dt){if(shake.t>0){shake.t-=dt;const o=shakeOffset(shake.t,shake.amp);shake.off.set(o.x,o.y,o.z);camera.position.add(shake.off)}else shake.off.set(0,0,0)}// Driving (driving.js, vehicle.js): E at a vehicle's driver door gets in (refused while carrying), E while driving gets out once you are below 1 m/s, at the door (else the other side, behind, in front).
 function enterVehicle(id,seat='driver',go=false){
  if(driving.active||inside||shop||consuming||putting||actionBusy())return;
- if(GameState.progress.carry||parcelHeld(GameState.progress)){toast(GameState.progress.carry?'Your hands are full. Put it down first (X).':PARCEL_HANDS);return}
+ {const why=mountError(GameState.progress,driving.byId.get(id)?.spec.model,driving.cargoOf(id));if(why){toast(why);return}} // ATV-STOW: a held parcel is stowed on the ATV's rack (no other vehicle has one yet)
  if(driving.byId.get(id)?.display){toast('It is not yours. Buy it at the dealership lot or order it on your phone.');return}
- if(!go&&driving.doorThen(id,seat,()=>enterVehicle(id,seat,true)))return;if(!driving.enter(id,seat))return;audio.prepare(driving.active.cls.id);fuel.putBack();if((driving.active.fuelMgal>0||!driving.active.spec.fuel)&&driving.active.cond>0){audio.ignition(me.position,listenerAt(),{tier:driving.active.cls.tier,seconds:driving.damageOf().crank});const tip=driving.exhaust();if(tip)smoke.burst(tip,START_PUFFS[driving.active.cls.tier]??6)}
+ if(!go&&driving.doorThen(id,seat,()=>enterVehicle(id,seat,true)))return;const stowKg=stowKgFor(driving.byId.get(id)?.spec.model);if(!driving.enter(id,seat,stowKg))return;audio.prepare(driving.active.cls.id);fuel.putBack();if((driving.active.fuelMgal>0||!driving.active.spec.fuel)&&driving.active.cond>0){audio.ignition(me.position,listenerAt(),{tier:driving.active.cls.tier,seconds:driving.damageOf().crank});const tip=driving.exhaust();if(tip)smoke.burst(tip,START_PUFFS[driving.active.cls.tier]??6)}
  const at=driving.seat();me.position.x=at.x;me.position.z=at.z;me.rotation.y=driving.yaw;keys.clear();look.resetMotion();
  yaw=driving.yaw+Math.PI;pitch=driving.cameraPitch();zoom=zoomTarget=driving.cameraZoom();driveIdle=9;persist();
- toast(seat==='driver'?`Driving the ${driving.active.spec.name.replace(/^Eastbank /,'')} · W S accelerate and brake, A D steer, Space brakes, E gets out`:`Riding in the ${driving.active.spec.name.replace(/^Eastbank /,'')} · you are the passenger: nobody is driving · E gets out`);
+ let more='';if(stowKg>0)more=' · '+STOW_TOAST;if(!heavyTold&&usesLoadDrag(driving.active.spec.model)&&isHeavy(stowKg+cargoMassKg(driving.cargoOf(id)))){heavyTold=true;more+=' · '+HEAVY_TEXT} // ATV-STOW: load drag toast, once per session
+ toast((seat==='driver'?`Driving the ${driving.active.spec.name.replace(/^Eastbank /,'')} · W S accelerate and brake, A D steer, Space brakes, E gets out`:`Riding in the ${driving.active.spec.name.replace(/^Eastbank /,'')} · you are the passenger: nobody is driving · E gets out`)+more);
 }
+let heavyTold=false;const stowKgFor=model=>canStow(model)&&parcelHeld(GameState.progress)?parcelMassKg(GameState.progress.gigs.active):0; // kg of the gig parcel that rides on this vehicle's rack (0 = none; load-drag.js)
 // The repair shop (VD4, garage.js holds the rules; here the bay, the counter, the repair kit and the tow). Everything works on the saved vehicle list (driving.save()); garageSync then makes the world match it: conditions, vehicles in the shop hidden, a towed or collected vehicle placed.
 const GARAGE_REACH=5,GARAGE_NAME='Eastbank repair shop',garageToldReady=new Set();
 const vname=uid=>driving.byId.get(uid)?.spec.name.replace(/^Eastbank /,'')||'vehicle';
@@ -859,6 +863,7 @@ function exitVehicle(now){
  const f=driving.active,seatWas=driving.seatSide,door=driving.door(),p=driving.leave((x,z)=>!blocked(x,z));
  if(p){me.position.x=p.x;me.position.z=p.z}else placeSafely(door.x,me.position.y,door.z);
  me.rotation.y=f.state.yaw+(driving.seatSide==='passenger'||seatWas==='passenger'?-Math.PI/2:Math.PI/2);keys.clear();look.resetMotion();pitch=.38;zoom=zoomTarget=7;persist();
+ if(canStow(f.spec.model)&&parcelHeld(GameState.progress))toast(UNSTOW_TOAST); // ATV-STOW: the parcel comes off the rack into your hands (syncParcel moves the mesh)
 }
 function updateWorldUI(){
  vehicleHud(fork.on?vehicleHudModel({forklift:{speed:fork.state.speed,lift:fork.state.lift,load:forkLoadOf(GameState.progress),hint:fork.hint||'',goal:fork.goal||''}}):vehicleHudModel({driving:driving.active,seat:driving.seatSide,name:driving.active?.spec.name,speed:driving.speed,lights:driving.driving?lightsLabel(lightMode,nightLights.ownOn):null,fuel:driving.active?driving.fuelOf(driving.active.spec.id):null,damage:driving.active?driving.damageOf():null,bog:driving.driving?driving.bogOf():null,gps:driving.driving?gps.hud:null,ground:driving.active?(()=>{const s=surfaceLive(driving.active.state.x,driving.active.state.z);return {label:SURFACE_LABEL[s]||'Ground',factor:surfaceSpeed(s,driving.active.cls)}})():null}));
@@ -871,17 +876,40 @@ function updateWorldUI(){
 }
 // Small destination marker, shared by pickups and drop-offs.
 const marker=new THREE.Group();marker.name='objective-beacon';const markerMaterial=new THREE.MeshBasicMaterial({color:'#d4e7b3',transparent:true,opacity:.8,depthWrite:false});
-const ring=new THREE.Mesh(new THREE.RingGeometry(.62,.72,32),markerMaterial);ring.rotation.x=-Math.PI/2;ring.position.y=.2;marker.add(ring);
+// OBJ-BEACON (beacon-style.js): a soft ground glow, a faint light beam and the small diamond, tinted by purpose. Two textures and one plane geometry are made once and shared; each beacon owns two additive materials (no allocation per frame).
+const beaconPlane=new THREE.PlaneGeometry(1,1);
+function beaconTexture(beam){const c=document.createElement('canvas');c.width=beam?16:64;c.height=64;const g=c.getContext('2d');
+ if(beam){const v=g.createLinearGradient(0,64,0,0),h=g.createLinearGradient(0,0,16,0);if(v&&h){v.addColorStop(0,'rgba(255,255,255,.9)');v.addColorStop(1,'rgba(255,255,255,0)');g.fillStyle=v;g.fillRect(0,0,16,64);h.addColorStop(0,'rgba(0,0,0,0)');h.addColorStop(.5,'rgba(0,0,0,1)');h.addColorStop(1,'rgba(0,0,0,0)');g.globalCompositeOperation='destination-in';g.fillStyle=h;g.fillRect(0,0,16,64)}}
+ else{const r=g.createRadialGradient(32,32,0,32,32,32);if(r){r.addColorStop(0,'rgba(255,255,255,.85)');r.addColorStop(.55,'rgba(255,255,255,.35)');r.addColorStop(.85,'rgba(255,255,255,.08)');r.addColorStop(1,'rgba(255,255,255,0)');g.fillStyle=r;g.fillRect(0,0,64,64)}}
+ return new THREE.CanvasTexture(c)}
+const beaconGlowTex=beaconTexture(false),beaconBeamTex=beaconTexture(true);
+function makeBeacon(){const mat=map=>new THREE.MeshBasicMaterial({map,color:'#ffffff',transparent:true,opacity:0,depthWrite:false,blending:THREE.AdditiveBlending,fog:false,side:THREE.DoubleSide}),mGlow=mat(beaconGlowTex),mBeam=mat(beaconBeamTex);
+ const group=new THREE.Group(),glow=new THREE.Mesh(beaconPlane,mGlow),beamA=new THREE.Mesh(beaconPlane,mBeam),beamB=new THREE.Mesh(beaconPlane,mBeam);
+ glow.rotation.x=-Math.PI/2;glow.position.y=.08;glow.renderOrder=2;beamA.position.y=beamB.position.y=7;beamB.rotation.y=Math.PI/2;beamA.scale.set(1.1,14,1);beamB.scale.set(1.1,14,1);beamA.renderOrder=beamB.renderOrder=2;group.add(glow,beamA,beamB);
+ const self={group,colour:'',apply(colour,fade,t,boost=1,grow=0){if(colour!==self.colour){self.colour=colour;mGlow.color.set(colour);mBeam.color.set(colour)}
+  const pulse=1+.06*Math.sin(t*1.6),breathe=.88+.12*Math.sin(t*1.6);glow.scale.setScalar(3.4*fade.padScale*pulse*(1+grow));mGlow.opacity=Math.min(1,fade.ringAlpha*breathe*boost);mBeam.opacity=Math.min(1,fade.beamAlpha*.5*boost);beamA.visible=beamB.visible=fade.beamAlpha>.01}};
+ return self}
+const markerBeacon=makeBeacon(),ghostBeacon=makeBeacon();let markerKind='story',gigKind='pickup',markerNear=0,gigNear=0,ghostT=-1;marker.add(markerBeacon.group);
+let beaconTime=0; // FIX-R1: one clock for both beacons (markerTime only ran while the story/work spot existed, so the gig beacon never pulsed)
+const daylightNow=()=>{if(shop||inside)return 0;try{return sky.state()?.weights?.day??0}catch{return 0}};
+// Completion: a beacon that vanishes while you stood close to it flashes and dissolves in its colour (one ghost beacon, reused).
+function flashBeacon(kind,position){if(!active||!position)return;ghostBeacon.apply(beaconColour(kind),beaconFade(20,0),0);ghostBeacon.group.position.copy(position);scene.add(ghostBeacon.group);ghostT=0} // FIX-R1: explicit, called only when a gig or a delivery is completed (never on a failed or abandoned gig, a shop door or a tracker change)
+const flashDone=()=>{if(gigMarker.visible)flashBeacon(gigKind,gigMarker.position);else if(marker.visible)flashBeacon(markerKind,marker.position)};
+function updateBeacons(dt){beaconTime+=dt;const t=beaconTime,day=daylightNow();
+ if(marker.visible){const f=beaconFade(markerNear,day),c=beaconColour(markerKind);if(markerBeacon.colour!==c)markerMaterial.color.set(c);markerBeacon.apply(c,f,t);markerMaterial.opacity=.35+.5*f.padScale;diamond.scale.setScalar(f.padScale)}
+ if(gigMarker.visible){const f=beaconFade(gigNear,day),c=beaconColour(gigKind);if(gigBeacon.colour!==c)gigMaterial.color.set(c);gigBeacon.apply(c,f,t);gigMaterial.opacity=.35+.5*f.padScale;gigDiamond.scale.setScalar(f.padScale)}
+ if(ghostT>=0){ghostT+=dt;const k=ghostT/FLASH_SECONDS;if(k>=1){ghostT=-1;ghostBeacon.group.removeFromParent()}else{ghostBeacon.apply(ghostBeacon.colour,{ringAlpha:(1-k)*1.4,beamAlpha:(1-k)*1.6,padScale:1},0,1,k*1.8)}}}
 const diamond=new THREE.Mesh(new THREE.OctahedronGeometry(.16),markerMaterial);diamond.position.y=2.5;marker.add(diamond);scene.add(marker);
 const parcelProtos=new Map(),parcelProto=id=>{let m=parcelProtos.get(id);if(!m){m=createProp(id,{apply:x=>x});parcelProtos.set(id,m)}return m},parcel=createProp(PARCEL_DEFAULT,{apply:m=>m});let parcelModel=PARCEL_DEFAULT;;parcel.name='gig-parcel';parcel.visible=false;player.add(parcel); // G2b/G3b: the real carton model (small 0.30 x 0.20 x 0.20 m or medium 0.40 x 0.30 x 0.30 m, clean or dirty by client hash), ONE pooled mesh that swaps geometry and material (the other prototypes are never in the scene): in the arms in front of the chest while held, on the ground (scene child) once put down; the old brown BoxGeometry is gone
 const parcelSize=new THREE.Vector3(.3,.155,.2),boxP=freshBoxPose(),BOX_H=new THREE.Vector3(),BOX_PV=new THREE.Vector3();let boxPoseW=0; // G2c: the carton's bounding size (measured when the model changes), the held pose numbers (carry-pose.js) and the arm blend
 function measureParcel(){const g=parcel.geometry;if(!g.boundingBox)g.computeBoundingBox();g.boundingBox.getSize(parcelSize)}function holdParcel(bend){boxPose(parcelSize,bend,boxP);parcel.position.set(boxP.box.x,boxP.box.y,boxP.box.z)} // held: base at belly height, its back against the sweater (was (0,1,.36), floating in front of the hip)
 measureParcel();let parcelMode='',parcelX=NaN,parcelZ=NaN; // syncParcel only moves the mesh when the mode or the saved drop spot changes: no per-frame allocation
-function syncParcel(old){const a=GameState.progress.gigs?.active?.needId?null:GameState.progress.gigs?.active,want=a?parcelModelId(a):parcelModel;if(want!==parcelModel){const pr=parcelProto(want);parcel.geometry=pr.geometry;parcel.material=pr.material;parcelModel=want;measureParcel()}const mode=old||(a&&!a.drop)?'held':a&&a.drop&&!inside&&!shop?'ground':'';parcel.visible=mode!=='';if(!mode){parcelMode='';return}const d=mode==='ground'?a.drop:null;if(mode!==parcelMode||(d&&(d.x!==parcelX||d.z!==parcelZ))){parcelMode=mode;if(d){parcelX=d.x;parcelZ=d.z;scene.add(parcel);parcel.position.set(d.x,heightAt(d.x,d.z)+(world.floorAt(d.x,d.z)??0),d.z)}else{player.add(parcel);holdParcel(bendNow)}}}
-function putDownParcel(){if(inside||shop){toast('Put the parcel down outside.');return}if(putting||actionBusy())return;let x=me.position.x+Math.sin(me.rotation.y)*.9,z=me.position.z+Math.cos(me.rotation.y)*.9; // same spot search as putDownCarried: in front, else underfoot, else a ring
+function syncParcel(old){const a=GameState.progress.gigs?.active?.needId?null:GameState.progress.gigs?.active,want=a?parcelModelId(a):parcelModel;if(want!==parcelModel){const pr=parcelProto(want);parcel.geometry=pr.geometry;parcel.material=pr.material;parcelModel=want;measureParcel()}const wait=!!a&&parcelWaiting(GameState.progress),rack=a&&!a.drop&&!wait&&driving.active&&canStow(driving.active.spec.model)?driving.active:null,mode=rack?'stowed':old||(a&&!a.drop&&!wait)?'held':wait&&a.origin.room==='street'&&!inside&&!shop?'ground':a&&a.drop&&!inside&&!shop?'ground':'';parcel.visible=mode!=='';if(!mode){parcelMode='';return}const d=mode==='ground'?(a.drop||a.origin):null;if(mode!==parcelMode||(d&&(d.x!==parcelX||d.z!==parcelZ))){parcelMode=mode;if(d){parcelX=d.x;parcelZ=d.z;scene.add(parcel);parcel.position.set(d.x,heightAt(d.x,d.z)+(world.floorAt(d.x,d.z)??0),d.z)}else if(rack){const b=BEDS[rack.spec.model];rack.mesh.add(parcel);parcel.position.set(0,b.y,(b.z0+b.z1)/2);parcel.rotation.set(0,0,0)}else{player.add(parcel);holdParcel(bendNow)}}}
+function putDownParcel(){if(driving.active){toast('The parcel is stowed on the rack. Get off to take it.');return}if(inside||shop){toast('Put the parcel down outside.');return}if(putting||actionBusy())return;let x=me.position.x+Math.sin(me.rotation.y)*.9,z=me.position.z+Math.cos(me.rotation.y)*.9; // same spot search as putDownCarried: in front, else underfoot, else a ring
   if(blocked(x,z)){let found=false;for(const [d,k] of [[0,0],[1.1,8],[1.8,8],[2.6,8]]){for(let i=0;i<(k||1)&&!found;i++){const a=i/(k||1)*Math.PI*2,cx=me.position.x+Math.sin(a)*d,cz=me.position.z+Math.cos(a)*d;if(!blocked(cx,cz)){x=cx;z=cz;found=true}}if(found)break}if(!found){toast('Find some clear ground to put it down.');return}}
   beginBend(()=>{const r=dropGigParcel(GameState.progress,{x,z});if(r.error){toast(r.error);return}GameState.progress=r.state;persist();toast(r.message)})}
-function pickUpParcel(){beginBend(()=>{const r=pickGigParcel(GameState.progress);if(r.error){toast(r.error);return}GameState.progress=r.state;persist();toast(r.message)})}
+function pickUpGigAtOrigin(){if(gigPickupHere(GameState.progress,me.position,currentRoom()))stowTool();beginBend(()=>{const r=pickUpGigBox(GameState.progress,me.position,currentRoom());if(r.error){toast(r.error);return}GameState.progress=r.state;persist();toast(r.message)})} // G-D: the pickup step (E at the pickup point); the carton appears in the hands via syncParcel
+function pickUpParcel(){if(GameState.progress.gigs?.active?.drop&&!GameState.progress.carry)stowTool();beginBend(()=>{const r=pickGigParcel(GameState.progress);if(r.error){toast(r.error);return}GameState.progress=r.state;persist();toast(r.message)})}
 const workMarker=new THREE.Mesh(new THREE.RingGeometry(.35,.43,32),new THREE.MeshBasicMaterial({color:'#e7c681',side:THREE.DoubleSide,transparent:true,opacity:.85}));workMarker.rotation.x=-Math.PI/2;shops.cafe.scene.add(workMarker);
 const drinkCup=new THREE.Mesh(new THREE.CylinderGeometry(.07,.055,.17,10),mat('#eee3ce'));drinkCup.position.set(.32,1.12,.3);player.add(drinkCup);
 let customerKey='',customerRoute=[],customerWalking=false,customerLeaving=false;
@@ -908,7 +936,7 @@ function updateWork(dt){
  if(inside){$('cash').textContent=money(GameState.progress.cash);const house=home.kind==='house',held=GameState.progress.properties?.[home.id];$('objective').querySelector('.eyebrow').textContent=house?'YOUR HOME':'YOUR FIRST HOME';$('objective').querySelector('h2').textContent=house?home.name:'Make yourself at home.';$('objective').querySelector('p').textContent=house?'Rest, cook, and make yourself at home. '+(held?.tenure==='rent'?'Rent '+money(listingOf(home.id).rentCents)+' every 7 days; next due in '+Math.max(0,held.nextBillDay-GameState.progress.housing.day)+' days. Pay or leave in the Housing app.':'You own this home.'):'Rest, cook, and make yourself at home. Rent: $60 / week. Next bills: '+weekday(GameState.progress.housing.nextBillDay)+' in '+dueIn(GameState.progress.housing)+' days.';$('distance').textContent=house&&home.STAIRS?'Bed: rest · Stairs: go up or down · Door: go outside':'Bed: rest · Door: go outside';$('direction').style.transform='none';
   const floor=home.room.floor||0,st=home.STAIRS,exit=floor===0&&Math.hypot(me.position.x-home.EXIT.x,me.position.z-home.EXIT.z)<1.5,bed=floor===(home.BED_FLOOR||0)&&Math.hypot(me.position.x-home.BED.x,me.position.z-home.BED.z)<1.4,kitchen=floor===0&&Math.hypot(me.position.x-home.KITCHEN.x,me.position.z-home.KITCHEN.z)<1.5,stairs=!!st&&Math.hypot(me.position.x-st.x,me.position.z-(floor===0?st.footZ:st.topZ))<1.5;$('prompt').hidden=!active||modal||(!exit&&!bed&&!kitchen&&!stairs);$('prompt').querySelector('span').textContent=exit?'Go outside':kitchen?'Prepare a meal':stairs?(floor===0?'Go upstairs':'Go downstairs'):'Rest and recover';marker.visible=false;syncParcel(carrying);return}
  $('cash').textContent=money(GameState.progress.cash);$('deliveryCount').textContent=GameState.progress.completed+' '+(GameState.progress.completed===1?'delivery':'deliveries')+' completed';
- $('objective').querySelector('.eyebrow').textContent=carrying?'ORDER COLLECTED':'DELIVERY WORK';
+ $('objective').querySelector('.eyebrow').textContent=carrying?'ORDER COLLECTED':starterObjective(GameState.progress)?'GETTING STARTED':'DELIVERY WORK';
  $('objective').querySelector('h2').textContent=carrying?'Deliver to '+dest.name:starterObjective(GameState.progress)?.title||(GameState.progress.completed?'Ready for another?':'Earn your first wages.');
  $('objective').querySelector('p').textContent=carrying?(GameState.progress.completed%3===1?'Speak to Elena at the café counter. Payment: ':'Use the marked delivery box. Payment: ')+money(route.pay)+'.':starterObjective(GameState.progress)?.text||(GameState.progress.completed?'Speak to Noah at the market counter, or take a gig on your phone.':'Speak to Noah at the market counter for delivery work. Next wage: '+money(route.pay)+'.');
  const distance=Math.hypot(me.position.x-dest.x,me.position.z-dest.z);
@@ -1142,6 +1170,7 @@ function pickUpLog(id){
 function toggleEquip(id,{silent=false}={}){if(fuel.held)return {error:'Hang up the nozzle first.'};
  if(!canAct('equip'))return {error:refusal()};
  if(GameState.progress.carry&&GameState.progress.equipped!==id)return {error:'Your hands are full. Put it down first (X).'};
+ if(parcelHeld(GameState.progress)&&GameState.progress.equipped!==id)return {error:'Drop the parcel before equipping an item (X).'}; // a held parcel and a tool never share the hands
  const result=equipTool(GameState.progress,id);
  if(result.error)return result;
  GameState.progress=result.state;persist();if(!silent)toast(result.message+(result.equipped===id&&id==='gas-can'?` ${canText(canOf(result.state))}. Hold F at a pump to fill it.`:''));
@@ -1217,7 +1246,7 @@ function updateZones(dt){
  fadeTarget.set(me.position.x,me.position.y+1.5,me.position.z);
  advanceWindClock(windClock,dt);world.setWind(windSample(windClock.t,windNow,windClock.weather));world.update(dt,camera,fadeTarget);sawmillCtl?.update(dt);syncSawmill();if(sawmillCtl?.ready)audio.update({listener:{x:me.position.x,z:me.position.z},blade:{at:sawmillCtl.bladePoint,level:sawmillCtl.speed,sawing:sawmillCtl.sawing},belt:{at:sawmillCtl.beltPoint,level:sawmillCtl.beltLevel}});
  const markers=[];
- if(outdoors){const job=GameState.progress.activeJob;if(job&&gigMarker.visible)markers.push({x:gigMarker.position.x,z:gigMarker.position.z,color:'#f2ca79'});if(marker.visible)markers.push({x:marker.position.x,z:marker.position.z,color:'#d4e7b3'});for(const v of driving.fleet)if(v.present&&!v.display&&!v.dev&&v!==driving.active)markers.push({x:v.state.x,z:v.state.z,color:'#6fb7ff'})} // your own vehicles show on the minimap in blue
+ if(outdoors){const job=GameState.progress.activeJob;if(job&&gigMarker.visible)markers.push({x:gigMarker.position.x,z:gigMarker.position.z,color:beaconColour(gigKind)});if(marker.visible)markers.push({x:marker.position.x,z:marker.position.z,color:beaconColour(markerKind)});for(const v of driving.fleet)if(v.present&&!v.display&&!v.dev&&v!==driving.active)markers.push({x:v.state.x,z:v.state.z,color:'#6fb7ff'})} // your own vehicles show on the minimap in blue
  const p=outdoors?me.position:shop?SHOPS[shop]:STUDIO;
  if(outdoors){const jb=GameState.progress.activeJob;gps.setJobTarget(active&&jb&&gigMarker.visible?{x:gigMarker.position.x,z:gigMarker.position.z}:null);if(gps.update(dt,{x:p.x,z:p.z})==='arrived')toast('You have arrived.')}
  minimap.update(dt,{player:{x:p.x,z:p.z},heading:outdoors?me.rotation.y:0,yaw,markers,route:outdoors?gps.ahead:null,pin:outdoors?gps.pin:null,speed:driving.speed,driving:!!driving.active});
@@ -1262,15 +1291,14 @@ phone=createPhone({document,getState:()=>GameState,gps:{state:gps,mapOptions:{bu
    const result=acceptContract(GameState.progress,id,me.position);
    if(result.error)return result;
    GameState.progress=result.state;persist();
-   toast('Gig accepted · '+GameState.progress.activeJob.title+' · Follow the gold marker');
+   toast('Gig accepted · '+GameState.progress.activeJob.title+' · '+(GameState.progress.activeJob.pickup?'Go and pick up the parcel first':'Follow the gold marker'));
    return result;
  }
 });
 // Dedicated gold marker: accepting a phone gig never overwrites a delivery route.
 const gigMarker=new THREE.Group();gigMarker.name='gig-marker';gigMarker.visible=false;
 const gigMaterial=new THREE.MeshBasicMaterial({color:'#f2ca79',transparent:true,opacity:.9,depthWrite:false});
-const gigRing=new THREE.Mesh(new THREE.RingGeometry(.75,.85,32),gigMaterial);
-gigRing.rotation.x=-Math.PI/2;gigRing.position.y=.2;gigMarker.add(gigRing);
+const gigBeacon=makeBeacon();gigMarker.add(gigBeacon.group); // the ring is now the soft glow and beam of makeBeacon (beacon-style.js)
 const gigDiamond=new THREE.Mesh(new THREE.OctahedronGeometry(.22),gigMaterial);
 gigDiamond.position.y=2.1;gigMarker.add(gigDiamond);scene.add(gigMarker);
 let objectiveCollapsed=false;
@@ -1360,7 +1388,8 @@ function updateObjective(dt){
  const progress=GameState.progress,objective=storyAimed(resolveObjective({progress,place:{inside:!!inside,shop},room:currentRoom(),gigTarget,delivery:targetFor(progress),world:OBJECTIVE_WORLD}));
  const spot=objective.beacon,near=spot?Math.hypot(me.position.x-(spot.local?.x??spot.x),me.position.z-(spot.local?.z??spot.z)):0;
  marker.visible=!!spot&&active&&near>spot.hideWithin;
- if(spot){marker.position.set(spot.x,spot.y,spot.z);markerTime+=dt;diamond.position.y=2.5+spot.lift+Math.sin(markerTime*2)*.09;diamond.rotation.y+=dt*.7}
+ markerNear=near;markerKind=beaconKindOf({source:objective.kind});
+ if(spot){marker.position.set(spot.x,spot.y+(spot.y===0?heightAt(spot.x,spot.z):0),spot.z);markerTime+=dt;diamond.position.y=2.5+spot.lift+Math.sin(markerTime*2)*.09;diamond.rotation.y+=dt*.7}
  const aim=objective.aim;storyAim=aim;
  $('direction').style.transform=aim?`rotate(${Math.atan2(aim.x-me.position.x,-(aim.z-me.position.z))+yaw}rad)`:'none';
 }
@@ -1387,7 +1416,8 @@ let gigLabelId='',gigLabelDone=-1;function updateGig(dt){
    else display={x:SHOPS.cafe.x,z:SHOPS.cafe.z};
  }else if(shop)gigMarker.visible=false;
  if(inside)gigMarker.visible=false;
- parent.add(gigMarker);gigMarker.position.set(display.x,0,display.z);gigDiamond.rotation.y+=dt*.9;
+ parent.add(gigMarker);gigMarker.position.set(display.x,parent===scene?heightAt(display.x,display.z):0,display.z);gigDiamond.rotation.y+=dt*.9;
+ gigKind=beaconKindOf({source:'gig',stage:job.stage==='return'?'return':'travel'});gigNear=Math.hypot(me.position.x-display.x,me.position.z-display.z);
  const arrived=job.stage!=='travel',finished=job.stage==='return';
  const returned=finished&&atGigPoint(me.position,room,job.returnLocation);
  for(const [id,done] of [['gigStepGo',arrived],['gigStepTask',finished],['gigStepReturn',returned]]){
@@ -1396,7 +1426,7 @@ let gigLabelId='',gigLabelDone=-1;function updateGig(dt){
  if(job.id!==gigLabelId||job.done!==gigLabelDone){gigLabelId=job.id;gigLabelDone=job.done;$('gigTaskLabel').textContent=job.stops>1?'Make the deliveries ('+job.done+' of '+job.stops+' done)':job.kind==='parcel'?'Deliver the parcel':'Make the delivery'}
  $('objective').querySelector('.eyebrow').textContent='ACTIVE GIG · '+money(job.reward);
  $('objective').querySelector('h2').textContent=job.title;
- $('objective').querySelector('p').textContent=job.dropped?'Your parcel is on the ground: press E beside it to pick it up.':finished?job.kind==='parcel'?'Go to the door and press E: how you greet the client earns a tip.':'Return to the gold marker and press E to collect your pay.':job.stage==='travel'?job.description:'Carry the order to the gold delivery marker.';
+ $('objective').querySelector('p').textContent=job.pickup?'Pick up the parcel at '+(job.pickupName||'the pickup point')+' (E when you are there). Then follow the marker to the stops.':job.dropped?'Your parcel is on the ground: press E beside it to pick it up.':finished?job.kind==='parcel'?'Go to the door and press E: how you greet the client earns a tip.':'Return to the gold marker and press E to collect your pay.':job.stage==='travel'?job.description:'Carry the order to the gold delivery marker.';
  $('distance').textContent=target.room!==room?(target.room==='cafe'?'Enter Alder Coffee':'Go outside to continue'):Math.round(Math.hypot(me.position.x-target.x,me.position.z-target.z))+' m · '+(finished?'Return for payment':'Gig location');
 }
 // Passing out (DESIGN 4.18): black fade, then (at black) the vehicle or forklift stops, a carried log or planks are put down, and you are moved to your main home's bed
@@ -1588,7 +1618,7 @@ sky.update(sessionClock.following?sessionClock.minutes:GameState.progress.routin
 if(!driving.driving)lightMode='auto';if(GameState.progress.properties!==lightsHeldFor){lightsHeldFor=GameState.progress.properties;lightsHeld=heldIds(GameState.progress)}
 if(!inside)nightLights.update(view,{sky:sky.state(),high:mainMenu.settings.quality==='high',held:lightsHeld,vehicles:[driving.driving?{key:'own',mesh:driving.active.mesh,model:driving.active.spec.model,use:'driver',mode:lightMode,own:true}:null,{key:'customer-truck',mesh:customerTruck.mesh,model:'flatbed',use:customerTruck.phase==='in'||customerTruck.phase==='out'?'driver':'parked'},{key:'dock-truck',mesh:dockTruck.mesh,model:'flatbed',use:dockTruck.phase==='in'||dockTruck.phase==='out'?'driver':'parked'}]}); // lamps, windows and vehicle lamps follow the picture's time (night-lights.js); a parked vehicle is dark
 
-updateEquipped(modal?0:view);updateCarryPose(view);updateNozzlePose(view);updateForkPose();updateDock(modal?0:view);if(forkGuide)forkGuideTick(fork.on?forkCtx():null,view);avatar.update(modal?0:view);if(shop)shops[shop].clerk.update(modal?0:view);updatePalletTags();updateZones(view);updatePassOut(real);updateSleep(real);updateWork(view);updateGig(view);updateObjective(view);updateWorldUI();updateTracker(real);updateHomeNotices();tickOrders(real);tickShifts(real);updateRing();updateMultiplayer(now,moving,view);syncPlayerMesh();fuelHose();{const dv=driving.active,on=!!dv&&(dv.fuelMgal>0||!dv.spec.fuel)&&!modal,run=on&&(!driving.driving||dv.engine.mode==='run'),dm=dv?smokeOf(dv.cond,driving.damageOf(dv).sinceCrash):null;voiceT+=view;const thr=keys.has('KeyW')||keys.has('ArrowUp')||keys.has('KeyS')||keys.has('ArrowDown')?1:0;{const tip=dv&&run?driving.exhaust(dv):null;if(tip)smoke.emit(dv.spec.id,view,tip,exhaustRate({running:true,throttle:driving.driving&&(keys.has('KeyW')||keys.has('ArrowUp'))?1:0,speed:dv.state.speed,top:dv.cls.top,tier:dv.cls.tier})*dm.exhaustMul,dm.tier);const hp=dv&&!modal&&dm.hoodRate>0?driving.hood(dv):null;if(hp)smoke.emit(dv.spec.id+'-hood',view,hp,dm.hoodRate,dm.tier);smoke.update(view,!inside);if(!modal)driving.sprayWheels(debris,view,{throttle:thr,quality:mainMenu.settings.quality,calm:calm()});debris.update(view,!inside)}audio.engine(engineVoice({speed:dv?dv.state.speed:0,top:dv?dv.cls.top:10,throttle:dv&&driving.driving&&(keys.has('KeyW')||keys.has('ArrowUp'))?1:0,tier:dv?dv.cls.tier:'low',running:run,cond:dv?dv.cond:1000,time:voiceT}),dv?dv.cls.id:null);driveFx.on=!!dv&&driving.driving&&!modal;driveFx.sliding=driving.hit;driveFx.speed=dv?dv.state.speed:0;driveFx.x=dv?dv.state.x:0;driveFx.z=dv?dv.state.z:0;driveFx.dt=view;driveFx.people=pedestrians.people;driving.tyreFx(driveFx,thr);audio.drive(driveFx)}audio.fuel({listener:listenerAt(),at:fuel.held?fuel.held.use:canAt,level:fuelFlow,fullness:fuelFull});fuelFlow=0;canAt=null;renderer.render(inside?home.room.scene:scene,camera)}requestAnimationFrame(frame);
+updateEquipped(modal?0:view);updateCarryPose(view);updateNozzlePose(view);updateForkPose();updateDock(modal?0:view);if(forkGuide)forkGuideTick(fork.on?forkCtx():null,view);avatar.update(modal?0:view);if(shop)shops[shop].clerk.update(modal?0:view);updatePalletTags();updateZones(view);updatePassOut(real);updateSleep(real);updateWork(view);updateGig(view);updateObjective(view);updateWorldUI();updateTracker(real);updateBeacons(view);updateHomeNotices();tickOrders(real);tickShifts(real);updateRing();updateMultiplayer(now,moving,view);syncPlayerMesh();fuelHose();{const dv=driving.active,on=!!dv&&(dv.fuelMgal>0||!dv.spec.fuel)&&!modal,run=on&&(!driving.driving||dv.engine.mode==='run'),dm=dv?smokeOf(dv.cond,driving.damageOf(dv).sinceCrash):null;voiceT+=view;const thr=keys.has('KeyW')||keys.has('ArrowUp')||keys.has('KeyS')||keys.has('ArrowDown')?1:0;{const tip=dv&&run?driving.exhaust(dv):null;if(tip)smoke.emit(dv.spec.id,view,tip,exhaustRate({running:true,throttle:driving.driving&&(keys.has('KeyW')||keys.has('ArrowUp'))?1:0,speed:dv.state.speed,top:dv.cls.top,tier:dv.cls.tier})*dm.exhaustMul,dm.tier);const hp=dv&&!modal&&dm.hoodRate>0?driving.hood(dv):null;if(hp)smoke.emit(dv.spec.id+'-hood',view,hp,dm.hoodRate,dm.tier);smoke.update(view,!inside);if(!modal)driving.sprayWheels(debris,view,{throttle:thr,quality:mainMenu.settings.quality,calm:calm()});debris.update(view,!inside)}audio.engine(engineVoice({speed:dv?dv.state.speed:0,top:dv?dv.cls.top:10,throttle:dv&&driving.driving&&(keys.has('KeyW')||keys.has('ArrowUp'))?1:0,tier:dv?dv.cls.tier:'low',running:run,cond:dv?dv.cond:1000,time:voiceT}),dv?dv.cls.id:null);driveFx.on=!!dv&&driving.driving&&!modal;driveFx.sliding=driving.hit;driveFx.speed=dv?dv.state.speed:0;driveFx.x=dv?dv.state.x:0;driveFx.z=dv?dv.state.z:0;driveFx.dt=view;driveFx.people=pedestrians.people;driving.tyreFx(driveFx,thr);audio.drive(driveFx)}audio.fuel({listener:listenerAt(),at:fuel.held?fuel.held.use:canAt,level:fuelFlow,fullness:fuelFull});fuelFlow=0;canAt=null;renderer.render(inside?home.room.scene:scene,camera)}requestAnimationFrame(frame);
 
 // Development hook: open the game with ?debug to inspect state from the console (window.__city).
 if(typeof location!=='undefined'&&new URLSearchParams(location.search).has('debug'))window.__city={blockedAt:(x,z)=>blocked(x,z),renderer,smoke,debris,GameState,world,scene,camera,avatar,driving,nightLights,shadows,lookAt:minutes=>sky.tune({minutes}),pedestrians,audio,sawmillCtl,enterOffice:key=>{const o=officeByKey(key);if(o)enterOffice(o);return !!o},holdBend:a=>{bendNow=a;avatar.setLean(a*.87);avatar.setCrouch(a*.22)},

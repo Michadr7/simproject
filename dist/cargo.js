@@ -22,14 +22,17 @@ export const BEDS=Object.freeze({
  flatbed:Object.freeze({x0:-1.25,x1:1.25,z0:-4.2,z1:.75,y:1.3,space:120,gate:'rear'}),
  worktruck:Object.freeze({x0:-.88,x1:.88,z0:-2.75,z1:-.95,y:.9,space:32,crates:true}),
  offroad:Object.freeze({x0:-1,x1:1,z0:-2.74,z1:-.8,y:.8,space:32,crates:true}),
+ atv:Object.freeze({x0:-.55,x1:.55,z0:-1,z1:-.58,y:.76,space:5,crates:true,across:true,maxPieces:1}), // ATV-STOW: the small rear rack (model anchor_cargo_rear x 0, y .76, z -.82; the taillights sit at y .62, below the deck, so nothing overlaps them: z -1..-.58 stays behind the seat at z -.3). space 5 = ONE piece only (maxPieces 1): one log (5), or one plank stack (4), or one crate (2); a second log, a loose plank beside the stack or a second crate is refused. Pieces lie across the ATV (across:true: yaw 90 degrees, a log is 1.15 m and the rack 1.1 m wide)
  shortbed:Object.freeze({x0:-.9,x1:.9,z0:-2.55,z1:-.1,y:1.0,space:44,gate:'rear',crates:true}) // space 44 = bed area 4.4 m2 at about 10 per m2, a whole number of plank stacks (flatbed 120 on 12.4 m2, worktruck 32 on 3.2, pickup 32 on 3.9); the Kasumuchi S70 (0.35.8): the deck mesh runs z -2.57..0.06 at y 1.005 (the model's cargo anchors sit at y 1.002), the side walls leave about 1.8 m across, the tailgate hinges at z -2.585
 });
 export const hasBed=model=>!!BEDS[model];
+export const usesLoadDrag=model=>!!BEDS[model]?.maxPieces; // FIX-R1: the kg load drag (load-drag.js) is for the one-piece rack (the ATV) only; bigger beds keep the withLoad slowdown
 export const spaceOf=model=>BEDS[model]?.space||0;
 // how many of a kind fit on an empty bed (24 logs or 120 planks on the flatbed)
-export const capacity=(model,kind)=>CARGO_KINDS[kind]&&(kind!=='crate'||BEDS[model]?.crates)?Math.floor(spaceOf(model)/CARGO_KINDS[kind].space):0;
+export const capacity=(model,kind)=>CARGO_KINDS[kind]&&(kind!=='crate'||BEDS[model]?.crates)?Math.min(Math.floor(spaceOf(model)/CARGO_KINDS[kind].space),kind!=='planks'&&BEDS[model]?.maxPieces||Infinity):0; // maxPieces: the ATV rack takes one piece, so one crate though its 5 units would hold two (a plank piece is a stack of up to 4, counted in planks)
 const pieceSpace=p=>p.k==='planks'?p.n:p.k==='crate'?CARGO_KINDS.crate.space:CARGO_KINDS.log.space;
 export const acceptsCrates=model=>!!BEDS[model]?.crates; // the flatbed is the timber truck: crates are refused there; timber is refused on a bed that holds crates (as farm-beds.js refuses timber on a tank)
+export const takesCrateGigs=model=>acceptsCrates(model)&&!BEDS[model].maxPieces; // the farm crate gigs (several crates per run) need a full crate bed: the ATV's one-crate rack does not count
 export const hasCrates=c=>(c||[]).some(p=>p.k==='crate');
 export const CRATE_MIX='Crates and timber do not mix on a bed: clear the bed first.';
 export const CRATE_HANDS='Crates stay on the bed until they are delivered.';
@@ -48,7 +51,7 @@ export function normalizeCargo(value,model){
   if(list.some(p=>p.k==='crate')&&(!acceptsCrates(model)||list.some(p=>p.k!=='crate')))list=list.filter(p=>p.k!=='crate')} // crates only on a bed that takes them and never mixed with timber (timber wins in a bad save)
  else if(value&&typeof value==='object'&&CARGO_KINDS[value.kind]&&Number.isFinite(value.count)){ // the first cargo build saved {kind, count}
   let n=Math.floor(value.count);if(value.kind==='log')list=Array.from({length:Math.max(0,n)},()=>({k:'log'}));else while(n>0){const take=Math.min(PLANKS_PER_STACK,n);list.push({k:'planks',n:take});n-=take}}
- const out=[];let used=0;for(const p of list){if(used+pieceSpace(p)>spaceOf(model))break;used+=pieceSpace(p);out.push(p)}
+ const out=[];let used=0;for(const p of list){if(used+pieceSpace(p)>spaceOf(model)||out.length>=(BEDS[model].maxPieces||Infinity))break;used+=pieceSpace(p);out.push(p)}
  return out.length?out:null;
 }
 // Where each piece lies, local to the vehicle: [{kind, x, y, z, yaw}] in load order (yaw 0: lengthwise along the bed). The lowest cell, front first, then side to side.
@@ -58,13 +61,14 @@ export function slotPositions(model,c){
   const cc=CARGO_KINDS.crate,cols=Math.max(1,Math.floor((bed.x1-bed.x0)/(cc.w+.01))),rows=Math.max(1,Math.floor((bed.z1-bed.z0)/(cc.l+.02))),per=cols*rows,cw=cc.w+.01,cl=cc.l+.02,gx=(bed.x0+bed.x1)/2-(cols*cw)/2+cw/2;
   return c.map((p,i)=>{const layer=Math.floor(i/per),r=Math.floor((i%per)/cols),col=i%cols;return {kind:'crate',x:+(gx+col*cw).toFixed(3),y:+(bed.y+layer*cc.h+cc.h/2).toFixed(3),z:+(bed.z1-cl/2-r*cl).toFixed(3),yaw:0}});
  }
- const cols=Math.max(1,Math.floor((bed.x1-bed.x0)/CELL.w)),rows=Math.max(1,Math.floor((bed.z1-bed.z0)/CELL.l)),tops=new Array(cols*rows).fill(0),out=[];
- const x0=(bed.x0+bed.x1)/2-(cols*CELL.w)/2+CELL.w/2,z0=bed.z1-CELL.l/2;
+ const cw=bed.across?CELL.l:CELL.w,cl=bed.across?CELL.w:CELL.l,yaw=bed.across?Math.PI/2:0; // across: the long pieces lie crosswise (the ATV rack), the cells swap their sides
+ const cols=Math.max(1,Math.floor((bed.x1-bed.x0)/cw)),rows=Math.max(1,Math.floor((bed.z1-bed.z0)/cl)),tops=new Array(cols*rows).fill(0),out=[];
+ const x0=(bed.x0+bed.x1)/2-(cols*cw)/2+cw/2,z0=bed.z1-cl/2;
  for(const p of c){const kind=p.k==='log'?'log':'planks',h=CARGO_KINDS[kind].h;let best=0;for(let i=1;i<tops.length;i++)if(tops[i]<tops[best]-1e-9)best=i;
-  const row=Math.floor(best/cols),col=best%cols;out.push({kind,x:+(x0+col*CELL.w).toFixed(3),y:+(bed.y+tops[best]+h/2).toFixed(3),z:+(z0-row*CELL.l).toFixed(3),yaw:0});tops[best]+=h}
+  const row=Math.floor(best/cols),col=best%cols;out.push({kind,x:+(x0+col*cw).toFixed(3),y:+(bed.y+tops[best]+h/2).toFixed(3),z:+(z0-row*cl).toFixed(3),yaw});tops[best]+=h}
  return out;
 }
-export const fits=(model,c)=>slotPositions(model,c).every(s=>s.y-BEDS[model].y<=MAX_HEIGHT);
+export const fits=(model,c)=>(c?.length||0)<=(BEDS[model]?.maxPieces||Infinity)&&slotPositions(model,c).every(s=>s.y-BEDS[model].y<=MAX_HEIGHT);
 // Where you stand to load: behind the bed and beside its middle (local). Within LOAD_REACH of one of these, you can load or unload.
 export const LOAD_REACH=1.7;
 export function loadPoints(model){const b=BEDS[model];if(!b)return [];const mid=(b.z0+b.z1)/2;return [{x:0,z:b.z0-(b.gate?1.6:.9),side:'rear'},{x:b.x1+.95,z:mid,side:'left'},{x:b.x0-.95,z:mid,side:'right'}]}

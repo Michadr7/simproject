@@ -96,7 +96,7 @@ export function createPhone({document:doc,getState,canOpen,onOpen,onClose,onAcce
     $('phoneFood').textContent=Math.round(progress.life.food)+' / 100';
     $('phoneEnergyMeter').value=progress.life.energy;$('phoneFoodMeter').value=progress.life.food;
     $('phoneThirst').textContent=Math.round(progress.life.thirst)+' / 100';$('phoneThirstMeter').value=progress.life.thirst;
-    $('phoneActiveJob').textContent=progress.activeJob?`Active: ${progress.activeJob.title}. Follow the gold marker.`:available.size?'No upfront energy charge. Offers refresh every 30 game minutes.': 'No offers right now. Check back after the board refreshes.';
+    $('phoneActiveJob').textContent=progress.activeJob?`Active: ${progress.activeJob.title}. ${progress.activeJob.pickup?'Pick up the parcel at '+(progress.activeJob.pickupName||'the pickup point')+'.':'Follow the gold marker.'}`:available.size?'No upfront energy charge. Offers refresh every 30 game minutes.': 'No offers right now. Check back after the board refreshes.';
     for(const {h,status,buttons} of homeCards){
       const held=progress.properties?.[h.id],renting=held?.tenure==='rent',owning=held?.tenure==='own';
       status.textContent=owning?'You own this home.':renting?(held.rentDue?`Rent overdue: ${money(held.rentDue)}.`:`Renting · rent due in ${Math.max(0,held.nextBillDay-progress.housing.day)} days.`):'For rent or sale.';
@@ -123,7 +123,7 @@ export function createPhone({document:doc,getState,canOpen,onOpen,onClose,onAcce
   function showScreen(next){
     screen=next;
     for(const name of ['home','messages','gigs','bank','homes','player','store','jobs','call','gps','people']){const sec=$('phoneScreen-'+name);if(sec)sec.hidden=name!==screen}
-    $('phoneTitle').textContent=screen==='home'?'Your phone':({homes:'Housing',gps:'GPS'})[screen]||screen[0].toUpperCase()+screen.slice(1);
+    $('phoneTitle').textContent=screen==='home'?'Your phone':({homes:'Housing',gps:'GPS',people:'Contacts'})[screen]||screen[0].toUpperCase()+screen.slice(1);
     if(screen!=='store')store.reset();if(screen!=='jobs')jobs.reset();if(screen!=='call')call.reset();if(screen!=='people')people.reset();if(gpsUi){if(screen==='gps')gpsUi.show();else gpsUi.hide()}$('phoneHome').disabled=screen==='home';$('phoneBack').disabled=screen==='home';$('phoneMessage').textContent='';refresh();
     // opening an app reads its messages; Messages reads them all (the list was drawn first, so the unread ones still show as unread this once)
     if(screen==='messages'){renderMessages();onRead?.(null)}else if(screen!=='home')onRead?.(screen);

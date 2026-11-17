@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import {DOOR_STYLES,doorStyle,doorTip,doorHint,doorChoices,GIG_TYPES,payFor,parRoute,normalizeGigs,boardFor as boardForReal,acceptGig as acceptGigReal,tickGig,completeGig,failGig,gigDone,freshGigs,qualityFor,gameMinutes,doneTodayOf,bumpDone,dayKey,noMoreWork,NO_MORE_WORK,starterBoard,pickUpGig,pickedUp,atPickup,onTimeLimit,limitFloor,STARTER_MIN_PAY_C,WORLD_SEED,normalizeActive,routeOf,repMulFor} from '../dist/gigs.js';
 // W-D2: the normal board is now the world's needs (tests/needs-loop.mjs). The old hashed board still exists behind opts.hashed, and these tests keep covering its rules (pay, fatigue, pickup, pair rest, starter).
 const boardFor=(p,t,c,o={})=>boardForReal(p,t,c,{hashed:true,...o}),acceptGig=(p,s,n,c,st,o={})=>acceptGigReal(p,s,n,c,st,{hashed:true,...o}),marketBoard=(p,t,c)=>boardFor(p,t,c).filter(s=>s.type==='grocery'||s.type==='parcel');
+import {PARCEL_PICKUP_FIRST} from '../dist/gig-parcel.js';
 import {payFor as payGig,minElapsed,fatigueFactor,MIN_PAR_M,HANDLING_C,MAX_GIGS_PER_DAY,basePay} from '../dist/gig-pay.js';
 import {acceptContract,availableContracts} from '../dist/gig-bridge.js';
 import {freshProgress} from '../dist/jobs.js';
@@ -41,6 +42,10 @@ assert(acceptGig(a.state,slot.slot,600).error);assert(acceptGig(p,9,600).error);
 assert(!boardFor(a.state,601).some(s=>s.slot===slot.slot&&s.window===slot.window));
 assert(completeGig(a.state,601).error);
 let s=a.state;const pl=s.gigs.active.places[0];
+// G-D: with requirePickup a stop does not tick before the box is picked up (the stale old test completed without a pickup; completeGig now refuses that)
+assert.deepEqual(tickGig(s,{position:{x:pl.x,z:pl.z},room:'street',now:610,requirePickup:true}).gigs.active.visited,[false]);assert(!gigDone(tickGig(s,{position:{x:pl.x,z:pl.z},room:'street',now:610,requirePickup:true})));
+{const forced={...s,gigs:{...s.gigs,active:{...s.gigs.active,visited:[true],stage:1}}};assert.equal(completeGig(forced,620).error,PARCEL_PICKUP_FIRST);assert(completeGig(pickUpGig(forced,615).state,620).paid>0)}
+s=pickUpGig(s,600).state;
 s=tickGig(s,{position:{x:pl.x+50,z:pl.z},room:'street',now:601});assert(!gigDone(s));
 s=tickGig(s,{position:{x:pl.x,z:pl.z},room:'street',now:620});assert(gigDone(s));
 // the accepted gig carries origin, ordered points, par, mode and the accept time (G-B)
@@ -54,7 +59,7 @@ const fast=completeGig(s,601);assert(fast.tooFast);assert.equal(fast.paid,HANDLI
 const late=completeGig(s,700),lateExp=payGig({mode:'walk',parM:act.parM,quality:60,repMul:1,doneToday:0,onTime:false,elapsedMin:100});assert.equal(late.paid,lateExp.total);assert.equal(late.tip,0);
 // rush: hard limit fails with rep -2 and no pay
 const rp={...rich,gigs:{...rich.gigs,rep:5}},rs=boardFor({...p,gigs:{...p.gigs,rep:5}},0).find(x=>x.type==='rush');
-if(rs){let q=acceptGig({...p,gigs:{...p.gigs,rep:5}},rs.slot,0).state;q=tickGig(q,{position:{x:99999,z:0},now:50});assert.equal(q.gigs.active,null);assert.equal(q.gigs.rep,3)}
+if(rs){let q=acceptGig({...p,gigs:{...p.gigs,rep:5}},rs.slot,0).state;q=pickUpGig(q,0).state;q=tickGig(q,{position:{x:99999,z:0},now:50});assert.equal(q.gigs.active,null);assert.equal(q.gigs.rep,3)}
 assert.equal(failGig({...p,gigs:{...p.gigs,rep:1}}).gigs.rep,1);assert.equal(failGig({...p,gigs:{...p.gigs,rep:1,active:a.state.gigs.active}}).gigs.rep,0);
 // round of three: any order
 const q3={...p,gigs:{...p.gigs,rep:10,active:normalizeGigs({active:{type:'round',places:[{x:0,z:0},{x:20,z:0},{x:40,z:0}]}}).active}};
@@ -78,7 +83,7 @@ const par=parRoute(ra.places,ra.start).length;assert.equal(par,30);assert.equal(
 let rp4={...rp3,gigs:{...rp3.gigs,active:{...rp3.gigs.active,metres:60}}};assert.equal(completeGig(rp4,100,{par}).quality,0);rp4.gigs.active.metres=37.5;assert.equal(completeGig(rp4,100,{par}).quality,80);
 assert.equal(completeGig(rp4,100).quality,100,'no par given: no penalty');
 // ---- G-B: daily fatigue, hard stop, old saves, short routes, shared board, starter gigs, pickup ----
-const mkActive=(o={})=>normalizeActive({id:5,type:'grocery',client:'cx',places:[{id:'h1',x:300,z:0}],visited:[true],stage:1,startedAt:0,acceptedAt:0,origin:{id:'o1',x:0,z:0},parM:400,points:[{x:300,z:0}],mode:'walk',onTimeMin:onTimeLimit(400),...o});
+const mkActive=(o={})=>normalizeActive({id:5,type:'grocery',client:'cx',places:[{id:'h1',x:300,z:0}],visited:[true],stage:1,startedAt:0,acceptedAt:0,origin:{id:'o1',x:0,z:0},parM:400,points:[{x:300,z:0}],mode:'walk',onTimeMin:onTimeLimit(400),pickedAt:o.acceptedAt??0,...o}); // G-D: these gigs are already picked up (completeGig refuses an unpicked box)
 const NOON=720,DAY1=300; // game minute 720 = 12:00 on day 1; the game day starts at 05:00
 // daily tiers through the real completeGig: 1st-5th full, 6th-8th 70%, 9th-10th 40%; each completion counts one
 {let q={...p,gigs:{...p.gigs,active:null}};const paid=[];
@@ -124,12 +129,22 @@ assert.equal(onTimeLimit(300),Math.ceil(300/9*2+10));assert.equal(onTimeLimit(0)
  const fin=tickGig(pk,{position:{x:stop.x,z:stop.z},requirePickup:true,now:651});assert(gigDone(fin));
  assert(completeGig(fin,651).tooFast,'accepted long ago but picked up one minute ago: too fast');assert(!completeGig(fin,650+Math.ceil(minElapsed(ac.parM,'walk'))+1).tooFast);
  assert(pickUpGig(p,1).error);}
+// FIX-R1: the walk to the pickup does not eat a hard gig's limit; the deadline restarts at pickup with the same allowance
+{const p5={...p,gigs:{...p.gigs,rep:5}},rb=boardFor(p5,0).find(x=>x.type==='rush');
+ if(rb){let q=acceptGig(p5,rb.slot,0).state;const allow=q.gigs.active.dueAt-q.gigs.active.acceptedAt;assert(allow>=20);
+  q=tickGig(q,{position:{x:99999,z:0},now:allow+30});assert(q.gigs.active,'before pickup the gig cannot fail on time');
+  q=pickUpGig(q,allow+30).state;assert.equal(q.gigs.active.dueAt,allow+30+allow);
+  q=tickGig(q,{position:{x:99999,z:0},now:allow+30+allow-1});assert(q.gigs.active,'still inside the new allowance');
+  q=tickGig(q,{position:{x:99999,z:0},now:allow+30+allow+1});assert.equal(q.gigs.active,null,'past the new limit it fails')}
+ const gb=boardFor(p,600).find(x=>x.type==='grocery'),ga=acceptGig(p,gb.slot,600).state;assert(ga.gigs.active.dueAt>0);assert.equal(pickUpGig(ga,700).state.gigs.active.dueAt,700+(ga.gigs.active.dueAt-600));
+ // an older save: an active gig with an origin but no pickedAt loads as waiting for pickup and does not throw
+ const old=JSON.parse(JSON.stringify(ga.gigs));delete old.active.pickedAt;const ng=normalizeGigs(old);assert(ng.active&&ng.active.origin&&!pickedUp(ng.active));assert(tickGig({...p,gigs:ng},{position:{x:0,z:0},now:601,requirePickup:true}).gigs.active)}
 // starter gigs: exempt from minimum par and fatigue (also at the hard stop), not counted, still pay sensibly (at least $25) and never "too fast"
 {const stopped={...p,gigs:{...p.gigs,doneToday:10,doneDay:dayKey(600)}};assert(noMoreWork(stopped,600));
  const sb=starterBoard(stopped,600);assert(sb.length>=1&&sb.every(s=>s.starter&&['grocery','parcel'].includes(s.type)));
  assert(acceptGig(stopped,sb[0].slot,600).error,'a normal accept is refused at the stop');
  const ok=acceptGig(stopped,sb[0].slot,600,undefined,null,{starter:true});assert.equal(ok.error,undefined);assert.equal(ok.state.gigs.active.starter,true);
- let sst=ok.state;for(const pl of sst.gigs.active.places)sst=tickGig(sst,{position:{x:pl.x,z:pl.z},now:601});const fin=completeGig(sst,601);assert(!fin.tooFast);assert(fin.paid>=STARTER_MIN_PAY_C);assert.equal(fin.state.gigs.doneToday,10,'a starter gig does not count');assert.equal(fin.state.gigs.completed,1);
+ let sst=pickUpGig(ok.state,600).state;for(const pl of sst.gigs.active.places)sst=tickGig(sst,{position:{x:pl.x,z:pl.z},now:601});const fin=completeGig(sst,601);assert(!fin.tooFast);assert(fin.paid>=STARTER_MIN_PAY_C);assert.equal(fin.state.gigs.doneToday,10,'a starter gig does not count');assert.equal(fin.state.gigs.completed,1);
  const viaBridge=acceptContract(stopped,'slot-'+sb[0].slot,null,{starter:true});assert(viaBridge.state&&viaBridge.state.gigs.active.starter);assert.equal(acceptContract(stopped,'slot-0').error,NO_MORE_WORK);}
 // W-D2: normal play posts needs only; with no open need the board is empty, and the starter board is still the hashed grocery/parcel one
 {assert.deepEqual(boardForReal(p,600),[],'no open needs: an empty board');assert.deepEqual(boardForReal(p,600,undefined,{hashed:true}),b1);assert(starterBoard(p,600).length>0);assert(!GIG_TYPES.filter(t=>!t.need).some(t=>t.id.startsWith('need-')))}

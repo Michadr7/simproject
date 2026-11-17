@@ -10,11 +10,11 @@ import {MAP} from '../dist/map-definition.js';
 import {TAILGATE_OPEN} from '../dist/flatbed.js';
 
 const L={k:'log'},P=n=>({k:'planks',n});
-assert.deepEqual(Object.keys(BEDS).sort(),['flatbed','offroad','shortbed','worktruck']);
+assert.deepEqual(Object.keys(BEDS).sort(),['atv','flatbed','offroad','shortbed','worktruck']); // ATV-STOW: the ATV's one-piece rack
 assert.equal(spaceOf('flatbed'),120);assert.equal(capacity('flatbed','planks'),120);assert.equal(capacity('flatbed','log'),24);assert.equal(capacity('worktruck','log'),6);assert.equal(capacity('car','log'),0);
 // a full bed of each kind, and a mixed one, lie inside the bed and never too high
 for(const [model,bed] of Object.entries(BEDS)){assert(bed.x0>-CLASSES[model].hx&&bed.x1<CLASSES[model].hx&&bed.z0>-CLASSES[model].hz&&bed.z1<CLASSES[model].hz,`${model}: the bed is inside the body`);
- const loads=[Array(capacity(model,'log')).fill(L),Array(capacity(model,'planks')/4).fill(P(4)),[...Array(Math.floor(capacity(model,'log')/2)).fill(L),...Array(Math.floor(spaceOf(model)/2/4)).fill(P(4))]];
+ const loads=model==='atv'?[[L],[P(4)]]:[Array(capacity(model,'log')).fill(L),Array(capacity(model,'planks')/4).fill(P(4)),[...Array(Math.floor(capacity(model,'log')/2)).fill(L),...Array(Math.floor(spaceOf(model)/2/4)).fill(P(4))]];
  for(const load of loads){let c=null;for(const piece of load){const r=loadCarry(piece.k==='log'?{kind:'log'}:{kind:'planks',count:piece.n},c,model);assert(!r.error,`${model}: ${r.error}`);c=r.cargo}
   const spots=slotPositions(model,c);assert.equal(spots.length,c.length);for(const s of spots){assert(s.x>=bed.x0&&s.x<=bed.x1&&s.z>=bed.z0&&s.z<=bed.z1,`${model}: (${s.x}, ${s.z}) on the bed`);assert(s.y>bed.y&&s.y<bed.y+1.5,`${model}: not piled too high (${s.y})`)}}}
 // loading: mixed, last on first off, full is full
@@ -47,7 +47,7 @@ assert.deepEqual(normalizeCargo({kind:'planks',count:10},'flatbed'),[P(4),P(4),P
 // ---- G3b: the crate piece (one InstancedMesh, never carried by hand, never mixed with timber, not on the timber flatbed)
 {const C=await import('../dist/cargo.js'),{createCargoView}=await import('../dist/cargo-view.js');
  assert.deepEqual(Object.keys(C.CARGO_KINDS).sort(),['crate','log','planks'],'three kinds');
- assert.deepEqual(Object.entries(BEDS).filter(([,b])=>b.crates).map(([m])=>m).sort(),['offroad','shortbed','worktruck'],'the pickups take crates');assert(!BEDS.flatbed.crates&&!C.acceptsCrates('flatbed')&&C.acceptsCrates('shortbed'),'the timber flatbed refuses them');
+ assert.deepEqual(Object.entries(BEDS).filter(([,b])=>b.crates).map(([m])=>m).sort(),['atv','offroad','shortbed','worktruck'],'the pickups and the ATV rack take crates');assert(!BEDS.flatbed.crates&&!C.acceptsCrates('flatbed')&&C.acceptsCrates('shortbed'),'the timber flatbed refuses them');
  assert.equal(capacity('shortbed','crate'),22,'22 crates on the Shortbed (2 units each of 44)');assert.equal(capacity('flatbed','crate'),0);assert.equal(capacity('worktruck','crate'),16);
  const four=C.addCrates(null,'shortbed',4);assert.equal(four.error,undefined);assert.equal(four.cargo.length,4);assert.equal(C.countOf(four.cargo,'crate'),4);assert.equal(C.usedSpace(four.cargo),8);assert.equal(C.cargoText(four.cargo),'4 crates');assert.equal(C.cargoText(C.addCrates(null,'shortbed',1).cargo),'1 crate');
  assert(C.addCrates(null,'flatbed',1).error,'no crates on the flatbed');assert(C.addCrates(null,'shortbed',23).error,'23 do not fit');assert.equal(C.addCrates(null,'shortbed',22).cargo.length,22);assert(C.addCrates([{k:'log'}],'shortbed',1).error,'timber on the bed: refused');assert(C.addCrates(null,'tow_tank',1).error,'no bed');
