@@ -26,6 +26,7 @@ export function createNpcCrowd({scene,createCharacter,outfit,population,schedule
  const ctx={point,route};
  const named=new Map(pedestrians.map(p=>[p.name,p]));
  const entries=population.people.filter(p=>!exclude.includes(p.name)).map(person=>({person,named:named.get(person.name)||null,slot:null,shown:false,yaw:0,ox:0,oz:0,pose:{state:'hidden',x:0,z:0,yaw:NaN,moving:false,walked:0}}));
+ for(const e of entries)if(e.named)e.named.group.visible=false; // the six start drawn at their old lanes (neighborhood.js); the plan decides when they appear, so nobody stands frozen outside while the schedule has them indoors
  const slots=[];for(let i=0;i<pool;i++){const avatar=createCharacter(outfit('male','Casual_2',{}));avatar.group.visible=false;avatar.group.position.y=HIDE_Y;scene.add(avatar.group);slots.push({avatar,owner:null,id:null})}
  const lookOf=person=>outfit(person.body,person.workOutfit||person.outfit,{skin:person.skin,hair:person.hair});
  function show(e,x,z,dt,player){

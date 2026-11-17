@@ -67,3 +67,15 @@ Jobs: 10 shift tasks from needs (new jobs yes, Ridgeline keeps its tasks); 11 fi
 Gigs: 12 board = needs only; 13 several players fill one need (split by units).
 Consequences: 14 unfilled need (NPC fills late and smaller + mood hit); 15 standing unlocks content (per-person tiers).
 Co-op: 16 standing per player, world shared. Pacing: 17 tick once at 05:00, cap 14 catch-up days. Tone: 18 subtle (shelves, prices, NPC lines, phone 'Town news').
+
+## VISITORS AND OUTDOOR LIFE (owner 2026-11-16; design only, nothing built; stage NPC-VISIBLE)
+Problem: by the schedule people are visible only about 2.4% of the day (walking) plus 3.6% standing (forest only), hidden 94%. The town feels empty. Fix has two parts:
+1. Outdoor blocks for residents: short outdoor acts (sit on a bench, chat at a shop door, stroll the pavement, smoke outside, wait for the bus) worth about 10 to 15% of the day, drawn by npc-crowd. Needs a new act (e.g. 'outside') in schedule.js ACTS and presenceOf (stand outdoors at a place point). Pure data, no run-time cost.
+2. THROUGH PEOPLE (not residents, not in population.js; a separate pure module, e.g. dist/visitors.js, with a day plan per visitor). Needs an NPC CAR SYSTEM that does not exist yet (drive blocks draw nothing): pooled vehicles from the existing vehicle models driving the real road data (map-master 6.1 roads table), no per-frame allocation, speed per visitor, one lane, they leave the map at the ends. Collisions with the player later.
+ - MATT ROSSION: drives fast, no regard for safety. Flags for the police system (not built): speeding, red-light running, pulled over often. Rarely stops in Ironwood. Appears on random days at random hours, any direction.
+ - JENNI CRAIN: drives through Ironwood to work 3 days a week: about 08:00 one way (west to east, assumed), and back east to west at about 15:00. Which days = OPEN (default Mon/Wed/Fri).
+ - RORY DOBBINSON: homeless, loiters around the edge of town on foot all day (standing and slow wandering at the edge points, sleeps rough at night: hidden). Talkable; later a need/standing hook. Needs a 'loiter' act and a few edge place points.
+ - More visitors later (owner will add).
+Open: Jenni's days, which vehicle model each drives, whether visitors get names on the People page (suggest: only once met), whether Rory can be helped (food gifts) now or later.
+Build order: (a) outdoor blocks (small, data), (b) visitors.js + tests (pure, plan per visitor, no drawing), (c) NPC car system + drawing (serial, game.js, big), (d) Rory as a walker via the crowd pool. Police flags stay data only until the police system exists.
+- Answers 2026-11-16: Jenni works Mon/Wed/Fri, west to east at about 08:00 and back east to west at about 15:00 (yes). Matt Rossion drives the Pevrolet. Jenni drives the work truck for now. Rory can be helped by the player (yes; food gifts etc. can be built with him).

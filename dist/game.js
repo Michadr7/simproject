@@ -485,7 +485,7 @@ function syncNeedCargo(){const a=GameState.progress.gigs?.active,h=a?.needId&&a.
 function crateTruckNear(pt,r){let best=null;for(const v of GameState.progress.vehicles||[]){if(v.loan||!takesCrateGigs(v.model))continue;const f=driving.byId.get(v.uid);if(!f)continue;const d=Math.hypot(f.state.x-pt.x,f.state.z-pt.z);if(d<r&&(!best||d<best.d))best={uid:v.uid,model:v.model,d}}return best}
 function needCandidates(add,p,s){const a=p.gigs?.active;if(!a?.needId||a.type!=='need-restock'||!CRATE_UNITS[a.needGood]||(!s.done&&s.step===4))return;const C=STORY_PLACES.crates,M=STORY_PLACES.market; // the story's own crate beat (step 4) keeps its prompts
  if(!(a.haul>0))add('need-load',C,()=>new THREE.Vector3(C.x,1.3,C.z),'Load the crates onto the truck',needLoad,2.6);
- else add('need-drop',M,()=>new THREE.Vector3(M.x,1.3,M.z),'Hand the crates to Noah',needDrop,3.2)}
+ else add('need-drop',M,()=>new THREE.Vector3(M.x,1.3,M.z),'Hand the crates to Noah',needDrop,6)}
 function needLoad(){const C=STORY_PLACES.crates,t=crateTruckNear(C,CRATE_REACH);if(!t){toast('Park a truck with a bed beside the crates first.');return}
  const bed=driving.cargoOf(t.uid);if(bed?.length&&!hasCrates(bed)){toast('Clear the timber off the deck first.');return}
  const good=GameState.progress.gigs.active.needGood;let n=crateCapacity(t.model,'crate');while(n>0&&addNeedCrates(null,t.model,n).error)n--;
@@ -498,7 +498,7 @@ function needDrop(){const a=GameState.progress.gigs?.active,M=STORY_PLACES.marke
  if(hal.visible&&halHere(p))add('hal',{x:hal.x,z:hal.z},()=>entityPoint(hal.group),'Talk to Hal',()=>{recordTalk('hal');talkHal()},2.4);
  if(s.done||s.step!==4)return;const C=STORY_PLACES.crates,M=STORY_PLACES.market;
  if(!s.loaded)add('story-load',C,()=>new THREE.Vector3(C.x,1.3,C.z),'Load the egg crates onto the truck',()=>{if(!loanNear(C,CRATE_REACH)){toast('Park the truck beside the crates first.');return}{const lu=GameState.progress.starter?.loanUid,bed=lu?driving.cargoOf(lu):null;if(bed?.length&&!hasCrates(bed)){toast('Clear the timber off the deck first.');return}}storyKnocks=0;storyEvent('loaded')},2.6);
- else add('story-unload',M,()=>new THREE.Vector3(M.x,1.3,M.z),'Hand the egg crates to Noah',()=>{if(!loanNear(M,MARKET_REACH)){toast('Bring the truck to the market first.');return}if(storyEvent('delivered-crates',{quality:knockQuality(storyKnocks)}))storyKnocks=0},3.2)}
+ else add('story-unload',M,()=>new THREE.Vector3(M.x,1.3,M.z),'Hand the egg crates to Noah',()=>{if(!loanNear(M,MARKET_REACH)){toast('Bring the truck to the market first.');return}if(storyEvent('delivered-crates',{quality:knockQuality(storyKnocks)}))storyKnocks=0},6)} // 6 m: the prompt must show anywhere at the market front (it was 3.2 and missed the street side); the truck check inside is the real gate
 function storyAimed(o){if(o.kind!=='door'||inside||shop)return o;const so=starterObjective(GameState.progress),pt=so&&so.aim!=='market'?aimPoint(so.aim):null;return pt?{...o,aim:pt,beacon:{x:pt.x,z:pt.z,y:standHeight(pt.x,pt.z),lift:.7,hideWithin:2.4}}:o}
 // G3: the story ticks and Hal live above (storyTick, storyCandidates, halChoice)
 function skipChoice(){const p=GameState.progress,s=p.starter;return s&&!s.done&&s.step<=1?[{label:'Skip the introduction',run:()=>speak(shops.market.clerk.group,'Noah','If you skip, there is no story and no truck from Hal. He will sell you one for \$'+SKIP_SALE_PRICE/100+' later. Skip anyway?',[{label:'Yes, skip it',run:()=>{GameState.progress={...GameState.progress,starter:skipStarter()};persist();toast('Introduction skipped.')}},{label:'No, keep going',run:()=>{}}])}]:[]}
@@ -672,7 +672,7 @@ function candidates(){const all=[],add=(id,point,anchor,label,run,range=1.5,key)
    if(carry)add('cargo-load-'+b.id,{x:b.point.x,z:b.point.z},()=>new THREE.Vector3(b.point.x,1.5,b.point.z),(carry.kind==='log'?'Load the log onto the ':'Load the planks onto the ')+name+' · '+cargoText(b.cargo)+hint,()=>loadOntoBed(b.id),LOAD_REACH);
    else if(new Set((b.cargo||[]).map(p=>p.k)).size>1||(countOf(b.cargo,'planks')&&truckWaiting(GameState.progress)&&Math.hypot(b.x-TRUCK_BAY.x,b.z-TRUCK_BAY.z)<25))add('cargo-panel-'+b.id,{x:b.point.x,z:b.point.z},()=>new THREE.Vector3(b.point.x,1.5,b.point.z),'Cargo · '+cargoText(b.cargo)+hint,()=>openCargo(b.id),LOAD_REACH);
    else if(onRidgeline()&&countOf(b.cargo,'planks')&&inLumberyard(b))add('dock-truck-'+b.id,{x:b.point.x,z:b.point.z},()=>new THREE.Vector3(b.point.x,1.5,b.point.z),'Unload '+countOf(b.cargo,'planks')+' planks at the lumberyard · $'+countOf(b.cargo,'planks').toFixed(2)+hint,()=>unloadAtDock(b.id),LOAD_REACH);
-   else if(b.cargo?.length)add('cargo-take-'+b.id,{x:b.point.x,z:b.point.z},()=>new THREE.Vector3(b.point.x,1.5,b.point.z),(b.cargo[b.cargo.length-1].k==='log'?'Take a log off the ':'Take planks off the ')+name+' · '+cargoText(b.cargo)+hint,()=>takeOffBed(b.id),LOAD_REACH);if(gated)add('gate-close-'+b.id,here,at,'Close the tailgate',()=>toggleGate(b.id),LOAD_REACH,'H')}
+   else if(b.cargo?.length&&b.cargo[b.cargo.length-1].k!=='crate')add('cargo-take-'+b.id,{x:b.point.x,z:b.point.z},()=>new THREE.Vector3(b.point.x,1.5,b.point.z),(b.cargo[b.cargo.length-1].k==='log'?'Take a log off the ':'Take planks off the ')+name+' · '+cargoText(b.cargo)+hint,()=>takeOffBed(b.id),LOAD_REACH);if(gated)add('gate-close-'+b.id,here,at,'Close the tailgate',()=>toggleGate(b.id),LOAD_REACH,'H')}
   if(truckWaiting(GameState.progress)&&customerTruck.parked()){const pr=GameState.progress,t=truckOf(pr),rp=customerTruck.rearPoint(),cp=customerTruck.cabPoint();
    if(pr.carry?.kind==='planks')add('cust-load',rp,()=>new THREE.Vector3(rp.x,1.6,rp.z),'Load the planks onto the customer\'s truck · '+t.loaded+' / '+t.order,custLoadHands,LOAD_REACH);
    else if(!pr.carry&&t.loaded<t.order&&stockOf(pr).planks)add('cust-stock',rp,()=>new THREE.Vector3(rp.x,1.6,rp.z),'Load planks from the stock · '+t.loaded+' / '+t.order+' (stock '+stockOf(pr).planks+')',custLoadStock,LOAD_REACH);
@@ -939,8 +939,9 @@ function updateWork(dt){
  $('objective').querySelector('.eyebrow').textContent=carrying?'ORDER COLLECTED':starterObjective(GameState.progress)?'GETTING STARTED':'DELIVERY WORK';
  $('objective').querySelector('h2').textContent=carrying?'Deliver to '+dest.name:starterObjective(GameState.progress)?.title||(GameState.progress.completed?'Ready for another?':'Earn your first wages.');
  $('objective').querySelector('p').textContent=carrying?(GameState.progress.completed%3===1?'Speak to Elena at the café counter. Payment: ':'Use the marked delivery box. Payment: ')+money(route.pay)+'.':starterObjective(GameState.progress)?.text||(GameState.progress.completed?'Speak to Noah at the market counter, or take a gig on your phone.':'Speak to Noah at the market counter for delivery work. Next wage: '+money(route.pay)+'.');
- const distance=Math.hypot(me.position.x-dest.x,me.position.z-dest.z);
- $('distance').textContent=Math.round(distance)+' m · '+dest.name;
+ const story=!carrying&&starterObjective(GameState.progress),sPt=story&&story.aim?aimPoint(story.aim):null,aimAt=sPt?{...sPt,name:STORY_PLACE_NAME[story.aim]||story.title}:dest; // the story step measures to ITS place, not the market
+ const distance=Math.hypot(me.position.x-aimAt.x,me.position.z-aimAt.z);
+ $('distance').textContent=Math.round(distance)+' m · '+aimAt.name;
  const atJob=carrying&&nearby(me.position,dest),atApartment=nearby(me.position,STUDIO); // E here only delivers an order; shop doors need no prompt
  const atCar=vehicles.some(v=>Math.hypot(me.position.x-v.x,me.position.z-v.z)<1.6);$('prompt').hidden=!active||modal||(!atJob&&!atApartment&&!atCar&&!nearestPerson());$('prompt').querySelector('span').textContent=atJob?'Deliver order':atApartment?'Apartment entrance':atCar?'Inspect parked vehicle':'Talk to '+nearestPerson()?.name;
  syncParcel(carrying);
@@ -1384,6 +1385,7 @@ function updateRing(){
 // The objective beacon (ring and diamond) and the arrow: objective.js decides what to point at (one answer for the gig, the delivery and
 // the market); this is the only place that draws it. The beacon disappears when you are already there (the prompt takes over).
 const OBJECTIVE_WORLD={marketDoor:{x:SHOPS.market.x,z:MAP.shops.market.doorway.beaconZ},counter:{local:COUNTER,world:{x:SHOPS.market.x+COUNTER.x,y:MAP.shops.market.interior.origin.y,z:MAP.shops.market.interior.origin.z+COUNTER.z}},cafeDoor:{x:SHOPS.cafe.x,z:SHOPS.cafe.z}};
+const STORY_PLACE_NAME={market:'Corner Market',oakStreet18:'18 Oak Street',farmhouse:'Willow Farmhouse',hal:'Hal Brennan',crates:'The egg crates',farmTruck:"Hal's truck",gas:'Gas station',apartments:'Oak Street Apartments',ridgeline:'Ridgeline office',spawn:'Start'};
 function updateObjective(dt){
  const progress=GameState.progress,objective=storyAimed(resolveObjective({progress,place:{inside:!!inside,shop},room:currentRoom(),gigTarget,delivery:targetFor(progress),world:OBJECTIVE_WORLD}));
  const spot=objective.beacon,near=spot?Math.hypot(me.position.x-(spot.local?.x??spot.x),me.position.z-(spot.local?.z??spot.z)):0;

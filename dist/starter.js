@@ -11,18 +11,18 @@ import {VEHICLE_PRICE,vehicleCount,vehicleCapacity,grantVehicle,parkingAim,STUDI
 export const SKIP_SALE_PRICE=VEHICLE_PRICE.shortbed; // Hal sells the Shortbed at its store price (orders.js), one source
 const B=(id,title,text,event,place,cash=0)=>Object.freeze({id,title,text,event,place,cash});
 export const BEATS=Object.freeze([
- B('message','Check your phone','A message from Noah: come by the market, he could use a hand.','read-message','market'),
+ B('message','Check your phone','Noah has sent you a message. Come by the market: he could use a hand.','read-message','market'),
  B('groceries','Sophie\'s groceries','Carry Sophie\'s groceries from the market to 18 Oak Street.','delivered','oakStreet18',300),
- B('food','Eat something first','Noah needs a delivery taken to Hal Brennan, and it is a long walk. Buy a food and a water at the Corner Market, and eat one before you set off.','ate','market'),
- B('farm','Walk to Willow Farmhouse','Take Hal his groceries. The arrow leads the way.','arrived','farmhouse',2500),
- B('crates','Eggs for Noah','Load four egg crates on Hal\'s flatbed and drive them to the market. Hard knocks cost quality.','delivered-crates','market'),
+ B('food','Eat something first','Noah wants a delivery taken to Hal Brennan, and it is a long walk. Buy food and water at the Corner Market, and eat something before you set off.','ate','market'),
+ B('farm','Walk to Willow Farmhouse','Take Hal his groceries. Follow the arrow.','arrived','farmhouse',2500),
+ B('crates','Eggs for Noah','Load four egg crates on Hal\'s flatbed and drive them to the market. Bumps and crashes cost quality.','delivered-crates','market'),
  B('fuel','Fill up','The tank is nearly empty. Hal left cash for gas: fill up at the pump.','refuelled','gas',3200),
  B('note','Hal\'s note for Walt','Drop Hal\'s note at the Ridgeline office in Eastbank.','note-given','ridgeline'),
  B('gig','Take a gig','Two starter gigs are on the Gigs app. Take one and finish it.','gig-done','phone'),
  B('rent','Somewhere to park','Studio 2B is for rent. Rent it so the truck has a home.','rented','apartments'),
  B('sleep','Keep her','Hal gives you the truck. Sleep in the studio to end the day.','slept','apartments')
 ]);
-const DONE=Object.freeze({groceries:'Sophie thanks you and the groceries are delivered.',food:'Fed and watered. Off to the farm.',farm:'Hal pays you for the groceries. His truck waits in the yard: more soon.'});
+const DONE=Object.freeze({groceries:'Sophie thanks you and the groceries are delivered.',food:'Fed and watered. Off to the farm.',farm:'Hal pays you for the groceries. His truck waits in the yard, and he has more work for you.'});
 export const STARTER_EPOCH=1;
 export const fresh=()=>({epoch:STARTER_EPOCH,step:0,done:false,skipped:false,quality:100,fuelGiven:false,loanUid:null,loaded:false,noteGiven:false,gigDone:false});
 const int=(v,lo,hi,d=0)=>Number.isFinite(v)?Math.max(lo,Math.min(hi,Math.floor(v))):d;
@@ -68,7 +68,7 @@ export function advanceStarter(p,event,data={}){
  if(event==='refuelled')o.fuelGiven=true;
  if(event==='arrived'&&data.loanUid)o.loanUid=data.loanUid;
  if(event==='slept'){o.done=true;o.loanUid=null}
- return {state:next(o),message:beat.id==='sleep'?'Hal: keep her. She is yours.':DONE[beat.id]||beat.title+' done.',cash:beat.event==='refuelled'&&s.fuelGiven?0:beat.cash};
+ return {state:next(o),message:beat.id==='sleep'?'Hal: Keep her. She is yours.':DONE[beat.id]||beat.title+' done.',cash:beat.event==='refuelled'&&s.fuelGiven?0:beat.cash};
 }
 
 // ---- G3: the game-facing layer (pure; game.js calls these with GameState.progress and applies what they return) ----
@@ -94,7 +94,7 @@ export function applyStory(p,event,data={}){
  const cash=r.cash||0,loan=p.starter.loanUid;
  let progress={...p,starter:r.state,cash:p.cash+cash,routine:{...p.routine,earned:(p.routine?.earned||0)+cash}},moved=null,removed=false,said=null;
  // S-RESET: the gift truck is only given when it fits. A player who already has a Shortbed, or has no free place at home, never stalls here: Hal takes his truck back and the story ends (he sells it later: buyFromHal).
- if(event==='slept'&&loan){const others=(progress.vehicles||[]).filter(v=>v.uid!==loan),dup=others.some(v=>v.model==='shortbed'),room=vehicleCount(p)<vehicleCapacity(p);if(dup||!room){progress={...progress,vehicles:others};removed=true;said=dup?'Hal: you already have a Shortbed, so I will take mine back. Thanks for the help.':'Hal: there is no room for her at home, so I will keep her in the yard. Buy her from me when you have space.'}}
+ if(event==='slept'&&loan){const others=(progress.vehicles||[]).filter(v=>v.uid!==loan),dup=others.some(v=>v.model==='shortbed'),room=vehicleCount(p)<vehicleCapacity(p);if(dup||!room){progress={...progress,vehicles:others};removed=true;said=dup?'Hal: You already have a Shortbed, so I will take mine back. Thanks for the help.':'Hal: There is no room for her at home, so I will keep her in the yard. Buy her from me when you have space.'}}
  if(event==='slept'&&loan&&!removed){const aim=parkingAim(STUDIO_ID),i=progress.vehicles.findIndex(v=>v.uid===loan);if(aim&&i>=0){const v={...progress.vehicles[i],x:+aim.x.toFixed(2),z:+aim.z.toFixed(2),yaw:+aim.yaw.toFixed(3)};progress={...progress,vehicles:progress.vehicles.map((o,j)=>j===i?v:o)};moved={uid:loan,pose:{x:v.x,z:v.z,yaw:v.yaw}}}}
  return {progress,text:(said||r.message)+(cash?' | +'+money(cash):''),moved,removed};
 }
@@ -116,13 +116,13 @@ export function halTalk(p){
  const s=p?.starter,price=money(SKIP_SALE_PRICE),has=p?.vehicles?.some(v=>v.model==='shortbed');
  if(s&&!s.done){
   if(s.step<3)return {text:'Hal: Haven\'t seen you around. Noah said he might send someone out with my groceries.',choices:[]};
-  if(s.step===3)return {text:'Hal: You must be Noah\'s helper. My knee says thank you. My old flatbed has stood since spring: take her for the day if you can drive.',choices:[{id:'groceries',label:'Hand over the groceries'}]};
-  if(s.step===4)return {text:s.loaded?'Hal: The crates are on. Noah is waiting, and mind the bumps.':'Hal: Four crates of eggs are on the pallet by the barn. Park the truck beside them, load up, and run them to Noah.',choices:[]};
-  if(s.step===5)return {text:'Hal: She is nearly dry. I left cash for gas: the pump is in Eastbank.',choices:[]};
-  return {text:s.step===9?'Hal: Studio 2B needs a place for her to sleep. Then she is yours.':'Hal: Walt at the Ridgeline office is expecting my note. Take a gig if you want the money.',choices:[]};
+  if(s.step===3)return {text:'Hal: You must be Noah\'s helper. My knee says thank you. My old flatbed has stood since spring. Take her for the day if you can drive.',choices:[{id:'groceries',label:'Hand over the groceries'}]};
+  if(s.step===4)return {text:s.loaded?'Hal: The crates are on. Noah is waiting, so mind the bumps.':'Hal: Four crates of eggs are on the pallet by the barn. Park the truck beside them, load up, and run them to Noah.',choices:[]};
+  if(s.step===5)return {text:'Hal: She is nearly dry. I left cash for gas. The pump is in Eastbank.',choices:[]};
+  return {text:s.step===9?'Hal: Rent Studio 2B so she has somewhere to sleep. Then she is yours.':'Hal: Walt at the Ridgeline office is expecting my note. Take a gig if you want the money.',choices:[]};
  }
- if(s?.skipped||!has)return {text:s?.skipped?'Hal: No story for you, then. But I will sell you the truck for '+price+': she runs fine.':s?.done&&!has?'Hal: The flatbed is still in my yard if you have room for her. '+price+', and she runs fine.':'Hal: Come by some mornings, I will have work.',choices:has?[]:(s?.skipped||s?.done)?[{id:'buy',label:'Buy the truck · '+price}]:[]};
- return {text:'Hal: Come by some mornings, I will have work.',choices:[]};
+ if(s?.skipped||!has)return {text:s?.skipped?'Hal: No story for you, then. But I will sell you the truck for '+price+'. She runs fine.':s?.done&&!has?'Hal: The flatbed is still in my yard if you have room for her. She is '+price+', and she runs fine.':'Hal: Come by some mornings. I will have work.',choices:has?[]:(s?.skipped||s?.done)?[{id:'buy',label:'Buy the truck · '+price}]:[]};
+ return {text:'Hal: Come by some mornings. I will have work.',choices:[]};
 }
 // Buying the truck from Hal (skippers and old saves): the Shortbed's store price, a place at home needed, parked in the farm yard.
 export function buyFromHal(p){
