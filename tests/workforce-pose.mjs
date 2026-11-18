@@ -9,7 +9,7 @@ import * as THREE from '../dist/vendor/three.module.js';
 import {
  WORK_HOURS,OUTDOOR_WORK_PLACES,WORKFORCE_POSTS,WORK_PHASES,
  CUTTER_CYCLE_MIN,HAULER_CYCLE_MIN,SAWYER_CYCLE_MIN,
- FELLER_CYCLE_MIN,FELLER_LOGS_PER_TRUNK,FELLER_TRUNKS_PER_DAY,FELLER_PHASE_MIN,BUCK_CUT_END,
+ fellerSlot,FELLER_LOGS_PER_TRUNK,FELLER_TRUNKS_PER_DAY,FELLER_PHASE_MIN,BUCK_CUT_END,
  SWING_SECONDS,HAUL_SPEED,
  BLOCK_TREES,SAWMILL_STATIONS,HAUL_WAYPOINTS,isOutdoorWork,workerRoleOf,workforcePose
 } from '../dist/workforce-pose.js';
@@ -120,13 +120,15 @@ for(const p of ['walk','chop','buck','carry','bend'])assert.ok(seenByRole.cutter
 for(const p of ['walk','chop','buck','carry','bend'])assert.ok(seenByRole.hauler.has(p),`hauler hits ${p}`);
 for(const p of ['walk','carry','bend','saw'])assert.ok(seenByRole.sawyer.has(p),`sawyer hits ${p}`);
 
-// 4b. W4: buck phase occurs once per tree between chop and carry, trunk position exposed, cycle sums right for 2 trunks/day
-const phaseSum=Object.values(FELLER_PHASE_MIN).reduce((s,v)=>s+v,0);
-assert.ok(Math.abs(phaseSum-FELLER_CYCLE_MIN)<1e-9,`feller phases sum to FELLER_CYCLE_MIN (${phaseSum} === ${FELLER_CYCLE_MIN})`);
+// 4b. W4: buck phase occurs once per tree between chop and carry, trunk position exposed. Owner eye-check 0.35.20 (crew at super speed): the slots are no
+// longer a fixed 15 minutes; each lasts as long as its walks need at WALK_SPEED/HAUL_SPEED (tests/crew-speed.mjs caps the visible speed), so the slot is found with fellerSlot.
+assert.deepEqual(Object.keys(FELLER_PHASE_MIN),['chop','buck','bend'],'only the station phases have fixed minutes');
 assert.equal(FELLER_TRUNKS_PER_DAY*FELLER_LOGS_PER_TRUNK,4,'2 trunks x 2 logs = 4 logs/day');
-for(const [worker,startM] of [[peter,360],[tom,360+FELLER_CYCLE_MIN/2]]){
+for(const worker of [peter,tom]){
+ const slot=fellerSlot(worker,1,400,{seed:MAP.seed}),startM=slot.start,len=slot.end-slot.start;
+ assert.ok(len>20&&len<400,`${worker.id} slot length ${len.toFixed(1)} game minutes`);
  const seq=[];let buckCount=0,trunkSeen=false,logs2Seen=false,logs1Seen=false;
- for(let dt=0.05;dt<FELLER_CYCLE_MIN;dt+=0.1){
+ for(let dt=0.05;dt<len;dt+=0.1){
   workforcePose(a,worker,1,startM+dt,{seed:MAP.seed});
   if(seq[seq.length-1]!==a.phase)seq.push(a.phase);
   if(a.phase==='buck'){
@@ -147,7 +149,7 @@ for(const [worker,startM] of [[peter,360],[tom,360+FELLER_CYCLE_MIN/2]]){
  }
  for(const ph of seq)if(ph==='buck')buckCount++;
  assert.equal(buckCount,1,`${worker.id} buck occurs once per tree`);
- assert.deepEqual(seq,['walk','chop','buck','bend','carry','bend','walk','bend','carry','bend','walk'],`${worker.id} exact feller cycle`);
+ assert.deepEqual(seq[0]==='walk'?seq:['walk',...seq],['walk','chop','buck','bend','carry','bend','walk','bend','carry','bend','walk'],`${worker.id} exact feller cycle (the walk is skipped when the hash picks the same tree again)`);
  assert.ok(trunkSeen&&logs2Seen&&logs1Seen,`${worker.id} exposes trunk during buck and 2->1->0 ground logs`);
 }
 

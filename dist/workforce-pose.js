@@ -9,16 +9,17 @@ export const WORK_HOURS=Object.freeze([360,1080]);
 export const OUTDOOR_WORK_PLACES=Object.freeze(['zone:forest','property:sawmill']);
 export const WORKFORCE_POSTS=Object.freeze(['ridgeline-fellers#1','ridgeline-fellers#2','ridgeline-sawyer']);
 export const WORK_PHASES=Object.freeze(['chop','buck','carry','bend','walk','saw']);
-export const CUTTER_CYCLE_MIN=5,HAULER_CYCLE_MIN=8,SAWYER_CYCLE_MIN=6;
-export const FELLER_CYCLE_MIN=15,FELLER_LOGS_PER_TRUNK=2,FELLER_TRUNKS_PER_DAY=2,BUCK_CUT_END=.8;
-export const FELLER_PHASE_MIN=Object.freeze({
- walkTree:1.6,chop:2.4,buck:1.5,
- bendPick1:.4,carry1:2.2,bendDrop1:.4,walkBack1:1.75,
- bendPick2:.4,carry2:2.2,bendDrop2:.4,walkBack2:1.75
-});
+export const CUTTER_CYCLE_MIN=5,HAULER_CYCLE_MIN=8;
+export const FELLER_LOGS_PER_TRUNK=2,FELLER_TRUNKS_PER_DAY=2,BUCK_CUT_END=.8;
+// Owner eye-check 0.35.20: the crew walked at up to 138 m/s because every walk and carry had a fixed number of game minutes. Now only the station phases
+// have fixed minutes; a walk lasts its route length at WALK_SPEED and a carry at HAUL_SPEED (game minutes = metres / speed * GAME_MINUTES_PER_SECOND),
+// so a feller's slot (walk to a tree, chop, buck, two carries to the log deck and back) is as long as its routes need (about 40-200 game minutes).
+export const FELLER_PHASE_MIN=Object.freeze({chop:2.4,buck:1.5,bend:.4});
+export const FELLER_CHAIN_START=Object.freeze({cutter:360,hauler:330}); // the minute each feller's first slot starts (the hauler half a near slot ahead)
 export const SWING_SECONDS=.74;
 export const HAUL_SPEED=+(WALK_SPEED*LOG_CARRY_FACTOR).toFixed(4);
 export const SECONDS_PER_MINUTE=1/GAME_MINUTES_PER_SECOND;
+export const minutesFor=(metres,speed)=>metres/speed*GAME_MINUTES_PER_SECOND; // game minutes to cover `metres` at `speed` m/s
 
 const pt=(x,z,tx=NaN,tz=NaN)=>Object.freeze({x,z,tx,tz});
 export const BLOCK_TREES=Object.freeze({
@@ -99,6 +100,10 @@ const SAW_W2=buildPoly([S.logIn,S.logDeck,S.nw,S.sw]);
 const SAW_W3=buildPoly([S.sw,S.nw,S.ne,S.se,S.belt]);
 const SAW_W4=buildPoly([S.belt,S.se,S.ep,S.pile]);
 const SAW_W5=buildPoly([S.pile,S.ep,S.ne,S.logDeck]);
+// The sawyer's loop: station minutes fixed, the five walks as long as their routes need. SAW_T: the minute each step ends.
+const SAW_T=(()=>{let t=0;const end=d=>(t+=d);return Object.freeze({pick:end(.35),w1:end(minutesFor(SAW_W1.length,HAUL_SPEED)),feed:end(.4),w2:end(minutesFor(SAW_W2.length,WALK_SPEED)),
+ saw:end(1.1),w3:end(minutesFor(SAW_W3.length,WALK_SPEED)),belt:end(.3),w4:end(minutesFor(SAW_W4.length,HAUL_SPEED)),pile:end(.3),w5:end(minutesFor(SAW_W5.length,WALK_SPEED))})})();
+export const SAWYER_CYCLE_MIN=SAW_T.w5;
 
 const clamp01=x=>x<=0?0:x>=1?1:x;
 const wrapMin=m=>Number.isFinite(m)?((m%DAY_MINUTES)+DAY_MINUTES)%DAY_MINUTES:720;
@@ -156,96 +161,121 @@ function lerpSegment(out,ax,az,bx,bz,u,fallbackTx,fallbackTz){
  out.yaw=dx||dz?Math.atan2(dx,dz):Math.atan2(fallbackTx-ax,fallbackTz-az);
 }
 
-function carryToDeck(out,blkId,tree,e1,u,role,groundLogs){
- if(tree===e1){samplePoly(HAUL_ROUTES[blkId].toDeck,u,out,S.logDeck.tx,S.logDeck.tz)}
- else if(u<.2){lerpSegment(out,tree.x,tree.z,e1.x,e1.z,u/.2,S.logDeck.x,S.logDeck.z)}
- else{samplePoly(HAUL_ROUTES[blkId].toDeck,(u-.2)/.8,out,S.logDeck.tx,S.logDeck.tz)}
+const dist=(a,b)=>Math.hypot(b.x-a.x,b.z-a.z);
+// A tree's carry to the log deck: the straight bit to the block's first tree (where the route starts), then the route. The walk back is the same path reversed.
+const haulLength=(blkId,tree)=>{const e1=BLOCK_TREES[blkId][0];return (tree===e1?0:dist(tree,e1))+HAUL_ROUTES[blkId].toDeck.length};
+function carryToDeck(out,blkId,tree,e1,u,len,role,groundLogs){
+ const a=tree===e1?0:dist(tree,e1),r=HAUL_ROUTES[blkId].toDeck,d=clamp01(u)*len;
+ if(d<a)lerpSegment(out,tree.x,tree.z,e1.x,e1.z,d/a,S.logDeck.x,S.logDeck.z);
+ else samplePoly(r,r.length>0?(d-a)/r.length:1,out,S.logDeck.tx,S.logDeck.tz);
  out.phase='carry';out.tag='carry';out.moving=true;out.speed=HAUL_SPEED;out.progress=clamp01(u);
  out.prop='log';out.role=role;out.state='walk';out.targetX=S.logDeck.tx;out.targetZ=S.logDeck.tz;
  out.trunkX=NaN;out.trunkZ=NaN;out.trunkYaw=NaN;out.groundLogs=groundLogs;
  return out;
 }
-
-function walkFromDeck(out,blkId,tree,e1,u,role,groundLogs){
- if(tree===e1){samplePoly(HAUL_ROUTES[blkId].fromDeck,u,out,tree.tx,tree.tz)}
- else if(u<.8){samplePoly(HAUL_ROUTES[blkId].fromDeck,u/.8,out,tree.x,tree.z)}
- else{lerpSegment(out,e1.x,e1.z,tree.x,tree.z,(u-.8)/.2,tree.tx,tree.tz)}
+function walkFromDeck(out,blkId,tree,e1,u,len,role,groundLogs){
+ const r=HAUL_ROUTES[blkId].fromDeck,d=clamp01(u)*len;
+ if(d<r.length||tree===e1)samplePoly(r,r.length>0?d/r.length:1,out,tree.tx,tree.tz);
+ else lerpSegment(out,e1.x,e1.z,tree.x,tree.z,(d-r.length)/(len-r.length),tree.tx,tree.tz);
  out.phase='walk';out.tag='walk';out.moving=true;out.speed=WALK_SPEED;out.progress=clamp01(u);
  out.prop=null;out.role=role;out.state='walk';out.targetX=tree.tx;out.targetZ=tree.tz;
  out.trunkX=NaN;out.trunkZ=NaN;out.trunkYaw=NaN;out.groundLogs=groundLogs;
  return out;
 }
-
+// The walk to the slot's tree: straight within a block; at the midday block change back along the old block's route to the deck and out along the new one.
+function walkToTree(out,L){
+ const {prev,curr,prevBlk,blk}=L,d=L.walkLen*clamp01(L.u);
+ if(!L.change){lerpSegment(out,prev.x,prev.z,curr.x,curr.z,L.walkLen>0?d/L.walkLen:1,curr.tx,curr.tz);return}
+ const e0=BLOCK_TREES[prevBlk][0],e1=BLOCK_TREES[blk][0],a=dist(prev,e0),r0=HAUL_ROUTES[prevBlk].toDeck,r1=HAUL_ROUTES[blk].fromDeck;
+ if(d<a)lerpSegment(out,prev.x,prev.z,e0.x,e0.z,d/a,curr.tx,curr.tz);
+ else if(d<a+r0.length)samplePoly(r0,(d-a)/r0.length,out,curr.tx,curr.tz);
+ else if(d<a+r0.length+r1.length)samplePoly(r1,(d-a-r0.length)/r1.length,out,curr.tx,curr.tz);
+ else{const b=L.walkLen-a-r0.length-r1.length;if(b>0)lerpSegment(out,e1.x,e1.z,curr.x,curr.z,(d-a-r0.length-r1.length)/b,curr.tx,curr.tz);else samplePoly(r1,1,out,curr.tx,curr.tz)}
+}
+// Finds the slot holding game minute m: slots run back to back from FELLER_CHAIN_START[role], each as long as its walks need. Writes into L (a
+// module-private scratch, so nothing is allocated per call; the result is a pure function of the arguments) and returns it.
+const MAX_SLOTS=64,P=FELLER_PHASE_MIN,FIXED_MIN=P.chop+P.buck+4*P.bend;
+const SLOT={k:0,start:0,end:0,u:0,blk:'',prevBlk:'',prev:null,curr:null,change:false,walkLen:0,haulLen:0,walk:0,carry:0,back:0};
+function locateSlot(id,day,m,seed,role){
+ const L=SLOT,blocks=MARKED_PAIRS[(day-1)%100];
+ let start=FELLER_CHAIN_START[role],prevBlk=blocks[0],prev=BLOCK_TREES[prevBlk][(hashOf(seed,id,day,'tree',0)+1)%BLOCK_TREES[prevBlk].length];
+ for(let k=0;;k++){
+  const blk=blocks[start<720?0:1],trees=BLOCK_TREES[blk],curr=trees[hashOf(seed,id,day,'tree',k)%trees.length],change=blk!==prevBlk;
+  const walkLen=change?dist(prev,BLOCK_TREES[prevBlk][0])+HAUL_ROUTES[prevBlk].toDeck.length+HAUL_ROUTES[blk].fromDeck.length+dist(trees[0],curr):dist(prev,curr);
+  const haulLen=haulLength(blk,curr),walk=minutesFor(walkLen,WALK_SPEED),carry=minutesFor(haulLen,HAUL_SPEED),back=minutesFor(haulLen,WALK_SPEED);
+  const end=start+walk+FIXED_MIN+2*(carry+back);
+  if(m<end||k>=MAX_SLOTS){L.k=k;L.start=start;L.end=end;L.blk=blk;L.prevBlk=prevBlk;L.prev=prev;L.curr=curr;L.change=change;L.walkLen=walkLen;L.haulLen=haulLen;L.walk=walk;L.carry=carry;L.back=back;return L}
+  start=end;prevBlk=blk;prev=curr;
+ }
+}
 function fellerPose(out,id,day,m,seed,role){
- const P=FELLER_PHASE_MIN,offset=role==='hauler'?FELLER_CYCLE_MIN/2:0;
- const tm=m+offset,slot=Math.floor(tm/FELLER_CYCLE_MIN),t=tm-slot*FELLER_CYCLE_MIN;
- const half=(slot*FELLER_CYCLE_MIN-offset)<720?0:1;
- const blocks=MARKED_PAIRS[(day-1)%100],blkId=blocks[half],trees=BLOCK_TREES[blkId];
- const prevSlot=slot>0?slot-1:0,prevHalf=slot>0?(((prevSlot*FELLER_CYCLE_MIN-offset)<720)?0:1):0;
- const prevBlk=blocks[prevHalf],prevTrees=BLOCK_TREES[prevBlk];
- const prevIdx=slot>0?hashOf(seed,id,day,'tree',prevSlot)%prevTrees.length:(hashOf(seed,id,day,'tree',0)+1)%trees.length;
- const prevTree=prevTrees[prevIdx],currTree=trees[hashOf(seed,id,day,'tree',slot)%trees.length];
- const e0=prevTrees[0],e1=trees[0];
- let acc=P.walkTree;
+ const L=locateSlot(id,day,m,seed,role),t=Math.max(0,m-L.start),{blk,curr}=L,e1=BLOCK_TREES[blk][0];
+ let acc=L.walk;
  if(t<acc){
-  const u=t/P.walkTree;
-  if(slot>0&&prevHalf!==half){
-   if(u<.2)lerpSegment(out,prevTree.x,prevTree.z,e0.x,e0.z,u/.2,e0.tx,e0.tz);
-   else if(u<.5)samplePoly(HAUL_ROUTES[prevBlk].toDeck,(u-.2)/.3,out,currTree.tx,currTree.tz);
-   else if(u<.8)samplePoly(HAUL_ROUTES[blkId].fromDeck,(u-.5)/.3,out,currTree.tx,currTree.tz);
-   else lerpSegment(out,e1.x,e1.z,currTree.x,currTree.z,(u-.8)/.2,currTree.tx,currTree.tz);
-  }else{
-   lerpSegment(out,prevTree.x,prevTree.z,currTree.x,currTree.z,u,currTree.tx,currTree.tz);
-  }
-  out.phase='walk';out.tag='walk';out.moving=true;out.speed=WALK_SPEED;out.progress=clamp01(u);
-  out.prop='axe';out.role=role;out.state='walk';out.targetX=currTree.tx;out.targetZ=currTree.tz;
+  L.u=t/L.walk;walkToTree(out,L);
+  out.phase='walk';out.tag='walk';out.moving=true;out.speed=WALK_SPEED;out.progress=clamp01(L.u);
+  out.prop='axe';out.role=role;out.state='walk';out.targetX=curr.tx;out.targetZ=curr.tz;
   clearTrunk(out);
   return out;
  }
  if(t<(acc+=P.chop)){
-  const swingProg=((t-P.walkTree)*SECONDS_PER_MINUTE/SWING_SECONDS)%1;
-  setStation(out,role,currTree,'chop',swingProg,'axe');
+  const swingProg=((t-L.walk)*SECONDS_PER_MINUTE/SWING_SECONDS)%1;
+  setStation(out,role,curr,'chop',swingProg,'axe');
   clearTrunk(out);
   return out;
  }
  if(t<(acc+=P.buck)){
-  const prog=(t-(P.walkTree+P.chop))/P.buck;
-  setStation(out,role,currTree,'buck',prog,'axe');
+  const prog=(t-(acc-P.buck))/P.buck;
+  setStation(out,role,curr,'buck',prog,'axe');
   if(prog<BUCK_CUT_END){
-   out.trunkX=currTree.tx;out.trunkZ=currTree.tz;out.trunkYaw=out.yaw+Math.PI/2;out.groundLogs=0;
+   out.trunkX=curr.tx;out.trunkZ=curr.tz;out.trunkYaw=out.yaw+Math.PI/2;out.groundLogs=0;
   }else{
    out.trunkX=NaN;out.trunkZ=NaN;out.trunkYaw=NaN;out.groundLogs=FELLER_LOGS_PER_TRUNK;
   }
   return out;
  }
  // Log 1: bend pick -> carry -> bend drop -> walk back
- if(t<(acc+=P.bendPick1)){setStation(out,role,currTree,'bend',(t-(acc-P.bendPick1))/P.bendPick1,'log');out.trunkX=NaN;out.trunkZ=NaN;out.trunkYaw=NaN;out.groundLogs=2;return out}
- if(t<(acc+=P.carry1))return carryToDeck(out,blkId,currTree,e1,(t-(acc-P.carry1))/P.carry1,role,1);
- if(t<(acc+=P.bendDrop1)){setStation(out,role,S.logDeck,'bend',(t-(acc-P.bendDrop1))/P.bendDrop1,'log');out.trunkX=NaN;out.trunkZ=NaN;out.trunkYaw=NaN;out.groundLogs=1;return out}
- if(t<(acc+=P.walkBack1))return walkFromDeck(out,blkId,currTree,e1,(t-(acc-P.walkBack1))/P.walkBack1,role,1);
+ if(t<(acc+=P.bend)){setStation(out,role,curr,'bend',(t-(acc-P.bend))/P.bend,'log');out.trunkX=NaN;out.trunkZ=NaN;out.trunkYaw=NaN;out.groundLogs=2;return out}
+ if(t<(acc+=L.carry))return carryToDeck(out,blk,curr,e1,(t-(acc-L.carry))/L.carry,L.haulLen,role,1);
+ if(t<(acc+=P.bend)){setStation(out,role,S.logDeck,'bend',(t-(acc-P.bend))/P.bend,'log');out.trunkX=NaN;out.trunkZ=NaN;out.trunkYaw=NaN;out.groundLogs=1;return out}
+ if(t<(acc+=L.back))return walkFromDeck(out,blk,curr,e1,(t-(acc-L.back))/L.back,L.haulLen,role,1);
  // Log 2: bend pick -> carry -> bend drop -> walk back
- if(t<(acc+=P.bendPick2)){setStation(out,role,currTree,'bend',(t-(acc-P.bendPick2))/P.bendPick2,'log');out.trunkX=NaN;out.trunkZ=NaN;out.trunkYaw=NaN;out.groundLogs=1;return out}
- if(t<(acc+=P.carry2))return carryToDeck(out,blkId,currTree,e1,(t-(acc-P.carry2))/P.carry2,role,0);
- if(t<(acc+=P.bendDrop2)){setStation(out,role,S.logDeck,'bend',(t-(acc-P.bendDrop2))/P.bendDrop2,'log');clearTrunk(out);return out}
- return walkFromDeck(out,blkId,currTree,e1,(t-acc)/P.walkBack2,role,0);
+ if(t<(acc+=P.bend)){setStation(out,role,curr,'bend',(t-(acc-P.bend))/P.bend,'log');out.trunkX=NaN;out.trunkZ=NaN;out.trunkYaw=NaN;out.groundLogs=1;return out}
+ if(t<(acc+=L.carry))return carryToDeck(out,blk,curr,e1,(t-(acc-L.carry))/L.carry,L.haulLen,role,0);
+ if(t<(acc+=P.bend)){setStation(out,role,S.logDeck,'bend',(t-(acc-P.bend))/P.bend,'log');clearTrunk(out);return out}
+ return walkFromDeck(out,blk,curr,e1,L.back>0?(t-acc)/L.back:1,L.haulLen,role,0);
 }
 
 function sawyerPose(out,id,day,m,seed){
  clearTrunk(out);
- const offset=(hashOf(seed,id,day,'saw')%150)/100;
- const t=((m+offset)%SAWYER_CYCLE_MIN+SAWYER_CYCLE_MIN)%SAWYER_CYCLE_MIN;
- if(t<.35){setStation(out,'sawyer',S.logDeck,'bend',t/.35,'log');return out}
- if(t<.85){const u=(t-.35)/.5;samplePoly(SAW_W1,u,out,S.logIn.tx,S.logIn.tz);out.phase='carry';out.tag='carry';out.moving=true;out.speed=HAUL_SPEED;out.progress=clamp01(u);out.prop='log';out.role='sawyer';out.state='walk';out.targetX=S.logIn.tx;out.targetZ=S.logIn.tz;return out}
- if(t<1.25){setStation(out,'sawyer',S.logIn,'bend',(t-.85)/.4,'log');return out}
- if(t<1.95){const u=(t-1.25)/.7;samplePoly(SAW_W2,u,out,S.sw.tx,S.sw.tz);out.phase='walk';out.tag='walk';out.moving=true;out.speed=WALK_SPEED;out.progress=clamp01(u);out.prop=null;out.role='sawyer';out.state='walk';out.targetX=S.sw.tx;out.targetZ=S.sw.tz;return out}
- if(t<3.05){setStation(out,'sawyer',S.sw,'saw',(t-1.95)/1.1,null);return out}
- if(t<4.15){const u=(t-3.05)/1.1;samplePoly(SAW_W3,u,out,S.belt.tx,S.belt.tz);out.phase='walk';out.tag='walk';out.moving=true;out.speed=WALK_SPEED;out.progress=clamp01(u);out.prop=null;out.role='sawyer';out.state='walk';out.targetX=S.belt.tx;out.targetZ=S.belt.tz;return out}
- if(t<4.45){setStation(out,'sawyer',S.belt,'bend',(t-4.15)/.3,'planks');return out}
- if(t<4.95){const u=(t-4.45)/.5;samplePoly(SAW_W4,u,out,S.pile.tx,S.pile.tz);out.phase='carry';out.tag='carry';out.moving=true;out.speed=HAUL_SPEED;out.progress=clamp01(u);out.prop='planks';out.role='sawyer';out.state='walk';out.targetX=S.pile.tx;out.targetZ=S.pile.tz;return out}
- if(t<5.25){setStation(out,'sawyer',S.pile,'bend',(t-4.95)/.3,'planks');return out}
- const u=(t-5.25)/.75;samplePoly(SAW_W5,u,out,S.logDeck.tx,S.logDeck.tz);
+ const offset=(hashOf(seed,id,day,'saw')%150)/100,T=SAW_T,C=SAWYER_CYCLE_MIN;
+ const t=((m+offset)%C+C)%C;
+ if(t<T.pick){setStation(out,'sawyer',S.logDeck,'bend',t/T.pick,'log');return out}
+ if(t<T.w1){const u=(t-T.pick)/(T.w1-T.pick);samplePoly(SAW_W1,u,out,S.logIn.tx,S.logIn.tz);out.phase='carry';out.tag='carry';out.moving=true;out.speed=HAUL_SPEED;out.progress=clamp01(u);out.prop='log';out.role='sawyer';out.state='walk';out.targetX=S.logIn.tx;out.targetZ=S.logIn.tz;return out}
+ if(t<T.feed){setStation(out,'sawyer',S.logIn,'bend',(t-T.w1)/(T.feed-T.w1),'log');return out}
+ if(t<T.w2){const u=(t-T.feed)/(T.w2-T.feed);samplePoly(SAW_W2,u,out,S.sw.tx,S.sw.tz);out.phase='walk';out.tag='walk';out.moving=true;out.speed=WALK_SPEED;out.progress=clamp01(u);out.prop=null;out.role='sawyer';out.state='walk';out.targetX=S.sw.tx;out.targetZ=S.sw.tz;return out}
+ if(t<T.saw){setStation(out,'sawyer',S.sw,'saw',(t-T.w2)/(T.saw-T.w2),null);return out}
+ if(t<T.w3){const u=(t-T.saw)/(T.w3-T.saw);samplePoly(SAW_W3,u,out,S.belt.tx,S.belt.tz);out.phase='walk';out.tag='walk';out.moving=true;out.speed=WALK_SPEED;out.progress=clamp01(u);out.prop=null;out.role='sawyer';out.state='walk';out.targetX=S.belt.tx;out.targetZ=S.belt.tz;return out}
+ if(t<T.belt){setStation(out,'sawyer',S.belt,'bend',(t-T.w3)/(T.belt-T.w3),'planks');return out}
+ if(t<T.w4){const u=(t-T.belt)/(T.w4-T.belt);samplePoly(SAW_W4,u,out,S.pile.tx,S.pile.tz);out.phase='carry';out.tag='carry';out.moving=true;out.speed=HAUL_SPEED;out.progress=clamp01(u);out.prop='planks';out.role='sawyer';out.state='walk';out.targetX=S.pile.tx;out.targetZ=S.pile.tz;return out}
+ if(t<T.pile){setStation(out,'sawyer',S.pile,'bend',(t-T.w4)/(T.pile-T.w4),'planks');return out}
+ const u=(t-T.pile)/(T.w5-T.pile);samplePoly(SAW_W5,u,out,S.logDeck.tx,S.logDeck.tz);
  out.phase='walk';out.tag='walk';out.moving=true;out.speed=WALK_SPEED;out.progress=clamp01(u);out.prop=null;out.role='sawyer';out.state='walk';out.targetX=S.logDeck.tx;out.targetZ=S.logDeck.tz;
  return out;
+}
+
+// W4 crew timber (npc-crowd.js forEachWork): the game minute in the middle of the first log's pick-up in the feller's slot holding `minute` (the second log lies
+// where that pose stands until it is picked up). NaN for anyone who is not a feller. Pure; allocates nothing.
+export function fellerPickMinute(person,day=1,minute=720,ctx=null){
+ const role=workerRoleOf(person);if(role!=='cutter'&&role!=='hauler')return NaN;
+ const d=Number.isFinite(day)?Math.max(1,Math.floor(day)):1,seed=Number.isFinite(ctx?.seed)?ctx.seed:MAP.seed,id=typeof person==='string'?person:(person.id||person.post||role);
+ const L=locateSlot(id,d,wrapMin(minute),seed,role);return L.start+L.walk+P.chop+P.buck+P.bend/2;
+}
+// The start and end minute of the feller's slot holding `minute` (tests and debugging): fills out.start/out.end and returns out.
+export function fellerSlot(person,day=1,minute=720,ctx=null,out={start:NaN,end:NaN}){
+ const role=workerRoleOf(person);if(role!=='cutter'&&role!=='hauler'){out.start=out.end=NaN;return out}
+ const d=Number.isFinite(day)?Math.max(1,Math.floor(day)):1,seed=Number.isFinite(ctx?.seed)?ctx.seed:MAP.seed,id=typeof person==='string'?person:(person.id||person.post||role);
+ const L=locateSlot(id,d,wrapMin(minute),seed,role);out.start=L.start;out.end=L.end;return out;
 }
 
 export function workforcePose(out,person,day=1,minute=720,ctx=null){

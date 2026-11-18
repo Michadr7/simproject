@@ -12,7 +12,7 @@ const withAxe=(p=freshProgress(),equipped=true)=>{let s=addItem(p,'axe').state;r
 const levelXp=n=>{let xp=0;for(let l=1;l<n;l++)xp+=xpForNext(l);return xp};
 // ── Defaults and sparse storage ────────────────────────────────────────────────
 assert.deepEqual(defaultPlot(pine.key),{type:'forest',tree:'pine',hits:0});assert.deepEqual(defaultPlot(farmKey),{type:'farm',crop:null,tilled:false});assert.equal(defaultPlot('0,0'),null);
-const fresh=freshProgress();assert.deepEqual([fresh.plots,fresh.logs,fresh.equipped,fresh.nextLogId,fresh.skills],[{},[],null,1,{lumberjack:{xp:0}}]);
+const fresh=freshProgress();assert.deepEqual([fresh.plots,fresh.logs,fresh.equipped,fresh.nextLogId,fresh.skills],[{},[],null,1,{lumberjack:{xp:0},hospitality:{xp:0}}]);
 let p=setPlot(fresh,farmKey,{type:'farm',crop:'wheat',tilled:true});assert.deepEqual(p.plots,{[farmKey]:{type:'farm',crop:'wheat',tilled:true}});
 p=setPlot(p,farmKey,{type:'farm',crop:null,tilled:false});assert.deepEqual(p.plots,{});assert.deepEqual(setPlot(fresh,'0,0',{type:'farm'}).plots,{});
 // ── Validation ────────────────────────────────────────────────────────────────

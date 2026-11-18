@@ -11,6 +11,7 @@ import {markedTrees} from '../dist/forest.js';
 import {carryEffects} from '../dist/carry.js';
 import {anchorWorld} from '../dist/sawmill.js';
 import {slabPile} from '../dist/sawmill-pile.js';
+import {workforcePose} from '../dist/workforce-pose.js';import {townPopulation} from '../dist/population.js';
 import {readFileSync} from 'node:fs';import {readFile,writeFile} from 'node:fs/promises';import {join} from 'node:path';import * as THREE from '../dist/vendor/three.module.js';
 // The drawing needs the owner's GLBs; Node has no image decoder for their textures, so the test reads each model's REAL geometry from the .glb (positions and indices) with a plain material,
 // and the boot hands them to game.js through the one hook it would otherwise load them with (editRelease below patches the temp copy only).
@@ -19,6 +20,8 @@ const glbGeometry=name=>{const b=readFileSync('dist/assets/timber/'+name+'.glb')
 globalThis.__timberParts=Object.fromEntries(['trunk','logs2','slab'].map(n=>[n,{geometry:glbGeometry(n),material:new THREE.MeshStandardMaterial()}]));
 const HOOK="if(globalThis.document?.baseURI)Promise.all(['trunk','logs2','slab']";
 
+// the sawyer's loop (workforce-pose.js) brings her to the feed end at times, and then E offers "Talk to Priya Nair" first: the clock steps to a minute she is at least 6 m away
+const SAWYER=townPopulation().people.find(q=>q.post==='ridgeline-sawyer'),far=(at,m)=>{const s=workforcePose({},SAWYER,DAY,m,{seed:MAP.seed});return Math.hypot(s.x-at.x,s.z-at.z)>6},awayFrom=(at,from)=>{for(let m=from;m<from+60;m+=.1)if(far(at,m)&&far(at,m+1.5))return m;return from}; // away now and still in 1.5 game minutes (the test's next 3 s)
 const DAY=3,tree=markedTrees(worldLayout().cuttable,DAY)[1],SAW=MAP.landmarks.find(l=>l.id==='sawmill');
 const g=await bootGame({position:{x:tree.x-1.4,z:tree.z},editRelease:async dir=>{const f=join(dir,'game.js'),src=await readFile(f,'utf8');assert(src.includes(HOOK),'game.js loads the timber models');await writeFile(f,src.replace(HOOK,'if(globalThis.__timberParts){Object.assign(TIMBER,globalThis.__timberParts);timberLoaded()}else '+HOOK))}});
 try{
@@ -47,7 +50,7 @@ try{
  GameState.progress={...p(),equipped:null,carry:{kind:'log',count:2}};const y0=p().sawmillYard,cut=y=>y.logs+y.logsSawn;let fed=false;
  for(const x of [-4.4,-4.8,-5.2,-5.6])for(const z of [0,.6,-.6,1.2,-1.2]){if(fed)break;const w=anchorWorld(SAW,[x,0,z]);go(w.x,w.z);if(/Put the two logs on the bench/.test(prompt())){tap();fed=true}}
  assert(fed,'the feed end offers the two logs');assert.equal(p().carry,null);assert.equal(cut(p().sawmillYard)-cut(y0),2,'both logs went in');
- GameState.progress={...p(),carry:{kind:'trunk'}};pump(.6);assert(/Put the trunk on the bench/.test(prompt()),prompt());tap();assert.equal(p().carry,null);assert.equal(p().sawmillYard.trunks+p().sawmillYard.trunksSawn,1,'the trunk waits at the saw');pump(.1);assert.equal(obj('yard-trunks')?.count,p().sawmillYard.trunks,'drawn on the trunk deck');assert.equal(obj('yard-trunks').castShadow,false);
+ GameState.progress={...p(),carry:{kind:'trunk'},routine:{...p().routine,minutes:awayFrom(me(),p().routine.minutes)}};pump(.6);assert(/Put the trunk on the bench/.test(prompt()),prompt());tap();assert.equal(p().carry,null);assert.equal(p().sawmillYard.trunks+p().sawmillYard.trunksSawn,1,'the trunk waits at the saw');pump(.1);assert.equal(obj('yard-trunks')?.count,p().sawmillYard.trunks,'drawn on the trunk deck');assert.equal(obj('yard-trunks').castShadow,false);
  GameState.progress={...p(),sawmillYard:{...p().sawmillYard,slabs:5}};const top=slabPile(5).at(-1),w=anchorWorld(SAW,[top.x,0,top.z]);let took=false;
  for(const dx of [0,.6,-.6,1.2,-1.2])for(const dz of [0,.6,-.6,1.2]){if(took)break;go(w.x+dx,w.z+dz);if(/Take a slab/.test(prompt())){tap();took=true}}
  assert(took,'the slab pile offers a slab');assert.deepEqual(p().carry,{kind:'slab'});assert.equal(p().sawmillYard.slabs,4);putDown();assert.equal(p().carry,null);assert.equal(p().slabDrops?.length,1,'X puts the slab on the ground');pump(.1);assert.equal(obj('yard-slabs')?.count,p().sawmillYard.slabs+1,'one mesh draws the yard slabs and the slab on the ground');assert.equal(obj('yard-slabs').castShadow,false);

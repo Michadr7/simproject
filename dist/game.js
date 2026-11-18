@@ -72,7 +72,7 @@ import {MAP,roadRects,nearestRescuePoint,roadGraph} from './map-definition.js';i
 import {activeAction,canStart,refusal} from './actions.js';
 import {resolveObjective} from './objective.js';
 import {substeps,MAX_FRAME} from './timestep.js';
-import {CARRY,CARRY_DIR,CARRY_POLE,GRIP,CHOP_TIMING,chopPose} from './chop-path.js';
+import {CARRY,CARRY_DIR,CARRY_POLE,CHOP_TIMING,chopPose,carryGrip,SAW_CARRY,SAW_DIR,sawPose,sawStand,sawCutting} from './chop-path.js';import {spawn as spawnDust} from './sawdust.js'; // STEP 4: trail carry, chainsaw bucking pose, sawdust chips into the sawmill's one Points pool
 import {createPedestrians,createVehicles} from './neighborhood.js';import {createNpcCrowd} from './npc-crowd.js';import {townPopulation} from './population.js';import {createSchedule,dayPlan} from './schedule.js';import {createRouteTable,tripWithTable,walkPairsOf} from './npc-routes.js';import {busyness} from './busyness.js';
 import {createDriving} from './driving.js';import {shakeAmplitude,shakeOffset,SHAKE_SECONDS,ENERGY_COST,bandToast,smokeOf,hitStopOf,stopSlice,flashOf} from './damage.js';import {createDebris} from './debris.js'; // VD7a: crash feedback
 import {pullOutAvailable,BOG_PULL_HOURS} from './surface-table.js';import {pullOut,pullFee,hoursNow,shopList,offers as garageQuotes,collect as collectRepair,startRepair,useKit,towTo,bayPose,inBay,inShop,condOf,hoursText as repairText,KIT_CAP} from './garage.js';import {percent as condPct} from './damage.js'; // VD4: the repair shop (garage.js holds every rule)
@@ -168,6 +168,7 @@ world.setLogs(GameState.progress.logs);
 const me=GameState.me;
 // consuming: an item is being raised and used (blocks input). armRecovery: the empty hand lowering afterwards (cosmetic only).
 let cargoUI=null,phone=null,inventoryUI=null,storeUI=null,consuming=null,armRecovery=null,chopping=null,sleepElapsed=null;
+let sawRecover=null,sawLean=false,heldHeadEnd=NaN,heldGrip=carryGrip(),carryAt=CARRY,sawDustLive=0;const SAW_OUT=sawPose(0,1),SAW_STEP=sawPose(0,1),SAW_STAND_AT={x:0,z:0,yaw:0},CHOP_OUT=chopPose(0),SAW_DUST_RATE=45,SAW_DUST_BURST=10; // STEP 4: the chainsaw's recoil after a cut, the axe's sliding grip, the arm's carry target, the chips
 // Hotbar, equipped tool, hold-E chopping, plot grid toggle and tree regrowth bookkeeping.
 let doorCooldown=1,doorFade=null,hotbarSignature='',eHeld=false,carried=null,carryWeight=0,gridOn=false,regrowClock=99;
 const pendingLogs=new Set(),lastStages=new Map();
@@ -410,6 +411,9 @@ const savedCharacter=loadAppearance({getItem:key=>localStorage.getItem(key)});
 const avatar=createCharacter(savedCharacter||defaults),player=avatar.group;player.name='player';scene.add(player);
 // Carried things (carry.js): a log on the right shoulder (the ground logs' own mesh), or a stack of planks (the model's own plank mesh, about half size so it fits the avatar).
 const groundLogs=scene.getObjectByName('ground-logs'),carryLog=new THREE.Group(),carryLogMesh=new THREE.Mesh(groundLogs.geometry,groundLogs.material);carryLogMesh.rotation.y=Math.PI/2;carryLog.add(carryLogMesh);carryLog.position.set(-.2,1.5,.05);carryLog.rotation.x=-.12;carryLog.visible=false;carryLog.name='carried-log';player.add(carryLog);
+// W4 (crew timber): the trunk a Ridgeline feller is bucking and the logs cut from it lie on the ground while the feller is drawn (npc-crowd.js forEachWork: a function of the clock, the same on every co-op client).
+// They go into the player's own meshes after the player's pieces (ground-trunks; world.js ground-logs, whose setLogs is wrapped so the crew's logs are put back after it): no new mesh, no new draw call.
+const crewTimber={sig:NaN,trunks:0,logs:groundLogs.count,nt:0,nl:0,t:new Float64Array(12),l:new Float64Array(24)},CREW_ALONG=.6;{const own=world.setLogs.bind(world);world.setLogs=list=>{own(list);crewTimber.logs=groundLogs.count;crewTimber.sig=NaN}}
 // T-E (timber redesign): the owner's timber models (dist/assets/timber: trunk, logs2 = two logs, slab; not in props-assets.js) are loaded once with GLTFLoader. Carried, they ride on the shoulder in the log's place (the carried-log group);
 // on the ground and at the saw they are InstancedMeshes (syncTimber): ground-trunks, yard-trunks (the waiting trunks, in the sawmill's own group like yard-logs) and yard-slabs (the yard's slab pile AND the slabs put down, one mesh): 3 draw calls at most.
 // A model that fails to load is simply not drawn; the console names the missing file. Tests (no document.baseURI) skip the load.
@@ -420,12 +424,18 @@ function showShoulder(c){const k=c?.kind==='log'&&c.count===2?'logs2':c?.kind;ca
 const timberMesh=(n,name,max,shadow,parent)=>{const m=new THREE.InstancedMesh(TIMBER[n].geometry,TIMBER[n].material,max);m.name=name;m.count=0;m.castShadow=shadow;m.receiveShadow=true;m.frustumCulled=false;parent.add(m);return m};
 let timberHost=null; // the sawmill's own group (found once: a scene search every frame would cost)
 function syncTimber(p){const host=sawmillCtl?.ready?timberHost||(timberHost=scene.getObjectByName('belt-planks')?.parent||null):null,yt=p.sawmillYard?.trunks||0,ys=p.sawmillYard?.slabs||0,drops=p.slabDrops||NO_DROPS,T=tFor,fresh=T.parts!==T.drawn;T.drawn=T.parts;
- if(TIMBER.trunk&&(fresh||T.logs!==p.logs||T.pend!==pendingLogs.size)){T.logs=p.logs;T.pend=pendingLogs.size;if(!groundTrunks)groundTrunks=timberMesh('trunk','ground-trunks',MAX_LOGS,true,scene);let n=0;for(const l of p.logs)if(l.kind==='trunk'&&!pendingLogs.has(l.id)&&n<MAX_LOGS){TIMBER_Q.setFromAxisAngle(TIMBER_UP,l.rot);groundTrunks.setMatrixAt(n++,TIMBER_M.compose(TIMBER_P.set(l.x,heightAt(l.x,l.z)+(world.floorAt(l.x,l.z)??0),l.z),TIMBER_Q,TIMBER_S))}groundTrunks.count=n;groundTrunks.instanceMatrix.needsUpdate=true} // a trunk lies like a ground log: along x turned by rot, on the ground
+ if(TIMBER.trunk&&(fresh||T.logs!==p.logs||T.pend!==pendingLogs.size)){T.logs=p.logs;T.pend=pendingLogs.size;if(!groundTrunks)groundTrunks=timberMesh('trunk','ground-trunks',MAX_LOGS,true,scene);let n=0;for(const l of p.logs)if(l.kind==='trunk'&&!pendingLogs.has(l.id)&&n<MAX_LOGS){TIMBER_Q.setFromAxisAngle(TIMBER_UP,l.rot);groundTrunks.setMatrixAt(n++,TIMBER_M.compose(TIMBER_P.set(l.x,heightAt(l.x,l.z)+(world.floorAt(l.x,l.z)??0),l.z),TIMBER_Q,TIMBER_S))}groundTrunks.count=n;crewTimber.trunks=n;crewTimber.sig=NaN;groundTrunks.instanceMatrix.needsUpdate=true} // a trunk lies like a ground log: along x turned by rot, on the ground
  if(fresh||T.yt!==yt||T.ys!==ys||T.drops!==drops||T.host!==host){
   if(TIMBER.trunk&&host){if(!yardTrunks)yardTrunks=timberMesh('trunk','yard-trunks',TRUNK_SLOTS,false,host);const list=trunkPile(yt);TIMBER_Q.identity();list.forEach((s,i)=>yardTrunks.setMatrixAt(i,TIMBER_M.compose(TIMBER_P.set(s.x,s.y-TRUNK_RADIUS,s.z),TIMBER_Q,TIMBER_S)));yardTrunks.count=list.length;yardTrunks.instanceMatrix.needsUpdate=true} // sawmill-pile.js trunkSlot y is the trunk's axis; the model's origin is its bottom
   if(TIMBER.slab){if(!slabMesh)slabMesh=timberMesh('slab','yard-slabs',SLAB_SLOTS+MAX_SLAB_DROPS,false,scene);let n=0;if(host){host.updateWorldMatrix(true,false);TIMBER_Q.identity();for(const s of slabPile(ys))slabMesh.setMatrixAt(n++,TIMBER_M.compose(TIMBER_P.set(s.x,s.y-SLAB_THICK/2,s.z),TIMBER_Q,TIMBER_S).premultiply(host.matrixWorld))} // the yard's slabs: model coords of the sawmill, taken to the world
    for(const d of drops){TIMBER_Q.setFromAxisAngle(TIMBER_UP,(d.q||0)*Math.PI/2);slabMesh.setMatrixAt(n++,TIMBER_M.compose(TIMBER_P.set(d.x,heightAt(d.x,d.z)+(world.floorAt(d.x,d.z)??0),d.z),TIMBER_Q,TIMBER_S))}slabMesh.count=n;slabMesh.instanceMatrix.needsUpdate=true}
   T.yt=yt;T.ys=ys;T.drops=drops;T.host=host;timberBoxes=[yardRect(trunkBounds(yt)),yardRect(slabBounds(ys))].filter(Boolean)}} // the yard's trunk and slab piles block like the log deck
+const crewVisit=(x,z,yaw,trunk,logs)=>{const C=crewTimber,rot=yaw-Math.PI/2; // the models lie along x: a quarter turn back from the pose's trunkYaw lays them across the feller's heading
+ if(trunk){if(C.nt<4){C.t[C.nt*3]=x;C.t[C.nt*3+1]=z;C.t[C.nt*3+2]=rot;C.nt++}return}
+ const ax=Math.cos(rot),az=-Math.sin(rot);for(let i=0;i<logs&&C.nl<8;i++){const along=i?-CREW_ALONG:CREW_ALONG;C.l[C.nl*3]=x+ax*along;C.l[C.nl*3+1]=z+az*along;C.l[C.nl*3+2]=rot;C.nl++}}; // two logs where the trunk lay, as grid.js buckTrunk lays the player's
+function syncCrewTimber(){const C=crewTimber;C.nt=C.nl=0;npcCrowd.forEachWork(crewVisit);let sig=C.nt*31+C.nl*7;for(let i=0;i<C.nt*3;i++)sig=sig*1.0001+C.t[i];for(let i=0;i<C.nl*3;i++)sig=sig*1.0001+C.l[i];if(sig===C.sig)return;C.sig=sig; // rewritten only when a piece appears, moves or goes
+ if(groundTrunks){let n=C.trunks;for(let i=0;i<C.nt&&n<MAX_LOGS;i++){const x=C.t[i*3],z=C.t[i*3+1];TIMBER_Q.setFromAxisAngle(TIMBER_UP,C.t[i*3+2]);groundTrunks.setMatrixAt(n++,TIMBER_M.compose(TIMBER_P.set(x,heightAt(x,z)+(world.floorAt(x,z)??0),z),TIMBER_Q,TIMBER_S))}groundTrunks.count=n;groundTrunks.instanceMatrix.needsUpdate=true}
+ {let n=C.logs;const cap=groundLogs.instanceMatrix.count;for(let i=0;i<C.nl&&n<cap;i++){const x=C.l[i*3],z=C.l[i*3+1];TIMBER_Q.setFromAxisAngle(TIMBER_UP,C.l[i*3+2]);groundLogs.setMatrixAt(n++,TIMBER_M.compose(TIMBER_P.set(x,heightAt(x,z)+.12+(world.floorAt(x,z)??0),z),TIMBER_Q,TIMBER_S))}groundLogs.count=n;groundLogs.instanceMatrix.needsUpdate=true}}
 function slabTakeAt(){const ys=GameState.progress.sawmillYard?.slabs||0,b=yardRect(slabBounds(ys)),top=slabPile(ys).at(-1);if(!b||!top)return null;const w=anchorWorld(SAW_MARK,[top.x,top.y+.5,top.z]);return {point:{x:Math.max(b.x-b.hx,Math.min(b.x+b.hx,me.position.x)),z:Math.max(b.z-b.hz,Math.min(b.z+b.hz,me.position.z))},anchor:()=>new THREE.Vector3(w.x,w.y,w.z)}}
 let crateMesh=null,boxDropMesh=null,crateDropsFor=null,crateBoxes=[],handBox=null,handBoxKind='',parcelStowedOn=''; // C-B: crates and boxes put down on the ground are ONE InstancedMesh of the crate prop (MAX_CRATE_DROPS instances, one draw call) and block like plank stacks (crateBoxes); handBox: the crate or box in the arms; parcelStowedOn: the vehicle the parcel piece went onto when you got in
 const crateProtos=new Map(),crateProto=id=>{let m=crateProtos.get(id);if(!m){m=createProp(id,{apply:x=>x});crateProtos.set(id,m)}return m},CRATE_M=new THREE.Matrix4(),CRATE_Q=new THREE.Quaternion(),CRATE_P=new THREE.Vector3(),CRATE_S=new THREE.Vector3(1,1,1),CRATE_UP=new THREE.Vector3(0,1,0),NO_DROPS=[],handBoxSize=new THREE.Vector3(.58,.44,.38);
@@ -448,7 +458,7 @@ function setYard(y,extra){GameState.progress={...GameState.progress,...extra,saw
 let yardSeen=null; // the game minute the saw last ran to (not saved: after a load it counts from the loaded minute)
 function tickSawYard(){const p=GameState.progress,now=gameMinutes(p),last=yardSeen;yardSeen=now;const y=p.sawmillYard;if(!y?.on||last===null||!(now>last))return;const n=tickYard(y,Math.min(now-last,1440));GameState.progress={...p,sawmillYard:n,belt:beltOf({sawmillYard:n})};if(n.logs!==y.logs||n.trunks!==y.trunks)persist();if(!n.on&&sawmillCtl?.ready&&Math.hypot(me.position.x-sawmillCtl.switchPoint.x,me.position.z-sawmillCtl.switchPoint.z)<25)toast((n.logs||n.trunks?'The yard is full: the saw stops until '+(n.logs?'planks':'slabs')+' are taken away':'The saw has cut every log and stops')+' · '+yardLine(n))}
 const SAW_MARK=MAP.landmarks.find(l=>l.id==='sawmill'),PILE_GLOW=.14;function yardRect(r){if(!r)return null;const a=anchorWorld(SAW_MARK,[r.x0,0,r.z0]),b=anchorWorld(SAW_MARK,[r.x1,0,r.z1]),x0=Math.min(a.x,b.x),x1=Math.max(a.x,b.x),z0=Math.min(a.z,b.z),z1=Math.max(a.z,b.z);return {x:(x0+x1)/2,z:(z0+z1)/2,hx:(x1-x0)/2,hz:(z1-z0)/2}}function syncYardPile(p,c){const planks=p.sawmillYard?.planks||0,logs=p.sawmillYard?.logs||0;if(!yardPile){const host=scene.getObjectByName('belt-planks')?.parent;if(!host)return;const mat=c.plank.material.clone();mat.name='yard-pile-plank';mat.emissive.copy(mat.color).multiplyScalar(PILE_GLOW);const pm=new THREE.InstancedMesh(c.plank.geometry,mat,PILE_SLOTS*YARD_STACK),lm=new THREE.InstancedMesh(groundLogs.geometry,groundLogs.material,LOG_SLOTS);pm.name='yard-pile';lm.name='yard-logs';for(const o of [pm,lm]){o.count=0;o.castShadow=false;o.receiveShadow=true;o.frustumCulled=false;host.add(o)}pm.setColorAt(0,new THREE.Color(1,1,1));yardPile={pm,lm,planks:-1,logs:-1,pileBox:null,m:new THREE.Matrix4(),q:new THREE.Quaternion(),at:new THREE.Vector3(),one:new THREE.Vector3(1,1,1),tint:new THREE.Color()}}const Y=yardPile;if(Y.planks===planks&&Y.logs===logs)return;const {pm,lm,m,q,at,one,tint}=Y;if(Y.planks!==planks){const list=pilePlanks(planks);list.forEach((s,i)=>{q.set(0,Math.sin(s.rot/2),0,Math.cos(s.rot/2));pm.setMatrixAt(i,m.compose(at.set(s.x,s.y,s.z),q,one));pm.setColorAt(i,tint.setScalar(PLANK_TINT[s.k]))});pm.count=list.length;pm.instanceMatrix.needsUpdate=true;if(pm.instanceColor)pm.instanceColor.needsUpdate=true;Y.planks=planks;Y.pileBox=yardRect(pileBounds(planks))}if(Y.logs!==logs){const list=logPile(logs);list.forEach((s,i)=>{const a=i*2.4;q.set(Math.sin(a/2),0,0,Math.cos(a/2));lm.setMatrixAt(i,m.compose(at.set(s.x,s.y,s.z),q,one))});lm.count=list.length;lm.instanceMatrix.needsUpdate=true;Y.logs=logs;Y.logBox=yardRect(logBounds(logs))}yardBoxes=[Y.pileBox,Y.logBox].filter(Boolean)}function yardTakeAt(){const b=yardPile?.pileBox,top=topStack(GameState.progress.sawmillYard?.planks||0);if(!b||!top)return null;const w=anchorWorld(SAW_MARK,[top.x,top.y+top.count*PLANK_PITCH+.35,top.z]);return {point:{x:Math.max(b.x-b.hx,Math.min(b.x+b.hx,me.position.x)),z:Math.max(b.z-b.hz,Math.min(b.z+b.hz,me.position.z))},anchor:()=>new THREE.Vector3(w.x,w.y,w.z)}}function syncSawmill(){
- const p=GameState.progress,c=sawmillCtl,hands=!inside&&!shop,ck=p.carry?.kind;carryLog.visible=hands&&(ck==='log'||ck==='trunk'||ck==='slab');showShoulder(p.carry);syncCrates();syncTimber(p); // T-E: a trunk, two logs or a slab ride on the shoulder like the log
+ const p=GameState.progress,c=sawmillCtl,hands=!inside&&!shop,ck=p.carry?.kind;carryLog.visible=hands&&(ck==='log'||ck==='trunk'||ck==='slab');showShoulder(p.carry);syncCrates();syncTimber(p);syncCrewTimber(); // T-E: a trunk, two logs or a slab ride on the shoulder like the log
  if(!c?.ready)return;
  if(!carryPlanks){carryPlanks=new THREE.Group();carryPlanks.name='carried-planks';for(let k=0;k<4;k++){const plain=c.plank.material.clone();plain.color.multiplyScalar(PLANK_TINT[k]);const m=new THREE.Mesh(c.plank.geometry,plain);m.position.y=k*.12;carryPlanks.add(m)}carryPlanks.position.set(PLANK_STACK.x,PLANK_STACK.y,PLANK_STACK.z);player.add(carryPlanks)}
  const n=p.carry?.kind==='planks'?p.carry.count:0;carryPlanks.visible=hands&&n>0;carryPlanks.children.forEach((m,i)=>m.visible=i<n);
@@ -1204,7 +1214,7 @@ function drawCreator(){
 // Store orders (orders.js): a parcel moves from the queue to its home's drop spot when its time comes, and is collected there into the inventory.
 let orderClock=0;
 // Shifts (shift.js): on site means standing on one of the employer's sites (a zone, a plot or an interior room), or in a company vehicle (none yet). Checked twice a second with the game clock; a shift ends by itself at closing time or after an hour off site.
-function openLoggingTutorial(){if(typeof document.body?.appendChild!=='function'||document.getElementById('logging-tutorial'))return;modal=true;keys.clear();look.release();const el=buildLoggingTutorial(document);document.body.appendChild(el);bindLoggingTutorialClose(el,document,()=>{el.remove();modal=false;keys.clear();look.resetMotion()})} // T-C: the first-day logging guide (logging-tutorial.js), also opened from the phone's Jobs screen
+function openLoggingTutorial(){if(typeof document.body?.appendChild!=='function'||document.getElementById('logging-tutorial'))return;modal=true;keys.clear();look.release();const el=buildLoggingTutorial(document);document.body.appendChild(el);bindLoggingTutorialClose(el,document,()=>{el.remove();setTimeout(()=>{modal=false;keys.clear();look.resetMotion()},0)})} /* talk-bug: modal drops AFTER the closing key's event, so the E that closes the guide does not also press E (it clocked you straight out at the time clock) */ // T-C: the first-day logging guide (logging-tutorial.js), also opened from the phone's Jobs screen
 function doClockIn(id){const r=clockIn(GameState.progress,id);if(r.error)return {error:r.error};GameState.progress=scheduleTruck(r.state);if(id==='ridgeline'&&shouldShowLoggingTutorial(GameState.progress)){GameState.progress=markLoggingTutorialSeen(GameState.progress);openLoggingTutorial()}persist();toast('Clocked in · '+employerName(GameState.progress,id));return {message:'Clocked in. '+r.tasks.length+' tasks today.'}}
 function doClockOut(){const r=clockOut(GameState.progress);if(r.error)return {error:r.error};GameState.progress=r.state;persist();shiftEnded(r);return {message:'Clocked out. Paid '+money(r.stub.total)+'.'}}
 const onRidgeline=()=>GameState.progress.shift?.employer==='ridgeline'; // Pine Ridge and the sawmill are the company's: they open on shift only
@@ -1255,12 +1265,12 @@ function startChop(tree,{quiet=false}={}){
 }
 function updateChop(dt){
  if(!chopping||modal||document.hidden)return;
- const c=chopping;if(c.saw){if(!eHeld){chopping=null;avatar.reach('R',CARRY,1,CARRY_POLE);toast('Hold E to cut through the trunk.');return}c.elapsed+=dt;if(c.elapsed>=c.total){chopping=null;keys.clear();strikeBuck(c,true)}return} // T-E: the chainsaw cut is a hold, not a swing
+ const c=chopping;if(c.saw){if(!eHeld){chopping=null;sawRecover={t:c.elapsed,release:c.elapsed,total:c.total};toast('Hold E to cut through the trunk.');return}c.elapsed=Math.min(c.total,c.elapsed+dt);sawStep(c,dt);if(c.elapsed>=c.total){chopping=null;sawRecover={t:c.total,release:c.total,total:c.total};keys.clear();strikeBuck(c,true)}return} // T-E: the chainsaw cut is a hold, not a swing; STEP 4: letting go or finishing starts the recoil (sawRecover), updateEquipped draws the pose
  c.elapsed=Math.min(c.total,c.elapsed+dt);
- const pose=chopPose(c.elapsed/c.total);
- avatar.reach('R',pose.point,1,CARRY_POLE);avatar.setLean(pose.lean);avatar.setTwoHanded(pose.twoHand);
+ const pose=chopPose(c.elapsed/c.total,CHOP_OUT,carryGrip(heldHeadEnd));
+ avatar.reach('R',pose.point,1,CARRY_POLE);avatar.setLean(pose.lean);avatar.setTwoHanded(pose.twoHand);heldGrip=pose.grip;avatar.alignHeld(pose.align?CARRY_DIR:null); // trail carry -> both hands on the handle -> trail carry
  if(!c.struck&&c.elapsed>=c.impact){c.struck=true;strikeTree(c)}
- if(c.elapsed>=c.total){avatar.reach('R',CARRY,1,CARRY_POLE);avatar.setLean(0);avatar.setTwoHanded(1);carryWeight=1;chopping=null;keys.clear();if(eHeld&&!modal&&!c.tree.stump){if(c.tree.buck){const t=(GameState.progress.logs||[]).find(l=>l.id===c.tree.buck);if(t)startBuck(t)}else chopNext()}}
+ if(c.elapsed>=c.total){avatar.reach('R',CARRY,1,CARRY_POLE);avatar.setLean(0);avatar.setTwoHanded(0);avatar.alignHeld(CARRY_DIR);heldGrip=carryGrip(heldHeadEnd);carryWeight=1;chopping=null;keys.clear();if(eHeld&&!modal&&!c.tree.stump){if(c.tree.buck){const t=(GameState.progress.logs||[]).find(l=>l.id===c.tree.buck);if(t)startBuck(t)}else chopNext()}}
 }
 // Digging out a stump (a Ridgeline task): the same swing as chopping, the stump is gone afterwards and the ground is bare until a sapling goes in.
 function startClear(key,t){
@@ -1307,9 +1317,15 @@ function startBuck(log){
  if(!canAct('chop'))return false;const p=GameState.progress,tool=buckTool(p);if(p.carry){toast('Your hands are full. Put it down first (X).');return false}
  const check=buckTrunk(p,log.id,me.position);if(check.error){toast(check.error);return false}
  me.rotation.y=Math.atan2(log.x-me.position.x,log.z-me.position.z);armRecovery=null;keys.clear();updateEquipped(0);carryWeight=1;const target={buck:log.id,key:'buck-'+log.id,x:log.x,z:log.z};
- if(isSaw(tool)){chopping={tree:target,saw:true,elapsed:0,struck:false,total:buckTimeSec(tool),impact:Infinity};return true}
+ if(isSaw(tool)){const st=sawStand(log.x,log.z,log.rot||0,me.position.x,me.position.z,SAW_STAND_AT),free=!worldBlocked(st.x,st.z),yaw0=me.rotation.y;sawRecover=null; // STEP 4: step in beside the trunk's middle, facing across it (where you stand is blocked: cut from here)
+  chopping={tree:target,saw:true,elapsed:0,struck:false,total:buckTimeSec(tool),impact:Infinity,step:0,dx:free?st.x-me.position.x:0,dz:free?st.z-me.position.z:0,yaw0,turn:free?Math.atan2(Math.sin(st.yaw-yaw0),Math.cos(st.yaw-yaw0)):0,dust:0,bit:false,rng:(log.id*2654435761)>>>0,ground:heightAt(log.x,log.z)+(world.floorAt(log.x,log.z)??0)};return true}
  const total=swingTime(levelOf(p.skills.lumberjack.xp).level);chopping={tree:target,elapsed:0,struck:false,total,impact:CHOP_TIMING.impact*total};return true;
 }
+// One step of the chainsaw hold: the step in and the turn follow sawPose's step (added as a change, so it never fights other movement); while the bar is in the wood, chips fly from the kerf
+// into the sawmill's sawdust pool (sawdust.js spawn: the one Points object, no new draw call), from a seeded generator (the trunk's id), never Math.random.
+function sawStep(c,dt){const p=sawPose(c.elapsed,c.total,-1,SAW_STEP),k=p.step-c.step;if(k>0){me.position.x+=c.dx*k;me.position.z+=c.dz*k;c.step=p.step}me.rotation.y=c.yaw0+c.turn*p.step;
+ const sd=sawmillCtl?.ready&&sawmillCtl.dust;if(!p.cutting||!sd)return;if(!c.bit){c.bit=true;c.dust+=SAW_DUST_BURST}c.dust+=SAW_DUST_RATE*dt;const fx=Math.sin(me.rotation.y),fz=Math.cos(me.rotation.y),rx=-Math.cos(me.rotation.y),rz=Math.sin(me.rotation.y),y=c.ground+2*TRUNK_RADIUS+.03;
+ const rnd=()=>(c.rng=(Math.imul(c.rng,1664525)+1013904223)>>>0)/4294967296;while(c.dust>=1){c.dust--;const back=.4+rnd()*.7,side=.15+rnd()*.5,up=1.1+rnd()*.9;spawnDust(sd.particles,c.tree.x+(rnd()-.5)*.08,y,c.tree.z+(rnd()-.5)*.08,-fx*back+rx*side,up,-fz*back+rz*side,.35+rnd()*.3)}sawDustLive=1} // chips fly back toward the cutter's right, up and out of the kerf
 function strikeBuck(c,last){
  const p=GameState.progress,tool=buckTool(p),id=c.tree.buck;if(!last&&isAxe(tool))audio.timber('chop',me.position,listenerAt());
  if(!last&&isAxe(tool)){const n=(buckHits.get(id)||0)+1,need=buckHitsFor(tool,levelOf(p.skills.lumberjack.xp).level);if(n<need){buckHits.set(id,n);toast(`Cut ${n} / ${need}`);return}}
@@ -1341,23 +1357,36 @@ function toggleEquip(id,{silent=false}={}){if(fuel.held)return {error:'Hang up t
 }
 function updateEquipped(dt){
  const want=GameState.progress.equipped;
- if(!want){if(carried){if(carried.parent===avatar.hand)avatar.release();disposeHeldItem(carried);carried=null}avatar.alignHeld(null);
-  // The carrying arm lowers back into the animation instead of staying posed once the axe is away.
+ if(!want){if(carried){if(carried.parent===avatar.hand)avatar.release();disposeHeldItem(carried);carried=null}avatar.alignHeld(null);sawRecover=null;sawRest();
+  // The carrying arm lowers back into the animation instead of staying posed once the tool is away.
   avatar.setTwoHanded(0);
-  if(carryWeight>0){carryWeight=Math.max(0,carryWeight-dt*5);avatar.reach('R',CARRY,carryWeight,CARRY_POLE)}
+  if(carryWeight>0){carryWeight=Math.max(0,carryWeight-dt*5);avatar.reach('R',carryAt,carryWeight,CARRY_POLE)}
   return}
  if(consuming||busy){avatar.setTwoHanded(0);return} // they own the hand until they finish
  if(!carried||carried.userData.itemId!==want){
   if(carried){if(carried.parent===avatar.hand)avatar.release();disposeHeldItem(carried)}
-  carried=createHeldItem(itemById(want));avatar.hold(carried,want==='gas-can'?{upright:true,curl:1}:{axis:'z',grip:GRIP,curl:1});
- }else if(carried.parent!==avatar.hand)avatar.hold(carried,want==='gas-can'?{upright:true,curl:1}:{axis:'z',grip:GRIP,curl:1});
+  carried=createHeldItem(itemById(want));avatar.hold(carried,want==='gas-can'?{upright:true,curl:1}:{axis:'z',curl:1});heldHeadEnd=headEndOf(carried);heldGrip=carryGrip(heldHeadEnd);
+ }else if(carried.parent!==avatar.hand)avatar.hold(carried,want==='gas-can'?{upright:true,curl:1}:{axis:'z',curl:1});
  if(want==='gas-can'){ // the can hangs level from the hand at the side (the arm swings with the walk); no chest carry
-  avatar.alignHeld(null);avatar.setTwoHanded(0);if(carryWeight>0){carryWeight=Math.max(0,carryWeight-dt*5);avatar.reach('R',CARRY,carryWeight,CARRY_POLE)}return}
+  avatar.alignHeld(null);avatar.setTwoHanded(0);sawRecover=null;sawRest();if(carryWeight>0){carryWeight=Math.max(0,carryWeight-dt*5);avatar.reach('R',carryAt,carryWeight,CARRY_POLE)}return}
+ if(isSaw(want)){sawEquipped(dt);return}
+ sawRecover=null;sawRest();carryAt=CARRY;
+ // The axe (owner 2026-11-18, chop-path.js): a one-handed trail carry at the side, choked up under the head; while chopping, updateChop takes the grip, the alignment and the left hand from chopPose.
  const idle=!chopping&&!armRecovery;
- avatar.alignHeld(chopping?null:CARRY_DIR); // carried across the chest; follows the forearm while swinging
+ if(!chopping){heldGrip+=(carryGrip(heldHeadEnd)-heldGrip)*(1-Math.exp(-dt*10));avatar.alignHeld(CARRY_DIR);avatar.setTwoHanded(0)}
+ if(carried.children[0])carried.children[0].position.z=-heldGrip; // the axe slides through the hand: the palm holds the held group's origin, so the mesh moves back by the grip
  if(idle){carryWeight=Math.min(1,carryWeight+dt*4);avatar.reach('R',CARRY,carryWeight,CARRY_POLE)}else if(!chopping)carryWeight=0;
- avatar.setTwoHanded(chopping?1:carryWeight); // both hands are on the handle while carrying and swinging
 }
+// The chainsaw (owner 2026-11-18, chop-path.js sawPose): carried two-handed low in front, the bar forward; while bucking (chopping.saw) and during the recoil after it (sawRecover) the pose drives both arms, the lean and the crouch.
+function sawEquipped(dt){carryAt=SAW_CARRY;const c=chopping?.saw?chopping:null,r=c?null:sawRecover;
+ if(c||r){if(r)r.t+=dt;const p=c?sawPose(c.elapsed,c.total,-1,SAW_OUT):sawPose(r.t,r.total,r.release,SAW_OUT);
+  avatar.reach('R',p.point,1);avatar.alignHeld(p.dir);avatar.setLean(p.lean);avatar.setCrouch(p.crouch);avatar.setTwoHanded(1);sawLean=true;carryWeight=1;if(r&&p.done)sawRecover=null;return}
+ sawRest();if(chopping)return;
+ avatar.alignHeld(SAW_DIR);if(!armRecovery){carryWeight=Math.min(1,carryWeight+dt*4);avatar.reach('R',SAW_CARRY,carryWeight,CARRY_POLE)}else carryWeight=0;
+ avatar.setTwoHanded(carryWeight);
+}
+function sawRest(){if(sawLean){sawLean=false;avatar.setLean(0);avatar.setCrouch(0)}} // the saw's lean and crouch end once (other poses, such as bending to pick up, set their own)
+function headEndOf(item){const g=item?.children[0]?.geometry;if(!g)return NaN;if(!g.boundingBox)g.computeBoundingBox();return g.boundingBox.max.z} // the far end of an axe's head (shared geometry: measured once)
 // Hotbar: every tool and consumable you own, in inventory order. Number keys (or a click) equip a tool or use food and drink.
 function refreshHotbar(){
  const p=GameState.progress,items=hotbarItems(p),signature=items.map(h=>h.item.id+':'+h.quantity).join()+'|'+p.equipped;
@@ -1410,7 +1439,7 @@ function updateZones(dt){
  world.targetCell=world.updateGrid(me.position,me.rotation.y,gridOn&&outdoors&&active&&!modal&&zone!=='city');
  world.fade.uniforms.uFadeEnabled.value=outdoors?1:0;
  fadeTarget.set(me.position.x,me.position.y+1.5,me.position.z);
- advanceWindClock(windClock,dt);world.setWind(windSample(windClock.t,windNow,windClock.weather));world.update(dt,camera,fadeTarget);sawmillCtl?.update(dt);audio.chainsaw({active:isSaw(GameState.progress.equipped)&&!modal,cutting:!!chopping?.saw,at:me.position,listener:me.position});tickSawYard();syncSawmill();if(sawmillCtl?.ready)audio.update({listener:{x:me.position.x,z:me.position.z},blade:{at:sawmillCtl.bladePoint,level:sawmillCtl.speed,sawing:sawmillCtl.sawing},belt:{at:sawmillCtl.beltPoint,level:sawmillCtl.beltLevel}});
+ advanceWindClock(windClock,dt);world.setWind(windSample(windClock.t,windNow,windClock.weather));world.update(dt,camera,fadeTarget);sawmillCtl?.update(dt);if(sawDustLive>0){sawDustLive-=dt;const sd=sawmillCtl?.dust;if(sd&&!sd.points.visible)sd.update(dt)}audio.chainsaw({active:isSaw(GameState.progress.equipped)&&!modal,cutting:!!chopping?.saw&&sawCutting(chopping.elapsed,chopping.total),at:me.position,listener:me.position});tickSawYard();syncSawmill();if(sawmillCtl?.ready)audio.update({listener:{x:me.position.x,z:me.position.z},blade:{at:sawmillCtl.bladePoint,level:sawmillCtl.speed,sawing:sawmillCtl.sawing},belt:{at:sawmillCtl.beltPoint,level:sawmillCtl.beltLevel}});
  const markers=[];
  if(outdoors){const job=GameState.progress.activeJob;if(job&&gigMarker.visible)markers.push({x:gigMarker.position.x,z:gigMarker.position.z,color:beaconColour(gigKind)});if(marker.visible)markers.push({x:marker.position.x,z:marker.position.z,color:beaconColour(markerKind)});for(const v of driving.fleet)if(v.present&&!v.display&&!v.dev&&v!==driving.active)markers.push({x:v.state.x,z:v.state.z,color:'#6fb7ff'})} // your own vehicles show on the minimap in blue
  const p=outdoors?me.position:shop?SHOPS[shop]:STUDIO;

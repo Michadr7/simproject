@@ -5,7 +5,7 @@
 import {MAP} from './map-definition.js';
 import {employerById,careerOf,employerName,taskKinds,changeRep} from './careers.js';
 import {normalizeTruck} from './customers.js';
-import {PAY,TIMBER_PAY} from './plank-economy.js'; // P-C wiring: a full rack cell pays PAY.rackCell (the planks chain's one table)
+import {formatClock} from './routine.js';import {DINER_ID,DINER_BONUS_PER_RANK,DINER_FAIL_REP} from './diner-job.js';import {PAY,TIMBER_PAY} from './plank-economy.js'; // P-C wiring: a full rack cell pays PAY.rackCell (the planks chain's one table)
 
 export const OFF_SITE_LIMIT=60,MIN_COUNTED_SHIFT=60,STUBS_KEPT=7;
 // Task kinds: the piece they count and the amounts handed out (picked by counters, so a save always gets the same day). Placeholders.
@@ -22,13 +22,22 @@ export const TASKS=Object.freeze({
  pick:{piece:'orders',amounts:[1,2],label:n=>`Pick ${n} customer order${n===1?'':'s'}`},
  deliver:{piece:'deliveries',amounts:[1],label:n=>`Deliver ${n} plank order${n===1?'':'s'}`},
  replant:{piece:'saplings',amounts:[6,10],label:n=>`Plant ${n} saplings in a cleared block`},
+ // diner D-A (notes/diner-design.md): the Alder Coffee & Diner pool (diner-job.js DINER_RANKS lists them per rank); the pieces are counted by the diner game wiring
+ take_order:{piece:'ordersTaken',amounts:[4,6,8],label:n=>`Take  order`},
+ serve_plate:{piece:'platesServed',amounts:[4,6,8],label:n=>`Serve  plate`},
+ bus_table:{piece:'tablesBused',amounts:[3,5,7],label:n=>`Bus  table`},
+ brew_drink:{piece:'drinksBrewed',amounts:[4,6,8],label:n=>`Brew  drink`},
+ prep_food:{piece:'foodPrepped',amounts:[3,5,7],label:n=>`Prepare  dish`},
+ combo_order:{piece:'combos',amounts:[2,3,4],label:n=>`Make  combo order`},
+ bake_pizza:{piece:'pizzasBaked',amounts:[2,3,4],label:n=>`Bake  pizza`},
+ rush_hour:{piece:'rushServed',amounts:[6,8,10],label:n=>`Serve  customers in the lunch rush`},
  // RETIRED (quest rework, owner 2026-11-18): never offered (no rank lists it), kept so a shift saved before the rework still loads and counts its landing task
  landing:{piece:'logs',amounts:[8,12,16],label:n=>`Carry ${n} logs to the landing`,retired:true}
 });
 // Piece pay in cents. Placeholders (DESIGN 4.15 K): the finished planks pay the most.
 // Quest rework (owner 2026-11-18): the logging chain pays the plank-economy.js PAY and TIMBER_PAY rates. trees: a marked pine felled; stray: an unmarked one; bucked: a trunk from a marked pine cut into logs; logsFed/trunksFed: carried to the saw; planks: a board off the pile (25 c, counts for Mill);
 // slabs: a slab off the pile (40 c, counts for Mill); delivered: a board at the lumberyard (730 c, was 100); slabsDelivered: a slab at the lumberyard (1400 c, counts for Haul); logs: stacked at the landing (the landing task is retired, the pile and its 25 c stay); fed: counts only (pays 0).
-export const PIECE_PAY=Object.freeze({trees:300,stray:75,bucked:TIMBER_PAY.buckTrunk,logsFed:PAY.logToSaw,trunksFed:TIMBER_PAY.trunkToSaw,fed:0,logs:25,gathered:25,stumps:150,planks:PAY.plankOffBelt,slabs:TIMBER_PAY.slabOffBelt,delivered:PAY.plankDelivered,slabsDelivered:TIMBER_PAY.slabDelivered,shipped:50,racks:PAY.rackCell,orders:800,deliveries:0,saplings:50});
+export const PIECE_PAY=Object.freeze({trees:300,stray:75,bucked:TIMBER_PAY.buckTrunk,logsFed:PAY.logToSaw,trunksFed:TIMBER_PAY.trunkToSaw,fed:0,logs:25,gathered:25,stumps:150,planks:PAY.plankOffBelt,slabs:TIMBER_PAY.slabOffBelt,delivered:PAY.plankDelivered,slabsDelivered:TIMBER_PAY.slabDelivered,shipped:50,racks:PAY.rackCell,orders:800,deliveries:0,saplings:50,ordersTaken:50,platesServed:100,tablesBused:50,drinksBrewed:120,foodPrepped:160,combos:200,pizzasBaked:200,rushServed:150,tips:1,failedOrders:0}); // diner: tips is counted in cents (1 c each), failedOrders pays nothing and costs 2 rep each at clock-out (never wages)
 // A piece that also counts for another piece's tasks (it pays under its own name only): a slab counts for Mill, a slab delivered for Haul, a log or trunk carried to the saw for the Feed task.
 export const COUNTS_AS=Object.freeze({slabs:['planks'],slabsDelivered:['delivered'],logsFed:['fed'],trunksFed:['fed']});
 export const BONUS_PER_RANK=2500;
@@ -65,7 +74,7 @@ export function canClockIn(progress,id,map=MAP){
  const e=employerById(id,map);if(!e)return {error:'No such employer.'};
  const c=careerOf(progress,id);if(!c.hired)return {error:`You do not work for ${employerName(progress,id,map)}. Apply at their office.`};
  if(progress.shift)return {error:progress.shift.employer===id?'You are already clocked in.':`You are on a shift for ${employerName(progress,progress.shift.employer,map)}. Clock out first.`};
- const m=progress.routine.minutes;if(m<e.hours.from||m>e.hours.lastIn)return {error:'Shifts run from 6:00 AM to 6:00 PM; the last clock-in is 5:30 PM.'};
+ const m=progress.routine.minutes;if(m<e.hours.from||m>e.hours.lastIn)return {error:`Shifts run from ${formatClock(e.hours.from)} to ${formatClock(e.hours.to)}; the last clock-in is ${formatClock(e.hours.lastIn)}.`};
  if(c.lastShiftDay===progress.housing.day)return {error:'You have already worked a shift here today. Come back tomorrow.'};
  return {ok:true,employer:e};
 }
@@ -79,7 +88,7 @@ export function clockIn(progress,id,map=MAP){
 export function shiftPay(progress,shift=progress.shift,map=MAP){
  const e=employerById(shift.employer,map),rank=careerOf(progress,shift.employer).rank||1,r=e.ranks[rank-1];
  const wage=Math.round(shift.paidMinutes*r.wage/60),piecePay=Object.entries(shift.pieces).reduce((s,[k,n])=>s+(PIECE_PAY[k]||0)*n,0);
- const tasksDone=shift.tasks.filter(t=>t.done>=t.target).length,all=shift.tasks.length>0&&tasksDone===shift.tasks.length,bonus=all?BONUS_PER_RANK*rank:0;
+ const tasksDone=shift.tasks.filter(t=>t.done>=t.target).length,all=shift.tasks.length>0&&tasksDone===shift.tasks.length,bonus=all?(shift.employer===DINER_ID?DINER_BONUS_PER_RANK:BONUS_PER_RANK)*rank:0;
  return {wage,piecePay,bonus,total:wage+piecePay+bonus,tasksDone,tasksTotal:shift.tasks.length,all};
 }
 
@@ -87,7 +96,7 @@ export function clockOut(progress,reason='clock-out',map=MAP){
  const sh=progress.shift;if(!sh)return {error:'You are not clocked in.'};
  const id=sh.employer,e=employerById(id,map),pay=shiftPay(progress,sh,map),c=careerOf(progress,id);
  const counted=sh.paidMinutes>=MIN_COUNTED_SHIFT,full=sh.paidMinutes>=(e.hours.to-e.hours.from)/2;
- const repDelta=(pay.all?REP.allTasks:0)+(full?REP.fullShift:0)+REP.unfinishedTask*(pay.tasksTotal-pay.tasksDone);
+ const repDelta=(pay.all?REP.allTasks:0)+(full?REP.fullShift:0)+REP.unfinishedTask*(pay.tasksTotal-pay.tasksDone)+DINER_FAIL_REP*(sh.pieces.failedOrders||0);
  const endAbs=Math.min(sh.last,dayEnd(e,sh.day)),to=endAbs-(sh.day-1)*1440;
  const stub={employer:id,name:employerName(progress,id,map),day:sh.day,from:sh.startedAt,to:Math.max(sh.startedAt,to),paidMinutes:sh.paidMinutes,wage:pay.wage,piecePay:pay.piecePay,bonus:pay.bonus,total:pay.total,tasksDone:pay.tasksDone,tasksTotal:pay.tasksTotal,reason};
  let s={...progress,shift:null,cash:progress.cash+pay.total,routine:{...progress.routine,earned:(progress.routine.earned||0)+pay.total},payStubs:[stub,...(progress.payStubs||[])].slice(0,STUBS_KEPT),

@@ -235,21 +235,19 @@ def add_mouth_shape_key(mesh):
 
     mesh.shape_key_add(name='Basis', from_mix=False)
     sk = mesh.shape_key_add(name='mouth_open', from_mix=False)
-    hinge = Vector((0.025, -0.162, 0.273))
-    rot = Matrix.Rotation(math.radians(32), 3, 'X') # +rx rotates front -Y downward (-Z) to open jaw
+    hinge = Vector((0.025, -0.158, 0.273))
+    rot = Matrix.Rotation(math.radians(15), 3, 'X') # gentle smooth chin drop without cheek creasing
     for v in me.vertices:
         p = v.co.copy()
         w = 0.0
         if v.index in c1_set:
-            # Lower half of mouth pocket moves with lower jaw
-            if p.z < 0.279:
-                w = min(1.0, max(0.0, (0.279 - p.z) / 0.007))
+            if p.z < 0.280:
+                w = min(1.0, max(0.0, (0.280 - p.z) / 0.005))
         else:
-            # Lower chin/jaw on body mesh: below upper lip line (z < 0.273) and front of chin (y < -0.168)
-            if p.y < -0.166 and 0.228 < p.z < 0.273 and abs(p.x - 0.024) < 0.036:
-                wy = min(1.0, max(0.0, (-0.166 - p.y) / 0.024))
-                wz = min(1.0, max(0.0, (0.273 - p.z) / 0.008)) * min(1.0, max(0.0, (p.z - 0.228) / 0.020))
-                wx = min(1.0, max(0.0, (0.036 - abs(p.x - 0.024)) / 0.012))
+            if p.y < -0.165 and 0.215 < p.z < 0.2735 and abs(p.x - 0.024) < 0.052:
+                wy = min(1.0, max(0.0, (-0.165 - p.y) / 0.026))
+                wz = min(1.0, max(0.0, (0.2735 - p.z) / 0.006)) * min(1.0, max(0.0, (p.z - 0.215) / 0.025))
+                wx = min(1.0, max(0.0, (0.052 - abs(p.x - 0.024)) / 0.022))
                 w = wy * wz * wx
         if w > 0.0:
             q = hinge + (rot @ (p - hinge))
@@ -296,9 +294,9 @@ def compute_weights(mesh, arm):
             wmap[v.index] = {'head': 1.0}
             continue
         # Anatomical region filter to avoid cross-limb/belly bleeding in curled sleep
-        is_tail = (p.y > 0.210 and p.z > 0.075)
+        is_tail = (p.y > 0.210)
         is_front_leg = (p.z < 0.115 and p.y < -0.04)
-        is_hind_leg = (p.z < 0.115 and p.y > 0.04)
+        is_hind_leg = (p.z < 0.115 and p.y > 0.04 and p.y <= 0.205)
         ws = []
         for n, (a, b) in segs.items():
             if n.endswith('.L') and p.x < -0.01: continue
@@ -441,27 +439,26 @@ def pose_run(t): # 0.667 s (16 frames) loop, bounding feline gallop (~2.4 m/cycl
         d['hind_paw.' + s]   = (-10 * push + 18 * lift, 0, 0)
     for i in range(4):
         d[f'tail{i+1}'] = (8 + 8 * S(p - 0.5 * i), 0, 4 * S(p - 0.5 * i))
-    d['_loc'] = {'root': (0, 0, 0.044 - 0.020 * bound)}
+    d['_loc'] = {'root': (0, 0, 0.050 - 0.020 * bound)}
     return d
 
-def pose_eat(t): # 2.0 s loop, crouched front stance so anchor_mouth reaches ~6 cm bowl with paws at z=0
+def pose_eat(t): # 2.0 s loop, crouched front stance so anchor_mouth reaches ~6 cm bowl with all 4 paws level at z=0
     p = TAU * t; ch = S(TAU * 4 * t)
     d = {
-        'spine1': (2, 0, 0), 'spine2': (4, 0, 0), 'spine3': (8, 0, 0),
-        'neck': (46 + 2.5 * ch, 0, 0), 'head': (22 + 5 * ch, 0, -2),
-        # Slight crouch in front legs (forward -rx, bend elbow +rx, paw flat -rx)
-        'front_upper.L': (-28, 0, 4), 'front_upper.R': (-28, 0, -4),
-        'front_lower.L': (52, 0, 0),  'front_lower.R': (52, 0, 0),
-        'front_paw.L':   (-24, 0, 0), 'front_paw.R':   (-24, 0, 0),
-        # Slight knee bend on hind legs to keep level
-        'hind_upper.L':  (-16, 0, 0), 'hind_upper.R':  (-16, 0, 0),
-        'hind_lower.L':  (30, 0, 0),  'hind_lower.R':  (30, 0, 0),
-        'hind_paw.L':    (-14, 0, 0), 'hind_paw.R':    (-14, 0, 0),
+        'spine1': (0, 0, 0), 'spine2': (4, 0, 0), 'spine3': (10, 0, 0),
+        'neck': (64 + 2.5 * ch, 0, 0), 'head': (24 + 5 * ch, 0, -2),
+        # Front legs wide + deep elbow bend (~4 cm lower chest) keeping front & hind paws on z=0
+        'front_upper.L': (-62, 0, 16), 'front_upper.R': (-62, 0, -16),
+        'front_lower.L': (116, 0, 0),  'front_lower.R': (116, 0, 0),
+        'front_paw.L':   (-54, 0, 0),  'front_paw.R':   (-54, 0, 0),
+        'hind_upper.L':  (-16, 0, 0),  'hind_upper.R':  (-16, 0, 0),
+        'hind_lower.L':  (32, 0, 0),   'hind_lower.R':  (32, 0, 0),
+        'hind_paw.L':    (-16, 0, 0),  'hind_paw.R':    (-16, 0, 0),
     }
     d.update(tail_wave(p, 5, 0.7))
     d['ear.L'] = (0, 0, 10 * bump(t, 0.55, 0.65)); d['ear.R'] = (0, 0, 0)
     d['_scale'] = {'spine2': 1 + 0.008 * S(p)}
-    d['_loc'] = {'root': (0, 0, 0.010)}
+    d['_loc'] = {'root': (0, 0, -0.009)}
     return d
 
 def pose_pet(t): # 2.0 s loop
@@ -475,34 +472,31 @@ def pose_pet(t): # 2.0 s loop
                    'spine3': (1 + 0.008 * pur, 1 + 0.008 * pur, 1 - 0.02)}
     return d
 
-def pose_sleep(t): # 4.0 s loop: real curled-up sleeping cat, head tucked near front paws, tail wrapped around same side
+def pose_sleep(t): # 4.0 s loop: real curled-up sleeping cat, head tucked near front paws, tail resting flat around flank
     p = TAU * t; br = S(TAU * 2 * t)
     d = {
-        # +rz curls spine/neck/head toward cat's RIGHT (-X); -rz on tail wraps around the SAME right side!
-        'spine1': (6, 8, 28),
-        'spine2': (6 + 1.0 * br, 6, 34),
-        'spine3': (12 - 0.8 * br, 4, 34),
-        'neck':   (24, -4, 32),
-        'head':   (14, -10, 26),
-        # Front legs folded flat forward/under chest (-rx forward, +rx fold lower back, -rx flat paw)
-        'front_upper.L': (-78, 6, -6),  'front_upper.R': (-76, -6, 8),
-        'front_lower.L': (146, 0, 0),   'front_lower.R': (142, 0, 0),
-        'front_paw.L':   (-68, 0, 0),   'front_paw.R':   (-66, 0, 0),
-        # Hind legs folded flat forward against belly (-rx thigh forward, +rx shin back, -rx paw flat)
-        'hind_upper.L':  (-74, -8, 6),  'hind_upper.R':  (-70, 8, -8),
-        'hind_lower.L':  (138, 0, 0),   'hind_lower.R':  (134, 0, 0),
-        'hind_paw.L':    (-64, 0, 0),   'hind_paw.R':    (-64, 0, 0),
-        # Tail wraps around the right flank toward the paws (-rz on tail matches +rz on spine!)
-        'tail1': (-8, 0, -34),
-        'tail2': (-4, 0, -40),
-        'tail3': (0, 0, -38),
-        'tail4': (4, 0, -32 + 2.5 * S(p)),
+        'spine1': (4, 8, 28),
+        'spine2': (5 + 1.0 * br, 6, 36),
+        'spine3': (10 - 0.8 * br, 4, 34),
+        'neck':   (28, -4, 34),
+        'head':   (18, -10, 26),
+        'front_upper.L': (-88, 6, -6),  'front_upper.R': (-86, -6, 8),
+        'front_lower.L': (164, 0, 0),   'front_lower.R': (160, 0, 0),
+        'front_paw.L':   (-76, 0, 0),   'front_paw.R':   (-74, 0, 0),
+        'hind_upper.L':  (-84, -8, 6),  'hind_upper.R':  (-80, 8, -8),
+        'hind_lower.L':  (158, 0, 0),   'hind_lower.R':  (154, 0, 0),
+        'hind_paw.L':    (-74, 0, 0),   'hind_paw.R':    (-74, 0, 0),
+        # Keep tail low/flat (-rx) and wrapped smoothly around the right side (-rz)
+        'tail1': (-12, 0, -34),
+        'tail2': (-4, 0, -36),
+        'tail3': (0, 0, -32),
+        'tail4': (2, 0, -24 + 2.5 * S(p)),
         'ear.L': (4, 0, 6 * bump(t, 0.45, 0.55)),
         'ear.R': (4, 0, 0),
     }
     d['_scale'] = {'spine2': (1 + 0.020 * br, 1 + 0.020 * br, 1 + 0.028 * br),
                    'spine3': (1 + 0.012 * br, 1 + 0.012 * br, 1 + 0.018 * br)}
-    d['_loc'] = {'root': (0, 0, -0.095)}
+    d['_loc'] = {'root': (0, 0, -0.016)}
     return d
 
 def pose_lie_down(t): # 1.25 s one-shot: idle(0) -> drop chest/hips -> curl into sleep(0)
@@ -531,26 +525,26 @@ def pose_get_up(t): # 1.25 s one-shot: sleep(0) -> lift head & push front up -> 
 def pose_sit(t): # 3.0 s loop: hindquarters seated on floor, upright chest, alert head, tail curled beside
     p = TAU * t; br = S(TAU * 2 * t)
     d = {
-        'spine1': (-16, 0, 0),
+        'spine1': (-12, 0, 0),
         'spine2': (-18 + 0.8 * br, 0, 0),
-        'spine3': (-10 - 0.8 * br, 0, 0),
+        'spine3': (-12 - 0.8 * br, 0, 0),
         'neck':   (24, 0, 2.5 * S(p)),
         'head':   (20 + 1.5 * S(p), 0, 3 * S(p + 0.8)),
-        # Front legs angled straight down to floor in front of chest
-        'front_upper.L': (36, 0, 0), 'front_upper.R': (36, 0, 0),
-        'front_lower.L': (6, 0, 0),  'front_lower.R': (6, 0, 0),
-        'front_paw.L':   (2, 0, 0),  'front_paw.R':   (2, 0, 0),
-        # Hind legs folded FORWARD under haunch (-rx thigh forward, +rx shin back, -rx paw flat)
+        # Front legs reach straight down to floor plane matching hind paws
+        'front_upper.L': (30, 0, 0), 'front_upper.R': (30, 0, 0),
+        'front_lower.L': (10, 0, 0), 'front_lower.R': (10, 0, 0),
+        'front_paw.L':   (-4, 0, 0), 'front_paw.R':   (-4, 0, 0),
+        # Hind legs folded FORWARD under haunch
         'hind_upper.L':  (-68, 0, 6),  'hind_upper.R':  (-68, 0, -6),
         'hind_lower.L':  (124, 0, 0),  'hind_lower.R':  (124, 0, 0),
         'hind_paw.L':    (-56, 0, 0),  'hind_paw.R':    (-56, 0, 0),
-        # Tail lifted slightly & curled gracefully around side (+rx lifts tail up!)
-        'tail1': (-14, 0, 20), 'tail2': (10, 0, 30), 'tail3': (10, 0, 28), 'tail4': (6, 0, 20 + 4 * S(p)),
+        # Smooth gradual tail curve around side resting near floor
+        'tail1': (24, 0, 14), 'tail2': (14, 0, 20), 'tail3': (8, 0, 20), 'tail4': (4, 0, 16 + 4 * S(p)),
         'ear.L': (0, 0, 12 * bump(t, 0.60, 0.70)),
         'ear.R': (0, 0, 0),
     }
     d['_scale'] = {'spine2': 1 + 0.012 * br}
-    d['_loc'] = {'root': (0, 0, -0.056)}
+    d['_loc'] = {'root': (0, 0, -0.106)}
     return d
 
 def pose_sit_groom(t): # 3.0 s loop: Sit(0) -> lift front left paw -> 3 licks -> lower back to Sit(0)
@@ -559,9 +553,9 @@ def pose_sit_groom(t): # 3.0 s loop: Sit(0) -> lift front left paw -> 3 licks ->
     lick = S(TAU * 3 * clamp01((t - 0.20) / 0.60)) if 0.20 <= t <= 0.80 else 0.0
     if w > 0:
         d = dict(base)
-        d['front_upper.L'] = (36 - 86 * w, 0, -8 * w)
-        d['front_lower.L'] = (6 + 96 * w + 8 * lick * w, 0, -6 * w)
-        d['front_paw.L']   = (2 + 24 * w, 0, 0)
+        d['front_upper.L'] = (30 - 82 * w, 0, -8 * w)
+        d['front_lower.L'] = (10 + 92 * w + 8 * lick * w, 0, -6 * w)
+        d['front_paw.L']   = (-4 + 30 * w, 0, 0)
         nx, ny, nz = base['neck']; hx, hy, hz = base['head']
         d['neck'] = (nx + 16 * w, ny, nz + 8 * w)
         d['head'] = (hx + 18 * w + 7 * lick * w, hy - 8 * w, hz + 10 * w)
@@ -569,25 +563,23 @@ def pose_sit_groom(t): # 3.0 s loop: Sit(0) -> lift front left paw -> 3 licks ->
         return d
     return base
 
-def pose_stretch(t): # 2.0 s one-shot: idle(0) -> deep front bow stretch, tail curled UP -> return to idle(0)
+def pose_stretch(t): # 2.0 s one-shot: idle(0) -> deep front bow stretch, forearms extended forward on floor, tail up
     base = pose_idle(0.0)
     if t < 0.28: w = smoothstep(t / 0.28)
     elif t < 0.68: w = 1.0
     else: w = smoothstep((1.0 - t) / 0.32)
     stretch_pose = {
-        'spine1': (-8, 0, 0), 'spine2': (12, 0, 0), 'spine3': (26, 0, 0),
-        'neck': (-22, 0, 0), 'head': (-18, 0, 0),
-        # Front legs stretched forward (-rx) and lowered to elbows/paws
-        'front_upper.L': (-62, 0, 0), 'front_upper.R': (-62, 0, 0),
-        'front_lower.L': (36, 0, 0),  'front_lower.R': (36, 0, 0),
-        'front_paw.L':   (26, 0, 0),  'front_paw.R':   (26, 0, 0),
-        # Hind legs planted tall
-        'hind_upper.L':  (10, 0, 0),  'hind_upper.R':  (10, 0, 0),
-        'hind_lower.L':  (-16, 0, 0), 'hind_lower.R':  (-16, 0, 0),
-        'hind_paw.L':    (6, 0, 0),   'hind_paw.R':    (6, 0, 0),
-        # +rx curls tail UPWARD in a happy question-mark arc!
+        'spine1': (-8, 0, 0), 'spine2': (14, 0, 0), 'spine3': (24, 0, 0),
+        'neck': (-22, 0, 0), 'head': (-16, 0, 0),
+        # Forearms extended far forward along ground (-rx) matching hind paw plane
+        'front_upper.L': (-88, 0, 0), 'front_upper.R': (-88, 0, 0),
+        'front_lower.L': (24, 0, 0),  'front_lower.R': (24, 0, 0),
+        'front_paw.L':   (64, 0, 0),  'front_paw.R':   (64, 0, 0),
+        'hind_upper.L':  (4, 0, 0),   'hind_upper.R':  (4, 0, 0),
+        'hind_lower.L':  (-8, 0, 0),  'hind_lower.R':  (-8, 0, 0),
+        'hind_paw.L':    (4, 0, 0),   'hind_paw.R':    (4, 0, 0),
         'tail1': (18, 0, 0), 'tail2': (22, 0, 0), 'tail3': (20, 0, 0), 'tail4': (14, 0, 0),
-        '_loc': {'root': (0, 0, 0.008)},
+        '_loc': {'root': (0, 0, 0.020)},
     }
     return lerp_dict(base, stretch_pose, w)
 
@@ -692,13 +684,16 @@ def make_actions(arm, mesh):
 # Verify ground clearance and measure anchor_mouth during eat!
 def audit_poses(arm, mesh):
     dg = bpy.context.evaluated_depsgraph_get()
-    for name in ('idle', 'walk', 'run', 'eat', 'sit', 'sleep'):
-        clip_name = 'Run' if name == 'run' else ('Sit' if name == 'sit' else name)
+    for t in arm.animation_data.nla_tracks: t.mute = True
+    for t in mesh.data.shape_keys.animation_data.nla_tracks: t.mute = True
+    for clip_name in ('idle', 'walk', 'Run', 'eat', 'Sit', 'Stretch', 'sleep'):
         act = bpy.data.actions[clip_name]
         n = int(act.frame_range[1])
         arm.animation_data.action = act
         min_z = 999.0; mouth_zs = []
         for f in range(0, n + 1, max(1, n // 8)):
+            for pb in arm.pose.bones:
+                pb.location = (0,0,0); pb.rotation_quaternion = (1,0,0,0); pb.scale = (1,1,1)
             bpy.context.scene.frame_set(f)
             bpy.context.view_layer.update()
             ev_mesh = mesh.evaluated_get(dg)
@@ -710,6 +705,8 @@ def audit_poses(arm, mesh):
             mouth_zs.append(round(anc.matrix_world.translation.z, 4))
         print(f"AUDIT {clip_name:10s}: min_z={min_z:+.4f}, mouth_z=({min(mouth_zs):.4f}..{max(mouth_zs):.4f})")
         arm.animation_data.action = None
+    for t in arm.animation_data.nla_tracks: t.mute = False
+    for t in mesh.data.shape_keys.animation_data.nla_tracks: t.mute = False
 
 def build():
     os.makedirs(OUT_DIR, exist_ok=True)

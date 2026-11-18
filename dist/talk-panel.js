@@ -5,6 +5,8 @@ export const TRANSCRIPT_MAX=6,BYE_ID='bye',CONTINUE_ID='continue';
 const KEYS_LEAVE=['Escape','q','Q'],KEYS_CONFIRM=['Enter','e','E'];
 export function createTalkPanel(root,opts){
  const o=opts||{},doc=root.ownerDocument;
+ // talk-bug (2026-11-18): the panel lives at body level. 0.35.20's index.html nested #talk inside the hidden #settings, so it could never show in a real browser.
+ const body=doc&&doc.body;if(body&&typeof body.appendChild==='function'&&root.parentNode&&root.parentNode!==body)body.appendChild(root);
  const el=(tag,cls,text)=>{const n=doc.createElement(tag);if(cls)n.className=cls;if(text!==undefined)n.textContent=String(text);return n};
  const head=el('div','talk-head'),nameEl=el('h2','talk-name'),chipEl=el('span','talk-chip'),clockEl=el('span','talk-clock');
  const portrait=el('div','talk-portrait');portrait.setAttribute('aria-hidden','true');

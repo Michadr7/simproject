@@ -23,6 +23,8 @@ for(const [co,y,n] of [[{},{planks:20},12],[{stock:{logs:2,planks:5}},{planks:20
 const NEAR=['C1','D1','C2','D2'],DAY=[...Array(60).keys()].map(i=>i+3).find(d=>NEAR.includes(markedBlocks(d)[0])),SPOT=HAUL_WAYPOINTS.hub;
 const people={cutter:'ridgeline-fellers#1',hauler:'ridgeline-fellers#2',sawyer:'ridgeline-sawyer'};
 const skinned=s=>s.children.filter(c=>{let k=false;c.traverse(o=>{if(o.isSkinnedMesh)k=true});return k}).length; // characters in the scene (an outfit change may swap a character's part meshes; the number of characters is what must not grow)
+// the first minute from 10:00 the cutter is chopping (crew-speed fix: the slots last as long as their walks, so 10:00 itself may fall on a carry)
+const CUTTER=townPopulation().people.find(q=>q.post===people.cutter),CHOP_MIN=(()=>{for(let m=600;m<715;m+=.05)if(workforcePose({},CUTTER,DAY,m,{seed:MAP.seed}).phase==='chop')return m+.3;throw new Error('no chop before noon')})();
 const shown=o=>{for(let x=o;x;x=x.parent)if(!x.visible)return false;return !!o.parent};
 
 // 1. Pine Ridge at 10:00: the cutter swings an axe at a marked pine, the hauler carries a log (or walks back for one), the sawyer works the shed; the same skinned meshes as at 03:00
@@ -30,7 +32,7 @@ const shown=o=>{for(let x=o;x;x=x.parent)if(!x.visible)return false;return !!o.p
  try{const {GameState,pump,scene}=g,p=()=>GameState.progress;
   const setClock=(day,minutes)=>{GameState.progress={...p(),housing:{...p().housing,day},routine:{...p().routine,minutes}}};
   setClock(DAY,180);GameState.me.position.x=SPOT.x;GameState.me.position.z=SPOT.z;pump(1.5);const night=skinned(scene());
-  setClock(DAY,600);GameState.me.position.x=SPOT.x;GameState.me.position.z=SPOT.z;pump(2);
+  setClock(DAY,CHOP_MIN-.5);GameState.me.position.x=SPOT.x;GameState.me.position.z=SPOT.z;pump(2);
   assert.equal(skinned(scene()),night,'no new skinned mesh for the workers ('+night+')');
   const m=p().routine.minutes,d=p().housing.day,pose=post=>workforcePose({},townPopulation().people.find(q=>q.post===post),d,m,{seed:MAP.seed}); // the real resident holding the post (the pose hashes the person's id)
   const axe=scene().getObjectByName('worker-cutter-axe');assert.ok(axe&&shown(axe),'the cutter holds an axe');

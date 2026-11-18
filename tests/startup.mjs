@@ -141,7 +141,7 @@ for(const saved of [false,true]){
   const bagBefore=phoneState.progress.inventory;
   phoneState.progress={...phoneState.progress,inventory:addItem(phoneState.progress,'axe').state.inventory};
   const axeSlot=hotbarItems(phoneState.progress).findIndex(h=>h.item.id==='axe')+1;
-  key('Digit'+axeSlot);for(let i=0;i<80;i++)phoneFrame();assert.equal(phoneState.progress.equipped,'axe');assert(forearm.quaternion.angleTo(rest)>.5,'the right arm is raised to carry the axe');
+  key('Digit'+axeSlot);for(let i=0;i<80;i++)phoneFrame();assert.equal(phoneState.progress.equipped,'axe');{const player=globalThis.__renderScene.getObjectByName('player'),axe=player.getObjectByName('held-item'),q=new THREE.Quaternion(),along=new THREE.Vector3(0,0,1).applyQuaternion(axe.getWorldQuaternion(q)).applyQuaternion(player.getWorldQuaternion(q).invert());assert(along.z>.85&&along.y>0,'the axe is carried in the trail carry: head forward, the handle trailing (re-pinned STEP 4: the arm hangs at the side now, it is no longer raised): '+along.toArray().map(v=>v.toFixed(2)))}
   key('Digit'+axeSlot);for(let i=0;i<160;i++)phoneFrame();assert.equal(phoneState.progress.equipped,null);assert(forearm.quaternion.angleTo(rest)<.08,'the right arm is back down once the axe is put away');
   phoneState.progress={...phoneState.progress,inventory:bagBefore}; // leave the bag as the rest of the test expects
  }

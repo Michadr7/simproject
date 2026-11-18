@@ -33,7 +33,7 @@ for(const g of [null,undefined,0,'x',[],{last:'a',seen:[1],beats:{}},{last:[1,nu
 const old=JSON.parse(fs.readFileSync(new URL('./fixtures/save-0.35.18-talk.json',import.meta.url),'utf8')).progress;
 const oldCopy=JSON.stringify(old);
 const P=normalizeProgress(old);assert.equal(JSON.stringify(old),oldCopy,'input not mutated');
-for(const k of Object.keys(old))if(k!=='npcs'&&k!=='sawmillYard')assert.deepEqual(P[k],old[k],'old field kept unchanged: '+k);
+for(const k of Object.keys(old))if(k!=='npcs'&&k!=='sawmillYard'&&k!=='skills')assert.deepEqual(P[k],old[k],'old field kept unchanged: '+k);assert.deepEqual(P.skills.lumberjack,old.skills.lumberjack,'old skills kept (the diner D-A hospitality skill is added)');
 if(old.sawmillYard)for(const k of Object.keys(old.sawmillYard))if(k!=='v')assert.deepEqual(P.sawmillYard[k],old.sawmillYard[k],'old yard field kept: '+k); // the yard is upgraded to v2 (trunks, slabs) on load
 assert.equal(P.talk,undefined,'no progress.talk until someone outside the roster is talked to');
 for(const id of Object.keys(old.npcs)){const {mem,...rest}=P.npcs[id];assert.deepEqual(rest,old.npcs[id],'npc kept: '+id)}
