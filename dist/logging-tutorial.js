@@ -5,7 +5,7 @@ import {SAW_SECONDS_PER_LOG,SAW_SECONDS_PER_TRUNK,TRUNK_TO_LOGS,TRUNK_TO_SLABS,L
 const pctNum=v=>Math.round(v*100);
 const pct=v=>pctNum(v)+'%';
 const SVG_NS='http://www.w3.org/2000/svg';
-const P={coal:'#14120f',char:'#221f19',bone:'#f1efdf',muted:'#b2ad9d',amber:'#facd38',rust:'#c88b2a',moss:'#4d8a55',sage:'#8ec994'};
+const P={coal:'#181612',char:'#23201a',bone:'#f1efdf',amber:'#facd38',timber:'#c88b2a',moss:'#4d8a55'};
 
 export const CARRY_RULES=Object.freeze([
  `Trunk: ${pct(HANDS_SPEED.trunk)} speed (no sprint)`,
@@ -20,7 +20,7 @@ export const STEPS=Object.freeze([
  Object.freeze({id:'fell',num:1,title:'Fell',rail:'Felling',facts:['1 Pine → 1 Trunk'],desc:'Chop a marked pine to drop 1 heavy Trunk.'}),
  Object.freeze({id:'buck',num:2,title:'Buck',rail:'Bucking',facts:[`1 Trunk → ${TRUNK_TO_LOGS} Logs`],desc:`Cut a Trunk into ${TRUNK_TO_LOGS} Logs. Chainsaws cut faster.`}),
  Object.freeze({id:'saw',num:3,title:'Saw',rail:'Sawing',facts:[`Log → ${LOGS_TO_PLANKS} Boards (${SAW_SECONDS_PER_LOG} s)`,`Trunk → ${TRUNK_TO_SLABS} Slabs (${SAW_SECONDS_PER_TRUNK} s)`],desc:`Logs make ${LOGS_TO_PLANKS} Boards (${SAW_SECONDS_PER_LOG} s); Trunks make ${TRUNK_TO_SLABS} Slabs (${SAW_SECONDS_PER_TRUNK} s).`}),
- Object.freeze({id:'haul',num:4,title:'Haul & Sell',rail:'Hauling',facts:[`${PLANKS_PER_STACK} Boards / stack`],desc:'Stack at the shed or haul to the lumberyard & warehouse.'})
+ Object.freeze({id:'haul',num:4,title:'Haul & Sell',rail:'Hauling',facts:[`${PLANKS_PER_STACK} Boards / stack`,'Hut storage only'],desc:'Carry boards and slabs into the lumber hut, then haul to the lumberyard and warehouse.'})
 ]);
 
 const CARRY_ITEMS=Object.freeze([
@@ -50,66 +50,66 @@ const svgEl=(doc,tag,attrs={},kids=[])=>{
  for(const k of kids)n.appendChild(k);
  return n;
 };
-const sp=(d,f,s,w=1.6,ex={})=>doc=>svgEl(doc,'path',{d,fill:f||'none',stroke:s||'none','stroke-width':w,'stroke-linecap':'round','stroke-linejoin':'round',...ex});
-const sr=(x,y,w,h,rx,f,s,sw=1.4)=>doc=>svgEl(doc,'rect',{x,y,width:w,height:h,rx,fill:f||'none',stroke:s||'none','stroke-width':sw});
-const sc=(cx,cy,r,f,s,sw=1.4,ex={})=>doc=>svgEl(doc,'circle',{cx,cy,r,fill:f||'none',stroke:s||'none','stroke-width':sw,...ex});
+const sp=(d,f,s,w=2.5,ex={})=>doc=>svgEl(doc,'path',{d,fill:f||'none',stroke:s||'none','stroke-width':w,'stroke-linecap':'round','stroke-linejoin':'round',...ex});
+const sr=(x,y,w,h,rx,f,s,sw=2.5)=>doc=>svgEl(doc,'rect',{x,y,width:w,height:h,rx,fill:f||'none',stroke:s||'none','stroke-width':sw,'stroke-linecap':'round','stroke-linejoin':'round'});
+const sc=(cx,cy,r,f,s,sw=2.5,ex={})=>doc=>svgEl(doc,'circle',{cx,cy,r,fill:f||'none',stroke:s||'none','stroke-width':sw,...ex});
+const se=(cx,cy,rx,ry,f,s,sw=2.5,ex={})=>doc=>svgEl(doc,'ellipse',{cx,cy,rx,ry,fill:f||'none',stroke:s||'none','stroke-width':sw,...ex});
 const sg=(cls,kids)=>doc=>svgEl(doc,'g',{class:cls},kids.map(k=>k(doc)));
 const svgBox=(doc,w,h,cls,specs)=>svgEl(doc,'svg',{viewBox:`0 0 ${w} ${h}`,width:w,height:h,class:cls,'aria-hidden':'true'},specs.map(fn=>fn(doc)));
 
+function sawPath(cx,cy,r0,r1,n){
+ let d='';
+ for(let i=0;i<n;i++){
+  const a0=i*2*Math.PI/n,a1=a0+1.1*Math.PI/n,a2=a0+1.65*Math.PI/n;
+  const pt=(r,a)=>`${(cx+r*Math.cos(a)).toFixed(1)} ${(cy+r*Math.sin(a)).toFixed(1)}`;
+  d+=(i?'L':'M')+pt(r0,a0)+'L'+pt(r1,a1)+'L'+pt(r0,a2);
+ }
+ return d+'Z';
+}
+
+function logCyl(x,y,w,h,side='right',sw=2.5,rings=2){
+ const rx=Math.max(2,+(h*.28).toFixed(1)),ry=+(h/2).toFixed(1),cy=+(y+ry).toFixed(1);
+ const cx=side==='left'?+(x+rx).toFixed(1):+(x+w-rx).toFixed(1);
+ const body=side==='left'
+  ?`M${x+rx} ${y} H${x+w-rx} A${rx} ${ry} 0 0 1 ${x+w-rx} ${y+h} H${x+rx} Z`
+  :`M${x+rx} ${y} H${x+w-rx} V${y+h} H${x+rx} A${rx} ${ry} 0 0 1 ${x+rx} ${y} Z`;
+ const out=[sp(body,P.timber,P.bone,sw),se(cx,cy,rx,ry,P.bone,P.timber,Math.max(1.2,sw*.65)),se(cx,cy,+(rx*.52).toFixed(1),+(ry*.52).toFixed(1),null,P.timber,Math.max(1,sw*.48))];
+ if(rings>=2)out.push(sc(cx,cy,Math.max(.8,sw*.42),P.coal));
+ return sg('',out);
+}
+
+function axeGlyph(gx,gy,hx,hy,scale=1){
+ const dx=hx-gx,dy=hy-gy,len=Math.hypot(dx,dy)||1,ux=dx/len,uy=dy/len,lx=uy,ly=-ux,rx=-uy,ry=ux;
+ const pt=(o,n)=>`${(hx+o*ux+n*rx).toFixed(1)} ${(hy+o*uy+n*ry).toFixed(1)}`;
+ const ptL=(o,n)=>`${(hx+o*ux+n*lx).toFixed(1)} ${(hy+o*uy+n*ly).toFixed(1)}`;
+ const head=`M${pt(5*scale,5*scale)} L${pt(-4*scale,5*scale)} L${ptL(-7*scale,13*scale)} Q${ptL(0,16*scale)} ${ptL(7*scale,13*scale)} Z`;
+ const edge=`M${ptL(-7*scale,13*scale)} Q${ptL(0,16*scale)} ${ptL(7*scale,13*scale)}`;
+ return [sp(`M${gx} ${gy} L${(hx+2*ux).toFixed(1)} ${(hy+2*uy).toFixed(1)}`,null,P.timber,3.2*scale),sp(head,P.bone,P.coal,2*scale),sp(edge,null,P.amber,2.5*scale)];
+}
+
 const BADGE=[
- sc(20,20,18,P.coal,P.amber,1.4),sc(20,20,16.5,'none',P.amber,2.6,{'stroke-dasharray':'2.2 2.4'}),
- sc(20,20,13.5,P.char,P.muted,.9),sp('M20 29 V22',null,P.rust,2.2),
- sp('M20 8 L27 17 H23 L29 24 H11 L17 17 H13 Z',P.moss,P.sage,1.3)
+ sc(20,20,18.5,P.coal,P.amber,1.4),
+ sp(sawPath(20,20,14.8,17.2,16),P.char,P.amber,1.4),
+ sc(20,20,12.5,P.coal,P.bone,1),
+ sp('M20 29 V22',null,P.timber,2.4),
+ sp('M20 9 L26.5 17 H22.8 L28.5 23.5 H11.5 L17.2 17 H13.5 Z',P.moss,P.bone,1.4)
 ];
 
+const GND=sp('M10 82 H150',null,'rgba(241,239,223,.26)',2.5),SHD=(cx,rx)=>se(cx,82,rx,4.5,'rgba(0,0,0,.45)');
+
 const SCENES={
- fell:[
-  sp('M8 62 Q40 59 74 62 T112 61',null,P.moss,1.6),sp('M16 61 L14 56 M19 61 L20 55 M22 61 L25 57',null,P.sage,1.2),
-  sp('M52 61 V36',null,P.rust,6.5),sp('M50 57 V41',null,P.coal,1.1),
-  sp('M55 48 L49 51 L55 54',P.coal,P.amber,1.3),sp('M49 41 H55',null,P.amber,1.4),
-  sp('M52 7 L68 25 H59 L73 40 H31 L45 25 H36 Z',P.moss,P.sage,1.6),sp('M47 18 L52 13 L57 18',null,P.bone,1.1),
-  sp('M93 21 A25 25 0 0 0 62 49',null,P.amber,1.5,{'stroke-dasharray':'3 3'}),
-  sg('lt-anim-axe',[sp('M96 19 L74 41',null,P.rust,2.4),sp('M70 37 L79 44 L73 49 L66 42 Z',P.bone,P.coal,1.3),sp('M70 37 L66 42',null,P.amber,1.6)])
- ],
- buck:[
-  sp('M8 58 H112',null,P.moss,1.5),
-  sp('M14 36 H54 A5 8 0 0 1 54 52 H14 A5 8 0 0 1 14 36 Z',P.rust,P.bone,1.5),
-  sp('M21 41 H31 M24 47 H41',null,P.coal,1.1),sc(14,44,5.5,P.bone,P.rust,1.3),
-  sg('lt-anim-cut',[sp('M34 29 V59',null,P.amber,1.8,{'stroke-dasharray':'3 2.5'}),sp('M31 31 L34 36 L37 31',P.amber,P.amber,1)]),
-  sp('M61 44 H71 M68 41 L71 44 L68 47',null,P.amber,1.6),
-  sr(76,43,28,12,5,P.rust,P.bone,1.5),sc(104,49,5.2,P.bone,P.rust,1.3),
-  sg('lt-anim-log',[sr(80,28,28,12,5,P.rust,P.bone,1.5),sc(108,34,5.2,P.bone,P.rust,1.3),sp('M85 34 H98',null,P.coal,1.1)])
- ],
- saw:[
-  sp('M10 49 H64 M18 49 V62 M54 49 V62',null,P.muted,1.6),sr(8,37,26,11,4,P.rust,P.bone,1.4),
-  sg('lt-anim-saw',[
-   sc(44,36,13.5,P.char,P.bone,1.6),
-   sp('M44 20 V23 M44 49 V52 M28 36 H31 M57 36 H60 M33 25 L35 27 M53 45 L55 47 M55 25 L53 27 M35 45 L33 47',null,P.amber,1.6),
-   sc(44,36,3.5,P.amber,P.coal,1.2)
-  ]),
-  sg('lt-anim-sparks',[sp('M34 21 L29 14 M41 18 L41 11 M49 20 L54 14',null,P.amber,1.6)]),
-  sp('M62 36 H70 M67 33 L70 36 L67 39',null,P.muted,1.5),
-  sr(74,45,36,4.5,1,P.amber,P.coal,1.2),sr(74,39,36,4.5,1,P.bone,P.coal,1.2),
-  sr(74,33,36,4.5,1,P.amber,P.coal,1.2),sr(74,27,36,4.5,1,P.bone,P.coal,1.2),
-  sp('M74 54 Q92 50 110 54 V59 H74 Z',P.rust,P.bone,1.3)
- ],
- haul:[
-  sp('M6 59 H114',null,P.muted,1.5),sp('M12 64 H26 M38 64 H52',null,P.amber,1.2,{'stroke-opacity':'.45'}),
-  sp('M86 59 V27 L100 18 L114 27 V59',P.char,P.muted,1.5),sr(92,39,16,20,1,P.coal,P.amber,1.3),
-  sg('lt-anim-truck',[
-   sr(15,32,28,4,1,P.bone,P.rust,1.2),sr(15,27,28,4,1,P.amber,P.rust,1.2),sr(12,37,34,12,2,P.moss,P.bone,1.5),
-   sp('M46 28 H62 L71 38 V49 H46 Z',P.amber,P.bone,1.5),sp('M50 31 H59 L64 37 H50 Z',P.coal,P.bone,1),
-   sc(23,52,6,P.coal,P.bone,1.6),sc(59,52,6,P.coal,P.bone,1.6),sc(23,52,2,P.amber),sc(59,52,2,P.amber)
-  ])
- ]
+ fell:[GND,SHD(52,32),sp('M16 82 L13 75 M21 82 L22 74',null,P.moss,2.2),sp('M47 82 V50 H57 V63 L49 67 L57 71 V82 Z',P.timber,P.bone,2.5),sp('M47 56 H57',null,P.amber,2.5),sp('M52 10 L72 34 H61 L77 54 H27 L43 34 H32 Z',P.moss,P.bone,2.5),sp('M114 24 A46 46 0 0 0 65 62',null,P.amber,2.5,{'stroke-dasharray':'4 4'}),sg('lt-anim-chip',[sp('M62 66 L69 61 L68 69 Z',P.amber,P.coal,1.6)]),sg('lt-anim-axe',axeGlyph(132,70,104,28,1))],
+ buck:[GND,SHD(42,32),SHD(127,22),logCyl(12,58,58,20,'left',2.5,2),sp('M32 65 H43 M52 72 H61',null,P.coal,2),sg('lt-anim-cut',[sp('M43 52 V82',null,P.amber,2.5,{'stroke-dasharray':'3.5 3'})]),sr(10,23,20,13,3,P.amber,P.bone,2.5),sp('M10 26 H5 V34 H10 M16 23 V18 H25 V23',null,P.bone,2.5),sp('M29 30 L45 50 A2.5 2.5 0 0 1 41 54 L25 34 Z',P.coal,P.bone,2.5),...axeGlyph(76,58,69,24,.88),sp('M82 68 H95 M91 64 L95 68 L91 72',null,P.amber,2.5),logCyl(104,66,44,14,'right',2.5,2),sg('lt-anim-log',[logCyl(107,52,44,14,'right',2.5,2)])],
+ saw:[GND,SHD(49,39),SHD(129,20),sp('M18 68 V82 M80 68 V82',null,P.bone,2.5),sr(10,60,78,8,4,P.coal,P.bone,2.5),sc(15,64,1.8,P.amber),sc(49,64,1.8,P.amber),sc(83,64,1.8,P.amber),logCyl(10,46,29,13,'left',2.5,1),sg('lt-anim-saw',[sp(sawPath(44,44,12.5,16.5,12),P.char,P.bone,2.5),sc(44,44,7,null,P.amber,2),sc(44,44,3.2,P.amber,P.coal,1.6)]),sg('lt-anim-sparks',[sp('M35 24 L30 16 M43 21 L43 13 M52 23 L57 16',null,P.amber,2.5)]),sr(63,54,23,5,1.2,P.amber,P.coal,1.8),sr(63,48,23,5,1.2,P.bone,P.coal,1.8),sp('M93 58 H102 M99 54 L102 58 L99 62',null,P.amber,2.5),sp('M109 75 Q128 69 147 75 V81 H109 Z',P.timber,P.bone,2.2),sr(109,66,38,5.5,1.2,P.amber,P.coal,1.8),sr(109,59,38,5.5,1.2,P.bone,P.coal,1.8),sr(109,52,38,5.5,1.2,P.amber,P.coal,1.8)],
+ haul:[GND,SHD(50,34),SHD(125,26),sp('M16 87 H34 M48 87 H66',null,'rgba(250,205,56,.45)',2.5),sg('lt-anim-truck',[sp('M8 52 H15 M6 60 H13',null,P.amber,2.5),sr(20,44,28,5,1,P.amber,P.coal,1.8),sr(20,38,28,5,1,P.bone,P.coal,1.8),sr(17,50,34,18,2,P.moss,P.bone,2.5),sp('M51 38 H68 L76 49 L84 52 V68 H51 Z',P.amber,P.bone,2.5),sp('M55 42 H66 L72 49 H55 Z',P.coal,P.bone,2),sc(81,58,1.8,P.bone),sc(31,72,8.5,P.coal,P.bone,2.5),sc(69,72,8.5,P.coal,P.bone,2.5),sc(31,72,2.5,P.amber),sc(69,72,2.5,P.amber)]),sp('M99 40 L125 22 L151 40 Z',P.char,P.bone,2.5),sp('M94 40 L125 20 L156 40',null,P.amber,3),sp('M103 40 V82 M147 40 V82 M100 72 H150 M103 60 H147',null,P.bone,2.5),sp('M108 66 Q116 61 124 66 V71 H108 Z',P.timber,P.bone,1.8),sr(127,65,16,5,1,P.amber,P.coal,1.6),sr(127,59,16,5,1,P.bone,P.coal,1.6)]
 };
 
 const MINI={
- trunk:[sr(1,3,13,8,3,P.rust,P.bone,1.2),sc(14,7,3.6,P.bone,P.rust,1.1)],
- log:[sr(2,4,12,6,2.5,P.rust,P.bone,1.2),sc(14,7,2.8,P.bone,P.rust,1.1)],
- logs2:[sr(1,7,11,5,2,P.rust,P.bone,1.1),sc(12,9.5,2.3,P.bone,P.rust,1),sr(4,2,11,5,2,P.rust,P.bone,1.1),sc(15,4.5,2.3,P.bone,P.rust,1)],
- slab:[sp('M2 7 Q10 3 18 7 V11 H2 Z',P.rust,P.bone,1.2)],
- boards:[sr(2,9,16,3,.8,P.amber,P.coal,1),sr(2,5.5,16,3,.8,P.bone,P.coal,1),sr(2,2,16,3,.8,P.amber,P.coal,1)]
+ trunk:[logCyl(1,2.5,18,9,'right',1.4,2)],
+ log:[logCyl(2,3.5,16,7,'right',1.3,1)],
+ logs2:[logCyl(1,7,14,5.5,'right',1.2,1),logCyl(4,1.5,14,5.5,'right',1.2,1)],
+ slab:[sp('M2 8 Q10 3 18 8 V12 H2 Z',P.timber,P.bone,1.4)],
+ boards:[sr(2,9.5,16,3.2,.8,P.amber,P.coal,1.1),sr(2,5.6,16,3.2,.8,P.bone,P.coal,1.1),sr(2,1.7,16,3.2,.8,P.amber,P.coal,1.1)]
 };
 
 export function buildOverlay(doc){
@@ -130,7 +130,7 @@ export function buildOverlay(doc){
  const rail=el(doc,'div','lt-rail',null,{'aria-hidden':'true'});
  for(const s of STEPS){
   const item=el(doc,'div','lt-rail-item',null,{'data-step':s.id});
-  item.appendChild(el(doc,'span','lt-rail-dot',String(s.num)));
+  item.appendChild(el(doc,'span','lt-rail-dot'));
   item.appendChild(el(doc,'span','lt-rail-label',s.rail));
   rail.appendChild(item);
  }
@@ -139,14 +139,14 @@ export function buildOverlay(doc){
  const grid=el(doc,'div','lt-steps');
  for(const s of STEPS){
   const box=el(doc,'article','lt-step',null,{'data-step':s.id});
-  const sh=el(doc,'div','lt-step-head');
-  sh.appendChild(el(doc,'span','lt-step-num',String(s.num)));
-  sh.appendChild(el(doc,'h3','lt-step-title',s.title));
   const scene=el(doc,'div','lt-scene');
-  scene.appendChild(svgBox(doc,120,72,'lt-svg lt-scene-svg',SCENES[s.id]||[]));
+  scene.appendChild(el(doc,'span','lt-step-num',String(s.num)));
+  scene.appendChild(svgBox(doc,160,96,'lt-svg lt-scene-svg',SCENES[s.id]||[]));
+  const sh=el(doc,'div','lt-step-head');
+  sh.appendChild(el(doc,'h3','lt-step-title',s.title));
   const facts=el(doc,'div','lt-facts');
   for(const f of s.facts)facts.appendChild(el(doc,'span','lt-fact',f));
-  box.appendChild(sh);box.appendChild(scene);box.appendChild(el(doc,'p','lt-step-desc',s.desc));box.appendChild(facts);
+  box.appendChild(scene);box.appendChild(sh);box.appendChild(el(doc,'p','lt-step-desc',s.desc));box.appendChild(facts);
   grid.appendChild(box);
  }
  card.appendChild(grid);

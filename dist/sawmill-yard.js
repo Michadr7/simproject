@@ -93,6 +93,12 @@ export function takeSlab(state){
  return freeze({state:taken?make({...s,slabs:s.slabs-1}):s,slabs:taken});
 }
 
+// Put carried boards or slabs back into the yard stock (kept in the lumber hut, lumber-hut.js) up to the cap; what does not fit stays in the hands (left).
+export function storeInYard(state,count,kind='planks'){
+ const s=normalizeYard(state),slab=kind==='slab',want=Number.isFinite(count)?Math.max(0,Math.floor(count)):0,room=slab?YARD_MAX_SLABS-s.slabs:YARD_MAX_PLANKS-s.planks,stored=Math.min(want,room);
+ return freeze({state:stored?make({...s,...(slab?{slabs:s.slabs+stored}:{planks:s.planks+stored})}):s,stored,left:want-stored});
+}
+
 // Apply the daily town trickle (TRICKLE_PER_DAY = 6) once per game day, idempotent for the same day.
 export function trickle(state,day){
  const s=normalizeYard(state);

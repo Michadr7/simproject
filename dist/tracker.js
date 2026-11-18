@@ -14,6 +14,7 @@ import {takenBy,dueText,stagingOf} from './tickets.js';
 import {racksOf} from './forest.js';
 import {RACK_SLOTS,HAND_LEVEL,WAREHOUSE_STAGING,WAREHOUSE_TABLE,DOCK_DOOR,HALL} from './warehouse-layout.js';
 import {destinationName} from './order-table.js';
+import {DINER_KINDS,dinerTarget} from './diner-flow.js';
 
 export const FOCUS_PATTERN=/^[a-z0-9:_-]{1,40}$/i;
 export const normalizeFocus=v=>typeof v==='string'&&FOCUS_PATTERN.test(v)?v:null;
@@ -27,13 +28,14 @@ export function taskPlace(kind,progress,from){
  if(kind==='stumps'||kind==='replant'){const now=((progress.housing?.day||1)-1)*1440+(progress.routine?.minutes||0),plots=felledStages(progress,now).map(([key,stage])=>({stage,...(c=>cellCenter(c.ix,c.iz))(parseCellKey(key))}));
   const want=kind==='stumps'?['stump']:['cleared','stump'];for(const s of want){const here=plots.filter(p=>p.stage===s);if(here.length)return nearest(from,here.map(p=>({x:p.x,z:p.z})))}return nearest(from,markedBlocks(day).map(blockCentre))}
  if(kind==='stack'||kind==='pick'||kind==='deliver'){const w=MAP.offices.find(o=>o.kind==='warehouse');return w?{x:w.door.out.x,z:w.door.out.z}:null} // the warehouse's person door
+ if(DINER_KINDS.includes(kind)){const c=MAP.shops.cafe;return {x:c.x,z:c.z}} // diner D-A2: outdoors a diner task points at the cafe door; inside, dinerTarget (diner-flow.js) points at the table or the pass
  if(kind==='landing')return {x:LANDING.x,z:LANDING.z};
  if(kind==='mill'||kind==='feed_saw'){const s=MAP.landmarks.find(l=>l.id==='sawmill');return s?{x:s.x,z:s.z}:null}
  if(kind==='haul')return {x:(LUMBERYARD.x0+LUMBERYARD.x1)/2,z:(LUMBERYARD.z0+LUMBERYARD.z1)/2};
  if(kind==='load')return {x:BAY.x,z:BAY.z};
  return null;
 }
-const PLACE_NAME={stack:'Warehouse',pick:'Warehouse',deliver:'Warehouse',fell:'Marked block',gather:'Fallen trunks',buck:'Fallen trunks',feed_saw:'Sawmill',stumps:'Stumps',replant:'Cleared ground',landing:'The landing',mill:'Sawmill',haul:'Lumberyard',load:'Timber yard bay'};
+const PLACE_NAME={stack:'Warehouse',pick:'Warehouse',deliver:'Warehouse',fell:'Marked block',gather:'Fallen trunks',buck:'Fallen trunks',feed_saw:'Sawmill',stumps:'Stumps',replant:'Cleared ground',landing:'The landing',mill:'Sawmill',haul:'Lumberyard',load:'Timber yard bay',...Object.fromEntries(DINER_KINDS.map(k=>[k,'Alder Coffee & Diner']))};
 
 export function trackerItems(progress,from,room=null){
  const items=[],shift=progress.shift;
@@ -43,7 +45,7 @@ export function trackerItems(progress,from,room=null){
  }
  {const w=MAP.offices.find(o=>o.kind==='warehouse'),now=Math.floor(((progress.housing?.day||1)-1)*1440+(progress.routine?.minutes||0)); // the customer orders you took at the warehouse's order table
   for(const k of takenBy(progress.companies?.ridgeline,'me'))items.push({id:'ticket:'+k.id,section:'Orders',group:'Orders',title:`Order #${k.id} · ${k.customer}`,detail:k.status==='loaded'?`Deliver ${k.planks} planks to ${destinationName(k.dest)} · ${dueText(k,now)}`:`Pick ${k.planks} planks: ${k.staged} staged · ${k.kind==='pickup'?'pickup':'delivery'} ${dueText(k,now)}`,done:false,pos:k.status==='loaded'&&k.dest&&dropSpot(k.dest)?(({x,z})=>({x,z}))(dropSpot(k.dest)):w?{x:w.door.out.x,z:w.door.out.z}:null,place:k.status==='loaded'?destinationName(k.dest):'Warehouse'})}
- if(room)for(const i of items)if(!i.done){const w=warehouseTarget(i,progress,from,room);i.pos=w.pos;i.place=w.place}
+ if(room)for(const i of items)if(!i.done){const w=room.diner?(DINER_KINDS.includes(i.id.slice(5))?dinerTarget(i.id.slice(5),progress,from):{pos:null,place:''}):warehouseTarget(i,progress,from,room);i.pos=w.pos;i.place=w.place}
  return items;
 }
 // Parcels and vehicles on the way are notifications (Messages), never items (DESIGN 4.19).

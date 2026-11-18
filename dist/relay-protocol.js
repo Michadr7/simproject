@@ -1,6 +1,7 @@
 // The multiplayer wire format and one lobby's rules, shared by the local relay (server.js), the hosted relay (worker/relay.js) and the client (multiplayer.js).
 // Pure: no sockets here. A lobby is given a send(peer, message) and a close(peer, code, reason) and is told when peers join, speak and leave.
 // PROTOCOL changes only when the messages change shape; the relay refuses any other number, so an old open tab is told to update instead of half-working.
+import {applyPetSnapshot} from './pet-view.js'; // PET3: a player's cat rides along with the position (optional field: an old client or relay just ignores it, so PROTOCOL stays)
 export const PROTOCOL=1;
 export const MAX_PLAYERS=8,MAX_MESSAGE_BYTES=4096,HELLO_TIMEOUT_MS=10000;
 export const POSITION_RATE={perSecond:25,burst:10}; // the game sends at most 20 a second while moving
@@ -44,8 +45,8 @@ export function allowPosition(bucket,nowMs){
 // restore: players rebuilt after a hosted relay wakes from hibernation ({peer, id, position, room}).
 export function createLobby({send,close,newId,now=()=>Date.now(),maxPlayers=MAX_PLAYERS,code=null,restore=[]}){
  const players=new Map(); // peer -> {id, position, room, bucket}
- for(const r of restore)players.set(r.peer,{id:r.id,position:r.position,room:r.room,bucket:{}});
- const view=p=>({id:p.id,position:p.position,room:p.room});
+ for(const r of restore)players.set(r.peer,{id:r.id,position:r.position,room:r.room,pet:applyPetSnapshot(r.pet),bucket:{}});
+ const view=p=>p.pet?{id:p.id,position:p.position,room:p.room,pet:p.pet}:{id:p.id,position:p.position,room:p.room};
  // The host is the oldest player still here (the one who created the lobby, or the next oldest if it left). Map order is join order, also after a restore.
  let lastClock=null; // the host's latest clock, so a joiner gets the time at once (aged to now) without waiting for the next broadcast
  const agedClock=()=>{if(!lastClock)return null;const abs=(lastClock.day-1)*1440+lastClock.minutes+Math.max(0,now()-lastClock.at)/1000*CLOCK_GAME_MINUTES_PER_SECOND;const day=Math.floor(abs/1440)+1;return {type:'clock',day,minutes:abs-(day-1)*1440}};
@@ -79,7 +80,7 @@ export function createLobby({send,close,newId,now=()=>Date.now(),maxPlayers=MAX_
   const room=message.room??'street';
   if(!validRoom(room)||!allowPosition(player.bucket,now()))return null;
   // Trust the peer's own id, never a client-supplied identity.
-  player.position={x:message.position.x,y:message.position.y,z:message.position.z};player.room=room;
+  player.position={x:message.position.x,y:message.position.y,z:message.position.z};player.room=room;player.pet=applyPetSnapshot(message.pet); // validated or null: junk never reaches the others
   broadcast({type:'playerMoved',...view(player)},peer);
   return view(player);
  }

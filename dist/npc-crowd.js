@@ -10,7 +10,7 @@ import {crowdWarm} from './npc-routes.js';
 import {crowdPool} from './busyness.js';
 import {chopPose,CARRY,CARRY_DIR,CARRY_POLE,CARRY_GRIP} from './chop-path.js'; // the trail carry (one hand under the head) and the two-handed swing, as the player's axe
 import {LOG_HAND,LOG_POLE,PLANK_HANDS,PLANK_POLES,PLANK_STACK} from './carry.js';
-import {BUCK_CUT_END,SAWMILL_STATIONS,fellerPickMinute,workforcePose} from './workforce-pose.js'; // W4: a feller bucks the trunk after the chop: two downward cuts, then a pause
+import {BUCK_CUT_END,SAWMILL_STATIONS,FELLER_PHASE_MIN,SECONDS_PER_MINUTE,swingAt,fellerPickMinute,workforcePose} from './workforce-pose.js'; // W4: a feller bucks the trunk after the chop: two downward cuts, then a pause
 // W3 (notes/workforce-design.md): the two Ridgeline fellers and the sawyer are pool characters like everyone else (no new SkinnedMesh); npc-walk.js gives them workforce-pose.js's pose
 // (phase chop/carry/bend/walk/saw, prop axe/log/planks). workProps {axe(), log(), planks()} (from game.js) make ONE of each prop, lazily, sharing the game's geometry; each is drawn only while its worker is drawn.
 const BEND_HAND=Object.freeze({x:-.2,y:.5,z:.6}),SAW_HAND=Object.freeze({x:-.25,y:1.1,z:.5}),sawAt={x:0,y:0,z:0};
@@ -49,7 +49,7 @@ export function createNpcCrowd({scene,createCharacter,outfit,population,schedule
   avatar.setCrouch(bend*.3);
   if(prop!=='axe'&&e.align){avatar.alignHeld(null);e.align=false}
   if(prop==='axe'){const swing=p.phase==='chop'||(p.phase==='buck'&&t<BUCK_CUT_END); // the trail carry between swings; chopPose hands it to both hands and back
-   if(swing){chopPose(p.phase==='chop'?t:(t/.4)%1,chopAt);avatar.reach('R',chopAt.point,1,CARRY_POLE);avatar.setTwoHanded(chopAt.twoHand);if(p.phase==='buck'){avatar.setLean(chopAt.lean+.25);avatar.setCrouch(.25)}else avatar.setLean(chopAt.lean)}
+   if(swing){chopPose(p.phase==='chop'?t:swingAt(t*FELLER_PHASE_MIN.buck*SECONDS_PER_MINUTE),chopAt);avatar.reach('R',chopAt.point,1,CARRY_POLE);avatar.setTwoHanded(chopAt.twoHand);if(p.phase==='buck'){avatar.setLean(chopAt.lean+.25);avatar.setCrouch(.25)}else avatar.setLean(chopAt.lean)}
    else{avatar.reach('R',CARRY,1,CARRY_POLE);avatar.setTwoHanded(0);avatar.setLean(bend*.35)}
    const o=props[p.role+'-axe'],align=!swing||chopAt.align>.5;if(o?.children[0])o.children[0].position.z=-(swing?chopAt.grip:CARRY_GRIP); // the axe slides in the hand: choked up to carry, at the butt to swing
    if(e.align!==align){avatar.alignHeld(align?CARRY_DIR:null);e.align=align}}

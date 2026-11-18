@@ -1,7 +1,7 @@
 // Boots the real packaged game (the release dist/index.html points at) in Node with a synthetic DOM and a renderer stub, like startup.mjs.
 // Not a test itself: it lives in tests/support so run-tests.mjs (which only reads tests/*.mjs) leaves it alone.
-import {mkdtemp,readFile,writeFile,cp,rm} from 'node:fs/promises';
-import {skipStarter} from '../../dist/starter.js';import {tmpdir} from 'node:os';import './unref-game-timers.mjs';import {join,resolve} from 'node:path';import {pathToFileURL} from 'node:url';
+import {mkdtemp,readFile,cp,rm} from 'node:fs/promises';
+import {skipStarter} from '../../dist/starter.js';import {tmpdir} from 'node:os';import './unref-game-timers.mjs';import {join} from 'node:path';import {pathToFileURL} from 'node:url';import {writeMockRenderer} from './mock-renderer.mjs';
 
 export class El extends EventTarget{
  constructor(tag='div'){super();this.tag=tag;this.hidden=false;this.value='';this.children=[];this.dataset={};this.style={setProperty(){}};{const set=new Set();this.classList={add:(...n)=>n.forEach(x=>set.add(x)),remove:(...n)=>n.forEach(x=>set.delete(x)),toggle:(n,force)=>{const on=force===undefined?!set.has(n):!!force;on?set.add(n):set.delete(n);return on},contains:n=>set.has(n)}}this.selectors=new Map()}
@@ -19,8 +19,7 @@ export async function bootGame({position=null,play=true,editRelease=async()=>{},
  const dir=await mkdtemp(join(tmpdir(),'city-boot-'));
  const release=html.match(/import\('\.\/(releases\/[^/]+)\/game\.js'/)[1];
  await cp('dist/'+release,dir,{recursive:true});
- const threeURL=pathToFileURL(resolve('dist/vendor/three.module.js')).href;
- await writeFile(join(dir,'vendor/three.module.js'),`export * from '${threeURL}';export class WebGLRenderer{constructor(){this.shadowMap={}}setPixelRatio(){}setSize(){}setViewport(){}clear(){}render(scene){if(scene.name==='menu-scene')globalThis.__menuScene=scene;else globalThis.__renderScene=scene}}`);
+ await writeMockRenderer(dir);
  await editRelease(dir);
  const ids=new Map([...html.matchAll(/id="([^"]+)"/g)].map(m=>[m[1],new El(m[1]==='characterName'?'input':'div')]));
  const created=[],doc=new EventTarget();

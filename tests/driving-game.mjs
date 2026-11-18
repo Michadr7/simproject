@@ -1,5 +1,5 @@
-import {mkdtemp,readFile,writeFile,cp,rm} from 'node:fs/promises';
-import './support/unref-game-timers.mjs';import {tmpdir} from 'node:os';import {join,resolve} from 'node:path';import {pathToFileURL} from 'node:url';import assert from 'node:assert/strict';
+import {mkdtemp,readFile,cp,rm} from 'node:fs/promises';
+import './support/unref-game-timers.mjs';import {writeMockRenderer} from './support/mock-renderer.mjs';import {tmpdir} from 'node:os';import {join} from 'node:path';import {pathToFileURL} from 'node:url';import assert from 'node:assert/strict';
 import * as THREE from '../dist/vendor/three.module.js';
 import {MAP} from '../dist/map-definition.js';
 import {propInfo} from '../dist/props.js';
@@ -18,8 +18,7 @@ const dir=await mkdtemp(join(tmpdir(),'city-driving-'));
 try{
  const release=html.match(/import\('\.\/(releases\/[^/]+)\/game\.js'/)[1];
  await cp('dist/'+release,dir,{recursive:true});
- const threeURL=pathToFileURL(resolve('dist/vendor/three.module.js')).href;
- await writeFile(join(dir,'vendor/three.module.js'),`export * from '${threeURL}';export class WebGLRenderer{constructor(){this.shadowMap={}}setPixelRatio(){}setSize(){}setViewport(){}clear(){}render(scene,camera){globalThis.__renderScene=scene;globalThis.__renderCamera=camera}}`);
+ await writeMockRenderer(dir);
  const ids=new Map([...html.matchAll(/id="([^"]+)"/g)].map(m=>[m[1],new El(m[1]==='characterName'?'input':'div')]));
  const doc=new EventTarget();doc.getElementById=id=>ids.get(id)||null;doc.createElement=tag=>new El(tag);doc.body=new El();doc.querySelectorAll=()=>[];doc.hidden=false;
  const win=new EventTarget();win.matches=()=>false;const store=new Map();

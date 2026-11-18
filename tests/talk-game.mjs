@@ -32,11 +32,13 @@ try{
  key('Escape');assert(talkOpen(ids)&&/See you/.test(talkText(ids)),'Esc says see you');{const m=p().routine.minutes;pump(1);assert(p().routine.minutes>m,'not the pause menu: time runs')}assert(closeTalk(ids,key));
  leave();assert.equal(ids.get('locationName').textContent,'WESTSIDE');
  // ---- Elena: clock out through the talk, then the recent-events ring changes her greeting
- at(14*60+10);enter(36);assert.equal(ids.get('locationName').textContent,'ALDER COFFEE');
- GameState.progress={...p(),cafe:{...p().cafe,employed:true,stage:'clockout',day:p().housing.day,served:2}};const cash0=p().cash;
+ at(14*60+10);enter(36);assert.equal(ids.get('locationName').textContent,'ALDER COFFEE & DINER'); // diner D-A2: the shop is renamed and the cafe shift is the diner career (a shift of two hours on site, paid by the hour)
+ GameState.progress={...p(),careers:{...p().careers,diner:{hired:true,rank:1,rep:10,shifts:0,lastShiftDay:0,granted:[],owed:[]}}};
  go(0,-2);pump(.3);press();assert.equal(talkName(ids),'Elena');
  assert(!talkReplies(ids).some(l=>/produce delivery/.test(l)),'no undeliverable produce reply (B2): '+talkReplies(ids).join(' | '));
- reply(ids,/cafe work/);reply(ids,/Clock me out/);assert.equal(p().cash,cash0+2400,'clocked out and paid');assert(/Shift complete/.test(talkText(ids)),talkText(ids));assert(closeTalk(ids,key));
+ reply(ids,/cafe work/);reply(ids,/Clock me in/);assert.equal(p().shift?.employer,'diner','clocked in through the talk');assert(closeTalk(ids,key));
+ GameState.progress={...p(),shift:{...p().shift,paidMinutes:120}};const cash0=p().cash;
+ press();reply(ids,/cafe work/);reply(ids,/Clock me out/);{const stub=p().payStubs[0];assert(stub.wage>=1600&&stub.total>=1600,'clocked out and paid by the hour: '+JSON.stringify(stub));assert.equal(p().cash,cash0+stub.total,'clocked out and paid');assert(/Paid \$/.test(talkText(ids)),talkText(ids))}assert(closeTalk(ids,key));
  press();assert(/Sharp shift earlier/.test(talkText(ids)),'recent cafe-shift: '+talkText(ids));assert(closeTalk(ids,key));assert(noIsBeats('elena'));
  leave();
  // ---- Hal at story step 3: the groceries hand over his truck; is.loaded is derived each turn and never saved

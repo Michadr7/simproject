@@ -5,7 +5,7 @@
 import {MAP} from './map-definition.js';
 import {employerById,careerOf,employerName,taskKinds,changeRep} from './careers.js';
 import {normalizeTruck} from './customers.js';
-import {formatClock} from './routine.js';import {DINER_ID,DINER_BONUS_PER_RANK,DINER_FAIL_REP} from './diner-job.js';import {PAY,TIMBER_PAY} from './plank-economy.js'; // P-C wiring: a full rack cell pays PAY.rackCell (the planks chain's one table)
+import {formatClock} from './routine.js';import {DINER_ID,DINER_BONUS_PER_RANK,DINER_FAIL_REP,freshDinerShift,normalizeDinerShift,step as dinerStep} from './diner-job.js';import {PAY,TIMBER_PAY} from './plank-economy.js'; // P-C wiring: a full rack cell pays PAY.rackCell (the planks chain's one table)
 
 export const OFF_SITE_LIMIT=60,MIN_COUNTED_SHIFT=60,STUBS_KEPT=7;
 // Task kinds: the piece they count and the amounts handed out (picked by counters, so a save always gets the same day). Placeholders.
@@ -23,14 +23,14 @@ export const TASKS=Object.freeze({
  deliver:{piece:'deliveries',amounts:[1],label:n=>`Deliver ${n} plank order${n===1?'':'s'}`},
  replant:{piece:'saplings',amounts:[6,10],label:n=>`Plant ${n} saplings in a cleared block`},
  // diner D-A (notes/diner-design.md): the Alder Coffee & Diner pool (diner-job.js DINER_RANKS lists them per rank); the pieces are counted by the diner game wiring
- take_order:{piece:'ordersTaken',amounts:[4,6,8],label:n=>`Take  order`},
- serve_plate:{piece:'platesServed',amounts:[4,6,8],label:n=>`Serve  plate`},
- bus_table:{piece:'tablesBused',amounts:[3,5,7],label:n=>`Bus  table`},
- brew_drink:{piece:'drinksBrewed',amounts:[4,6,8],label:n=>`Brew  drink`},
- prep_food:{piece:'foodPrepped',amounts:[3,5,7],label:n=>`Prepare  dish`},
- combo_order:{piece:'combos',amounts:[2,3,4],label:n=>`Make  combo order`},
- bake_pizza:{piece:'pizzasBaked',amounts:[2,3,4],label:n=>`Bake  pizza`},
- rush_hour:{piece:'rushServed',amounts:[6,8,10],label:n=>`Serve  customers in the lunch rush`},
+ take_order:{piece:'ordersTaken',amounts:[4,6,8],label:n=>`Take ${n} order${n===1?'':'s'}`},
+ serve_plate:{piece:'platesServed',amounts:[4,6,8],label:n=>`Serve ${n} order${n===1?'':'s'} to tables`},
+ bus_table:{piece:'tablesBused',amounts:[3,5,7],label:n=>`Clear ${n} table${n===1?'':'s'}`},
+ brew_drink:{piece:'drinksBrewed',amounts:[4,6,8],label:n=>`Make ${n} drink${n===1?'':'s'}`},
+ prep_food:{piece:'foodPrepped',amounts:[3,5,7],label:n=>`Prepare ${n} dish${n===1?'':'es'}`},
+ combo_order:{piece:'combos',amounts:[2,3,4],label:n=>`Make ${n} combo order${n===1?'':'s'}`},
+ bake_pizza:{piece:'pizzasBaked',amounts:[2,3,4],label:n=>`Bake ${n} pizza${n===1?'':'s'}`},
+ rush_hour:{piece:'rushServed',amounts:[6,8,10],label:n=>`Serve ${n} customers in the lunch rush`},
  // RETIRED (quest rework, owner 2026-11-18): never offered (no rank lists it), kept so a shift saved before the rework still loads and counts its landing task
  landing:{piece:'logs',amounts:[8,12,16],label:n=>`Carry ${n} logs to the landing`,retired:true}
 });
@@ -62,8 +62,8 @@ export function normalizeShift(value,careers,map=MAP){
  const n=(x,max)=>Number.isSafeInteger(x)&&x>=0&&x<=max?x:0;
  const tasks=(Array.isArray(v.tasks)?v.tasks:[]).filter(t=>TASKS[t?.kind]).slice(0,6).map(t=>{const target=Math.max(1,n(t.target,1000));return {kind:t.kind,piece:TASKS[t.kind].piece,target,done:Math.min(target,n(t.done,1000))}});
  const pieces={};for(const k of Object.keys(PIECE_PAY))if(n(v.pieces?.[k],1e6))pieces[k]=n(v.pieces[k],1e6);
- const truck=normalizeTruck(v.truck),gathered=(Array.isArray(v.gathered)?v.gathered:[]).filter(id=>Number.isSafeInteger(id)&&id>0).slice(-300),stacked=(Array.isArray(v.stacked)?v.stacked:[]).filter(id=>typeof id==='string'&&/^[A-E][1-8]-[1-3]$/.test(id)).slice(-120); // stacked: rack cells already paid the Stack piece this shift
- return {employer:e.id,day:Math.max(1,n(v.day,1e7)),startedAt:n(v.startedAt,1439),last:n(v.last,1e10),paidMinutes:n(v.paidMinutes,1440),offSiteMinutes:n(v.offSiteMinutes,1440),tasks,pieces,...(truck?{truck}:{}),...(gathered.length?{gathered}:{}),...(stacked.length?{stacked}:{})};
+ const diner=e.id===DINER_ID&&v.diner?normalizeDinerShift(v.diner):null,truck=normalizeTruck(v.truck),gathered=(Array.isArray(v.gathered)?v.gathered:[]).filter(id=>Number.isSafeInteger(id)&&id>0).slice(-300),stacked=(Array.isArray(v.stacked)?v.stacked:[]).filter(id=>typeof id==='string'&&/^[A-E][1-8]-[1-3]$/.test(id)).slice(-120); // stacked: rack cells already paid the Stack piece this shift
+ return {employer:e.id,day:Math.max(1,n(v.day,1e7)),startedAt:n(v.startedAt,1439),last:n(v.last,1e10),paidMinutes:n(v.paidMinutes,1440),offSiteMinutes:n(v.offSiteMinutes,1440),tasks,pieces,...(diner?{diner}:{}),...(truck?{truck}:{}),...(gathered.length?{gathered}:{}),...(stacked.length?{stacked}:{})};
 }
 export function normalizePayStubs(value){
  if(!Array.isArray(value))return [];const n=x=>Number.isSafeInteger(x)&&x>=0&&x<=1e10?x:0;
@@ -81,7 +81,7 @@ export function canClockIn(progress,id,map=MAP){
 export function clockIn(progress,id,map=MAP){
  const ok=canClockIn(progress,id,map);if(ok.error)return ok;
  const c=careerOf(progress,id),day=progress.housing.day,tasks=dailyTasks(ok.employer,c.rank,c.shifts,day);
- return {state:{...progress,shift:{employer:id,day,startedAt:progress.routine.minutes,last:absolute(progress),paidMinutes:0,offSiteMinutes:0,tasks,pieces:{}}},tasks};
+ return {state:{...progress,shift:{employer:id,day,startedAt:progress.routine.minutes,last:absolute(progress),paidMinutes:0,offSiteMinutes:0,tasks,pieces:{},...(id===DINER_ID?{diner:freshDinerShift({day,rank:c.rank,seed:map.seed,startMin:progress.routine.minutes})}:{})}},tasks};
 }
 
 // Pay for a shift: the wage for the minutes on site, the pieces, and the bonus when every task is done.
@@ -111,11 +111,11 @@ export function tickShift(progress,{onSite},map=MAP){
  const sh=progress.shift;if(!sh)return {state:progress};
  const e=employerById(sh.employer,map),now=absolute(progress),end=dayEnd(e,sh.day),upTo=Math.min(now,end),dt=Math.max(0,upTo-sh.last);
  const next={...sh,last:Math.max(sh.last,upTo)};
- if(onSite){next.paidMinutes=Math.min(1440,sh.paidMinutes+dt);next.offSiteMinutes=0}else next.offSiteMinutes=Math.min(1440,sh.offSiteMinutes+dt);
+ let events=[];if(onSite){next.paidMinutes=Math.min(1440,sh.paidMinutes+dt);next.offSiteMinutes=0;if(sh.diner&&dt>0){const d=dinerStep(sh.diner,dt);next.diner=d.state;events=d.events;const lost=events.filter(x=>x.type==='order-expired'||x.type==='seat-expired').length;if(lost)next.pieces={...sh.pieces,failedOrders:(sh.pieces.failedOrders||0)+lost}}}else next.offSiteMinutes=Math.min(1440,sh.offSiteMinutes+dt); // diner: the diner clock only runs while you are on site; a customer who gave up (patience) counts as a failed order (-2 rep at clock-out, never wages)
  const s={...progress,shift:next};
  if(now>=end)return {...clockOut(s,'end-of-day',map)};
  if(next.offSiteMinutes>=OFF_SITE_LIMIT)return {...clockOut(s,'off-site',map)};
- return {state:s};
+ return {state:s,events};
 }
 
 // A piece of work done on shift (a trunk bucked, a plank milled, a load hauled...). Off shift it counts for nothing.
@@ -123,6 +123,13 @@ export function recordPiece(progress,piece,count=1){
  const sh=progress.shift;if(!sh||!(piece in PIECE_PAY)||!(count>0))return {state:progress,finished:[]};
  const finished=[],counts=[piece,...(COUNTS_AS[piece]||[])];const tasks=sh.tasks.map(t=>{if(!counts.includes(t.piece)||t.done>=t.target)return t;const done=Math.min(t.target,t.done+count);if(done>=t.target)finished.push(taskText(t));return {...t,done}});
  return {state:{...progress,shift:{...sh,tasks,pieces:{...sh.pieces,[piece]:(sh.pieces[piece]||0)+count}}},finished};
+}
+
+// Takes back up to `count` of a piece counted this shift (boards or slabs put back into the lumber hut were paid when taken out: no take/store loop). Never below 0.
+export function unrecordPiece(progress,piece,count=1){
+ const sh=progress.shift,n=Math.min(sh?.pieces?.[piece]||0,Number.isFinite(count)?Math.floor(count):0);if(!(n>0))return {state:progress,removed:0};
+ const counts=[piece,...(COUNTS_AS[piece]||[])],tasks=sh.tasks.map(t=>counts.includes(t.piece)?{...t,done:Math.max(0,t.done-n)}:t),pieces={...sh.pieces,[piece]:sh.pieces[piece]-n};if(!pieces[piece])delete pieces[piece];
+ return {state:{...progress,shift:{...sh,tasks,pieces}},removed:n};
 }
 
 // Is (x, z) or the room on one of the employer's sites? Zones and plots are rectangles from the map; rooms are interior scene ids.

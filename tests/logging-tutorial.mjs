@@ -156,4 +156,26 @@ for(const svg of svgs){
  assert.equal(fd.listeners.focusin?.size||0,0,'focusin listener cleaned up');
 }
 
+// 11. Pass-2 copy, no duplicate step numbers, scene geometry & orientation checks
+{
+ const haul=STEPS.find(s=>s.id==='haul');
+ assert.ok(haul.desc.toLowerCase().includes('lumber hut'),'Haul copy references the lumber hut');
+ assert.ok(haul.desc.toLowerCase().includes('boards and slabs'),'Haul copy mentions boards and slabs');
+ assert.ok(!/\bshed\b/i.test(haul.desc),'Haul copy no longer says shed');
+ const railDots=find(overlay,n=>hasCls(n,'lt-rail-dot'));
+ assert.ok(railDots.every(d=>d.textContent===''),'rail dots do not duplicate step numbers');
+ const sceneNums=steps.map(s=>find(find(s,n=>hasCls(n,'lt-scene'))[0],n=>hasCls(n,'lt-step-num'))[0]?.textContent);
+ assert.deepEqual(sceneNums,['1','2','3','4'],'each scene corner displays its unique step number 1..4');
+ assert.equal(find(overlay,n=>hasCls(n,'lt-step-num')).length,4,'no duplicate step-number badges');
+ for(const s of steps){
+  const sceneSvg=find(s,n=>hasCls(n,'lt-scene-svg'))[0];
+  assert.ok(find(sceneSvg,n=>n.tagName==='ellipse').length>=1,`step ${s.attrs['data-step']} scene includes shadow/ring ellipses`);
+ }
+ const fellSvg=find(steps[0],n=>hasCls(n,'lt-scene-svg'))[0];
+ const axeGroup=find(fellSvg,n=>hasCls(n,'lt-anim-axe'))[0];
+ const axeHandle=find(axeGroup,n=>n.tagName==='path')[0]?.attrs?.d||'';
+ const m=axeHandle.match(/^M([\d.]+)\s+([\d.]+)\s+L([\d.]+)\s+([\d.]+)/);
+ assert.ok(m&&Number(m[4])<Number(m[2]),'Fell axe head sits at the TOP of the handle (hy < gy)');
+}
+
 console.log('PASS logging-tutorial');

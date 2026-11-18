@@ -23,8 +23,10 @@ export function createShop(kind){const cafe=kind==='cafe',scene=new T.Group();sc
  box(.9,.55,.55,-1,1.38,-3.5,'#455953');
  }else{for(const x of [-4.6,4.6]){box(1.2,1.8,5,x,.9,-.3,'#718575',true);for(const y of [.55,1.15,1.75]){box(1.3,.08,5.1,x,y,-.3,'#b5baa5');for(let z=-2.4;z<2;z+=.65)box(.75,.32,.42,x,y+.2,z,(Math.round(z*10)%2)?'#c6a25f':'#a56e51')}}}
  const customer=cafe?createCharacter(outfit('female','Casual',{skin:'#d9ae8d',hair:'#bca06a'})):null;
+ const customers=cafe?[customer,createCharacter(outfit('male','Casual_2')),createCharacter(outfit('female','Formal',{hair:'#5a3a28'})),createCharacter(outfit('male','Casual_Hoodie'))]:[]; // diner D-A2: one pooled customer per table (up to four seated), hidden until the shift seats them
  const usedCup=box(.13,.18,.13,-3.8,.97,-.7,'#eee5d1');usedCup.visible=false;
- if(customer){customer.group.name='cafe-customer';customer.group.visible=false;scene.add(customer.group)}
+ const usedCups=[usedCup];if(cafe)for(const [x,z] of [[-3.8,2],[3.8,-.7],[3.8,2]]){const c=box(.13,.18,.13,x,.97,z,'#eee5d1');c.visible=false;usedCups.push(c)} // a used cup on each table that needs clearing
+ for(const c of customers){c.group.name='cafe-customer';c.group.visible=false;scene.add(c.group)}
  const exitSpec=MAP.shops[kind].interior.exitDoor,exitDoor=(exitSpec.kind==='double'?createDoubleDoor:createSlidingDoor)({width:exitSpec.width,height:exitSpec.height});exitDoor.group.position.set(0,0,exitSpec.z);scene.add(exitDoor.group);
- return {scene,occluders,glass,doorBits,customer,usedCup,clerk,exitDoor,blocked(x,z){return Math.abs(x)>5.55||Math.abs(z)>4.55||blocks.some(b=>Math.abs(x-b.x)<b.hx+.32&&Math.abs(z-b.z)<b.hz+.32)}};
+ return {scene,occluders,glass,doorBits,customer,customers,usedCup,usedCups,clerk,exitDoor,blocked(x,z){return Math.abs(x)>5.55||Math.abs(z)>4.55||blocks.some(b=>Math.abs(x-b.x)<b.hx+.32&&Math.abs(z-b.z)<b.hz+.32)}};
 }

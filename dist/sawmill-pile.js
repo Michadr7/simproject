@@ -27,13 +27,13 @@ export function pileSlot(i){
 // The floor rectangle a stack covers.
 export function slotRect(s){const hx=s.rot?PLANK_WIDTH/2:PLANK_LENGTH/2,hz=s.rot?PLANK_LENGTH/2:PLANK_WIDTH/2;return {x0:s.x-hx,x1:s.x+hx,z0:s.z-hz,z1:s.z+hz}}
 // planks -> the stacks to draw: every full stack, plus the odd planks (planks % 4) as a short stack in slot 0 (under the pile), so taking a stack always lifts the TOP one off.
-export function pileStacks(planks){
- const p=int(planks,PILE_SLOTS*PLANKS_PER_STACK),full=Math.floor(p/PLANKS_PER_STACK),odd=p%PLANKS_PER_STACK,n=full+(odd?1:0),out=[];
- for(let i=0;i<n;i++)out.push(Object.freeze({...pileSlot(i),slot:i,count:i===0&&odd?odd:PLANKS_PER_STACK}));
+export function pileStacks(planks,slotAt=pileSlot,slots=PILE_SLOTS){ // slotAt/slots: another place's slots (lumber-hut.js) with the same count mapping
+ const p=int(planks,slots*PLANKS_PER_STACK),full=Math.floor(p/PLANKS_PER_STACK),odd=p%PLANKS_PER_STACK,n=full+(odd?1:0),out=[];
+ for(let i=0;i<n;i++)out.push(Object.freeze({...slotAt(i),slot:i,count:i===0&&odd?odd:PLANKS_PER_STACK}));
  return out;
 }
 // Every plank as {x,y,z,rot,k} (k: 0 = bottom plank of its stack; y = the plank's centre), in the order the stacks were laid.
-export function pilePlanks(planks){const out=[];for(const s of pileStacks(planks))for(let k=0;k<s.count;k++)out.push({x:s.x,y:s.y+PLANK_REST+k*PLANK_PITCH,z:s.z,rot:s.rot,k});return out}
+export function pilePlanks(planks,slotAt,slots){const out=[];for(const s of pileStacks(planks,slotAt,slots))for(let k=0;k<s.count;k++)out.push({x:s.x,y:s.y+PLANK_REST+k*PLANK_PITCH,z:s.z,rot:s.rot,k});return out}
 // The top stack (the one a player takes) and the floor rectangle of everything on the pile; null when empty.
 export const topStack=planks=>{const s=pileStacks(planks);return s.length?s[s.length-1]:null};
 const union=rects=>rects.length?rects.reduce((a,r)=>({x0:Math.min(a.x0,r.x0),x1:Math.max(a.x1,r.x1),z0:Math.min(a.z0,r.z0),z1:Math.max(a.z1,r.z1)})):null;

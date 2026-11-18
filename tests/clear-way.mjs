@@ -15,7 +15,7 @@ const CLEAR=need('clear','clear|shop:market||6'),REPAIR=need('repair','repair|sh
 const quiet=normalizeWorld(null,MAP.seed,DAY);
 
 // the rule itself: exactly clear and repair are off; every other kind is boardable and the kind table is untouched
-assert.deepEqual([...OFF_KINDS],['clear','repair']);
+assert.deepEqual([...OFF_KINDS],['clear','repair','serve']); // diner D-A2: the 'Cover a shift' gig is retired too (the cafe shift is the diner career now)
 for(const k of KINDS)assert.equal(isBoardable(k),!OFF_KINDS.includes(k),k);
 assert.ok(KINDS.includes('clear')&&KINDS.includes('repair')&&TEMPLATES.clear&&TEMPLATES.repair&&typeById('need-clear')&&typeById('need-repair'),'the kinds stay in the tables for old saves and stage P-F');
 

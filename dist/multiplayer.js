@@ -80,10 +80,10 @@ export class MultiplayerClient {
     });
     return true;
   }
-  sendPosition(position, room = 'street') {
+  sendPosition(position, room = 'street', pet = null) { // PET3: pet = petSnapshot (pet-view.js) of your cat while it is shown in your home, else null
     if (this.socket?.readyState !== 1 || !this.id || this.socket.bufferedAmount > 65536) return false;
     if (!position || !['x', 'y', 'z'].every(k => Number.isFinite(position[k]))) return false;
-    this.socket.send(JSON.stringify({type: 'position', position: {x: position.x, y: position.y, z: position.z}, room}));
+    this.socket.send(JSON.stringify({type: 'position', position: {x: position.x, y: position.y, z: position.z}, room, ...(pet ? {pet} : {})}));
     return true;
   }
   // The host's game clock (the relay ignores it from anyone else).

@@ -22,7 +22,7 @@ export const VEHICLE_QTY=12;             // a need of this many units or more is
 export const KEEPERS=Object.freeze({'shop:market':'noah','shop:cafe':'elena','property:farm-house':'hal','property:alder-bakery':'baker'}); // UNVERIFIED ids (gig-clients HAL_ID is a guess too); ctx.keeperOf overrides
 // OFF_KINDS: need kinds that must never become a gig yet, because the game has no real obstacle to clear and nothing broken to repair (the card walked you to a marker and paid you for nothing).
 // Kept in KINDS, TEMPLATES and the gig types so old saves load; stage P-F (construction and plank repairs) wires real obstacles and re-enables them by emptying this list.
-export const OFF_KINDS=Object.freeze(['clear','repair']);
+export const OFF_KINDS=Object.freeze(['clear','repair','serve']); // serve ('Cover a shift', diner D-A2): the cafe shift is a real career now (employer 'diner')
 export const isBoardable=kind=>!OFF_KINDS.includes(kind);
 export const EVENT_KINDS=Object.freeze({'tree-down':'clear','road-blocked':'clear','broken-fence':'repair','stranded-car':'tow'}); // ctx.events kind -> need kind
 // Place points (x,z). market/cafe/farm/gas are the gigs.js origins; the warehouse is its door (map-definition.js); the rest are map landmark centres (FIX-R2). ctx.placePoint(place) overrides.

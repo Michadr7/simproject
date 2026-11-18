@@ -7,7 +7,7 @@ import {LOGS_TO_PLANKS,PLANKS_PER_STACK,TRICKLE_PER_DAY,SAW_MIN_PER_LOG,STARTER_
 import {YARD_MAX_PLANKS,freshYard,normalizeYard,switchSaw,feed,tick,trickle} from './sawmill-yard.js';
 import {normalizeCells,toCompany,intakeFromYard} from './warehouse-intake.js';
 import {totalPlanks,consumeFromRacks,crewPutAway,STAGING_SQUARES,orderPallet,squarePallet,stageByHand,dropOrderPallet} from './pallets.js';
-import {PLACES,PALLET_LINK} from './world-goods.js';
+import {PLACES,PALLET_LINK,SUPPLY} from './world-goods.js';
 import {TICK_MINUTE,normalizeWorld,worldTick} from './world-state.js';
 import {CLAIM_LAPSE_MIN,normalizeNeeds,fill} from './needs.js';
 import {CLOSE,ticketsOf} from './tickets.js';
@@ -30,6 +30,16 @@ export const WORKFORCE_NEED_LOGS_STEP=4;
 export const WORKFORCE_TICKET_GRACE_MIN=180;
 export const WORKFORCE_TICKET_STEP_MIN=30;
 export const WORKFORCE_TICKET_BATCH=PLANKS_PER_STACK;
+// Demand gate (owner 2026-11-18, prompts/opus-timber-storage.md): the crew saws only when the stock (yard + warehouse racks) is below the demand (the warehouse's
+// standing stock plus a day of its use and of the town supply, open orders still to stage, open lumber needs) AND the player's last day of sawing (opts.playerMade planks) does not cover the gap.
+export const WORKFORCE_DAILY_DRAW=(PLACES[PALLET_LINK.place]?.goods[PALLET_LINK.good]?.daily||0)+SUPPLY.filter(s=>s.from===SAWMILL_PLACE&&s.good==='planks').reduce((a,s)=>a+s.perDay,0); // 10 + 6 planks leave the chain a day
+export function lumberDemand(company,needs){
+ let orders=0,owed=0;
+ for(const k of ticketsOf(company||{}).list)if(k.status==='open'||k.status==='taken')orders+=Math.max(0,(k.planks||0)-(k.staged||0));
+ for(const n of Array.isArray(needs)?needs:[])if(n?.status==='open'&&n.good==='planks')owed+=Math.max(0,(n.qty||0)-(n.filled||0));
+ return freeze({demand:WORKFORCE_WAREHOUSE_CAP+WORKFORCE_DAILY_DRAW+orders+owed,orders,needs:owed});
+}
+export const crewShare=(demand,stock,playerMade=0)=>{const gap=Math.max(0,demand-stock),p=Number.isFinite(playerMade)?Math.max(0,playerMade):0;return gap>p?gap-p:0}; // planks the crew should add today
 
 const clamp=(v,a,b)=>Math.min(b,Math.max(a,v));
 const clampInt=(v,lo,hi)=>Number.isFinite(v)?Math.max(lo,Math.min(hi,Math.floor(v))):lo;
@@ -123,9 +133,9 @@ export function workforceDay(state={},opts={}){
  y=trickle(y,day);
  const trickled=y.planks-beforeTrickle;
 
- // 2. Felling & sawing (up to 4 forest logs/day -> 16 planks, paused above 48 yard planks)
- const forestLogs=w.stock[FOREST_PLACE]?.logs||0;
- const capLogs=y.planks<WORKFORCE_YARD_CAP?Math.min(WORKFORCE_LOGS_PER_DAY,forestLogs,Math.ceil((WORKFORCE_YARD_CAP-y.planks)/LOGS_TO_PLANKS),Math.floor((YARD_MAX_PLANKS-y.planks)/LOGS_TO_PLANKS)):0;
+ // 2. Felling & sawing (up to 4 forest logs/day -> 16 planks, paused above 48 yard planks), only for the part of the demand the player leaves (crewShare)
+ const forestLogs=w.stock[FOREST_PLACE]?.logs||0,dem=lumberDemand(co,ns),share=crewShare(dem.demand,y.planks+totalPlanks(co),opts?.playerMade);
+ const capLogs=share>0&&y.planks<WORKFORCE_YARD_CAP?Math.min(WORKFORCE_LOGS_PER_DAY,Math.ceil(share/LOGS_TO_PLANKS),forestLogs,Math.ceil((WORKFORCE_YARD_CAP-y.planks)/LOGS_TO_PLANKS),Math.floor((YARD_MAX_PLANKS-y.planks)/LOGS_TO_PLANKS)):0;
  const fed=capLogs>0?feed(y,capLogs):{state:y,accepted:0};
  const logsFed=fed.accepted;
  if(logsFed>0)w={...w,stock:{...w.stock,[FOREST_PLACE]:{...w.stock[FOREST_PLACE],logs:forestLogs-logsFed}}};
@@ -207,7 +217,7 @@ export function workforceDay(state={},opts={}){
   company:co,
   needs:ns,
   stumps,
-  stats:freeze({trickled,logsFed,sawnPlanks,warehouseConsumed,suppliedToEastbank,hauledToWarehouse,needsFilledPlanks,needsFilledLogs,playerPayCents:0,playerRepDelta:0})
+  stats:freeze({demand:dem.demand,crewShare:share,playerMade:Number.isFinite(opts?.playerMade)?opts.playerMade:0,trickled,logsFed,sawnPlanks,warehouseConsumed,suppliedToEastbank,hauledToWarehouse,needsFilledPlanks,needsFilledLogs,playerPayCents:0,playerRepDelta:0})
  });
 }
 

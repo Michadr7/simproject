@@ -72,7 +72,7 @@ export function talkContext(progress,who,env){
   let memRaw=null;if(isObj(e.mem))memRaw=e.mem;else if(npc&&isObj(npc.mem))memRaw=npc.mem;else if(tp)memRaw={last:tp.last,seen:tp.seen,beats:tp.beats,lastMin:num(tp.lastMin)?tp.lastMin:num(tp.lastDay)&&tp.lastDay>=0?tp.lastDay*1440:-1};
   const metDay=npc&&num(npc.metDay)?npc.metDay:tp&&num(tp.metDay)?tp.metDay:-1;
   let tier='stranger';try{if(isObj(p.standing)&&id)tier=tierFor(p.standing,id)}catch(_){}
-  const st=isObj(p.starter)?p.starter:{},gig=isObj(p.gigs)&&isObj(p.gigs.active)?p.gigs.active:{},cafe=isObj(p.cafe)?p.cafe:{};
+  const st=isObj(p.starter)?p.starter:{},gig=isObj(p.gigs)&&isObj(p.gigs.active)?p.gigs.active:{};
   const hired={};if(isObj(p.careers))for(const k of Object.keys(p.careers)){const c=p.careers[k];if(safeKey(k)&&isObj(c)&&c.hired===true)hired[k]=num(c.rank)?c.rank:1}
   // derived beats: env.flags (an object {skipped:true,...} or a list of names) become the beats 'is.skipped' etc. They are computed fresh each turn by the caller and never saved (remember() keeps only session beats).
   const fl=[];if(Array.isArray(e.flags)){for(const f of e.flags)if(typeof f==='string')fl.push(f.replace(/^is\./,''))}else if(isObj(e.flags)){for(const k of Object.keys(e.flags))if(e.flags[k]===true)fl.push(k)}
@@ -80,7 +80,7 @@ export function talkContext(progress,who,env){
   const mb=cleanMem(memRaw).beats.filter(b=>!derived.includes(b));
   const beats=[...mb.slice(Math.max(0,mb.length-(BEATS_CAP-derived.length))),...derived];
   return baseContext({who:id,day:e.day,minute:e.minute,weather:e.weather,place:e.place,seed:e.seed,recent:e.recent,mem:memRaw,beats,met:metDay>=0,tier,mood:npc&&num(npc.mood)?npc.mood:50,
-   story:st.step,storyDone:st.done===true||st.skipped===true,gig:str(gig.type),gigClient:str(gig.client),hired,cafe:cafe.employed===true?(str(cafe.stage,'off')!=='off'?'onShift':'employed'):'none'});
+   story:st.step,storyDone:st.done===true||st.skipped===true,gig:str(gig.type),gigClient:str(gig.client),hired,cafe:hired.diner?(isObj(p.shift)&&p.shift.employer==='diner'?'onShift':'employed'):'none'}); // diner D-A2: the cafe state comes from the career: none (not hired), employed, onShift
  }catch(_){return baseContext({})}
 }
 // ---- conditions (the closed list the validator checks). A missing or empty cond always holds; an unknown key or a wrong-shaped value never holds.

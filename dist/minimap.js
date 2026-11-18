@@ -72,8 +72,8 @@ export function createMinimap(doc,{canvas,cityRoads=[],buildings=[],trees=()=>[]
   if(!player)return;
   const x=px(player.x),z=pz(player.z),u=(size==='large'?7:5)*dpr;
   // Camera view wedge (the camera looks along -sin(yaw), -cos(yaw)).
-  ctx.fillStyle='#ffffff22';ctx.beginPath();ctx.moveTo(x,z);
-  ctx.arc(x,z,u*4,Math.atan2(-Math.cos(yaw),-Math.sin(yaw))-.5,Math.atan2(-Math.cos(yaw),-Math.sin(yaw))+.5);ctx.closePath();ctx.fill();
+  ctx.fillStyle='rgba(250,205,56,.28)';ctx.beginPath();ctx.moveTo(x,z);
+  ctx.arc(x,z,u*4,Math.atan2(-Math.cos(yaw),-Math.sin(yaw))-.28,Math.atan2(-Math.cos(yaw),-Math.sin(yaw))+.28);ctx.closePath();ctx.fill();
   // Player arrow, pointing the way the character faces (+z is down on the map).
   ctx.save();ctx.translate(x,z);ctx.rotate(Math.PI-heading);
   ctx.fillStyle='#ffffff';ctx.strokeStyle='#0a1118';ctx.lineWidth=dpr;

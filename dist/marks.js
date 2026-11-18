@@ -28,16 +28,13 @@ export function createLandingRing({scene,x,z,y=0,radius=2.4}){
  mesh.name='landing-ring';mesh.position.set(x,y+.05,z);mesh.renderOrder=3;scene.add(mesh);return mesh;
 }
 
-// Company stock you can see (0.35): the log pile at the landing (up to 21 logs drawn, a pyramid of six, five, four ... lying across the ring) and plank stacks on the lumberyard's
-// pallets (up to 54 stacks of four: three side by side, three high, on each of the six pallets). Two InstancedMeshes; refilled only when the count changes.
-export function createStockPiles({scene,groundAt=()=>0,landing,pallets}){
- const logs=new THREE.InstancedMesh(new THREE.CylinderGeometry(.12,.12,1.15,8).rotateZ(Math.PI/2),new THREE.MeshStandardMaterial({color:'#8a6240',roughness:1}),21);
+// Company stock you can see (0.35): plank stacks on the lumberyard's pallets (up to 54 stacks of four: three side by side, three high, on each of the six pallets), used by the
+// lumberyard delivery and the customer-truck loading. One InstancedMesh, refilled only when the count changes. The log pile at the landing (stock-logs) was removed (owner 2026-11-18).
+export function createStockPiles({scene,groundAt=()=>0,pallets}){
  const planks=new THREE.InstancedMesh(new THREE.BoxGeometry(1.2,.38,.22),new THREE.MeshStandardMaterial({color:'#c99f63',roughness:.9}),pallets.length*9);
- logs.name='stock-logs';planks.name='stock-planks';for(const m of [logs,planks]){m.count=0;m.castShadow=m.receiveShadow=true;m.frustumCulled=false;scene.add(m)}
- const m4=new THREE.Matrix4(),q=new THREE.Quaternion(),p=new THREE.Vector3(),one=new THREE.Vector3(1,1,1);let nLogs=-1,nPlanks=-1;
- const logSpots=[];for(let layer=0,row=6;row>0;layer++,row--)for(let i=0;i<row;i++)logSpots.push({x:landing.x+(i-(row-1)/2)*.25,y:.12+layer*.22,z:landing.z});
+ planks.name='stock-planks';planks.count=0;planks.castShadow=planks.receiveShadow=true;planks.frustumCulled=false;scene.add(planks);
+ const m4=new THREE.Matrix4(),q=new THREE.Quaternion(),p=new THREE.Vector3(),one=new THREE.Vector3(1,1,1);let nPlanks=-1;
  const plankSpots=[];for(const pl of pallets)for(let layer=0;layer<3;layer++)for(let i=0;i<3;i++)plankSpots.push({x:pl.x,y:.16+.19+layer*.38,z:pl.z+(i-1)*.24});
- return {logs,planks,
-  setLogs(n){n=Math.min(n,logSpots.length);if(n===nLogs)return;nLogs=n;for(let i=0;i<n;i++){const s=logSpots[i];m4.compose(p.set(s.x,groundAt(s.x,s.z)+s.y,s.z),q,one);logs.setMatrixAt(i,m4)}logs.count=n;logs.instanceMatrix.needsUpdate=true},
+ return {planks,
   setPlanks(planksCount){const n=Math.min(Math.ceil(planksCount/4),plankSpots.length);if(n===nPlanks)return;nPlanks=n;for(let i=0;i<n;i++){const s=plankSpots[i];m4.compose(p.set(s.x,groundAt(s.x,s.z)+s.y,s.z),q,one);planks.setMatrixAt(i,m4)}planks.count=n;planks.instanceMatrix.needsUpdate=true}};
 }

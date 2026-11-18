@@ -157,17 +157,18 @@ const allText=res=>res.lines.map(l=>l.text).join(' ');
  assert(allText(nSkip).includes('$500')&&step(NOAH,nSkip,/Yes, skip/,nc).effects.some(e=>e.kind==='act'&&e.id==='skipStory'));
 }
 
-// 4d. Elena acts & facts ($24, $6).
+// 4d. Elena acts & facts (diner D-A2: eight dollars an hour plus tips replaced the $24 two-customer shift; the lunch is still $6).
 {
  const ec=baseContext({who:'elena',minute:540,place:'cafe',cafe:'none',met:false});
  const oe=openConversation(ELENA,'elena',ec,undefined,{strict:true});
  const ew=step(ELENA,oe,/cafe work/i,ec);
- assert(allText(ew).includes('$24'));
+ assert(allText(ew).includes('Eight dollars an hour plus tips'));
  const eh=step(ELENA,ew,/would like the job/i,ec);
  assert(eh.effects.some(e=>e.kind==='act'&&e.id==='cafe.hire'));
  const ee=baseContext({who:'elena',minute:600,place:'cafe',cafe:'employed',met:true});
  const eWork=step(ELENA,openConversation(ELENA,'elena',ee,undefined,{strict:true}),/cafe work/i,ee);
  assert(step(ELENA,eWork,/Clock me in/,ee).effects.some(e=>e.kind==='act'&&e.id==='cafe.clockin'));
+ assert(step(ELENA,eWork,/due a promotion/,ee).effects.some(e=>e.kind==='act'&&e.id==='cafe.promote'),'the diner promotion is asked at the counter');
  const eMeal=step(ELENA,openConversation(ELENA,'elena',ee,undefined,{strict:true}),/eat and drink/i,ee);
  assert(allText(eMeal).includes('$6')&&step(ELENA,eMeal,/Yes, please/,ee).effects.some(e=>e.kind==='act'&&e.id==='cafe.meal'));
 }

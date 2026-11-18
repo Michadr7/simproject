@@ -37,7 +37,7 @@ try{
  const near=(list,x,z,yaw)=>list.some(o=>Math.hypot(o.x-x,o.z-z)<.02&&Math.abs(Math.atan2(Math.sin(o.yaw-yaw),Math.cos(o.yaw-yaw)))<.02);
  const at=minute=>{GameState.progress={...p(),housing:{...p().housing,day:DAY},routine:{...p().routine,minutes:minute-.3}};GameState.me.position.x=SPOT.x;GameState.me.position.z=SPOT.z;pump(.6)};
  const drawCalls=()=>{let n=0;scene().traverse(o=>{if(!(o.isMesh||o.isPoints))return;for(let x=o;x;x=x.parent)if(!x.visible)return;if(o.isInstancedMesh&&!o.count)return;n++});return n}; // a proxy: visible meshes with something to draw (the stub renderer counts nothing)
- const meshes=()=>{let n=0;scene().traverse(o=>{if(o.isMesh||o.isPoints)n++});return n};
+ const meshes=()=>{let n=0;scene().traverse(o=>{if((o.isMesh||o.isPoints)&&!/^(worker-|axe-)/.test(o.name))n++});return n}; // the crew's hand props (an axe, a log, boards) come and go with what each worker holds (calm crew timing, 2026-11-18): not counted
  at(mCarry2);const before={calls:drawCalls(),meshes:meshes()},logs0=obj('ground-logs').count;
  assert.equal(obj('ground-trunks').count,0,'no trunk while the cutter carries the second log');assert.equal(logs0,1,'only the player\'s own log');
  // bucking: the trunk at the pose

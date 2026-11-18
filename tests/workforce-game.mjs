@@ -24,7 +24,7 @@ const NEAR=['C1','D1','C2','D2'],DAY=[...Array(60).keys()].map(i=>i+3).find(d=>N
 const people={cutter:'ridgeline-fellers#1',hauler:'ridgeline-fellers#2',sawyer:'ridgeline-sawyer'};
 const skinned=s=>s.children.filter(c=>{let k=false;c.traverse(o=>{if(o.isSkinnedMesh)k=true});return k}).length; // characters in the scene (an outfit change may swap a character's part meshes; the number of characters is what must not grow)
 // the first minute from 10:00 the cutter is chopping (crew-speed fix: the slots last as long as their walks, so 10:00 itself may fall on a carry)
-const CUTTER=townPopulation().people.find(q=>q.post===people.cutter),CHOP_MIN=(()=>{for(let m=600;m<715;m+=.05)if(workforcePose({},CUTTER,DAY,m,{seed:MAP.seed}).phase==='chop')return m+.3;throw new Error('no chop before noon')})();
+const CUTTER=townPopulation().people.find(q=>q.post===people.cutter),CHOP_MIN=(()=>{for(const [a,b] of [[600,715],[380,600]])for(let m=a;m<b;m+=.05)if(workforcePose({},CUTTER,DAY,m,{seed:MAP.seed}).phase==='chop')return m+.3;throw new Error('no chop before noon')})(); // calm crew (2026-11-18): a tree's chop+buck is 30 game minutes and the cutter's turn ends by noon, so it may rest from late morning: then the morning's chop
 const shown=o=>{for(let x=o;x;x=x.parent)if(!x.visible)return false;return !!o.parent};
 
 // 1. Pine Ridge at 10:00: the cutter swings an axe at a marked pine, the hauler carries a log (or walks back for one), the sawyer works the shed; the same skinned meshes as at 03:00

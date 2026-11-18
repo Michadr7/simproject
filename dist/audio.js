@@ -1,7 +1,7 @@
 import './legacy-keys.js';
 import {bandOf,misfiring} from './damage.js';
 import {PHONE_CLIPS} from './phone-calls.js'; // PH1: the Call app's sounds (lazy, fallback tones)
-import {SOUND_EXT,CRANK_CLIP,STALL_CLIP,VEHICLE_SET,YELL_CLIPS,SCRAPE_CLIPS,engineFor,crashPlan,pickIndex,createYellGate,createVoices,scrapeGain,scrapeRate,TYRE,TYRE_CLIPS,tyreMix,stepTyreBlend,freshTyreBlend} from './vehicle-sounds.js';import {TIMBER_SHOTS,TIMBER_FILES,CHAINSAW,SAWMILL_BLADE} from './timber-sounds.js';import {STEP_CLIPS,STEP_LEVEL,SWEEP_SHOTS,SWEEP_LOOPS,SWEEP_CORE,stepKind} from './sweep-sounds.js'; // SND1: recorded vehicle, crash and yell sounds (optional: the generated sounds stay as the fallback)
+import {SOUND_EXT,CRANK_CLIP,STALL_CLIP,VEHICLE_SET,YELL_CLIPS,SCRAPE_CLIPS,engineFor,crashPlan,pickIndex,createYellGate,createVoices,scrapeGain,scrapeRate,TYRE,TYRE_CLIPS,tyreMix,stepTyreBlend,freshTyreBlend} from './vehicle-sounds.js';import {TIMBER_SHOTS,TIMBER_FILES,CHAINSAW,SAWMILL_BLADE} from './timber-sounds.js';import {STEP_CLIPS,STEP_LEVEL,SWEEP_SHOTS,SWEEP_LOOPS,SWEEP_CORE,stepKind} from './sweep-sounds.js';import {CAT_SHOTS,CAT_FILES} from './cat-sounds.js'; // SND1: recorded vehicle, crash and yell sounds (optional: the generated sounds stay as the fallback)
 const PHONE_LEVEL={key:.45,pickup:.7,ring:.5,busy:.5,hangup:.7}; // PH1: levels of the recorded phone clips
 const PHONE_TONES={key:{f:[697,1209],on:.09,per:.09,n:1,lv:.12},ring:{f:[440,480],on:1.8,per:2,n:1,lv:.1},busy:{f:[480,620],on:.5,per:1,n:6,lv:.1},pickup:{click:1800},hangup:{click:900}}; // the generated fallbacks (Hz)
 // Sound, generated with the Web Audio API (no sound files). One AudioContext, created on the first click or key (browsers do not allow sound before one); a master volume and a mute that are saved;
@@ -137,6 +137,12 @@ export function createAudio({AudioContextClass,storage,random=Math.random,sample
    const T=SWEEP_SHOTS[name];if(!ctx||settings.muted||!T)return false;if(!tim.warm){tim.warm=true;want(SWEEP_CORE)}want(T.clips);
    const a=at&&listener?attenuate(distance(listener,at)):1;if(a<.02)return false;
    last[name]??=-1;return pickShot(T.clips,name,T.level*a,{rate:1+(random()-.5)*T.jitter*2});
+  },
+  // PET3: a cat one-shot (cat-sounds.js CAT_SHOTS: meow, meow-sad, purr, eat, hiss) at the cat; 'warm' only starts loading the cat clips (on entering a home with a cat).
+  cat(kind,at,listener){
+   if(!ctx||settings.muted)return false;if(kind==='warm'){want(CAT_FILES);return false}const T=CAT_SHOTS[kind];if(!T)return false;want(T.clips);
+   const a=at&&listener?attenuate(distance(listener,at)):1;if(a<.02)return false;
+   last['cat-'+kind]??=-1;return pickShot(T.clips,'cat-'+kind,T.level*a,{rate:1+(random()-.5)*T.jitter*2});
   },
   // A footstep: surface is a terrain.js SURFACE id or 'pave'|'grass'|'gravel'|'wood' (inside a building or on a deck: 'wood'); running makes it louder. One call per step.
   step(surface,at,listener,running=false){

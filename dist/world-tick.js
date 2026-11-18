@@ -12,7 +12,7 @@ import {PALLET_LINK,PLACES,PUMP_PLACE,SOLD_OUT_TEXT} from './world-goods.js';
 import {totalPlanks,crewPutAway} from './pallets.js';
 import {strollDemand} from './stroll-visits.js';
 import {normalizeYard} from './sawmill-yard.js';
-import {workforceDay,pickWorkforceStumps} from './workforce-tick.js'; // W3 (notes/workforce-design.md): the Ridgeline crew's day (trickle, 4 logs sawn, the world tick, 12 planks hauled, late lumber needs)
+import {workforceDay,pickWorkforceStumps} from './workforce-tick.js';import {LOGS_TO_PLANKS} from './plank-economy.js'; // W3 (notes/workforce-design.md): the Ridgeline crew's day (trickle, 4 logs sawn, the world tick, 12 planks hauled, late lumber needs)
 import {plotAt,setPlot} from './grid.js';
 
 export {TICK_MINUTE,CATCH_UP_MAX,SOLD_OUT_TEXT};
@@ -66,7 +66,9 @@ export function runWorldDay(progress,dayNow=tickTargetDay(progress),ctx={}){
  // (production, supply, the warehouse's use taken off the pallets), up to 12 planks hauled from the yard to the racks, and lumber needs left unclaimed for a day filled from real stock. Nothing is made but the trickle.
  const wh=warehouseOf(world,P),claimNow=((Number(P.housing?.day)||1)-1)*1440+(Number(P.routine?.minutes)||0),worldCtx={demand:(place,d)=>counts(d)[place]||0,farmHealth:d=>halSick[d]?SICK_FARM_HEALTH:1,events:ctx.events};
  let yard=yardOf(P,world),company=wh.company,crewNeeds=normalizeNeeds(P.needs);
- for(let d=first;d<=dayNow;d++){const r=workforceDay({world,yard,company,needs:crewNeeds},{day:d,seed,runWorldTick:true,worldCtx,activeNeedId:P.gigs?.active?.needId,claimNow});world=r.world;yard=r.yard;company=r.company;crewNeeds=r.needs}
+ // demand gate: the player's sawing since the last tick (logs sawn past progress.crewMark, 4 planks each) counts for the first ticked day; a save with no mark yet counts 0
+ const playerMade=Number.isSafeInteger(P.crewMark)?Math.max(0,yard.logsSawn-P.crewMark)*LOGS_TO_PLANKS:0;
+ for(let d=first;d<=dayNow;d++){const r=workforceDay({world,yard,company,needs:crewNeeds},{day:d,seed,runWorldTick:true,worldCtx,activeNeedId:P.gigs?.active?.needId,claimNow,playerMade:d===first?playerMade:0});world=r.world;yard=r.yard;company=r.company;crewNeeds=r.needs}
  if(world.day<dayNow)world={...world,day:dayNow};
  if(!wh.real){const d=PLACES[PALLET_LINK.place].goods[PALLET_LINK.good];world={...world,stock:{...world.stock,[PALLET_LINK.place]:{...world.stock[PALLET_LINK.place],[PALLET_LINK.good]:clamp(totalPlanks(company)+wh.spare,0,d.max)}}}}
  // 3. needs: past-due ones close (a late fill, the keeper's mood), then the new day's needs open
@@ -82,7 +84,7 @@ export function runWorldDay(progress,dayNow=tickTargetDay(progress),ctx={}){
    if(PLACE_POINTS[s.place]||ctx.placePoint?.(s.place))needSeeds.push({kind:s.kind,place:s.place,good:s.good,person:s.person,qty:s.qty,dueIn:Math.max(1,s.dueDay-dayNow)})}} // seeds for places with no point on the map would only fill the board
  needs=needsFrom(world,dayNow,{needs,sickNpcs,needSeeds,boardOnly:true,keepNeedIds,events:ctx.events,keeperOf:ctx.keeperOf,placePoint:ctx.placePoint});
  yard=normalizeYard({...yard,planks:world.stock[SAWMILL_PLACE].planks}); // what the supply (and any late restock from the sawmill) took leaves the yard: conserved
- const out={...P,world,needs,npcs,sawmillYard:yard};
+ const out={...P,world,needs,npcs,sawmillYard:yard,crewMark:yard.logsSawn};
  if(wh.real&&company!==wh.company)out.companies={...P.companies,[PALLET_LINK.company]:company};
  const plots=workforceStumps(P,dayNow+1,seed);if(plots!==P.plots)out.plots=plots;
  return out;

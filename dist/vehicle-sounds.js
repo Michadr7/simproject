@@ -3,7 +3,7 @@
 import {PHONE_CLIPS} from './phone-calls.js';
 import {SURFACE} from './terrain.js';
 import {TIMBER_FILES,CONVEYOR_CLIP} from './timber-sounds.js';
-import {SWEEP_FILES} from './sweep-sounds.js';
+import {SWEEP_FILES} from './sweep-sounds.js';import {DINER_FILES} from './diner-sounds.js';import {CAT_FILES} from './cat-sounds.js';
 export const SOUND_EXT='.ogg';
 // One engine loop per vehicle class (a steady idle, 5 to 6 s, cross-faded to loop). The rpm moves its playbackRate between [idle-ish, top]; the load opens a low-pass.
 export const ENGINES=Object.freeze({
@@ -30,7 +30,7 @@ export const VEHICLE_SET=Object.freeze([CRANK_CLIP,STALL_CLIP,...CRASH_CLIPS.med
 // TR6: one tyre loop per kind of ground (mono Ogg, CC0, see ASSETS.md). NOT in VEHICLE_SET: audio.drive() loads only the loop of the ground you are on, the first time you need it.
 export const TYRE_CLIPS=Object.freeze({asphalt:'tyres-asphalt',gravel:'tyres-gravel',grass:'tyres-grass',mud:'tyres-mud'});
 export const TYRE_FILES=Object.freeze(Object.values(TYRE_CLIPS));
-export const ALL_FILES=Object.freeze([...new Set(Object.values(ENGINES).map(e=>e.file)),...VEHICLE_SET,...PHONE_CLIPS,...TYRE_FILES,...TIMBER_FILES,CONVEYOR_CLIP,...SWEEP_FILES]); // PH1: the phone clips are registered here too (loaded by audio.phone(), not on entering a vehicle)
+export const ALL_FILES=Object.freeze([...new Set(Object.values(ENGINES).map(e=>e.file)),...VEHICLE_SET,...PHONE_CLIPS,...TYRE_FILES,...TIMBER_FILES,CONVEYOR_CLIP,...SWEEP_FILES,...DINER_FILES,...CAT_FILES]); // PH1: the phone clips are registered here too (loaded by audio.phone(), not on entering a vehicle)
 // Budgets (tests check the files against them).
 export const MAX_FILE_BYTES=60000,MAX_PAYLOAD_BYTES=3000000,MAX_VOICES=12,MAX_YELLS=2,YELL_MAX_SECONDS=1.2;
 const ENG_BY_CLASS=new Map(Object.entries(ENGINES).map(([k,v])=>[k,v]));

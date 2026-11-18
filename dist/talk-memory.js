@@ -82,10 +82,10 @@ export function migrateTalkMem(npc,progress,who){
  if(who==='walt'&&progress?.careers?.ridgeline?.hired===true)m=recordBeat(m,'walt.hired');
  return m;
 }
-// The whole save: every roster person without a mem is migrated, and Elena is met if you already work for her (cafe.employed). day = the npc day (housing.day - 1). -> new npcs
+// The whole save: every roster person without a mem is migrated, and Elena is met if you already work for her (careers.diner.hired; before D-A2 it was cafe.employed). day = the npc day (housing.day - 1). -> new npcs
 export function migrateNpcsTalk(npcs,progress,day){
  const out={...npcs},d=int(day,0,1e9,0);
- if(progress?.cafe?.employed===true&&out.elena&&!(out.elena.metDay>=0))out.elena={...out.elena,metDay:d};
+ if(progress?.careers?.diner?.hired===true&&out.elena&&!(out.elena.metDay>=0))out.elena={...out.elena,metDay:d};
  for(const id of ROSTER_ORDER){const n=out[id];if(!n||n.mem)continue;const m=migrateTalkMem(n,progress,id);if(!isEmptyMem(m))out[id]={...n,mem:m}}
  return out;
 }

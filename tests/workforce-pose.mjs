@@ -106,14 +106,14 @@ for(let day=1;day<=10;day++){
  for(let m=360;m<=1080;m+=0.25){
   for(const worker of [peter,tom,priya]){
    workforcePose(a,worker,day,m,{seed:MAP.seed});
-   assert.ok(WORK_PHASES.includes(a.phase),`valid phase ${a.phase}`);
-   assert.equal(a.phase,a.tag,'tag mirrors phase');
+   if(a.phase===null)assert.equal(a.tag,'rest','a feller outside its turn rests (calm crew, owner 2026-11-18)');else{assert.ok(WORK_PHASES.includes(a.phase),`valid phase ${a.phase}`);assert.equal(a.phase,a.tag,'tag mirrors phase')}
    assert.ok(Number.isFinite(a.x)&&Number.isFinite(a.z)&&Number.isFinite(a.yaw),'finite coordinates and heading');
    assert.ok(a.progress>=0&&a.progress<=1,'progress in 0..1');
    assert.equal(T.walkable(a.x,a.z),true,`d${day} m${m} ${worker.id} walkable`);
    assert.equal(world.blocked(a.x,a.z),false,`d${day} m${m} ${worker.id} unblocked`);
    seenByRole[a.role].add(a.phase);
   }
+  {let busy=0;for(const w of [peter,tom]){workforcePose(a,w,day,m,{seed:MAP.seed});if(a.phase!==null)busy++}assert.ok(busy<=1,`d${day} m${m}: at most one feller works at a time`)}
  }
 }
 for(const p of ['walk','chop','buck','carry','bend'])assert.ok(seenByRole.cutter.has(p),`cutter hits ${p}`);
@@ -125,7 +125,7 @@ for(const p of ['walk','carry','bend','saw'])assert.ok(seenByRole.sawyer.has(p),
 assert.deepEqual(Object.keys(FELLER_PHASE_MIN),['chop','buck','bend'],'only the station phases have fixed minutes');
 assert.equal(FELLER_TRUNKS_PER_DAY*FELLER_LOGS_PER_TRUNK,4,'2 trunks x 2 logs = 4 logs/day');
 for(const worker of [peter,tom]){
- const slot=fellerSlot(worker,1,400,{seed:MAP.seed}),startM=slot.start,len=slot.end-slot.start;
+ const slot=fellerSlot(worker,1,worker===tom?800:400,{seed:MAP.seed}) /* the hauler works the afternoon (FELLER_CHAIN) */,startM=slot.start,len=slot.end-slot.start;
  assert.ok(len>20&&len<400,`${worker.id} slot length ${len.toFixed(1)} game minutes`);
  const seq=[];let buckCount=0,trunkSeen=false,logs2Seen=false,logs1Seen=false;
  for(let dt=0.05;dt<len;dt+=0.1){

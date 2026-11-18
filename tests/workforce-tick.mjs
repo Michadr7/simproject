@@ -12,8 +12,9 @@ import {makeTicket,takeTicket} from '../dist/tickets.js';
 import {
  SAWMILL_PLACE,FOREST_PLACE,WORKFORCE_YARD_CAP,WORKFORCE_WAREHOUSE_CAP,WORKFORCE_STUMPS_MAX,
  WORKFORCE_NEED_PLANKS_STEP,WORKFORCE_TICKET_BATCH,
- normalizeWorkforce,pickWorkforceStumps,paceComparison,supplyFromStocks,workforceDay,workforceTicketStep
+ normalizeWorkforce,pickWorkforceStumps,paceComparison,supplyFromStocks,workforceDay,workforceTicketStep,lumberDemand,crewShare,WORKFORCE_DAILY_DRAW
 } from '../dist/workforce-tick.js';
+import {runWorldDay} from '../dist/world-tick.js';import {freshProgress,normalizeProgress} from '../dist/jobs.js';
 
 // 1. consumeFromRacks on pallets.js: racks first, preserves order pallets, exact totalPlanks delta
 {
@@ -188,4 +189,28 @@ import {
  assert.ok(!/document|window|three\.module|Date\.now|Math\.random/.test(src),'pure source');
 }
 
-console.log(`PASS workforce-tick.mjs: 14-day log/plank conservation (0 free planks beyond trickle), >=6x player speed (${paceComparison().ratio}x), $0/0-rep crew fills, grace windows, player claims block, empty stock=0, 1/5/30-min frame invariance, pure.`);
+// 7. Demand gate (owner 2026-11-18, prompts/opus-timber-storage.md): the crew saws only for the part of the demand the player leaves.
+{
+ const world=normalizeWorld({day:0,stock:{[FOREST_PLACE]:{logs:60}}},MAP.seed,0),wh=crewPutAway({},56).company,yard=normalizeYard({planks:0,lastTrickleDay:0});
+ assert.equal(WORKFORCE_DAILY_DRAW,16,'a day of warehouse use (10) and town supply (6)');
+ const d=lumberDemand(wh,[]);assert.equal(d.demand,WORKFORCE_WAREHOUSE_CAP+WORKFORCE_DAILY_DRAW);
+ // a full day, the player saws nothing: the off-screen crew covers the demand
+ const idle=workforceDay({world,yard,company:wh,needs:[]},{day:1,seed:MAP.seed,playerMade:0});
+ assert.ok(idle.stats.logsFed>0,'the crew saws when the player does not');assert.ok(idle.yard.planks+totalPlanks(idle.company)>=d.demand,`demand ${d.demand} met: ${idle.yard.planks}+${totalPlanks(idle.company)}`);
+ // the player covered the gap yesterday: the crew adds nothing
+ const busy=workforceDay({world,yard,company:wh,needs:[]},{day:1,seed:MAP.seed,playerMade:16});
+ assert.equal(busy.stats.logsFed,0,'the player alone covers demand: the crew saws nothing');assert.equal(busy.stats.crewShare,0);
+ // half covered: the crew saws only the rest (gap 14, player 8 -> 6 planks -> 2 logs)
+ assert.equal(workforceDay({world,yard,company:wh,needs:[]},{day:1,seed:MAP.seed,playerMade:8}).stats.logsFed,2);
+ // stock already over the demand (open orders and needs raise it)
+ const full=crewPutAway({},80).company;assert.equal(workforceDay({world,yard,company:full,needs:[]},{day:1,seed:MAP.seed}).stats.logsFed,0,'stock covers demand: nothing sawn');
+ assert.equal(lumberDemand(full,[{status:'open',good:'planks',qty:20,filled:4},{status:'open',good:'bread',qty:9,filled:0},{status:'closed',good:'planks',qty:9,filled:0}]).needs,16,'open plank needs count');
+ assert.equal(crewShare(76,70,2),4);assert.equal(crewShare(76,80,0),0);assert.equal(crewShare(76,60,NaN),16);
+ // world-tick.js: the player's logs sawn since progress.crewMark count for the next tick; the tick writes the new mark; jobs.js keeps it
+ const P0=normalizeProgress(freshProgress()),at=(P,day)=>({...P,housing:{...P.housing,day:day+1},routine:{...P.routine,minutes:400}});
+ const w1=normalizeWorld({day:100,stock:{[FOREST_PLACE]:{logs:60},[PALLET_LINK.place]:{planks:56}}},MAP.seed,100);
+ const run=mark=>{const P={...at({...P0,world:w1,sawmillYard:normalizeYard({planks:0,logsSawn:10,lastTrickleDay:100})},101),crewMark:mark};const r=runWorldDay(P);return {crew:r.sawmillYard.logsSawn-10,r}};
+ const lazy=run(10),worker=run(6);assert.ok(lazy.crew>0,'no player sawing since the mark: the crew saws '+lazy.crew);assert.equal(worker.crew,0,'4 logs (16 planks) sawn by the player since the mark: the crew rests');
+ assert.equal(lazy.r.crewMark,lazy.r.sawmillYard.logsSawn,'the tick moves the mark');assert.equal(normalizeProgress(lazy.r).crewMark,lazy.r.crewMark,'saved');assert.equal(normalizeProgress(P0).crewMark,undefined,'absent on a fresh save');
+}
+console.log(`PASS workforce-tick.mjs: 14-day log/plank conservation (0 free planks beyond trickle), >=6x player speed (${paceComparison().ratio}x), $0/0-rep crew fills, grace windows, player claims block, empty stock=0, 1/5/30-min frame invariance, pure; demand gate: an idle player -> the crew meets demand, a player who covers it -> the crew saws nothing, crewMark saved.`);

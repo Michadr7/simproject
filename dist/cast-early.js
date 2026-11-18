@@ -123,7 +123,7 @@ export const NOAH=freezeDeep({
 
   {id:'noah.town',say:[
    {if:{hired:false},t:['Walt Hargrove at Ridgeline Timber in Eastbank is taking on crew, six AM to six PM.','Starts at eight dollars an hour plus three dollars per marked pine!']},
-   {if:{cafe:'none'},t:['Elena next door at Alder Coffee was asking for an extra hand behind the espresso bar.','Her shifts pay twenty-four dollars for serving two regulars and wiping down.']},
+   {if:{cafe:'none'},t:['Elena next door at Alder Coffee & Diner is hiring waiters: eight dollars an hour plus tips.','Ask her at the counter any day from eight.']},
    {t:['Eastbank fuel tanker rolls in once a week with four-dollar gas and four-twenty diesel.','Do not run a truck dry north of the bridge!']}
   ],replies:[
    {label:'How did Sophie find her groceries?',if:{story:[2,10],notBeat:'is.skipped'},go:'noah.sophie'},
@@ -385,15 +385,15 @@ export const ELENA=freezeDeep({
  name:'Elena',
  personId:'oak-apartments/7#1',
  voice:'Brisk, warm, organised Alder Coffee manager who takes pride in her espresso and keeps one eye on the tables.',
- facts:{cafe:'Alder Coffee',hours:'8 AM to 6 PM',wage:'$24'},
+ facts:{cafe:'Alder Coffee & Diner',hours:'8 AM to 6 PM',wage:'$8 an hour plus tips'},
  bye:[
-  {if:{cafe:'onShift'},t:'Ticket is on your left—keep the portafilter clean!'},
+  {if:{cafe:'onShift'},t:'Tables are waiting—keep those orders moving!'},
   {t:'Stop by for an espresso sometime.'}
  ],
  nodes:[
   {id:'elena.door',entry:true,when:{place:['door','doorway']},do:[{meet:true}],say:[
    {if:{period:'night'},t:['Quiet down here after closing! Flat seven smells faintly of roasted beans, sorry.','Cafe opens again at eight.']},
-   {if:{cafe:'employed'},t:['Fancy bumping into my cafe assistant! Do not forget—shifts start at eight.']},
+   {if:{cafe:'employed'},t:['Fancy bumping into my waiter! Do not forget—shifts start at eight.']},
    {t:['Oh, hello! I am Elena, Flat seven—and manager over at Alder Coffee.','Pop over to the counter between eight and six if you want a coffee or work.']}
   ],replies:[
    {label:'How are shifts going at Alder Coffee?',go:'elena.work'},
@@ -405,10 +405,10 @@ export const ELENA=freezeDeep({
    {if:{met:false},w:5,t:['Welcome to Alder Coffee! I am Elena, I manage the counter and the machine here.','Pull up a seat for a hot meal, or ask if you want shifts behind the bar.']},
    {if:{gig:'need-restock',gigClient:'elena'},w:6,t:['Wait—are you carrying milk or egg crates for my cafe counter? Drop them in and we will square up.']},
    {if:{story:[2,2],storyDone:false},w:5,t:['Noah tell you to fuel up before walking out to Willow Farm?','Our six-dollar sandwich and coffee will set your feet straight for the hike.']},
-   {if:{cafe:'onShift'},w:4,t:['Good timing! Two tables to keep happy and I have one eye on the timer.','Need your next task or ready to square up your shift?']},
-   {if:{recent:'cafe-shift',cafe:'employed'},w:3,t:['Sharp shift earlier! The cups are stacked and Maya said it was the best latte all week.']},
-   {if:{cafe:'employed',period:'morning'},w:3,t:['Morning! Machine is hot and we open for shift clock-ins from eight AM until four.','Ready to step behind the counter?']},
-   {if:{cafe:'employed'},w:2,t:['Good to see you back at the counter. Plenty of steady customers on Oak Street today.','Clocking in for $24, or stopping for food?']},
+   {if:{cafe:'onShift'},w:4,t:['Good timing! The tables are filling up and I have one eye on the timer.','Your tickets are on the left, or square up your shift when you are done.']},
+   {if:{recent:'cafe-shift',cafe:'employed'},w:3,t:['Sharp shift earlier! The tables were spotless and the tips were generous.']},
+   {if:{cafe:'employed',period:'morning'},w:3,t:['Morning! The machine is hot and shift clock-ins run from eight AM until five.','Ready to step behind the counter?']},
+   {if:{cafe:'employed'},w:2,t:['Good to see you back at the counter. Plenty of steady customers on Oak Street today.','Clocking in, or stopping for food?']},
    {if:{mood:['miserable','low']},w:1,t:['Rush nearly had me behind two customers short, though the roast is still spot-on.','What can I brew for you?']},
    {t:['Hi there! Fresh roast is on and the tables are spotless.','What can I help you with?']}
   ],replies:[
@@ -420,8 +420,8 @@ export const ELENA=freezeDeep({
   ]},
 
   {id:'elena.open',entry:true,do:[{meet:true}],say:[
-   {if:{cafe:'employed',hour:[5,8]},t:['Morning! See you behind the machine at eight sharp—customers will not wait for their lattes.']},
-   {if:{cafe:'employed'},t:['Good catching you outside! Remember shift clock-in closes at four PM, and I pay $24 a shift.']},
+   {if:{cafe:'employed',hour:[5,8]},t:['Morning! See you at the counter at eight sharp—the first tables fill fast.']},
+   {if:{cafe:'employed'},t:['Good catching you outside! Remember the last clock-in is five PM, and it is eight dollars an hour plus tips.']},
    {if:{period:['evening','night']},t:['Just locked the double glass doors after six. Nothing beats fresh air after steaming milk all day!']},
    {if:{met:false},t:['Hi! I am Elena, I manage Alder Coffee a few doors down from 18 Oak Street.','Drop in between eight AM and six PM sometime.']},
    {t:['Hello there! Walking past Alder Coffee today, or headed up Oak Street?']}
@@ -432,28 +432,29 @@ export const ELENA=freezeDeep({
   ]},
 
   {id:'elena.work',say:[
-   {if:{cafe:'onShift'},t:['Check the order on your left: take Maya or Theo’s order, brew latte or espresso at the machine, serve, then wipe the table.','Clock back out with me once both leave to collect your $24 wages.']},
-   {if:{cafe:'employed'},t:['You can clock in from 8 AM to 4 PM. Serve two customers, reset their tables, and return here for $24 pay.']},
-   {t:['I need a cafe assistant to take orders, brew espresso or latte and keep the tables cleared.','A completed two-customer shift pays $24 straight away, same day.']}
+   {if:{cafe:'onShift'},t:['Tables first: take the order, wait for it at the pass, then bring it over and clear the table once they leave.','Clock out with me or on your phone when you are done, and I will pay your wage, your tips and the bonus.']},
+   {if:{cafe:'employed'},t:['You can clock in from 8 AM to 5 PM. Take orders, serve the tables and clear them for your wage and tips.']},
+   {t:['I need waiters to take orders, bring the plates and keep the tables cleared.','Eight dollars an hour plus tips, and a bonus when you finish all your tasks. Do well and you move up to the espresso bar and the kitchen.']}
   ],replies:[
    {label:'I would like the job.',if:{cafe:'none',place:['cafe','counter']},act:'cafe.hire',go:'elena.hired'},
    {label:'Clock me in for my shift.',if:{cafe:'employed',place:['cafe','counter']},act:'cafe.clockin'},
-   {label:'Clock me out and pay $24.',if:{cafe:'onShift',place:['cafe','counter']},act:'cafe.clockout'},
-   {label:'Walk me through what Maya and Theo order.',go:'elena.feedback'},
+   {label:'Clock me out and pay me.',if:{cafe:'onShift',place:['cafe','counter']},act:'cafe.clockout'},
+   {label:'Am I due a promotion?',if:{cafe:'employed',place:['cafe','counter']},act:'cafe.promote'},
+   {label:'How does a shift work?',go:'elena.feedback'},
    {label:'Leave the counter clear for now.',go:'elena.wrap'}
   ]},
 
   {id:'elena.hired',say:[
-   {t:['Wonderful—welcome aboard! Whenever you are ready between eight and four, talk to me here to clock in.']}
+   {t:['Wonderful—welcome aboard! Whenever you are ready between eight and five, talk to me here to clock in.']}
   ],replies:[
    {label:'Clock me in right now.',if:{place:['cafe','counter']},act:'cafe.clockin'},
-   {label:'Walk me through Maya and Theo’s orders.',go:'elena.feedback'},
+   {label:'How does a shift work?',go:'elena.feedback'},
    {label:'See you behind the bar.',go:'elena.wrap'}
   ]},
 
   {id:'elena.feedback',say:[
-   {if:{cafe:'employed'},t:['Maya always asks for a latte and Theo takes an espresso. Never mix up the roast on the machine!','Wipe the mug off the table right after each leaves.']},
-   {t:['Only two tables per shift—Maya orders a latte, Theo orders an espresso.','Quick, calm work, and a clean bench keeps the regulars happy.']}
+   {if:{cafe:'employed'},t:['Up to four tables. Take the order at the table, collect it at the pass, serve it and clear the table when they leave.','Quick service earns the best tips, and a dish that waits too long costs you a tip and some reputation.']},
+   {t:['Two to four tables at a time: take the order, collect it at the pass, serve it and clear the table afterwards.','Wages are by the hour, tips are on top, and the bonus comes when you finish the day’s tasks.']}
   ],replies:[
    {label:'Tell me about your sandwich and coffee.',go:'elena.meal'},
    {label:'How are supplies holding up?',go:'elena.stock'},

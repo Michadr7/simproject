@@ -14,9 +14,15 @@ export const FELLER_LOGS_PER_TRUNK=2,FELLER_TRUNKS_PER_DAY=2,BUCK_CUT_END=.8;
 // Owner eye-check 0.35.20: the crew walked at up to 138 m/s because every walk and carry had a fixed number of game minutes. Now only the station phases
 // have fixed minutes; a walk lasts its route length at WALK_SPEED and a carry at HAUL_SPEED (game minutes = metres / speed * GAME_MINUTES_PER_SECOND),
 // so a feller's slot (walk to a tree, chop, buck, two carries to the log deck and back) is as long as its routes need (about 40-200 game minutes).
-export const FELLER_PHASE_MIN=Object.freeze({chop:2.4,buck:1.5,bend:.4});
-export const FELLER_CHAIN_START=Object.freeze({cutter:360,hauler:330}); // the minute each feller's first slot starts (the hauler half a near slot ahead)
-export const SWING_SECONDS=.74;
+// Calm crew (owner 2026-11-18, prompts/opus-timber-storage.md): the game clock runs GAME_MINUTES_PER_SECOND = 0.5 (2 real seconds a game minute), so a tree's chop + buck
+// (30 game minutes) takes the visible feller a real minute, each bend 3 s. Only ONE feller works at a time: the cutter in the morning, the hauler in the afternoon
+// (FELLER_CHAIN); outside its turn a feller stands at rest (phase null, tag 'rest'). The visible crew makes no stock: workforce-tick.js is the economy.
+export const FELLER_PHASE_MIN=Object.freeze({chop:18,buck:12,bend:1.5});
+export const FELLER_CHAIN=Object.freeze({cutter:Object.freeze([360,720]),hauler:Object.freeze([720,1080])}); // [first slot start, last slot end] in game minutes
+export const FELLER_CHAIN_START=Object.freeze({cutter:FELLER_CHAIN.cutter[0],hauler:FELLER_CHAIN.hauler[0]});
+export const SWING_SECONDS=.74,CHOP_BEAT_SECONDS=1.6; // one swing, then a breath before the next
+export const swingAt=sec=>{const b=sec>0?sec%CHOP_BEAT_SECONDS:0;return b<SWING_SECONDS?b/SWING_SECONDS:0}; // the swing's progress at sec real seconds into a chop (0 while resting between swings)
+export const SAWYER_PHASE_MIN=Object.freeze({pick:1.5,feed:2,saw:12,belt:1.5,hut:1.5}); // the sawyer's station minutes (a log fed, sawn, the boards carried into the lumber hut)
 export const HAUL_SPEED=+(WALK_SPEED*LOG_CARRY_FACTOR).toFixed(4);
 export const SECONDS_PER_MINUTE=1/GAME_MINUTES_PER_SECOND;
 export const minutesFor=(metres,speed)=>metres/speed*GAME_MINUTES_PER_SECOND; // game minutes to cover `metres` at `speed` m/s
@@ -44,7 +50,8 @@ export const SAWMILL_STATIONS=Object.freeze({
  se:pt(108.2,-271.6),
  belt:pt(107.2,-271.6,106.3,-271.6),
  ep:pt(108.2,-275.5),
- pile:pt(105.6,-275.5,104.0,-272.0)
+ yard:pt(114.0,-273.6),
+ hut:pt(124.0,-275.2,124.0,-278.0) // the lumber hut's south end: the boards go in here (owner 2026-11-18: the sawmill deck is no store)
 });
 
 export const HAUL_WAYPOINTS=Object.freeze({
@@ -98,11 +105,11 @@ const HAUL_ROUTES=Object.freeze(Object.fromEntries(BLOCK_IDS.map(id=>{
 const SAW_W1=buildPoly([S.logDeck,S.logIn]);
 const SAW_W2=buildPoly([S.logIn,S.logDeck,S.nw,S.sw]);
 const SAW_W3=buildPoly([S.sw,S.nw,S.ne,S.se,S.belt]);
-const SAW_W4=buildPoly([S.belt,S.se,S.ep,S.pile]);
-const SAW_W5=buildPoly([S.pile,S.ep,S.ne,S.logDeck]);
+const SAW_W4=buildPoly([S.belt,S.se,S.yard,S.hut]);
+const SAW_W5=buildPoly([S.hut,S.yard,S.ep,S.ne,S.logDeck]);
 // The sawyer's loop: station minutes fixed, the five walks as long as their routes need. SAW_T: the minute each step ends.
-const SAW_T=(()=>{let t=0;const end=d=>(t+=d);return Object.freeze({pick:end(.35),w1:end(minutesFor(SAW_W1.length,HAUL_SPEED)),feed:end(.4),w2:end(minutesFor(SAW_W2.length,WALK_SPEED)),
- saw:end(1.1),w3:end(minutesFor(SAW_W3.length,WALK_SPEED)),belt:end(.3),w4:end(minutesFor(SAW_W4.length,HAUL_SPEED)),pile:end(.3),w5:end(minutesFor(SAW_W5.length,WALK_SPEED))})})();
+const SP=SAWYER_PHASE_MIN,SAW_T=(()=>{let t=0;const end=d=>(t+=d);return Object.freeze({pick:end(SP.pick),w1:end(minutesFor(SAW_W1.length,HAUL_SPEED)),feed:end(SP.feed),w2:end(minutesFor(SAW_W2.length,WALK_SPEED)),
+ saw:end(SP.saw),w3:end(minutesFor(SAW_W3.length,WALK_SPEED)),belt:end(SP.belt),w4:end(minutesFor(SAW_W4.length,HAUL_SPEED)),pile:end(SP.hut),w5:end(minutesFor(SAW_W5.length,WALK_SPEED))})})();
 export const SAWYER_CYCLE_MIN=SAW_T.w5;
 
 const clamp01=x=>x<=0?0:x>=1?1:x;
@@ -146,6 +153,8 @@ export function isOutdoorWork(target,person){
 }
 
 function clearTrunk(out){out.trunkX=NaN;out.trunkZ=NaN;out.trunkYaw=NaN;out.groundLogs=0}
+// Off duty inside the work hours (the other feller's turn): standing still where the last slot ended (or where the first will start), facing its tree.
+function restAt(out,role,at){out.x=at.x;out.z=at.z;out.yaw=Number.isFinite(at.tx)?Math.atan2(at.tx-at.x,at.tz-at.z):0;out.phase=null;out.tag='rest';out.moving=false;out.speed=0;out.progress=0;out.prop=null;out.role=role;out.state='stand';out.targetX=NaN;out.targetZ=NaN;clearTrunk(out);return out}
 
 function setStation(out,role,station,phase,prog,prop){
  out.x=station.x;out.z=station.z;
@@ -195,21 +204,24 @@ function walkToTree(out,L){
 // Finds the slot holding game minute m: slots run back to back from FELLER_CHAIN_START[role], each as long as its walks need. Writes into L (a
 // module-private scratch, so nothing is allocated per call; the result is a pure function of the arguments) and returns it.
 const MAX_SLOTS=64,P=FELLER_PHASE_MIN,FIXED_MIN=P.chop+P.buck+4*P.bend;
-const SLOT={k:0,start:0,end:0,u:0,blk:'',prevBlk:'',prev:null,curr:null,change:false,walkLen:0,haulLen:0,walk:0,carry:0,back:0};
+const SLOT={k:0,start:0,end:0,u:0,blk:'',prevBlk:'',prev:null,curr:null,change:false,walkLen:0,haulLen:0,walk:0,carry:0,back:0,rest:null};
 function locateSlot(id,day,m,seed,role){
- const L=SLOT,blocks=MARKED_PAIRS[(day-1)%100];
- let start=FELLER_CHAIN_START[role],prevBlk=blocks[0],prev=BLOCK_TREES[prevBlk][(hashOf(seed,id,day,'tree',0)+1)%BLOCK_TREES[prevBlk].length];
+ const L=SLOT,blocks=MARKED_PAIRS[(day-1)%100],CH=FELLER_CHAIN[role],first=CH[0],last=CH[1];
+ let start=first,prevBlk=blocks[start<720?0:1],prev=BLOCK_TREES[prevBlk][0]; // a feller's turn starts at its block's entry tree (where it rests before its turn)
+ L.rest=null;if(m<start){L.rest=prev;L.start=L.end=NaN;return L}
  for(let k=0;;k++){
   const blk=blocks[start<720?0:1],trees=BLOCK_TREES[blk],curr=trees[hashOf(seed,id,day,'tree',k)%trees.length],change=blk!==prevBlk;
   const walkLen=change?dist(prev,BLOCK_TREES[prevBlk][0])+HAUL_ROUTES[prevBlk].toDeck.length+HAUL_ROUTES[blk].fromDeck.length+dist(trees[0],curr):dist(prev,curr);
   const haulLen=haulLength(blk,curr),walk=minutesFor(walkLen,WALK_SPEED),carry=minutesFor(haulLen,HAUL_SPEED),back=minutesFor(haulLen,WALK_SPEED);
   const end=start+walk+FIXED_MIN+2*(carry+back);
+  if(k>0&&end>last){L.rest=prev;L.start=L.end=NaN;return L} // the turn is over: the next slot would run past it
   if(m<end||k>=MAX_SLOTS){L.k=k;L.start=start;L.end=end;L.blk=blk;L.prevBlk=prevBlk;L.prev=prev;L.curr=curr;L.change=change;L.walkLen=walkLen;L.haulLen=haulLen;L.walk=walk;L.carry=carry;L.back=back;return L}
   start=end;prevBlk=blk;prev=curr;
  }
 }
 function fellerPose(out,id,day,m,seed,role){
- const L=locateSlot(id,day,m,seed,role),t=Math.max(0,m-L.start),{blk,curr}=L,e1=BLOCK_TREES[blk][0];
+ const L=locateSlot(id,day,m,seed,role);if(L.rest)return restAt(out,role,L.rest);
+ const t=Math.max(0,m-L.start),{blk,curr}=L,e1=BLOCK_TREES[blk][0];
  let acc=L.walk;
  if(t<acc){
   L.u=t/L.walk;walkToTree(out,L);
@@ -219,7 +231,7 @@ function fellerPose(out,id,day,m,seed,role){
   return out;
  }
  if(t<(acc+=P.chop)){
-  const swingProg=((t-L.walk)*SECONDS_PER_MINUTE/SWING_SECONDS)%1;
+  const swingProg=swingAt((t-L.walk)*SECONDS_PER_MINUTE);
   setStation(out,role,curr,'chop',swingProg,'axe');
   clearTrunk(out);
   return out;
@@ -257,8 +269,8 @@ function sawyerPose(out,id,day,m,seed){
  if(t<T.saw){setStation(out,'sawyer',S.sw,'saw',(t-T.w2)/(T.saw-T.w2),null);return out}
  if(t<T.w3){const u=(t-T.saw)/(T.w3-T.saw);samplePoly(SAW_W3,u,out,S.belt.tx,S.belt.tz);out.phase='walk';out.tag='walk';out.moving=true;out.speed=WALK_SPEED;out.progress=clamp01(u);out.prop=null;out.role='sawyer';out.state='walk';out.targetX=S.belt.tx;out.targetZ=S.belt.tz;return out}
  if(t<T.belt){setStation(out,'sawyer',S.belt,'bend',(t-T.w3)/(T.belt-T.w3),'planks');return out}
- if(t<T.w4){const u=(t-T.belt)/(T.w4-T.belt);samplePoly(SAW_W4,u,out,S.pile.tx,S.pile.tz);out.phase='carry';out.tag='carry';out.moving=true;out.speed=HAUL_SPEED;out.progress=clamp01(u);out.prop='planks';out.role='sawyer';out.state='walk';out.targetX=S.pile.tx;out.targetZ=S.pile.tz;return out}
- if(t<T.pile){setStation(out,'sawyer',S.pile,'bend',(t-T.w4)/(T.pile-T.w4),'planks');return out}
+ if(t<T.w4){const u=(t-T.belt)/(T.w4-T.belt);samplePoly(SAW_W4,u,out,S.hut.tx,S.hut.tz);out.phase='carry';out.tag='carry';out.moving=true;out.speed=HAUL_SPEED;out.progress=clamp01(u);out.prop='planks';out.role='sawyer';out.state='walk';out.targetX=S.hut.tx;out.targetZ=S.hut.tz;return out}
+ if(t<T.pile){setStation(out,'sawyer',S.hut,'bend',(t-T.w4)/(T.pile-T.w4),'planks');return out}
  const u=(t-T.pile)/(T.w5-T.pile);samplePoly(SAW_W5,u,out,S.logDeck.tx,S.logDeck.tz);
  out.phase='walk';out.tag='walk';out.moving=true;out.speed=WALK_SPEED;out.progress=clamp01(u);out.prop=null;out.role='sawyer';out.state='walk';out.targetX=S.logDeck.tx;out.targetZ=S.logDeck.tz;
  return out;
@@ -269,9 +281,9 @@ function sawyerPose(out,id,day,m,seed){
 export function fellerPickMinute(person,day=1,minute=720,ctx=null){
  const role=workerRoleOf(person);if(role!=='cutter'&&role!=='hauler')return NaN;
  const d=Number.isFinite(day)?Math.max(1,Math.floor(day)):1,seed=Number.isFinite(ctx?.seed)?ctx.seed:MAP.seed,id=typeof person==='string'?person:(person.id||person.post||role);
- const L=locateSlot(id,d,wrapMin(minute),seed,role);return L.start+L.walk+P.chop+P.buck+P.bend/2;
+ const L=locateSlot(id,d,wrapMin(minute),seed,role);return L.rest?NaN:L.start+L.walk+P.chop+P.buck+P.bend/2;
 }
-// The start and end minute of the feller's slot holding `minute` (tests and debugging): fills out.start/out.end and returns out.
+// The start and end minute of the feller's slot holding `minute` (tests and debugging): fills out.start/out.end (NaN while the feller rests) and returns out.
 export function fellerSlot(person,day=1,minute=720,ctx=null,out={start:NaN,end:NaN}){
  const role=workerRoleOf(person);if(role!=='cutter'&&role!=='hauler'){out.start=out.end=NaN;return out}
  const d=Number.isFinite(day)?Math.max(1,Math.floor(day)):1,seed=Number.isFinite(ctx?.seed)?ctx.seed:MAP.seed,id=typeof person==='string'?person:(person.id||person.post||role);

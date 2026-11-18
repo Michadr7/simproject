@@ -1,5 +1,5 @@
 
-import {WAREHOUSE_INTERIOR} from './warehouse-layout.js';// The world as data. world.js, the minimap, the shops and game.js read this file; nothing else hard-codes zone edges, roads,
+import {WAREHOUSE_INTERIOR} from './warehouse-layout.js';import {DINER_RANKS,DINER_HOURS} from './diner-job.js';// The world as data. world.js, the minimap, the shops and game.js read this file; nothing else hard-codes zone edges, roads,
 // fields, shop doors or building footprints. Coordinates are metres: +x east, -z north (the default camera looks north up
 // Oak Street). Adding a district means adding data here (and, later, scenery code that reads it), not editing the engine.
 // The map is flat: there is no elevation in version 1.
@@ -175,7 +175,7 @@ const interior=(doorKind='sliding')=>({origin:{y:.165,z:-13.5},frontWallZ:5,entr
 // front, hours are [opens, closes) in minutes since midnight, sign is the text over the door.
 const shops={
  market:{name:'Corner Market',x:19,z:-6.3,doorZ:-8.46,door:{width:2.3,height:2.5},hours:[420,1320],sign:'MARKET 7AM–10PM',doorway:doorway(),interior:interior()},
- cafe:{name:'Alder Coffee',x:36,z:-6.3,doorZ:-8.46,door:{width:2.3,height:2.5},hours:[480,1080],sign:'CAFE 8AM–6PM',doorway:doorway(),interior:interior('double')}
+ cafe:{name:'Alder Coffee & Diner',x:36,z:-6.3,doorZ:-8.46,door:{width:2.3,height:2.5},hours:[480,1080],sign:'CAFE 8AM–6PM',doorway:doorway(),interior:interior('double')}
 };
 
 // Land set aside for later (ownership, preset buildings). Whole-cell rectangles; kind is 'residential', 'commercial' or
@@ -271,7 +271,7 @@ function deepFreeze(value){if(value&&typeof value==='object'&&!Object.isFrozen(v
 // A vacant house may carry a `listing` (weekly rent, deposit, price, all in cents): the Homes app on the phone offers it, and ownership.js turns it into `progress.properties` (0.30).
 const properties=[
  {id:'market',type:'shop',name:'Corner Market',access:'public',owner:{type:'city'}},
- {id:'cafe',type:'shop',name:'Alder Coffee',access:'public',owner:{type:'city'}},
+ {id:'cafe',type:'shop',name:'Alder Coffee & Diner',access:'public',owner:{type:'city'}},
  {id:'studio',type:'apartment',name:'Studio 2B',access:'tenant',owner:{type:'landlord',name:'the landlord'}},
  // Cedar Heights: R1, R3, R5 and R7 are vacant (for sale); the others belong to residents.
  {id:'house-r1',type:'house',size:'small',landmark:'house-r1',plot:'R1',name:'1 Cedar Loop',access:'owner',owner:null,listing:{rentCents:16000,depositCents:32000,priceCents:1250000}},
@@ -413,7 +413,8 @@ const employers=[ {id:'ridgeline',name:'Ridgeline Timber Co.',skill:'lumberjack'
    {id:'yard-hand',name:'Yard hand',needs:{level:7,shifts:10,rep:50},wage:1400,grants:[],tasks:['stack','pick']},
    {id:'sawyer',name:'Sawyer',needs:{level:10,shifts:15,rep:60},wage:1600,grants:['steel-axe'],tasks:['deliver','replant']},
    {id:'foreman',name:'Foreman',needs:{level:15,shifts:25,rep:75},wage:1800,grants:[],tasks:[]}
-  ]}
+  ]},
+ {id:'diner',name:'Alder Coffee & Diner',skill:'hospitality',office:'cafe',owner:{kind:'npc',id:'elena',name:'Elena',title:'Manager'},hours:DINER_HOURS,sites:[{room:'cafe'}],ranks:DINER_RANKS} // diner D-A2 (notes/diner-design.md): Elena hires at the counter of the cafe (office = the cafe property, no MAP.offices entry), hours and ranks from diner-job.js
 ];
 // The repair shop (VD4, garage.js): a marked service bay on the workshop's apron, in front of the Eastbank Vehicle Workshop (I4). A vehicle whose centre is inside the box is in the bay; pose is where a towed or collected vehicle stands (nose east). The painted box is the bayRow 'service-bay'.
 const garage={id:'eastbank-garage',name:'Eastbank repair shop',x0:121,x1:131,z0:21,z1:26.5,pose:{x:126,z:23.75,yaw:Math.PI/2},counter:{x:122.2,z:22.2}}; // counter: where the prompt stands (the north-west end of the box, clear of the doors and the fuel cap of a vehicle parked in it)
@@ -476,7 +477,7 @@ export const MAP=deepFreeze({
  landmarks:[
   // The timber yard: the sawmill, a hut for lumber and logs (the parked flatbed truck was removed in 0.33).
   {id:'sawmill',prop:'sawmill-v4',zone:'forest',x:104,z:n(-208),yaw:-Math.PI/2}, // the rigged Blender model (rigged-props.js); its root is the main deck's centre. Turned -90 degrees: its front (switch, player) faces the woods lane to the west, the belt-clearing end faces the yard to the east, the log pile and log feed are on the open north side
-  {id:'yard-hut',prop:'hut',zone:'forest',x:124,z:-280,yaw:0,decor:true},{id:'yard-log-1',prop:'log',zone:'forest',x:131,z:-278.2,yaw:0,decor:true},{id:'yard-log-2',prop:'log',zone:'forest',x:131,z:-279.8,yaw:0,decor:true},{id:'yard-log-3',prop:'log',zone:'forest',x:131,z:-281.4,yaw:0,decor:true},
+  {id:'yard-hut',prop:'hut',zone:'forest',x:124,z:-280,yaw:0,decor:true}, // the lumber hut: the yard's boards and slabs are stacked inside it (lumber-hut.js); the three decor logs beside it were removed (owner 2026-11-18)
   // Willow Farmstead (Quaternius barns, 1.55 times their size): the barn, the small barn, the open barn, the silo, the coop and the windmill, with a Kenney house as the farmhouse.
   {id:'farm-barn',prop:'barn',zone:'farm',x:-66,z:-270,yaw:0},{id:'farm-small-barn',prop:'small-barn',zone:'farm',x:-84,z:-262,yaw:0},{id:'farm-open-barn',prop:'open-barn',zone:'farm',x:-83,z:-246,yaw:0},
   {id:'farm-silo',prop:'silo-house',zone:'farm',x:-48,z:-272,yaw:0},{id:'farm-coop',prop:'coop',zone:'farm',x:-52,z:-256,yaw:0},{id:'farm-windmill',prop:'windmill',zone:'farm',x:-44,z:-282,yaw:0},

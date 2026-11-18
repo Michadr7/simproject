@@ -25,7 +25,7 @@ for(const m of Object.keys(P.TOP_SPEED))assert.equal(P.TOP_SPEED[m],CLASSES[m].t
 const lm=MAP.landmarks.find(l=>l.id==='sawmill'),off=MAP.offices.find(o=>o.id==='ridgeline-warehouse');
 assert.ok(lm&&off);assert.equal(P.SAWMILL_POS.x,lm.x);assert.equal(P.SAWMILL_POS.z,lm.z);assert.equal(P.WAREHOUSE_POS.x,off.door.x);assert.equal(P.WAREHOUSE_POS.z,off.door.z);
 const ridge=MAP.employers.find(e=>e.id==='ridgeline');assert.deepEqual(P.RIDGELINE_RANKS.map(r=>[r.id,r.level,r.wage]),ridge.ranks.map(r=>[r.id,r.needs.level,r.wage]));
-{const src=fs.readFileSync(new URL('../dist/cafe-job.js',import.meta.url),'utf8');assert.ok(src.includes('cash:s.cash+2400'),'cafe pays 2400');assert.equal(P.CAFE.pay,2400);assert.equal(P.CAFE.minutes,90,'2 customers x (10+10+10+15) min')}
+{assert.ok(!fs.existsSync(new URL('../dist/cafe-job.js',import.meta.url)),'diner D-A2: the flat $24 cafe shift is gone (the diner career replaced it)');assert.equal(P.CAFE.pay,2400);assert.equal(P.CAFE.minutes,90,'the retired shift is kept as a measured record: 2 customers x (10+10+10+15) min')}
 assert.equal(P.ROAD_M,Math.ceil(Math.hypot(104-166.9,-278-31.5)*1.3));assert.ok(P.ROAD_M>400&&P.ROAD_M<430);
 
 // 2. Prices and rates: the trickle is smaller than the old rate and than the town's use; the player fills the gap.

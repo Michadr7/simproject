@@ -15,7 +15,7 @@
 //  6. No two bubbles share a text, in this cast or any other cast. Write facts ("a sawyer at the Ridgeline mill"), never ids (ridgeline-sawyer), and no {slot} without a fact.
 //  7. Every node must have a variant for every situation it can be reached in: end each node's `say` list with one variant that has no `if`.
 import {CONDITION_KEYS,EFFECT_KEYS,PERIODS,TIERS,MOOD_BANDS,PLACES,WEATHERS,CAFE_STATES,MAX_REPLIES,MAX_BUBBLES,MAX_BUBBLE_CHARS,MAX_LABEL_CHARS,matches,baseContext,bubblesOf,indexNodes,periodOf} from './talk-engine.js';
-export const DEFAULT_ACTS=Object.freeze(['openStore','gigBoard','shelves','hal.groceries','hal.buy','walt.hire','walt.promote','walt.collect','cafe.hire','cafe.clockin','cafe.clockout','cafe.meal','job.pickup','job.deliver','skipStory']);
+export const DEFAULT_ACTS=Object.freeze(['openStore','gigBoard','shelves','hal.groceries','hal.buy','walt.hire','walt.promote','walt.collect','cafe.hire','cafe.clockin','cafe.clockout','cafe.promote','cafe.meal','job.pickup','job.deliver','skipStory']);
 export const SWEEP_LIMIT=4000; // contexts tried per node by the coverage sweep (rule 11)
 const R=(rule,level)=>Object.freeze({rule,level});
 export const RULES=Object.freeze({

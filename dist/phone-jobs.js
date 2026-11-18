@@ -7,7 +7,7 @@ import {formatClock} from './routine.js';
 import {weekday} from './housing.js';
 import {employerName,ownerOf,careerOf,nextRank} from './careers.js';
 import {canClockIn,shiftPay,taskText,OFF_SITE_LIMIT,BONUS_PER_RANK} from './shift.js';
-import {itemById} from './items.js';
+import {itemById} from './items.js';import {DINER_ID,DINER_BONUS_PER_RANK} from './diner-job.js';
 import {openTickets,takenBy,ticketText,dueText,TAKE_RANK} from './tickets.js';
 
 const TABS=[['shift','Shift'],['job','My job'],['employers','Employers'],['pay','Pay']];
@@ -31,7 +31,7 @@ export function createPhoneJobs({document:doc,getState,isOnSite,onClockIn,onCloc
       out.push(el('h4','phone-heading',"Today's tasks"));
       for(const t of sh.tasks){const row=el('div','phone-need'),done=t.done>=t.target;row.append(el('label',null,taskText(t)),el('strong',null,done?'Done':`${t.done} / ${t.target}`));const m=el('meter');m.min=0;m.max=t.target;m.value=t.done;row.append(m);out.push(row)}
       if(!sh.tasks.length)out.push(el('p','phone-subtitle','No tasks today: you are paid by the hour.'));
-      if(sh.tasks.length)out.push(el('p','phone-subtitle',`Finish every task for the shift bonus (${money(BONUS_PER_RANK*careerOf(progress,sh.employer).rank)}).`));
+      if(sh.tasks.length)out.push(el('p','phone-subtitle',`Finish every task for the shift bonus (${money((sh.employer===DINER_ID?DINER_BONUS_PER_RANK:BONUS_PER_RANK)*careerOf(progress,sh.employer).rank)}).`));
       if(sh.employer==='ridgeline'&&careerOf(progress,'ridgeline').rank>=4){ // customer orders (tickets.js): the phone shows them; you take them at the warehouse's order table
         const co=progress.companies?.ridgeline,now=Math.floor((progress.housing.day-1)*1440+progress.routine.minutes),mine=takenBy(co,'me'),open=openTickets(co);
         out.push(el('h4','phone-heading','Customer orders'));
@@ -45,10 +45,10 @@ export function createPhoneJobs({document:doc,getState,isOnSite,onClockIn,onCloc
     }
     const hired=MAP.employers.filter(e=>careerOf(progress,e.id).hired);
     if(!hired.length){out.push(el('p','phone-subtitle','You have no job yet. Open Employers to see who is hiring: you apply in person at their office.'));return out}
-    out.push(el('p','phone-subtitle',`Shifts run ${formatClock(MAP.employers[0].hours.from)} to ${formatClock(MAP.employers[0].hours.to)}. It is ${weekday(progress.housing.day)}, ${formatClock(progress.routine.minutes)}.`));
+    out.push(el('p','phone-subtitle',`It is ${weekday(progress.housing.day)}, ${formatClock(progress.routine.minutes)}.`));
     for(const e of hired){
       const card=el('article','phone-contract'),can=canClockIn(progress,e.id);
-      card.append(el('h3',null,employerName(progress,e.id)),el('p',null,`${e.ranks[careerOf(progress,e.id).rank-1].name} · ${money(e.ranks[careerOf(progress,e.id).rank-1].wage)} an hour on site`));
+      card.append(el('h3',null,employerName(progress,e.id)),el('p',null,`${e.ranks[careerOf(progress,e.id).rank-1].name} · ${money(e.ranks[careerOf(progress,e.id).rank-1].wage)} an hour on site · shifts ${formatClock(e.hours.from)} to ${formatClock(e.hours.to)}`));
       if(can.error)card.append(el('p','phone-home-status',can.error));
       card.append(button('Clock in',()=>act(()=>onClockIn(e.id)),{disabled:!!can.error,id:'jobs-clockin-'+e.id}));if(e.id==='ridgeline'&&onLoggingGuide)card.append(button('Logging guide',()=>onLoggingGuide(),{id:'jobs-logging-guide'}));out.push(card)}
     return out;

@@ -48,7 +48,7 @@ for(const junk of ['x',[],5,{logs:-5,planks:'q',on:'yes'},{planks:1e9,logs:1e9}]
  assert.ok(far.sawmillYard.planks>0&&far.sawmillYard.planks<48+TRICKLE_PER_DAY+16,'14 days of trickle and crew sawing (paused at 48) less the crew\'s haul to the warehouse: '+far.sawmillYard.planks);assert.equal(far.sawmillYard.lastTrickleDay,40)}
 // a progress without a yard (never normalised): the world's sawmill planks become the yard, nothing lost
 {const w=normalizeWorld(null,MAP.seed,100);w.stock[SAWMILL_PLACE].planks=30;w.stock['property:eastbank-supply'].planks=100;const P={...at({...base,world:w},101,400)};delete P.sawmillYard;
- assert.equal(yardOf(P,w).planks,30);assert.equal(runWorldDay(P).sawmillYard.planks,48,'30 + the trickle 6 + 3 real logs sawn (12): the crew stops at 48')}
+ assert.equal(yardOf(P,w).planks,30);assert.equal(runWorldDay(P).sawmillYard.planks,36,'30 + the trickle 6; the crew saws nothing: 36 in the yard + 65 in the warehouse cover the demand (timber storage demand gate, owner 2026-11-18)')}
 
 // 4. the saw: a fed log becomes 4 planks after 4 game minutes at any frame rate; a stack of 4 comes off
 {let y=feed(normalizeYard({}),1).state;assert.equal(y.on,true);for(let i=0;i<240;i++)y=tick(y,1/60);assert.equal(y.planks,4);assert.equal(y.logs,0);assert.equal(y.on,false);

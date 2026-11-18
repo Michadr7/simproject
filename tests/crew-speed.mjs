@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import {townPopulation,GAME_MINUTES_PER_SECOND,WALK_SPEED} from '../dist/population.js';
 import {MAP} from '../dist/map-definition.js';
-import {workforcePose,fellerSlot,HAUL_SPEED,WORK_HOURS,SAWYER_CYCLE_MIN} from '../dist/workforce-pose.js';
+import {workforcePose,fellerSlot,HAUL_SPEED,WORK_HOURS,SAWYER_CYCLE_MIN,FELLER_PHASE_MIN,SAWYER_PHASE_MIN,FELLER_CHAIN} from '../dist/workforce-pose.js';
 
 // Owner eye-check 0.35.20: the Ridgeline crew walked between stations at super speed (up to 138 m/s: fixed minutes per walk on 25-163 m routes).
 // The visible speed (distance moved per real second at the game clock's rate) must never exceed a normal walk: WALK_SPEED (the pedestrians' pace),
@@ -24,7 +24,14 @@ for(const person of crew)for(const [day,hz] of [[1,60],[4,60],[7,60],[2,30],[3,1
 }
 // ten days at a coarse 1 s step (a chord is never longer than the path, so this still bounds the speed)
 for(const person of crew)for(let day=1;day<=10;day++){const r=sweep(person,day,1);assert.ok(r.max<=CAP,`${person.post} day ${day} coarse: ${r.max.toFixed(2)} m/s`)}
-// the slots are long enough for their walks: a feller's slot is 20..400 game minutes, the sawyer's loop more than its 2.45 station minutes
+// Calm crew (owner 2026-11-18, prompts/opus-timber-storage.md): at the real clock rate (GAME_MINUTES_PER_SECOND game minutes a real second) a tree's chop + buck takes the
+// visible feller at least a real minute, each bend 3 s, the sawyer's feed 4 s and saw 20 s; measured from the poses as well; only one feller works at a time.
+const SEC=m=>m/GAME_MINUTES_PER_SECOND,P=FELLER_PHASE_MIN,SP=SAWYER_PHASE_MIN;
+assert.ok(SEC(P.chop+P.buck)>=60&&SEC(P.bend)>=3,`feller: chop+buck ${SEC(P.chop+P.buck)} s, bend ${SEC(P.bend)} s`);
+assert.ok(SEC(SP.pick)>=3&&SEC(SP.feed)>=4&&SEC(SP.saw)>=20&&SEC(SP.belt)>=3&&SEC(SP.hut)>=3,'sawyer station phases: '+JSON.stringify(SP));
+let treeSec=0,trees=0;{let on=false;for(const [who,turn] of [[crew[0],FELLER_CHAIN.cutter],[crew[1],FELLER_CHAIN.hauler]])for(let m=turn[0],run=0;m<turn[1];m+=1/120){workforcePose(a,who,1,m,ctx);const at=a.phase==='chop'||a.phase==='buck';if(at){run+=1/60;if(!on)trees++}else if(on){treeSec=treeSec?Math.min(treeSec,run):run;run=0}on=at}}
+assert.ok(treeSec>=60-1/30,`measured at 60 Hz: the quickest visible tree took ${treeSec.toFixed(1)} real seconds (chop + buck)`);
+for(let m=WORK_HOURS[0];m<=WORK_HOURS[1];m+=.5){let busy=0;for(const w of crew.slice(0,2)){workforcePose(a,w,4,m,ctx);if(a.phase!==null)busy++}assert.ok(busy<=1,'one feller at a time, minute '+m)}// the slots are long enough for their walks: a feller's slot is 20..400 game minutes, the sawyer's loop more than its 2.45 station minutes
 const s=fellerSlot(crew[0],1,400,ctx);assert.ok(s.end-s.start>20&&s.end-s.start<400,'feller slot '+(s.end-s.start).toFixed(1));
 assert.ok(SAWYER_CYCLE_MIN>6&&SAWYER_CYCLE_MIN<40,'sawyer loop '+SAWYER_CYCLE_MIN.toFixed(1));
-console.log(`PASS crew-speed.mjs: the Ridgeline crew never moves faster than ${WALK_SPEED} m/s (pedestrian pace, under the player's ${PLAYER_WALK} m/s walk) over full working days at 30/60/144 Hz and ten days coarse, no teleports at phase or block changes, and the pose's speed matches the distance walked (feller slot ${(s.end-s.start).toFixed(0)} game min, sawyer loop ${SAWYER_CYCLE_MIN.toFixed(1)} game min).`);
+console.log(`PASS crew-speed.mjs: the Ridgeline crew never moves faster than ${WALK_SPEED} m/s (pedestrian pace, under the player's ${PLAYER_WALK} m/s walk) over full working days at 30/60/144 Hz and ten days coarse, no teleports at phase or block changes, and the pose's speed matches the distance walked (feller slot ${(s.end-s.start).toFixed(0)} game min, sawyer loop ${SAWYER_CYCLE_MIN.toFixed(1)} game min); calm crew: a visible tree takes >= ${treeSec.toFixed(0)} real s (${trees} trees on day 1), one feller at a time.`);
