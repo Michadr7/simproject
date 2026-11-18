@@ -52,7 +52,11 @@ try{
  {const item=trackerItems(p(),{x:0,z:0}).find(i=>i.id==='ticket:'+mine.id);assert(item&&item.group==='Orders'&&/Order #\d+/.test(item.title)&&item.pos.x===W.door.out.x,'the tracker lists it: '+JSON.stringify(item))}
  // a failed pickup: past its deadline it fails, costs 3 reputation, shakes the phone
  GameState.progress={...p(),companies:{...p().companies,ridgeline:{...co(),tickets:{...ticketsOf(co()),list:ticketsOf(co()).list.map(t=>t.id===mine.id?{...t,staged:5}:t)}}}};const racked=()=>(p().companies.ridgeline.pallets||[]).filter(q=>q.at.rack).reduce((s,q)=>s+q.count,0),racksBefore=racked(); // with 5 planks on its staging square: they go back to the racks, they do not vanish
-  const rep=careerOf(p(),'ridgeline').rep;at(DAY,mine.dueAt%1440+1);pump(1.2);assert.equal(racked(),racksBefore+5,'the 5 staged planks went back to the racks: '+racksBefore+' -> '+racked());
+  const mineOnPallet=(p().companies.ridgeline.pallets||[]).find(q=>q.order===mine.id)?.count; // W3: the crew may have staged part of this order before it was taken: then its real pallet is what comes back
+  const rep=careerOf(p(),'ridgeline').rep,others0=new Map(list().filter(k=>k.id!==mine.id).map(k=>[k.id,{staged:k.staged||0,status:k.status}]));at(DAY,mine.dueAt%1440+1);pump(1.2);
+  // W3: over the jumped hours the crew stages planks from the racks onto orders nobody touched for 3 hours (a pickup it completes leaves); an untouched order that expires gives its staged planks back
+  const crew=list().filter(k=>k.id!==mine.id).reduce((s,k)=>{const b=others0.get(k.id)||{staged:0,status:'open'};return s+(k.staged||0)-b.staged-(k.status==='expired'&&b.status!=='expired'?(k.staged||0):0)},0);
+  assert.equal(racked(),racksBefore+(mineOnPallet??5)-crew,'the staged planks went back to the racks: '+racksBefore+' -> '+racked()+' (on its pallet '+mineOnPallet+', crew moved '+crew+')');
  assert.equal(list().find(k=>k.id===mine.id).status,'failed','past its time it fails');assert.equal(careerOf(p(),'ridgeline').rep,Math.max(0,rep-3),'and costs reputation');assert(p().messages.some(x=>x.app==='jobs'&&/failed/.test(x.text)&&!x.read),'a Jobs message says it failed (notifications are saved, the toast may be waiting its turn): '+JSON.stringify(p().messages.map(x=>x.text)));
  // clocking out fails a taken pickup at once
  {const open=openTickets(co());assert(open.length>0);at(DAY,545);ids.get('jobToast').textContent='';

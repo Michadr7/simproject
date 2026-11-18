@@ -2,7 +2,22 @@
 // and shows each in plain words (ok, warning, or blocking). It publishes nothing. The judging is in hub/deploy.js; the work is done by scripts/deploy-check.mjs, started as a job (a script, no model, no tokens).
 // Text only (textContent). Polls GET /api/jobs every 2 s while the check runs and every 8 s otherwise.
 import {runCall,errorText} from './runs-api.js';
-import {canPublish,confirmText,bumpPlan,bumpConfirmText,LEVELS} from './deploy-rules.js';
+import {canPublish,confirmText,bumpPlan,bumpConfirmText,LEVELS,shipButtonText} from './deploy-rules.js';
+export {shipButtonText};
+
+export async function runShip({busy=false,call=runCall,waitForCheck,confirmFn=t=>globalThis.confirm(t),now=Date.now,lastPublished=null}={}){
+ if(busy)return {ok:false,stage:'guard',error:'Something is working.',check:null,job:null};
+ const cRes=await call('job-start',{job:'deploy-check'});
+ if(!cRes||!cRes.ok)return {ok:false,stage:'check-start',error:errorText(cRes),check:null,job:null};
+ const checkId=cRes.data&&cRes.data.job&&cRes.data.job.id||null;
+ const checkRec=waitForCheck?await waitForCheck(checkId):null;
+ const pub=typeof lastPublished==='function'?lastPublished():lastPublished;
+ const gate=canPublish(checkRec,now(),pub);
+ if(!gate.ok)return {ok:false,stage:'check-gate',error:gate.why,check:checkRec,job:null};
+ if(!confirmFn(confirmText(checkRec.summary)))return {ok:false,stage:'cancelled',error:'',check:checkRec,job:null};
+ const pRes=await call('job-start',{job:'deploy',confirm:checkRec.summary.version});
+ if(!pRes||!pRes.ok)return {ok:false,stage:'publish',error:errorText(pRes),check:checkRec,job:null};
+ return {ok:true,stage:'done',error:'',check:checkRec,job:pRes.data&&pRes.data.job||null}}
 
 export const STATE_GLYPH={ok:'✓',warn:'!',fail:'✕',unknown:'?'};
 export const STATE_WORD={ok:'OK',warn:'Warning',fail:'Blocks',unknown:'Unknown'};
@@ -24,7 +39,7 @@ const h=(tag,props,...kids)=>{const e=document.createElement(tag);for(const [k,v
 async function getJson(url){try{const r=await fetch(url,{cache:'no-store'});if(!r.ok)return null;return await r.json()}catch{return null}}
 
 export function mountDeploy(view,{onChange}={}){
- let alive=true,timer=null,sig=null,busy=false,level='patch',lastD=null;
+ let alive=true,timer=null,sig=null,busy=false,level='patch',lastD=null,latestPub=null;
  const stop=()=>{alive=false;clearTimeout(timer)};
  const top=h('p',{class:'next'}),note=h('p',{class:'msg err',role:'alert',hidden:true}),body=h('div',{});
  view.append(top,note,body);
@@ -44,18 +59,37 @@ export function mountDeploy(view,{onChange}={}){
   const res=await runCall('job-start',{job:'deploy-check'});busy=false;if(!alive)return;
   if(!res.ok)say(errorText(res));
   await load(true);if(onChange)onChange()}
+ async function waitForCheck(checkId){
+  const deadline=Date.now()+90000;
+  while(alive&&Date.now()<deadline){
+   const d=await getJson('/api/jobs');if(!alive)break;
+   if(d)draw(d,true);
+   const jobs=d&&Array.isArray(d.jobs)?d.jobs:[];
+   const chk=jobs.find(j=>j.key==='deploy-check');
+   const pub=jobs.find(j=>j.key==='deploy');
+   latestPub=pub&&pub.last?pub.last:null;
+   if(chk&&!chk.running&&chk.last&&(!checkId||chk.last.id===checkId||!d.busy))return chk.last;
+   if(d&&!d.running&&!d.busy&&(!chk||!chk.running))return chk&&chk.last?chk.last:null;
+   await new Promise(r=>setTimeout(r,400))}
+  return null}
+ async function ship(){
+  if(busy)return;busy=true;say('');if(lastD)draw(lastD,true);
+  const res=await runShip({busy:false,call:runCall,waitForCheck,lastPublished:()=>latestPub});
+  busy=false;if(!alive)return;
+  if(res.error)say(res.error);
+  await load(true);if(onChange)onChange()}
  function draw(d,force){
-  const job=d&&d.jobs?d.jobs.find(j=>j.key==='deploy-check'):null,pub=d&&d.jobs?d.jobs.find(j=>j.key==='deploy'):null,bmp=d&&d.jobs?d.jobs.find(j=>j.key==='bump'):null,s=JSON.stringify([d&&d.enabled,d&&d.busy,job,pub,bmp,level]);lastD=d;if(!force&&s===sig)return;sig=s;
+  const job=d&&d.jobs?d.jobs.find(j=>j.key==='deploy-check'):null,pub=d&&d.jobs?d.jobs.find(j=>j.key==='deploy'):null,bmp=d&&d.jobs?d.jobs.find(j=>j.key==='bump'):null,s=JSON.stringify([d&&d.enabled,d&&d.busy,job,pub,bmp,level,busy]);lastD=d;latestPub=pub&&pub.last?pub.last:null;if(!force&&s===sig)return;sig=s;
   top.textContent='';top.append(h('b',{},'NEXT STEP'),nextLine(d,job,Date.now(),pub,bmp));body.textContent='';
   if(!d){body.append(h('p',{class:'soon'},'Could not read the tools. Is the hub still running?'));return}
   if(!d.enabled){body.append(h('div',{class:'box'},h('div',{class:'label'},'Going online needs runs on'),h('p',{},'Start the hub again with:'),h('code',{class:'cmd'},'npm run hub -- --runs')));return}
   const l=job&&job.last,sum=l&&l.summary,running=!!(job&&job.running);
   body.append(h('div',{class:'box tool'},h('div',{class:'tool-head'},
    h('span',{class:'plan-main'},h('span',{class:'plan-title'},'Check before going online'),h('span',{class:'plan-meta tool-res '+(running?'run':sum&&sum.ok?'ok':sum?'bad':'')},running?'Checking…':sum?sum.text:'Not run yet'),h('span',{class:'plan-meta'},'Sends and publishes nothing. It reads what is live and checks the Cloudflare login.')),
-   h('span',{class:'acts'},h('button',{class:'btn pri',type:'button',disabled:running||d.busy,onclick:check},'Check')))));
+   h('span',{class:'acts'},h('button',{class:'btn pri',type:'button',disabled:busy||running||d.busy,onclick:check},'Check')))));
   if(sum&&Array.isArray(sum.checks)){
    body.append(h('h2',{class:'sect'},'Results'),h('div',{class:'box'},h('ul',{class:'dchecks'},sum.checks.map(c=>h('li',{class:'dc dc-'+c.state},
-    h('span',{class:'dg','aria-hidden':'true'},STATE_GLYPH[c.state]||'?'),h('span',{},h('b',{},c.label),h('span',{class:'dw'},' · '+(STATE_WORD[c.state]||c.state)),h('br'),h('span',{class:'small dim'},c.text)))))))}
+    h('span',{class:'dg','aria-hidden':'true'},STATE_GLYPH[c.state]||'?'),h('span',{},h('b',{},c.label),h('span',{class:'dw'},' · '+(STATE_WORD[c.state]||c.state)),h('br'),h('span',{class:'small dim'},c.text),...(c.href==='#commit'||(c.key==='changed'&&c.state==='warn')?[' ',h('a',{class:'dlink',href:'#commit'},'Open Commit (#commit)')]:[])))))))}
   // Raise the version: only once the current version is live, so no number is skipped. The browser asks once; the hub and the script check it again; then the release and the tests follow.
   const bl=bmp&&bmp.last,br=!!(bmp&&bmp.running),plan=bumpPlan(job&&job.last,level,bl),sel=h('select',{class:'sel','aria-label':'How big a change','disabled':br||undefined},LEVELS.map(x=>h('option',{value:x,selected:x===level},x==='patch'?'patch (a small change)':x==='minor'?'minor (a new feature)':'major (a new era)')));
   sel.addEventListener('change',()=>{level=sel.value;if(lastD)draw(lastD,true)});
@@ -63,14 +97,15 @@ export function mountDeploy(view,{onChange}={}){
    h('span',{class:'plan-main'},h('span',{class:'plan-title'},'Raise the version number'),
     h('span',{class:'plan-meta tool-res '+(br?'run':bl&&bl.summary?(bl.summary.ok?'ok':'bad'):'')},br?'Working…':bl&&bl.summary?bl.summary.text+(bl.endedAt?' · '+hm(bl.endedAt)+' ('+agoText(bl.endedAt,Date.now())+')':''):'Not used from the hub yet'),
     h('span',{class:'plan-meta'},plan.ok?plan.from+' becomes '+plan.to+'. Then the hub makes the release and runs the tests. Nothing goes online.':plan.why)),
-   h('span',{class:'acts'},sel,h('button',{class:'btn pri',type:'button',disabled:!plan.ok||br||d.busy,onclick:()=>bump(plan)},plan.ok?'Bump to '+plan.to:'Bump')))),
+   h('span',{class:'acts'},sel,h('button',{class:'btn pri',type:'button',disabled:busy||!plan.ok||br||d.busy,onclick:()=>bump(plan)},plan.ok?'Bump to '+plan.to:'Bump')))),
    !br&&bl&&bl.tail&&bl.tail.length?h('details',{class:'fold tool-fold'},h('summary',{},`Last output (${bl.tail.length} line${bl.tail.length===1?'':'s'})`),h('pre',{class:'tool-out'},bl.tail.join('\n'))):'');  // Publish: only after a passing check from the last 10 minutes; the browser asks once more, naming both versions. The hub and the script check it all again.
   const can=canPublish(job&&job.last,Date.now(),pub&&pub.last),pl=pub&&pub.last,pr=!!(pub&&pub.running);
+  const shipLabel=shipButtonText((sum&&sum.version)||(pl&&pl.version)||(bl&&bl.summary&&bl.summary.version)||'');
   body.append(h('h2',{class:'sect'},'Go online'),h('div',{class:'box tool'+(pr?' on':'')},h('div',{class:'tool-head'},
    h('span',{class:'plan-main'},h('span',{class:'plan-title'},'Publish the game'),
     h('span',{class:'plan-meta tool-res '+(pr?'run':pl&&pl.summary?(pl.summary.ok?'ok':'bad'):'')},pr?'Publishing…':pl&&pl.summary?pl.summary.text+(pl.endedAt?' · '+hm(pl.endedAt)+' ('+agoText(pl.endedAt,Date.now())+')':''):'Not published from the hub yet'),
     h('span',{class:'plan-meta'},can.ok?'Runs wrangler deploy for '+job.last.summary.version+'. One press, one deploy. It is never forced.':can.why)),
-   h('span',{class:'acts'},h('button',{class:'btn pri danger',type:'button',disabled:!can.ok||pr||d.busy,onclick:()=>publish(job.last.summary)},'Publish')))),
+   h('span',{class:'acts'},h('button',{class:'btn pri',type:'button',disabled:busy||running||pr||br||d.busy,onclick:ship},shipLabel),h('button',{class:'btn pri danger',type:'button',disabled:busy||!can.ok||pr||d.busy,onclick:()=>publish(job.last.summary)},'Publish')))),
    !pr&&pl&&pl.tail&&pl.tail.length?h('details',{class:'fold tool-fold'},h('summary',{},`Last output (${pl.tail.length} line${pl.tail.length===1?'':'s'})`),h('pre',{class:'tool-out'},pl.tail.join('\n'))):'')}
  async function load(force){
   clearTimeout(timer);

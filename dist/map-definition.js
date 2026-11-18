@@ -404,11 +404,11 @@ const posts=[
 ];
 const employers=[ {id:'ridgeline',name:'Ridgeline Timber Co.',skill:'lumberjack',office:'ridgeline-office',owner:{kind:'npc',id:'walt-hargrove',name:'Walt Hargrove',title:'Owner'},
   hours:{from:360,to:1080,lastIn:1050},
-  store:[{item:'chainsaw',rank:6},{item:'logging-chainsaw',rank:6}], // the company store at the office: sold to this rank and above (an item may also need a skill level: items.js `requires`)
+  store:[{item:'chainsaw',rank:3},{item:'logging-chainsaw',rank:6}], // T-E (owner 2026-11-18): the basic chainsaw from Rank 3 Hauler (level 5, items.js); // the company store at the office: sold to this rank and above (an item may also need a skill level: items.js `requires`)
   sites:[{zone:'forest'},{plot:'I5'},{plot:'I1'},{room:'ridgeline-office'},{room:'ridgeline-warehouse'}],
   ranks:[
-   {id:'trainee',name:'Trainee',needs:{level:1,shifts:0,rep:0},wage:800,grants:['axe'],tasks:['fell','landing','gather']},
-   {id:'feller',name:'Feller',needs:{level:3,shifts:3,rep:20},wage:1000,grants:[],tasks:['mill','stumps']},
+   {id:'trainee',name:'Trainee',needs:{level:1,shifts:0,rep:0},wage:800,grants:['axe'],tasks:['fell','buck','gather']},
+   {id:'feller',name:'Feller',needs:{level:3,shifts:3,rep:20},wage:1000,grants:[],tasks:['feed_saw','mill','stumps']},
    {id:'hauler',name:'Hauler',needs:{level:5,shifts:6,rep:35},wage:1200,grants:['logging-axe'],tasks:['haul','load']},
    {id:'yard-hand',name:'Yard hand',needs:{level:7,shifts:10,rep:50},wage:1400,grants:[],tasks:['stack','pick']},
    {id:'sawyer',name:'Sawyer',needs:{level:10,shifts:15,rep:60},wage:1600,grants:['steel-axe'],tasks:['deliver','replant']},

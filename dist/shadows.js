@@ -10,7 +10,7 @@ import {SHADOW_BOX,SHADOW_FAR,SHADOW_MAP,FADE_GLSL,BLOB,snapShadow,shadowPlan,bl
 // False if this three.js has no getShadow to edit: then shadows simply never fade.
 export function installShadowFade(){
  const chunk=THREE.ShaderChunk.shadowmap_pars_fragment;
- if(chunk.includes(FADE_GLSL))return true;
+ if(chunk.includes('shadowIntensity')||chunk.includes(FADE_GLSL))return true; // three.js r166+ fades natively (light.shadow.intensity): nothing to edit
  const from=chunk.indexOf('float getShadow('),at=from<0?-1:chunk.indexOf('return shadow;',from);
  if(at<0)return false;
  THREE.ShaderChunk.shadowmap_pars_fragment=chunk.slice(0,at)+FADE_GLSL+chunk.slice(at+'return shadow;'.length);return true;
@@ -71,7 +71,7 @@ export function createShadows({scene,renderer,sun,footing=()=>0,people=()=>[],ve
   sun.position.x+=snap.offset[0];sun.position.y+=snap.offset[1];sun.position.z+=snap.offset[2];sun.target.position.x+=snap.offset[0];sun.target.position.y+=snap.offset[1];sun.target.position.z+=snap.offset[2];sun.target.updateMatrixWorld();
   // the fade, and no shadow pass at all while it is fully faded
   plan=shadowPlan({sky,enabled:!!renderer.shadowMap?.enabled,indoors});
-  sun.shadow.radius=faded?plan.strength:1;update.run=!faded||plan.strength>0;update.n=(update.n|0)+1;sun.shadow.autoUpdate=update.run&&(update.n&1)===1; // option 2: the map is redrawn every second frame
+  sun.shadow.intensity=faded?plan.strength:1;update.run=!faded||plan.strength>0;update.n=(update.n|0)+1;sun.shadow.autoUpdate=update.run&&(update.n&1)===1; // option 2: the map is redrawn every second frame
   // the patches
   opacity=blobOpacity(sky);const show=blobsShown({low,outdoors,opacity});
   shown=show?writeBlobs(centre||sun.target.position):0;blobs.visible=show&&shown>0;material.uniforms.uOpacity.value=opacity;

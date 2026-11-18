@@ -75,7 +75,7 @@ assert.equal(tickTargetDay(at(base,5,299)),4);assert.equal(tickTargetDay(at(base
 
 // ---- the Ridgeline pallets ARE the warehouse's planks (the pallets are the truth)
 {const w=normalizeWorld(null,MAP.seed,100);let P=at({...base,world:w,companies:{ridgeline:{pallets:[{id:1,product:'planks',count:25,at:{rack:'A1-1'}},{id:2,product:'planks',count:11,at:{rack:'A1-2'}}]}}},101,400);
- P=runWorldDay(P);assert.equal(P.world.stock[PALLET_LINK.place][PALLET_LINK.good],36);
+ P=runWorldDay(P);const held=P.companies.ridgeline.pallets.reduce((s,q)=>s+q.count,0);assert.equal(P.world.stock[PALLET_LINK.place][PALLET_LINK.good],held,'the world shows the pallets');assert.ok(held>36&&held<=36+12,'W3: the crew hauled at most 12 planks from the yard to the racks: '+held);
  const none=runWorldDay(at({...base,world:w},101,400));assert.equal(none.world.stock[PALLET_LINK.place][PALLET_LINK.good],w.stock[PALLET_LINK.place].planks,'no Ridgeline company: the world keeps its own number')}
 
 // ---- eggs are DOZENS; the starter's 4 crates hold whole dozens and fit the truck beds

@@ -14,14 +14,18 @@ export const DAY_FROM=.10,DAY_FULL=.45;             // sun height where day star
 export const NIGHT_FROM=-.08,NIGHT_FULL=-.4226;     // sun height where night starts to mix in and where it is all night: 19:40 to 04:20 (sin 25 degrees)
 const TILT_UP=.82,TILT_SOUTH=.57;                   // the sun's circle leans 35 degrees to the south (+z): 55 degrees high at noon
 
+export const SKY_BANDS=Object.freeze({horizonPow:3,cloudMinY:.08,cloudFullY:.24,cloudScale:2.2,cloudSpeed:.015}); // V-B: dome horizon falloff and cloud-wisp band (0 at <= 0.08 so uHorizon === fog)
+export const horizonMix=dirY=>Math.pow(clamp(1-Math.max(Number.isFinite(dirY)?dirY:0,0),0,1),SKY_BANDS.horizonPow);
+export const cloudFade=dirY=>Number.isFinite(dirY)?smoothstep(SKY_BANDS.cloudMinY,SKY_BANDS.cloudFullY,dirY):0;
+
 // ── The four moods (all tune). Night's two strengths are the DAY values: skyAt multiplies them by NIGHT_FLOOR. ─────────────
 export const MOODS={
- dawn: {top:'#5b7fa8',horizon:'#f2b98f',light:'#ffc48a',lightStrength:1.6,hemiSky:'#d6cfe0',hemiGround:'#6b5f52',hemiStrength:1.4,fogNear:40,fogFar:130,exposure:1.05,stars:0,glow:.6},
- day:  {top:'#4f8fd0',horizon:'#bcd6e2',light:'#fff1d6',lightStrength:3.1,hemiSky:'#d8e8f0',hemiGround:'#777655',hemiStrength:1.7,fogNear:65,fogFar:155,exposure:1.12,stars:0,glow:0},
- dusk: {top:'#3d4f86',horizon:'#f08a4b',light:'#ff9a55',lightStrength:1.8,hemiSky:'#d9b9c2',hemiGround:'#5c4a45',hemiStrength:1.3,fogNear:45,fogFar:135,exposure:1.05,stars:0,glow:.7},
- night:{top:'#070b1c',horizon:'#18233f',light:'#b4c8ff',lightStrength:3.1,hemiSky:'#8fa3dc',hemiGround:'#2a3450',hemiStrength:1.7,fogNear:30,fogFar:120,exposure:1.0,stars:1,glow:1},
+ dawn: {top:'#5b7fa8',horizon:'#f2b98f',light:'#ffc48a',lightStrength:1.6,hemiSky:'#d6cfe0',hemiGround:'#6b5f52',hemiStrength:1.4,fogNear:40,fogFar:130,exposure:1.05,stars:0,glow:.6,clouds:'#ffd6b8',cloudCover:.45},
+ day:  {top:'#4f8fd0',horizon:'#bcd6e2',light:'#fff1d6',lightStrength:3.1,hemiSky:'#d8e8f0',hemiGround:'#777655',hemiStrength:1.7,fogNear:65,fogFar:155,exposure:1.12,stars:0,glow:0,clouds:'#f4f7fa',cloudCover:.38},
+ dusk: {top:'#3d4f86',horizon:'#f08a4b',light:'#ff9a55',lightStrength:1.8,hemiSky:'#d9b9c2',hemiGround:'#5c4a45',hemiStrength:1.3,fogNear:45,fogFar:135,exposure:1.05,stars:0,glow:.7,clouds:'#ffb082',cloudCover:.5},
+ night:{top:'#070b1c',horizon:'#18233f',light:'#b4c8ff',lightStrength:3.1,hemiSky:'#8fa3dc',hemiGround:'#2a3450',hemiStrength:1.7,fogNear:30,fogFar:120,exposure:1.0,stars:1,glow:1,clouds:'#1e2b4a',cloudCover:.18},
 };
-export const MOOD_NAMES=['dawn','day','dusk','night'],COLOUR_KEYS=['top','horizon','light','hemiSky','hemiGround'],NUMBER_KEYS=['fogNear','fogFar','exposure','stars','glow'];
+export const MOOD_NAMES=['dawn','day','dusk','night'],COLOUR_KEYS=['top','horizon','light','hemiSky','hemiGround','clouds'],NUMBER_KEYS=['fogNear','fogFar','exposure','stars','glow','cloudCover'];
 export const toLinear=hex=>{const n=parseInt(hex.slice(1),16);return [n>>16&255,n>>8&255,n&255].map(v=>{const c=v/255;return c<=.04045?c/12.92:Math.pow((c+.055)/1.055,2.4)})};
 const LIN=Object.fromEntries(MOOD_NAMES.map(name=>[name,Object.fromEntries(COLOUR_KEYS.map(k=>[k,toLinear(MOODS[name][k])]))]));
 const blend3=(w,key)=>{const out=[0,0,0];for(const name of MOOD_NAMES){const c=LIN[name][key],k=w[name];out[0]+=c[0]*k;out[1]+=c[1]*k;out[2]+=c[2]*k}return out};
@@ -62,6 +66,7 @@ export function skyAt(minutes,options={}){
   lightColor:up?sunColour:LIN.night.light.slice(),lightStrength:up?sunStrength:moonStrength,
   hemiSky:blend3(w,'hemiSky'),hemiGround:blend3(w,'hemiGround'),hemiStrength,
   top:blend3(w,'top'),horizon:blend3(w,'horizon'),                        // horizon is also the fog colour, so distance fades into the sky
+  clouds:blend3(w,'clouds'),cloudCover:blend(w,'cloudCover'),             // V-B: procedural cloud-wisp tint and coverage above SKY_BANDS.cloudMinY
   fogNear:blend(w,'fogNear'),fogFar:Math.min(FOG_FAR_MAX,blend(w,'fogFar')),
   exposure:blend(w,'exposure')*exposureScale,
   stars:blend(w,'stars'),glow:blend(w,'glow'),                            // glow: how far lamps and windows are on (Stage 3 reads it)

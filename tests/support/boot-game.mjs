@@ -8,6 +8,9 @@ export class El extends EventTarget{
  append(...els){this.children.push(...els)}replaceChildren(...els){this.children=[...els]}setAttribute(k,v){this[k]=v}querySelector(s){if(!this.selectors.has(s))this.selectors.set(s,new El());return this.selectors.get(s)}focus(){}matches(s){return ['input','textarea','select'].includes(this.tag)}setCustomValidity(){}reportValidity(){}setPointerCapture(){}click(){this.onclick?.({preventDefault(){}})}
  getBoundingClientRect(){return {left:0,top:0,width:1400,height:900}}
  getContext(){return new Proxy({measureText:t=>({width:t.length*20})},{get:(o,k)=>o[k]??(()=>{})})}
+ // C6: what the talk panel (dist/talk-panel.js) uses, as the real DOM does it: appendChild/remove keep parentNode, setting textContent drops the children
+ appendChild(el){if(el?.parentNode)el.remove();el.parentNode=this;this.children.push(el);return el}remove(){const p=this.parentNode;if(p){const i=p.children.indexOf(this);if(i>=0)p.children.splice(i,1)}this.parentNode=null}
+ get ownerDocument(){return globalThis.document}get textContent(){return this._text}set textContent(v){this._text=v;this.children=[]}
 }
 
 // position: a saved player position, or null for none. play: press Play once the game has loaded. editRelease(dir): change the copied release before it loads.
@@ -21,7 +24,7 @@ export async function bootGame({position=null,play=true,editRelease=async()=>{},
  await editRelease(dir);
  const ids=new Map([...html.matchAll(/id="([^"]+)"/g)].map(m=>[m[1],new El(m[1]==='characterName'?'input':'div')]));
  const created=[],doc=new EventTarget();
- doc.getElementById=id=>ids.get(id)||null;doc.createElement=tag=>{const e=new El(tag);created.push(e);return e};doc.body=new El();doc.querySelectorAll=()=>[];doc.hidden=false;
+ doc.getElementById=id=>ids.get(id)||null;doc.createElement=tag=>{const e=new El(tag);created.push(e);return e};doc.body=new El();doc.body.appendChild=undefined;doc.querySelectorAll=()=>[];doc.hidden=false; // body keeps no appendChild, as before C6: world.js screenFade checks it and would take over requestAnimationFrame here
  const win=new EventTarget();win.matches=()=>false;const store=new Map();
  store.set('edenridge.character.v1',JSON.stringify({version:1,appearance:{name:'Tester'}}));
  store.set('edenridge.progress.v1',JSON.stringify({version:1,progress:{cash:1000,completed:0,phase:'available',starter:skipStarter(),...(position?{position}:{}),...progress}}));

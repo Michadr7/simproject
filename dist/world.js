@@ -612,9 +612,9 @@ export function createWorld(scene,{label,cullRadius,streaming=false}={}){
    t.standing=false;t.stage='stump';t.collider.active=false;t.anim={type:'fall',time:0,dirX:(t.x-from.x)/d,dirZ:(t.z-from.z)/d,onDone}},
   // A ring on the ground under the tree the player is about to chop (null hides it).
   setTarget(tree){if(!tree){ring.visible=false;return}ring.visible=true;ring.position.set(tree.x,-.03,tree.z)},
-  // Logs lying on the ground: [{x,z,rot}], drawn as instances.
-  setLogs(list){
-   const n=Math.min(list.length,MAX_LOG_INSTANCES);
+  // Logs lying on the ground: [{x,z,rot}], drawn as instances. Trunks (kind 'trunk', T-E) are game.js's own InstancedMesh of the trunk model, so they are left out here.
+  setLogs(all){
+   const list=all.some(l=>l.kind==='trunk')?all.filter(l=>l.kind!=='trunk'):all,n=Math.min(list.length,MAX_LOG_INSTANCES);
    for(let i=0;i<n;i++)logMesh.setMatrixAt(i,m4.compose(v.set(list[i].x,heightAt(list[i].x,list[i].z)+.12+(this.floorAt(list[i].x,list[i].z)??0),list[i].z),q.setFromAxisAngle(yAxis,list[i].rot),s.set(1,1,1)));
    logMesh.count=n;logMesh.instanceMatrix.needsUpdate=true;
   },

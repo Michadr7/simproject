@@ -1,7 +1,7 @@
 import './legacy-keys.js';
 import {bandOf,misfiring} from './damage.js';
 import {PHONE_CLIPS} from './phone-calls.js'; // PH1: the Call app's sounds (lazy, fallback tones)
-import {SOUND_EXT,CRANK_CLIP,STALL_CLIP,VEHICLE_SET,YELL_CLIPS,SCRAPE_CLIPS,engineFor,crashPlan,pickIndex,createYellGate,createVoices,scrapeGain,scrapeRate,TYRE,TYRE_CLIPS,tyreMix,stepTyreBlend,freshTyreBlend} from './vehicle-sounds.js'; // SND1: recorded vehicle, crash and yell sounds (optional: the generated sounds stay as the fallback)
+import {SOUND_EXT,CRANK_CLIP,STALL_CLIP,VEHICLE_SET,YELL_CLIPS,SCRAPE_CLIPS,engineFor,crashPlan,pickIndex,createYellGate,createVoices,scrapeGain,scrapeRate,TYRE,TYRE_CLIPS,tyreMix,stepTyreBlend,freshTyreBlend} from './vehicle-sounds.js';import {TIMBER_SHOTS,TIMBER_FILES,CHAINSAW,SAWMILL_BLADE} from './timber-sounds.js';import {STEP_CLIPS,STEP_LEVEL,SWEEP_SHOTS,SWEEP_LOOPS,SWEEP_CORE,stepKind} from './sweep-sounds.js'; // SND1: recorded vehicle, crash and yell sounds (optional: the generated sounds stay as the fallback)
 const PHONE_LEVEL={key:.45,pickup:.7,ring:.5,busy:.5,hangup:.7}; // PH1: levels of the recorded phone clips
 const PHONE_TONES={key:{f:[697,1209],on:.09,per:.09,n:1,lv:.12},ring:{f:[440,480],on:1.8,per:2,n:1,lv:.1},busy:{f:[480,620],on:.5,per:1,n:6,lv:.1},pickup:{click:1800},hangup:{click:900}}; // the generated fallbacks (Hz)
 // Sound, generated with the Web Audio API (no sound files). One AudioContext, created on the first click or key (browsers do not allow sound before one); a master volume and a mute that are saved;
@@ -65,7 +65,7 @@ export function createAudio({AudioContextClass,storage,random=Math.random,sample
  }
  // SND1: the recorded sounds (vehicle-sounds.js). Fetched and decoded one at a time, only after the first gesture and only when a vehicle is used (the engine loop of its class, then one shared set of about 35 short clips);
  // a file that is missing or will not decode is skipped for good and the generated sound stays. Decoded memory is about 11 MB for everything (4 engines are never loaded together: one per class used).
- const buffers=new Map(),wanted=new Set(),queue=[],voices=createVoices(),gate=createYellGate(),last={crash:-1,yell:-1,glass:-1,thud:-1,scrape:-1};
+ const buffers=new Map(),wanted=new Set(),queue=[],voices=createVoices(),gate=createYellGate(),last={crash:-1,yell:-1,glass:-1,thud:-1,scrape:-1,chop:-1,fall:-1,logDrop:-1,plankDrop:-1};
  let busy=false,eng=null,scr=null,scrIdle=0,yellClock=0;
  function pump(){if(busy||!queue.length||!ctx)return;busy=true;const name=queue.shift();
   Promise.resolve().then(()=>fetchFn(soundBase+name+SOUND_EXT)).then(r=>r&&r.ok?r.arrayBuffer():null).then(b=>b?ctx.decodeAudioData(b):null).then(buf=>{if(buf)buffers.set(name,buf)}).catch(()=>{}).then(()=>{busy=false;pump()})}
@@ -83,6 +83,10 @@ export function createAudio({AudioContextClass,storage,random=Math.random,sample
   env.gain.setValueAtTime(0,t);env.gain.linearRampToValueAtTime(level,t+.004);env.gain.setTargetAtTime(.0001,t+.02,hard?.12:.07);src.connect(low);low.connect(env);o.connect(env);env.connect(master);
   src.start(t,random()*1.5);src.stop(t+.5);o.start(t);o.stop(t+.5);src.onended=()=>voices.free();return true;
  }
+ // Lumber (timber-sounds.js, SND2): the clips are fetched the first time one is asked for. A loop that is not decoded yet simply stays silent (the generated blade stays until the recorded one is ready).
+ const tim={warm:false,amb:{},fuel:null,fork:{},csOn:false,csAt:0,csA:0,idle:null,cut:null,stopT:0,mill:null,lvl:0};
+ function loopOf(name){const b=buffers.get(name);if(!b||!ctx)return null;const s=looping(b),g=gain(0);s.connect(g);g.connect(master);s.start(ctx.currentTime,random()*b.duration);return {s,g}}
+ function stopLoop(l){if(!l)return;try{l.s.stop()}catch{}l.s.disconnect?.();l.g.disconnect?.()}
  function pickShot(pool,slot,level,opts){const n=pool.length,i=pickIndex(n,random,last[slot]);last[slot]=i;for(let k=0;k<n;k++)if(shot(pool[(i+k)%n],level,opts))return true;return false}
  function yell(vol){if(!(vol>.02)||!live())return false;want(YELL_CLIPS);return pickShot(YELL_CLIPS,'yell',.8*vol,{rate:.95+random()*.12,yell:true})}
  function startEngine(cls,buf){const s=looping(buf),lp=filtered('lowpass',1500,.5),g=gain(0),d=gain(0);s.connect(lp);lp.connect(g);g.connect(master);v.engThrob.connect(d);d.connect(g.gain);s.start(ctx.currentTime,random()*buf.duration);eng={cls,src:s,lp,g,depth:d}}
@@ -122,6 +126,48 @@ export function createAudio({AudioContextClass,storage,random=Math.random,sample
   setActive(on){if(!ctx)return;if(on)ctx.resume?.();else ctx.suspend?.()}, // a hidden tab is silent
   setVolume(volume){settings.volume=Math.max(0,Math.min(1,Number.isFinite(volume)?volume:settings.volume));saveAudioSettings(storage,settings);if(master)ease(master.gain,loudness(),.03)},
   setMuted(muted){settings.muted=!!muted;saveAudioSettings(storage,settings);if(master)ease(master.gain,loudness(),.03)},
+  // A lumber one-shot at a place: kind is a key of TIMBER_SHOTS (chop, fall, thud, logDrop, plankDrop, plankStack). at: {x,z} (null = the player's own, full level); delay in seconds (the thud after the fall).
+  timber(kind,at,listener,{delay=0}={}){
+   const T=TIMBER_SHOTS[kind];if(!ctx||settings.muted||!T)return false;want(TIMBER_FILES);
+   const a=at&&listener?attenuate(distance(listener,at)):1;if(a<.02)return false;
+   return pickShot(T.clips,T.slot,T.level*a,{rate:1+(random()-.5)*T.jitter,delay});
+  },
+  // SND3: a one-shot from the sweep table (SWEEP_SHOTS: ui-click, cash-register, door-open, car-horn, ...). at {x,z} + listener = placed in the world; no `at` = the player's own, full level. The first call also starts loading the core set.
+  sweep(name,at,listener){
+   const T=SWEEP_SHOTS[name];if(!ctx||settings.muted||!T)return false;if(!tim.warm){tim.warm=true;want(SWEEP_CORE)}want(T.clips);
+   const a=at&&listener?attenuate(distance(listener,at)):1;if(a<.02)return false;
+   last[name]??=-1;return pickShot(T.clips,name,T.level*a,{rate:1+(random()-.5)*T.jitter*2});
+  },
+  // A footstep: surface is a terrain.js SURFACE id or 'pave'|'grass'|'gravel'|'wood' (inside a building or on a deck: 'wood'); running makes it louder. One call per step.
+  step(surface,at,listener,running=false){
+   const k=stepKind(surface);if(!k||!ctx||settings.muted)return false;if(!tim.warm){tim.warm=true;want(SWEEP_CORE)}want(STEP_CLIPS[k]);
+   const a=at&&listener?attenuate(distance(listener,at)):1;if(a<.02)return false;
+   last['step'+k]??=-1;return pickShot(STEP_CLIPS[k],'step'+k,(running?STEP_LEVEL.run:STEP_LEVEL.walk)*a,{rate:1+(random()-.5)*STEP_LEVEL.jitter*2});
+  },
+  // Outdoor ambience, every frame: birds by day, crickets by night, wind (windSpeed in m/s, a fifth of it indoors), water near the lake (waterDist in metres to the nearest water). Quiet and slow to change.
+  ambience({outdoors=true,isNight=false,windSpeed=0,waterDist=Infinity}={}){
+   if(!ctx)return;const L=SWEEP_LOOPS,names={birds:L.birds,crickets:L.crickets,wind:L.wind,water:L.water};want(Object.values(names));
+   for(const k of Object.keys(names))if(!tim.amb[k]&&buffers.has(names[k]))tim.amb[k]=loopOf(names[k]);
+   const to={birds:outdoors&&!isNight?.2:0,crickets:outdoors&&isNight?.2:0,wind:.18*Math.min(1,windSpeed/12)*(outdoors?1:.2),water:outdoors?.22*attenuate(waterDist):0};
+   for(const k of Object.keys(to))if(tim.amb[k])ease(tim.amb[k].g.gain,to[k],1.2);
+  },
+  // The forklift, every frame: on (engine/seat), speed (negative = reversing: the beep), raise (non-zero while the forks move: the hydraulic whine), at {x,z}, listener {x,z}.
+  forklift({on=false,speed=0,raise=0,at,listener}={}){
+   if(!ctx)return;const L=SWEEP_LOOPS;want([L.forkBeep,L.forkLift]);
+   if(!tim.fork.beep&&buffers.has(L.forkBeep))tim.fork.beep=loopOf(L.forkBeep);if(!tim.fork.lift&&buffers.has(L.forkLift))tim.fork.lift=loopOf(L.forkLift);
+   const a=on&&at&&listener?attenuate(distance(listener,at)):0;
+   if(tim.fork.beep)ease(tim.fork.beep.g.gain,speed<-.1?.45*a:0,.05);if(tim.fork.lift)ease(tim.fork.lift.g.gain,raise!==0?.5*a:0,.05);
+  },  // A chainsaw, every frame it is in someone's hands: active (the engine runs), cutting (the bar is in wood), at {x,z}, listener {x,z}. Start clip, then the idle loop; the cut loop blends in while cutting; the stop clip when it is put away.
+  chainsaw({active,cutting,at,listener}){
+   if(!ctx)return;want(Object.values(CHAINSAW));
+   const a=active&&at&&listener?attenuate(distance(listener,at)):0,now=ctx.currentTime;
+   if(active&&!tim.csOn){tim.csOn=true;tim.csAt=now;shot(CHAINSAW.start,.75*a)}
+   if(!active&&tim.csOn){tim.csOn=false;tim.stopT=now+.4;shot(CHAINSAW.stop,.65*tim.csA)}
+   if(active){tim.csA=a;if(!tim.idle)tim.idle=loopOf(CHAINSAW.idle);if(!tim.cut)tim.cut=loopOf(CHAINSAW.cut)}
+   const up=Math.max(0,Math.min(1,(now-tim.csAt-1.8)/.7)),k=cutting?1:0; // the start clip already idles: the idle loop fades in after about 2 s
+   if(tim.idle)ease(tim.idle.g.gain,.55*a*(1-k)*up,.06);if(tim.cut)ease(tim.cut.g.gain,.75*a*k*up,.06);
+   if(!active&&(tim.idle||tim.cut)&&now>tim.stopT){stopLoop(tim.idle);stopLoop(tim.cut);tim.idle=tim.cut=null}
+  },
   // Every frame while the sawmill is loaded. listener: {x,z}. blade/belt: {at:{x,z}, level:0..1 (how fast it runs), sawing (blade only: a log is going through)}.
   update({listener,blade,belt}){
    if(!ctx)return;
@@ -130,12 +176,17 @@ export function createAudio({AudioContextClass,storage,random=Math.random,sample
    ease(v.bladeToneGain.gain,.13*b*(1-.25*load));ease(v.bladeHissGain.gain,(.04*b)+(.3*load*b));ease(v.bladeBand.frequency,2000+1800*blade.level);
    const r=attenuate(distance(listener,belt.at))*belt.level;
    ease(v.beltRumbleGain.gain,.22*r);ease(v.beltHumGain.gain,.07*r);
+   want(Object.values(SAWMILL_BLADE)); // SND2: the recorded blade replaces the generated one as soon as both loops are decoded; the stop clip plays when the saw is switched off
+   if(buffers.has(SAWMILL_BLADE.idle)&&buffers.has(SAWMILL_BLADE.cut)){if(!tim.mill)tim.mill={i:loopOf(SAWMILL_BLADE.idle),c:loopOf(SAWMILL_BLADE.cut)};const m=tim.mill;ease(v.bladeToneGain.gain,0);ease(v.bladeHissGain.gain,0);
+    if(m.i&&m.c){ease(m.i.g.gain,.55*b*(1-.75*load));ease(m.i.s.playbackRate,.85+.25*blade.level);ease(m.c.g.gain,.75*b*load)}
+    if(tim.lvl>.2&&blade.level<=.02)shot(SAWMILL_BLADE.stop,.65*attenuate(distance(listener,blade.at)));tim.lvl=blade.level}
   },
   // Fuel flowing (every frame while a nozzle is out): at: {x,z} of the pump, level 0..1 (1 while it is flowing), fullness 0..1 (how full the tank is: the pitch rises).
   fuel({listener,at,level,fullness=0}){
    if(!ctx)return;
    const a=at?attenuate(distance(listener,at))*level:0;
    ease(v.fuelRushGain.gain,.22*a,.04);ease(v.fuelHumGain.gain,.05*a,.04);ease(v.fuelBand.frequency,550+950*Math.max(0,Math.min(1,fullness)));
+   want([SWEEP_LOOPS.fuel]);if(buffers.has(SWEEP_LOOPS.fuel)){if(!tim.fuel)tim.fuel=loopOf(SWEEP_LOOPS.fuel);if(tim.fuel){ease(tim.fuel.g.gain,.45*a,.04);ease(tim.fuel.s.playbackRate,.85+.45*Math.max(0,Math.min(1,fullness)),.1);ease(v.fuelRushGain.gain,0,.04);ease(v.fuelHumGain.gain,0,.04)}} // SND3: the recorded pour replaces the generated one once decoded
   },
   // Every frame: the engine of the vehicle you are sitting in. voice: engineVoice(...) (gain 0 when it is off or stalled). It plays at full level for the driver (and a passenger).
   // cls: the class id of that vehicle ('shortbed', ...): its recorded loop (vehicle-sounds.js) replaces the generated tone as soon as it is decoded; the misfire dip, the roughness by band and the revs are applied on top of it.
@@ -180,6 +231,7 @@ export function createAudio({AudioContextClass,storage,random=Math.random,sample
   // The phone's notification: two soft rising notes, not placed in the world (it is in your pocket). Shares the click limit.
   ping(){
    if(!ctx||settings.muted||clicks>=MAX_CLICKS)return false;
+   want(['phone-ping']);if(shot('phone-ping',.45))return true; // SND3: the recorded ping, else the two generated notes
    const t=ctx.currentTime;clicks++;let last=null;
    [1175,1568].forEach((freq,i)=>{const o=ctx.createOscillator(),env=gain(0);o.type='sine';o.frequency.value=freq;const s=t+i*.12;env.gain.setValueAtTime(0,s);env.gain.linearRampToValueAtTime(.18,s+.01);env.gain.setTargetAtTime(.0001,s+.04,.09);o.connect(env);env.connect(master);o.start(s);o.stop(s+.4);last=o});
    last.onended=()=>{clicks--};

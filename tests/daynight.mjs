@@ -2,7 +2,7 @@
 // the four mood anchors, NIGHT_FLOOR, the fog limit, the colour grade and its GLSL twin. The packaged-game part at the end checks the wiring (sky.js, game.js).
 import assert from 'node:assert/strict';
 import {readFile} from 'node:fs/promises';
-import {SUNRISE,SUNSET,NIGHT_FLOOR,NIGHT_FLOOR_MIN,NIGHT_FLOOR_MAX,EXPOSURE_MIN,EXPOSURE_MAX,FOG_FAR_MAX,MIN_LIGHT_ELEVATION,MOODS,MOOD_NAMES,toLinear,wrapMinutes,clampNightFloor,sunHeight,sunDirection,moonDirection,moodAt,lightDirection,skyAt,GRADE,grade,gradeGLSL,litGround} from '../dist/daynight.js';
+import {SUNRISE,SUNSET,NIGHT_FLOOR,NIGHT_FLOOR_MIN,NIGHT_FLOOR_MAX,EXPOSURE_MIN,EXPOSURE_MAX,FOG_FAR_MAX,MIN_LIGHT_ELEVATION,SKY_BANDS,horizonMix,cloudFade,MOODS,MOOD_NAMES,toLinear,wrapMinutes,clampNightFloor,sunHeight,sunDirection,moonDirection,moodAt,lightDirection,skyAt,GRADE,grade,gradeGLSL,litGround} from '../dist/daynight.js';
 import {bootGame} from './support/boot-game.mjs';
 
 const near=(a,b,eps,msg)=>assert(Math.abs(a-b)<=eps,`${msg}: ${a} vs ${b}`);
@@ -15,21 +15,22 @@ const clock=(h,m=0)=>h*60+m;
 assert.equal(SUNRISE,360);assert.equal(SUNSET,1080);assert.equal(NIGHT_FLOOR,.12,'the starting night floor the user chose');
 assert.equal(NIGHT_FLOOR_MIN,.04);assert.equal(NIGHT_FLOOR_MAX,.30);assert(FOG_FAR_MAX<=155,'fog ends before scenery is culled (tests/culling.mjs pins 155 to 200)');
 assert.deepEqual(MOOD_NAMES,['dawn','day','dusk','night']);
-for(const name of MOOD_NAMES){const m=MOODS[name];for(const k of ['top','horizon','light','hemiSky','hemiGround'])assert.match(m[k],/^#[0-9a-f]{6}$/,`${name}.${k} is a colour`);assert(m.fogFar<=FOG_FAR_MAX&&m.fogNear<m.fogFar,`${name}: fog distances`)}
+for(const name of MOOD_NAMES){const m=MOODS[name];for(const k of ['top','horizon','light','hemiSky','hemiGround','clouds'])assert.match(m[k],/^#[0-9a-f]{6}$/,`${name}.${k} is a colour`);assert(m.fogFar<=FOG_FAR_MAX&&m.fogNear<m.fogFar,`${name}: fog distances`);assert(m.cloudCover>=0&&m.cloudCover<=1,`${name}: cloudCover`)}
+assert.equal(SKY_BANDS.cloudMinY,.08);assert.equal(cloudFade(0),0);assert.equal(cloudFade(SKY_BANDS.cloudMinY),0,'clouds fade to 0 at horizon band so uHorizon === fog');assert.equal(cloudFade(.5),1);assert.equal(horizonMix(0),1);assert.equal(horizonMix(1),0);assert(horizonMix(.5)<.2,'horizon band is tighter toward the ground');
 assert.equal(MOODS.day.lightStrength,3.1);assert.equal(MOODS.day.hemiStrength,1.7);assert.equal(MOODS.day.fogNear,65);assert.equal(MOODS.day.fogFar,155);assert.equal(MOODS.day.exposure,1.12); // day keeps the values the game had before the rig
 
 // --- Every output is finite and in range, for all 1,440 minutes ---------------------------------------------------------
 for(let m=0;m<1440;m++){
  const s=skyAt(m);
  for(const v of flat(s))assert(Number.isFinite(v),`finite at ${m}`);
- for(const k of ['top','horizon','lightColor','hemiSky','hemiGround'])for(const c of s[k])assert(c>=0&&c<=1,`${k} in 0..1 at ${m}`);
+ for(const k of ['top','horizon','lightColor','hemiSky','hemiGround','clouds'])for(const c of s[k])assert(c>=0&&c<=1,`${k} in 0..1 at ${m}`);
  near(Object.values(s.weights).reduce((a,b)=>a+b,0),1,1e-9,`weights sum to 1 at ${m}`);for(const v of Object.values(s.weights))assert(v>=0&&v<=1);
  for(const k of ['sunDir','moonDir','lightDir'])near(len(s[k]),1,1e-9,`${k} is a unit vector at ${m}`);
  assert(s.lightDir[1]>=Math.sin(MIN_LIGHT_ELEVATION*Math.PI/180)-1e-9,`the light never comes from under ${MIN_LIGHT_ELEVATION} degrees (${m})`);
  assert(s.lightStrength>=0&&s.lightStrength<=3.1+1e-9,`light strength at ${m}`);assert(s.hemiStrength>0&&s.hemiStrength<=1.7+1e-9,`hemisphere strength at ${m}`);
  assert(s.fogFar<=FOG_FAR_MAX&&s.fogFar>=120-1e-9&&s.fogNear>=30-1e-9&&s.fogNear<s.fogFar,`fog at ${m}`);
  assert(s.exposure>=1-1e-9&&s.exposure<=1.12+1e-9,`exposure at ${m}`);
- for(const k of ['stars','glow','sunDisc','moonDisc','sunGlow'])assert(s[k]>=0&&s[k]<=1+1e-9,`${k} in 0..1 at ${m}`);
+ for(const k of ['stars','glow','sunDisc','moonDisc','sunGlow','cloudCover'])assert(s[k]>=0&&s[k]<=1+1e-9,`${k} in 0..1 at ${m}`);
 }
 
 // --- The same answer for the same time; the clock wraps; bad input is noon ---------------------------------------------
@@ -38,7 +39,7 @@ assert.equal(wrapMinutes(NaN),720);assert.deepEqual(skyAt(undefined),skyAt(720))
 
 // --- Continuous: no jump between neighbouring moments, and none across midnight or noon (where dawn and dusk swap) ------
 // The light's colour and direction do flip at the horizon, where its strength is 0: so the light is compared as colour x strength and direction x strength.
-{const view=m=>{const s=skyAt(m);return [...s.top,...s.horizon,...s.hemiSky,...s.hemiGround,s.hemiStrength,s.fogNear/100,s.fogFar/100,s.exposure,s.stars,s.glow,s.sunDisc,s.moonDisc,s.sunGlow,...s.sunDir,...Object.values(s.weights),...s.lightColor.map(c=>c*s.lightStrength/3.1),...s.lightDir.map(c=>c*s.lightStrength/3.1)]};
+{const view=m=>{const s=skyAt(m);return [...s.top,...s.horizon,...s.hemiSky,...s.hemiGround,...s.clouds,s.cloudCover,s.hemiStrength,s.fogNear/100,s.fogFar/100,s.exposure,s.stars,s.glow,s.sunDisc,s.moonDisc,s.sunGlow,...s.sunDir,...Object.values(s.weights),...s.lightColor.map(c=>c*s.lightStrength/3.1),...s.lightDir.map(c=>c*s.lightStrength/3.1)]};
  let worst=0,at=0;
  for(let i=0;i<1440*4;i++){const a=view(i/4),b=view((i+1)/4);for(let k=0;k<a.length;k++){const d=Math.abs(a[k]-b[k]);if(d>worst){worst=d;at=i/4}}}
  assert(worst<.03,`no step above 0.03 per quarter minute (half a real second): worst ${worst.toFixed(4)} at minute ${at}`);

@@ -19,14 +19,14 @@ try{
  GameState.progress={...p(),carry:{kind:'planks',count:4}};pump(.6);assert(!/Deliver/.test(prompt()),'off shift the yard takes nothing: '+prompt());
  GameState.progress=clockIn({...p(),carry:null},'ridgeline').state;
  // by hand: four planks at the pallets
- GameState.progress={...p(),carry:{kind:'planks',count:4}};me().x=86;me().z=47;pump(.6);assert(/Deliver 4 planks to the lumberyard · \$4\.00/.test(prompt()),'the pallets take the planks: '+prompt());
+ GameState.progress={...p(),carry:{kind:'planks',count:4}};me().x=86;me().z=47;pump(.6);assert(/Deliver 4 planks to the lumberyard · \$29\.20/.test(prompt()),'the pallets take the planks: '+prompt());
  press();assert.equal(p().carry,null);assert.equal(stockOf(p()).planks,4,'four planks in stock');assert.equal(p().shift.pieces.delivered,4,'and paid as delivered');assert.equal(planksDrawn(),1,'one stack drawn on a pallet');
  // by truck: the flatbed in the yard; standing behind it, all its planks come off at once and the log stays
  me().x=TRUCK.x;me().z=TRUCK.z+rear.z;pump(.8);assert(/Open the tailgate/.test(prompt()),'a shut tailgate is opened first: '+prompt());press();assert(/Cargo · 1 log, 12 planks/.test(prompt()),'a mixed bed offers the Cargo panel: '+prompt());
- press();assert(!ids.get('cargoOverlay').hidden,'the panel opens');{const rows=[0,1,2].map(i=>find('cargo-row-'+i)?.textContent);assert(/Take a log · 1 on the bed/.test(rows[0])&&/Take planks · 12 on the bed/.test(rows[1])&&/Unload all 12 planks at the lumberyard · \$12\.00/.test(rows[2]),'a row per kind and the bulk unload: '+rows.join(' | '))}
+ press();assert(!ids.get('cargoOverlay').hidden,'the panel opens');{const rows=[0,1,2].map(i=>find('cargo-row-'+i)?.textContent);assert(/Take a log · 1 on the bed/.test(rows[0])&&/Take planks · 12 on the bed/.test(rows[1])&&/Unload all 12 planks at the lumberyard · \$87\.60/.test(rows[2]),'a row per kind and the bulk unload: '+rows.join(' | '))}
  send('keydown','Digit3');pump(.5);ids.get('cargoClose').onclick();pump(.5);assert.equal(stockOf(p()).planks,16);assert.equal(p().shift.pieces.delivered,16);assert.deepEqual(p().vehicles.find(v=>v.uid==='v1').cargo,[{k:'log'}],'the log is still on the bed');assert.equal(planksDrawn(),4,'four stacks on the pallets now');
  // the landing: a log stacked joins the pile (drawn), and can be taken back
  GameState.progress={...p(),carry:{kind:'log'}};me().x=LANDING.x+.8;me().z=LANDING.z;pump(.6);press();assert.equal(stockOf(p()).logs,1);assert.equal(logsDrawn(),1,'the pile shows the log');
  pump(.6);assert(/Take a log from the pile · 1/.test(prompt()),'empty-handed, the pile offers it back: '+prompt());press();assert.deepEqual(p().carry,{kind:'log'});assert.equal(stockOf(p()).logs,0);assert.equal(logsDrawn(),0);
- console.log('PASS dock-game.mjs: planks delivered by hand at the lumberyard pallets ($1.00 each, drawn on them), a parked flatbed with a mixed load opens the Cargo panel (a row per kind, the bulk unload on key 3: all its planks at once, its log stays), a log stacked at the landing joins the pile and can be taken back; nothing is taken off shift.');
+ console.log('PASS dock-game.mjs: planks delivered by hand at the lumberyard pallets ($7.30 each, drawn on them), a parked flatbed with a mixed load opens the Cargo panel (a row per kind, the bulk unload on key 3: all its planks at once, its log stays), a log stacked at the landing joins the pile and can be taken back; nothing is taken off shift.');
 }finally{await g.done()}

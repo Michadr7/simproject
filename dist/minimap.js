@@ -1,5 +1,6 @@
 import {ZONES} from './world.js';
-import {MAP} from './map-definition.js';
+import {MAP,roadGraph} from './map-definition.js';
+import {roadDisplayName} from './hud-cards.js';
 import {DEV_MODE} from './dev-flag.js';
 import {sharedBake,relief,TILE_CACHE_FULL} from './map-bake.js';
 import {BASE_MPP,TILE_MPP,TILE_GUTTER,tilesFor,levelFor,cropWindow,cropSource,zoomTarget,footTarget,freshZoom,smoothZoom,lookAheadStep,edgeIndicator} from './map-view.js';
@@ -10,6 +11,8 @@ import {BASE_MPP,TILE_MPP,TILE_GUTTER,tilesFor,levelFor,cropWindow,cropSource,zo
 const VIEW=MAP.minimap.view;
 export {relief};
 const SIZES={small:{w:200,h:200},large:{w:600,h:490}},EDGE='#141c19',JOB='#f2ca79';
+let labelCache=null; // one label per road name (its longest piece, at its middle), built once from the road graph
+function roadLabels(){if(labelCache)return labelCache;const best=new Map();for(const e of Object.values(roadGraph(MAP).edges)){if(!e.poly||e.poly.length<2)continue;const name=roadDisplayName(e);if(!name)continue;const len=e.length||e.len||e.poly.length,old=best.get(name);if(!old||len>old.len){const m=e.poly[Math.floor((e.poly.length-1)/2)],n=e.poly[Math.ceil((e.poly.length-1)/2)];best.set(name,{name,len,x:(m[0]+n[0])/2,z:(m[1]+n[1])/2})}}return labelCache=[...best.values()]}
 
 export function createMinimap(doc,{canvas,cityRoads=[],buildings=[],trees=()=>[],startSize='small',fixedDpr=0,bake=null}){
  if(!canvas)return {update(){},toggle(){},invalidate(){},invalidateAt(){},pick(){return null},get large(){return false}};
@@ -38,10 +41,12 @@ export function createMinimap(doc,{canvas,cityRoads=[],buildings=[],trees=()=>[]
   if(size==='large'){const colour={residential:'#2fbf9f',commercial:'#b0529b',industrial:'#e0a02e'};ctx.fillStyle='#fff';ctx.font=`${Math.round(11*dpr)}px Arial`;ctx.textAlign='center';for(const plot of MAP.reserved){ctx.fillStyle=colour[plot.kind];ctx.fillText(plot.id,px((plot.x0+plot.x1)/2),pz((plot.z0+plot.z1)/2)+4*dpr)}}
   ctx.fillStyle='#ffffffcc';ctx.font=`${Math.round((size==='large'?13:8)*dpr)}px Arial`;ctx.textAlign='center';
   for(const zone of MAP.zones)ctx.fillText(ZONES[zone.id].label,px(zone.minimap.label.x),pz(zone.minimap.label.z));
+  ctx.fillStyle='#dce4ec8f';ctx.font=`bold ${Math.round((size==='large'?9:7)*dpr)}px Arial`; // street names (slop-newyork style), drawn only inside the window
+  for(const r of roadLabels()){const x=px(r.x),z=pz(r.z);if(x>8*dpr&&x<w-8*dpr&&z>8*dpr&&z<h-8*dpr)ctx.fillText(r.name,x,z)}
  }
  // The GPS route (gps.js): a blue line from where you are along the points still ahead (route.points from index route.from, starting at route.start). Only a stroke of a few hundred points at 12 fps.
  function drawRoute(ctx,route){const P=route.points;if(!P||P.length<2)return;const w=Math.max(2,(size==='large'?3.2:2.4)*dpr),m=20,vis=(ax,az,bx,bz)=>Math.max(ax,bx)>=win.x0-m&&Math.min(ax,bx)<=win.x1+m&&Math.max(az,bz)>=win.z0-m&&Math.min(az,bz)<=win.z1+m;ctx.lineJoin='round';ctx.lineCap='round';
-  for(const pass of [0,1]){ctx.strokeStyle=pass?'#4aa8ff':'#0b2a46';ctx.lineWidth=pass?w:w+2*dpr;ctx.beginPath();let ax=route.start[0],az=route.start[1],pen=false;
+  for(const pass of [0,1]){ctx.strokeStyle=pass?'#ffc21a':'#4a3700';ctx.lineWidth=pass?w:w+2*dpr;ctx.beginPath();let ax=route.start[0],az=route.start[1],pen=false;
    for(let i=route.from;i<P.length;i++){const bx=P[i][0],bz=P[i][1];if(vis(ax,az,bx,bz)){if(!pen){ctx.moveTo(px(ax),pz(az));pen=true}ctx.lineTo(px(bx),pz(bz))}else pen=false;ax=bx;az=bz}ctx.stroke()}}
  // A target off the corner map: a chevron on the frame pointing at it, with the distance when it is far.
  function chevron(ctx,ind,color){const u=6*dpr;ctx.save();ctx.translate(ind.x,ind.y);ctx.rotate(ind.angle);ctx.fillStyle=color;ctx.strokeStyle='#10130f';ctx.lineWidth=dpr;ctx.beginPath();ctx.moveTo(u,0);ctx.lineTo(-u*.7,-u*.8);ctx.lineTo(-u*.3,0);ctx.lineTo(-u*.7,u*.8);ctx.closePath();ctx.fill();ctx.stroke();ctx.restore();
@@ -71,7 +76,7 @@ export function createMinimap(doc,{canvas,cityRoads=[],buildings=[],trees=()=>[]
   ctx.arc(x,z,u*4,Math.atan2(-Math.cos(yaw),-Math.sin(yaw))-.5,Math.atan2(-Math.cos(yaw),-Math.sin(yaw))+.5);ctx.closePath();ctx.fill();
   // Player arrow, pointing the way the character faces (+z is down on the map).
   ctx.save();ctx.translate(x,z);ctx.rotate(Math.PI-heading);
-  ctx.fillStyle='#fff6c8';ctx.strokeStyle='#1d2b26';ctx.lineWidth=dpr;
+  ctx.fillStyle='#ffffff';ctx.strokeStyle='#0a1118';ctx.lineWidth=dpr;
   ctx.beginPath();ctx.moveTo(0,-u);ctx.lineTo(u*.7,u*.8);ctx.lineTo(0,u*.4);ctx.lineTo(-u*.7,u*.8);ctx.closePath();ctx.fill();ctx.stroke();ctx.restore();
  }
  resize();

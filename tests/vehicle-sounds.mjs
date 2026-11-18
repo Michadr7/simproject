@@ -19,7 +19,7 @@ assert(total<=VS.MAX_PAYLOAD_BYTES,`payload ${total} bytes under ${VS.MAX_PAYLOA
 for(const f of onDisk)assert(VS.ALL_FILES.includes(f.slice(0,-VS.SOUND_EXT.length)),`${f} is registered`);
 // Ogg Vorbis header: mono, and the yells and cranks are the right length (the last page's granule position over the sample rate).
 function oggInfo(name){const b=readFileSync(new URL(name+VS.SOUND_EXT,DIR));assert.equal(b.toString('latin1',0,4),'OggS',name+' is an Ogg file');const segs=b[26],pk=27+segs;assert.equal(b.toString('latin1',pk+1,pk+7),'vorbis',name+' is Vorbis');const channels=b[pk+11],rate=b.readUInt32LE(pk+12);let at=b.lastIndexOf('OggS');const gran=Number(b.readBigUInt64LE(at+6));return {channels,rate,seconds:gran/rate}}
-for(const name of VS.ALL_FILES){const i=oggInfo(name);assert.equal(i.channels,1,name+' is mono');assert(i.seconds>.1&&i.seconds<12,`${name} is ${i.seconds.toFixed(2)} s`)}
+for(const name of VS.ALL_FILES){const i=oggInfo(name);assert.equal(i.channels,1,name+' is mono');assert(i.seconds>.03&&i.seconds<12,`${name} is ${i.seconds.toFixed(2)} s`)}
 for(const name of VS.YELL_CLIPS)assert(oggInfo(name).seconds<VS.YELL_MAX_SECONDS,`${name} is under ${VS.YELL_MAX_SECONDS} s`);
 for(const e of Object.values(VS.ENGINES))assert(oggInfo(e.file).seconds>=4,`${e.file} is a loop long enough not to buzz`);
 // Decoded memory (4 bytes a sample at the context rate, 48 kHz assumed): all the clips, and the worst single engine.

@@ -1,0 +1,26 @@
+// Timber redesign T-A (notes/timber-redesign-design.md, owner answers 2026-11-18): the pure trunk and slab rules.
+import assert from 'node:assert/strict';
+import {BEDS,CARGO_KINDS,capacity,normalizeCargo,cargoText,usedSpace} from '../dist/cargo.js';
+import {carryEffects,normalizeCarry,CARRY_KINDS} from '../dist/carry.js';
+import {MASS_KG,cargoMassKg} from '../dist/load-drag.js';
+import {logsFromTrunk} from '../dist/skills.js';
+import {buckHitsFor,hitsFor,buckTimeSec} from '../dist/tools.js';
+import {SAW_MIN_PER_LOG,SAW_MIN_PER_TRUNK,TRUNK_TO_SLABS,TRUNK_TO_LOGS,TIMBER_PAY} from '../dist/plank-economy.js';
+import {GOODS} from '../dist/world-goods.js';
+import {canLoad,itemOf} from '../dist/cargo-items.js';
+assert.equal(capacity('flatbed','trunk'),12);assert.equal(capacity('shortbed','trunk'),4);assert.equal(capacity('worktruck','trunk'),3);assert.equal(capacity('offroad','trunk'),3);assert.equal(capacity('atv','trunk'),0,'a trunk does not go on the ATV rack');
+assert.equal(capacity('flatbed','slab'),60);assert.equal(capacity('shortbed','slab'),22);assert.equal(capacity('atv','slab'),1);assert.equal(capacity('flatbed','log'),24,'logs unchanged');
+assert.equal(canLoad('atv',[],itemOf('trunk')).error!==undefined,true);assert.equal(canLoad('flatbed',[],itemOf('trunk')).ok,true);assert.equal(canLoad('flatbed',[],itemOf('slab')).ok,true);
+assert.deepEqual(normalizeCargo([{k:'trunk'},{k:'slab'},{k:'log'},{k:'trunk',x:1}],'flatbed'),[{k:'trunk'},{k:'slab'},{k:'log'},{k:'trunk'}]);
+assert.equal(normalizeCargo([{k:'trunk'}],'atv'),null,'normalizeCargo drops a trunk the ATV cannot hold');
+assert.equal(usedSpace([{k:'trunk'},{k:'slab'},{k:'log'}]),10+2+5);assert.equal(cargoText([{k:'trunk'},{k:'slab'},{k:'slab'}]),'1 trunk, 2 slabs');
+assert.equal(cargoMassKg([{k:'trunk'},{k:'slab'}]),MASS_KG.trunk+MASS_KG.slab);assert.equal(MASS_KG.trunk,2*MASS_KG.log);
+assert.deepEqual([carryEffects({kind:'log'}).speed,carryEffects({kind:'log',count:2}).speed,carryEffects({kind:'trunk'}).speed,carryEffects({kind:'slab'}).speed],[.95,.9,.6,.8]);
+for(const k of ['trunk','log','slab'])assert.equal(carryEffects({kind:k}).sprint,false,k+' blocks sprint');assert.equal(carryEffects({kind:'log',count:2}).sprint,false);
+assert(CARRY_KINDS.includes('trunk')&&CARRY_KINDS.includes('slab'));assert.equal(normalizeCarry({kind:'log',count:3}).count,undefined);
+assert.equal(TRUNK_TO_LOGS,2);assert.equal(TRUNK_TO_SLABS,2);assert.equal(logsFromTrunk(1),2);assert.equal(logsFromTrunk(3),3,'bonus log at level 3');assert.equal(logsFromTrunk(8),4,'and at level 8');
+assert.equal(SAW_MIN_PER_TRUNK/SAW_MIN_PER_LOG,1.5,'12 s against 8 s');
+assert(buckHitsFor('axe',1)<hitsFor('axe',1)&&buckHitsFor('axe',1)>=1);assert(buckHitsFor('steel-axe',10)<=buckHitsFor('axe',1));assert.equal(buckTimeSec('chainsaw'),1.2);assert.equal(buckTimeSec('logging-chainsaw'),.8);assert.equal(buckTimeSec('axe'),0);
+assert.equal(GOODS.trunks.baseCents,2800);assert.equal(GOODS.slabs.baseCents,1800);assert.equal(GOODS.logs.baseCents,1500,'logs unchanged');assert(TIMBER_PAY.slabDelivered>TIMBER_PAY.slabOffBelt);assert(Object.isFrozen(TIMBER_PAY));
+assert(CARGO_KINDS.trunk.l===2*CARGO_KINDS.log.l-.05&&CARGO_KINDS.trunk.space===2*CARGO_KINDS.log.space,'a trunk is two logs long (2.25 m) and two logs of space');
+console.log('PASS timber-rules.mjs: trunk and slab bed capacities (the ATV refuses a trunk), save normalising, masses, carry speeds (log 95%, two logs 90%, trunk 60%, slab 80%, no sprint), bucking (bonus log at levels 3 and 8, axe swings, chainsaw seconds), saw times (log 8 s, trunk 12 s), prices.');

@@ -2,6 +2,7 @@
 // findRoute: grid A* between two points (2 m cells) with an injected `blocked` and `cost`, then shortened; walkDistance and routePoint: how far along a route someone is at a moment (they walk to the end and stop, never back);
 // personPose: where a person is and what they are doing from schedule.js's plan, with no allocation (it fills `out`).
 import {WALK_SPEED,GAME_MINUTES_PER_SECOND,placeKind} from './population.js';
+import {isOutdoorWork,workerRoleOf,workforcePose} from './workforce-pose.js'; // W3: the Ridgeline fellers and the sawyer work in the open (notes/workforce-design.md)
 
 export const SECONDS_PER_MINUTE=1/GAME_MINUTES_PER_SECOND; // real seconds per game minute (2)
 export const CELL=2;
@@ -80,7 +81,7 @@ export function presenceOf(block){
  if(block.act==='travel')return block.mode==='drive'?'hidden':'walk';
  if(block.act==='outside')return 'stand'; // out in the open (schedule.js 'outside'), even at a shop or a front door
  if(block.act==='sleep'||block.act==='home'||block.act==='away')return 'hidden';
- return INDOOR_KINDS.includes(placeKind(block.place))?'hidden':'stand';
+ return INDOOR_KINDS.includes(placeKind(block.place))&&!isOutdoorWork(block)?'hidden':'stand'; // W3: work at the sawmill (an open-sided yard) is outdoors
 }
 // The index of the plan block a minute falls in (the plan covers 0 to 1440; blockAt in schedule.js builds an object, this does not).
 export function blockIndex(plan,minute){
@@ -104,9 +105,12 @@ function pace(out,b,minute,ctx){
 export function freeReach(blocked,x,z,dx,dz,max,step=.4){if(!blocked)return max;if(blocked(x,z))return 0;let d=0;while(d<max){const n=Math.min(max,d+step);if(blocked(x+dx*n,z+dz*n))return d;d=n}return max}
 // Where a person is: fills out {state, x, z, yaw, moving, walked}. ctx: point(place)->{x,z}|null, route(from,to)->route|null (null: not worked out yet, or no such trip), both injected.
 // yaw is NaN when they stand (keep the last heading). state 'hidden' leaves x and z alone.
+// W3: with ctx.person (and ctx.day, ctx.seed) a Ridgeline feller or sawyer at work gets workforce-pose.js's pose instead (phase chop/carry/bend/walk/saw, prop axe/log/planks, speed):
+// a pure function of (person, day, minute, seed), so every co-op client draws the same swing. Everyone else gets phase = prop = null.
 export function personPose(out,plan,minute,ctx){
- const b=plan[blockIndex(plan,minute)],kind=presenceOf(b);out.moving=false;out.yaw=NaN;out.state='hidden';
+ const b=plan[blockIndex(plan,minute)],kind=presenceOf(b);out.moving=false;out.yaw=NaN;out.state='hidden';if(out.phase)out.phase=out.prop=null;
  if(kind==='hidden')return out;
+ if(kind==='stand'&&b.act==='work'&&ctx?.person&&workerRoleOf(ctx.person)&&isOutdoorWork(b,ctx.person)){return workforcePose(out,ctx.person,ctx.day??1,minute,ctx)}
  if(kind==='stand'){const p=ctx.point(b.place);if(p){out.state='stand';out.x=p.x;out.z=p.z;if(b.act==='outside')pace(out,b,minute,ctx)}return out}
  const route=ctx.route(b.origin,b.place);if(!route)return out;
  const m=minute>=0&&minute<1440?minute:((minute%1440)+1440)%1440,elapsed=(m-b.from)*SECONDS_PER_MINUTE,duration=(b.to-b.from)*SECONDS_PER_MINUTE,d=walkDistance(route.length,elapsed,duration);

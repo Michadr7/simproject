@@ -3,13 +3,14 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import path from 'node:path';
 import {fileURLToPath} from 'node:url';
-import {cmpVersion,deployChecks,verdictText,LIVE_URL,canPublish,confirmText,CHECK_FRESH_MS,nextVersion,bumpPlan,bumpConfirmText,LEVELS} from '../hub/web/deploy-rules.js';
+import {cmpVersion,deployChecks,verdictText,LIVE_URL,canPublish,confirmText,CHECK_FRESH_MS,nextVersion,bumpPlan,bumpConfirmText,LEVELS,isTrackedCodePath,newestCodeMtime,shipButtonText} from '../hub/web/deploy-rules.js';
 import {spawnSync} from 'node:child_process';
 import os from 'node:os';
 import http from 'node:http';
 import {createHubServer} from '../hub/server.js';
 import {summarise,JOBS,tableProblems} from '../hub/jobs.js';
-import {nextLine} from '../hub/web/deploy.js';
+import {gatherFacts} from '../hub/deploy-facts.mjs';
+import {nextLine,runShip} from '../hub/web/deploy.js';
 const root=path.resolve(path.dirname(fileURLToPath(import.meta.url)),'..');
 
 assert.equal(cmpVersion('0.35.4','0.35.3'),1);assert.equal(cmpVersion('0.35.4','0.35.4'),0);assert.equal(cmpVersion('0.9.0','0.10.0'),-1,'numbers, not text');assert.equal(cmpVersion('1.0.0','0.99.99'),1);assert.equal(cmpVersion('x','0.1.0'),null);
@@ -19,11 +20,11 @@ let r=deployChecks(good);assert.equal(r.ready,true);assert.equal(r.warnings,0);a
 // what blocks
 assert.equal(by({...good,version:'nope'},'version').state,'fail');assert.equal(by({...good,releaseFolder:false},'version').state,'fail');assert.equal(by({...good,indexPointsHere:false},'version').state,'fail');
 assert.equal(by({...good,live:{version:'0.36.0'}},'live').state,'fail','a deployed version is never reused');assert.match(by({...good,live:{version:'0.36.0'}},'live').text,/never be reused/);assert.equal(by({...good,live:{version:'0.40.0'}},'live').state,'fail','never publish something older');
-assert.equal(by({...good,tests:{ok:false,at:1}},'tests').state,'fail');assert.equal(by({...good,wrangler:'out'},'wrangler').state,'fail');assert.match(by({...good,wrangler:'out'},'wrangler').text,/npx wrangler login/);
-for(const f of [{...good,releaseFolder:false},{...good,live:{version:'0.36.0'}},{...good,tests:{ok:false}},{...good,wrangler:'out'}])assert.equal(deployChecks(f).ready,false);
-// what only warns (you may go on): Dev Mode on, uncommitted files, no test run recorded, the live version unreadable, wrangler unclear
+assert.equal(by({...good,tests:null},'tests').state,'fail','missing test run blocks Publish');assert.equal(by({...good,tests:{ok:false,at:1}},'tests').state,'fail');assert.equal(by({...good,wrangler:'out'},'wrangler').state,'fail');assert.match(by({...good,wrangler:'out'},'wrangler').text,/npx wrangler login/);
+for(const f of [{...good,releaseFolder:false},{...good,live:{version:'0.36.0'}},{...good,tests:null},{...good,tests:{ok:false}},{...good,tests:{ok:true,endedAt:100},newestChangedMtime:200},{...good,wrangler:'out'}])assert.equal(deployChecks(f).ready,false);
+// what only warns (you may go on): Dev Mode on, uncommitted files (with link to #commit), the live version unreadable, wrangler unclear
 assert.equal(by({...good,devMode:true},'dev').state,'warn');assert.equal(deployChecks({...good,devMode:true}).ready,true,'Dev Mode on is a warning you can accept');
-assert.equal(by({...good,changed:3},'changed').state,'warn');assert.match(by({...good,changed:1},'changed').text,/1 file changed/);assert.equal(by({...good,tests:null},'tests').state,'warn');
+assert.equal(by({...good,changed:3},'changed').state,'warn');assert.equal(by({...good,changed:3},'changed').href,'#commit');assert.equal(deployChecks({...good,changed:3}).ready,true,'uncommitted files warn, never block');assert.match(by({...good,changed:1},'changed').text,/1 file changed/);
 assert.equal(by({...good,live:null,liveError:true},'live').state,'warn');assert.equal(deployChecks({...good,live:null,liveError:true}).ready,true);assert.equal(by({...good,wrangler:'unknown'},'wrangler').state,'warn');
 assert.equal(by({...good,changed:null},'changed').state,'unknown');assert.equal(by({...good,devMode:null},'dev').state,'unknown');
 assert.equal(deployChecks({...good,devMode:true,changed:5}).warnings,2);assert.equal(deployChecks({}).ready,false,'no facts, no go');
@@ -122,4 +123,81 @@ assert.ok(JOBS.bump&&JOBS.bump.steps.join()==='bump-step,release,test'&&JOBS['bu
   r=await post({job:'bump',level:'minor',confirm:'0.37.0'});assert.equal(r.status,200);assert.equal(started,1);const rq=JSON.parse(fs.readFileSync(path.join(root2,'.hub','bump-request.json'),'utf8'));assert.deepEqual([rq.level,rq.from,rq.to],['minor','0.36.0','0.37.0']);assert.ok(Date.now()-rq.at<5000)
  }finally{await s2.close()}
  fs.rmSync(root2,{recursive:true,force:true})}
-console.log('hub-deploy: the version rules, every blocking and warning result, the job summary, the page sentence, and the proof that the check publishes nothing, the Publish rules, the refusals of the script, the route of the hub, and Bump version (the number rules, the refusals of the script, the route) passed.');
+// ── Decisions 2, 3, 4: test freshness gate, #commit warn link, and chained Ship <version> (never skips confirm)
+assert.equal(isTrackedCodePath('dist/game.js','0.36.0'),true);assert.equal(isTrackedCodePath('tests/startup.mjs','0.36.0'),true);
+assert.equal(isTrackedCodePath('dist/releases/0.36.0/game.js','0.36.0'),true,'current release is tracked');
+assert.equal(isTrackedCodePath('dist/releases/0.35.3/game.js','0.36.0'),false,'old release folder excluded');
+assert.equal(isTrackedCodePath('notes/handoff.md','0.36.0'),false,'notes excluded');
+assert.equal(newestCodeMtime([{path:'dist/releases/0.35.3/game.js',mtime:500},{path:'notes/x.md',mtime:400},{path:'dist/game.js',mtime:200},{path:'tests/a.mjs',mtime:250}],'0.36.0'),250);
+assert.equal(by({...good,tests:{ok:true,endedAt:100},newestChangedMtime:200},'tests').state,'fail','stale test blocks');
+assert.equal(by({...good,tests:{ok:true,endedAt:200},newestChangedMtime:200},'tests').state,'ok','equal mtime passes');
+assert.equal(by({...good,tests:{ok:true,endedAt:100},files:[{path:'dist/game.js',mtime:200}]},'tests').state,'fail','newer dist file blocks');
+assert.equal(by({...good,tests:{ok:true,endedAt:100},files:[{path:'tests/x.mjs',mtime:200}]},'tests').state,'fail','newer test file blocks');
+assert.equal(by({...good,tests:{ok:true,endedAt:100},files:[{path:'dist/releases/0.36.0/game.js',mtime:200}]},'tests').state,'fail','current release newer than tests blocks');
+assert.equal(by({...good,tests:{ok:true,endedAt:100},files:[{path:'dist/releases/0.35.3/game.js',mtime:900},{path:'notes/x.md',mtime:900}]},'tests').state,'ok','old release and notes do not block');
+// gatherFacts fs check: ignores old release mtimes, tracks dist/ and tests/ against job test endedAt
+{const root3=fs.mkdtempSync(path.join(os.tmpdir(),'hub-facts-'));
+ try{
+  fs.mkdirSync(path.join(root3,'dist','releases','0.36.0'),{recursive:true});
+  fs.mkdirSync(path.join(root3,'dist','releases','0.35.3'),{recursive:true});
+  fs.mkdirSync(path.join(root3,'tests'),{recursive:true});
+  fs.mkdirSync(path.join(root3,'.hub','jobs'),{recursive:true});
+  fs.writeFileSync(path.join(root3,'package.json'),JSON.stringify({version:'0.36.0'}));
+  fs.writeFileSync(path.join(root3,'dist','index.html'),'./releases/0.36.0/game.js');
+  fs.writeFileSync(path.join(root3,'dist','dev-flag.js'),'export const DEV_MODE = false;');
+  const tOld=new Date(Date.now()-60000),tTest=Date.now()-30000,tNew=new Date(Date.now()-5000);
+  const fCur=path.join(root3,'dist','releases','0.36.0','game.js'),fRelOld=path.join(root3,'dist','releases','0.35.3','game.js'),fGame=path.join(root3,'dist','game.js'),fTest=path.join(root3,'tests','x.mjs');
+  for(const p of [fCur,path.join(root3,'dist','index.html'),path.join(root3,'dist','dev-flag.js'),fGame,fTest]){fs.writeFileSync(p,'x');fs.utimesSync(p,tOld,tOld)}
+  fs.writeFileSync(fRelOld,'old');fs.utimesSync(fRelOld,tNew,tNew);
+  fs.writeFileSync(path.join(root3,'.hub','jobs','job-20260101-000000-0001.json'),JSON.stringify({key:'test',endedAt:tTest,summary:{ok:true,total:1}}));
+  const f1=await gatherFacts({root:root3,fetchFn:async()=>({ok:true,json:async()=>({version:'0.35.3'})})});
+  assert.equal(by({...f1,wrangler:'in',changed:0},'tests').state,'ok','old release folder mtime ignored by gatherFacts');
+  fs.utimesSync(fGame,tNew,tNew);
+  const f2=await gatherFacts({root:root3,fetchFn:async()=>({ok:true,json:async()=>({version:'0.35.3'})})});
+  assert.equal(by({...f2,wrangler:'in',changed:0},'tests').state,'fail','newer dist/game.js fails freshness');
+  fs.utimesSync(fGame,tOld,tOld);fs.utimesSync(fTest,tNew,tNew);
+  const f3=await gatherFacts({root:root3,fetchFn:async()=>({ok:true,json:async()=>({version:'0.35.3'})})});
+  assert.equal(by({...f3,wrangler:'in',changed:0},'tests').state,'fail','newer tests/ file fails freshness');
+ }finally{fs.rmSync(root3,{recursive:true,force:true})}}
+// Decision 3 & 4 UI wiring & runShip tests (never skips version confirm)
+assert.equal(shipButtonText('0.36.0'),'Ship 0.36.0');assert.equal(shipButtonText(''),'Ship');
+assert.ok(page.includes("href:'#commit'")||page.includes('href:"#commit"'),'deploy page renders #commit link');
+assert.ok(page.includes('shipButtonText')&&page.includes('runShip'),'deploy page wires Ship <version>');
+{
+ let calls=[],confirmed=0;
+ const rBusy=await runShip({busy:true,call:async()=>{calls.push('x');return {ok:true}},confirmFn:()=>{confirmed++;return true}});
+ assert.equal(rBusy.ok,false);assert.equal(rBusy.stage,'guard');assert.equal(calls.length,0);assert.equal(confirmed,0);
+ const rFailStart=await runShip({call:async()=>{calls.push('check');return {ok:false,data:{error:'no'}}},confirmFn:()=>{confirmed++;return true}});
+ assert.equal(rFailStart.ok,false);assert.equal(rFailStart.stage,'check-start');assert.equal(confirmed,0);
+ calls=[];const blockedChk={summary:{ok:false,version:'0.36.0',live:'0.35.3',checks:deployChecks({...good,tests:null}).checks},endedAt:1000};
+ const rGate=await runShip({call:async(op,a)=>{calls.push([op,a]);return {ok:true,data:{job:{id:'job-1'}}}},waitForCheck:async()=>blockedChk,confirmFn:()=>{confirmed++;return true},now:()=>2000});
+ assert.equal(rGate.ok,false);assert.equal(rGate.stage,'check-gate');assert.equal(confirmed,0,'hard gate blocks before confirm');assert.equal(calls.length,1,'only deploy-check started');
+ calls=[];let confirmPrompt='';const warnChk={summary:{ok:true,version:'0.36.0',live:'0.35.3',checks:deployChecks({...good,changed:2}).checks},endedAt:1000};
+ const rCancel=await runShip({call:async(op,a)=>{calls.push([op,a]);return {ok:true,data:{job:{id:'job-2'}}}},waitForCheck:async()=>warnChk,confirmFn:txt=>{confirmed++;confirmPrompt=txt;return false},now:()=>2000});
+ assert.equal(rCancel.ok,false);assert.equal(rCancel.stage,'cancelled');assert.equal(confirmed,1);assert.match(confirmPrompt,/Publish 0\.36\.0\?/);assert.equal(calls.length,1,'cancel never starts deploy');
+ calls=[];confirmed=0;
+ const rGo=await runShip({call:async(op,a)=>{calls.push([op,a]);return {ok:true,data:{job:{id:op==='deploy-check'?'job-3':'job-4'}}}},waitForCheck:async()=>warnChk,confirmFn:txt=>{confirmed++;return true},now:()=>2000});
+ assert.equal(rGo.ok,true);assert.equal(rGo.stage,'done');assert.equal(confirmed,1);assert.deepEqual(calls,[['job-start',{job:'deploy-check'}],['job-start',{job:'deploy',confirm:'0.36.0'}]]);
+}
+// Live hub server test for runShip: Check -> confirm -> Publish (deploy-confirm written only when confirmed)
+{const root4=fs.mkdtempSync(path.join(os.tmpdir(),'hub-ship-'));fs.mkdirSync(path.join(root4,'.hub'));
+ const startedJobs=[];let nextChk=null;
+ const jobsStub={has:k=>k==='deploy'||k==='deploy-check',last:k=>k==='deploy-check'?nextChk:null,start:k=>{startedJobs.push(k);return {job:{id:`job-20260101-00000${startedJobs.length}-abcd`}}},list:()=>({running:null,jobs:[]}),active:()=>false},runsStub={checkToken:t=>t==='tk',locked:()=>false};
+ const s4=createHubServer({root:root4,runs:runsStub,jobs:jobsStub}),p4=await s4.listen();
+ const callApi=async(op,args)=>{const url=op==='job-start'?'/api/jobs/start':'';return new Promise((res,rej)=>{const q=http.request({host:'127.0.0.1',port:p4,method:'POST',path:url,headers:{'Content-Type':'application/json',Origin:'http://127.0.0.1:'+p4,'X-Hub-Token':'tk'}},x=>{let b='';x.on('data',c=>b+=c);x.on('end',()=>{const data=JSON.parse(b||'{}');res({ok:x.statusCode>=200&&x.statusCode<300,status:x.statusCode,data})})});q.on('error',rej);q.end(JSON.stringify(args))})};
+ try{
+  nextChk={id:'job-20260101-000001-abcd',summary:{ok:false,version:'0.36.0',live:'0.35.3',checks:deployChecks({...good,tests:{ok:true,endedAt:10},newestChangedMtime:99}).checks},endedAt:Date.now()};
+  let ask=0;
+  let res=await runShip({call:callApi,waitForCheck:async()=>nextChk,confirmFn:()=>{ask++;return true}});
+  assert.equal(res.ok,false);assert.equal(res.stage,'check-gate');assert.equal(ask,0);assert.deepEqual(startedJobs,['deploy-check']);
+  assert.equal(fs.existsSync(path.join(root4,'.hub','deploy-confirm.json')),false);
+  nextChk={id:'job-20260101-000002-abcd',summary:{ok:true,version:'0.36.0',live:'0.35.3',checks:deployChecks({...good,changed:1}).checks},endedAt:Date.now()};
+  res=await runShip({call:callApi,waitForCheck:async()=>nextChk,confirmFn:()=>{ask++;return false}});
+  assert.equal(res.ok,false);assert.equal(res.stage,'cancelled');assert.equal(ask,1);assert.deepEqual(startedJobs,['deploy-check','deploy-check']);
+  assert.equal(fs.existsSync(path.join(root4,'.hub','deploy-confirm.json')),false);
+  res=await runShip({call:callApi,waitForCheck:async()=>nextChk,confirmFn:()=>{ask++;return true}});
+  assert.equal(res.ok,true);assert.equal(res.stage,'done');assert.equal(ask,2);assert.deepEqual(startedJobs,['deploy-check','deploy-check','deploy-check','deploy']);
+  assert.equal(JSON.parse(fs.readFileSync(path.join(root4,'.hub','deploy-confirm.json'),'utf8')).version,'0.36.0');
+ }finally{await s4.close()}
+ fs.rmSync(root4,{recursive:true,force:true})}
+console.log('hub-deploy: the version rules, every blocking and warning result, the job summary, the page sentence, and the proof that the check publishes nothing, the Publish rules, the refusals of the script, the route of the hub, Bump version, and Decisions 2-4 passed.');

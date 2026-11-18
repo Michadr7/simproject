@@ -9,6 +9,8 @@ import {itemById} from './items.js';
 import {normalizeTickets,migrateOrderPallets} from './tickets.js';
 import {normalizeSupply} from './supply.js';
 import {normalizePallets} from './pallets.js';
+// W3: the same rule as workforce-tick.js normalizeWorkforce (repeated: importing it closes a cycle careers -> workforce-tick -> forest -> shift -> careers; tests/workforce-game.mjs checks they agree)
+export const normalizeWorkforce=v=>v&&typeof v==='object'&&!Array.isArray(v)&&Number.isSafeInteger(v.lastMin)&&v.lastMin>=0&&v.lastMin<=1e9?{lastMin:v.lastMin}:null;
 
 export const REP_MAX=100,START_REP=10,LOCAL_PLAYER='me';
 export const employerById=(id,map=MAP)=>(map.employers||[]).find(e=>e.id===id)||null;
@@ -34,6 +36,7 @@ export function normalizeCompanies(value,map=MAP){
   {const pallets=normalizePallets(c.pallets,c);if(pallets.length)entry.pallets=pallets} // the warehouse's pallets (pallets.js); a save from before pallets carries racks {slot: n} and forkload n, migrated here
   if(entry.tickets){const m=migrateOrderPallets(entry);if(m!==entry)entry.pallets=m.pallets} // a staged order from before order pallets gets its pallet on its square
   {const s=normalizeSupply(c.supply);if(s)entry.supply=s} // a crew delivery on its way to the warehouse (supply.js)
+  {const wf=normalizeWorkforce(c.workforce);if(wf)entry.workforce=wf} // W3: the workforce's last ticket step {lastMin} (workforce-tick.js); omitted when idle, old saves load
   if(Object.keys(entry).length)out[e.id]=entry}
  return out;
 }

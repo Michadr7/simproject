@@ -27,7 +27,7 @@ export const ITEMS=Object.freeze([
  equipment('large-backpack','Large backpack','🎒','backpack',20,4500),
   tool('axe','Axe','🪓','Equip it, then press E (hold to keep chopping) at a pine in Pine Ridge. Four swings for a pine at level 1',2000),
  {...tool('logging-axe','Logging Axe','🪓','A heavier, sharper axe: a pine falls in three swings at level 5',12000),requires:{skill:'lumberjack',level:5}},
- {...tool('chainsaw','Chainsaw','🪚','A petrol chainsaw. Sold only by Ridgeline Timber to a Foreman at level 15. Cutting with it arrives with fuel and wear',60000),requires:{skill:'lumberjack',level:15},buyable:false,companyOnly:'ridgeline'},
+ {...tool('chainsaw','Chainsaw','🪚','A petrol chainsaw: equip it and hold E at a felled trunk to cut it into logs. Sold only by Ridgeline Timber to a Hauler at level 5. Felling with it arrives with fuel and wear',35000),requires:{skill:'lumberjack',level:5},buyable:false,companyOnly:'ridgeline'}, // T-E (owner 2026-11-18): Rank 3 Hauler, level 5, $350 (was Foreman, level 15, $600)
  {...tool('logging-chainsaw','Logging Chainsaw','🪚','The professional saw: half the fuel and slow to wear. Sold only by Ridgeline Timber at level 20. Cutting with it arrives with fuel and wear',150000),requires:{skill:'lumberjack',level:20},buyable:false,companyOnly:'ridgeline'},
  {...tool('steel-axe','Steel Axe','🪓','The best axe there is: a pine falls in two swings at level 10',35000),requires:{skill:'lumberjack',level:10}},
  {...tool('gas-can','Gas Can','⛽','Equip it. At a pump hold F to fill it (5 gallons of one fuel); at a vehicle\'s tank cap hold F to pour it in',1500),capacityMgal:5000},

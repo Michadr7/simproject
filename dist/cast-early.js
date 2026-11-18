@@ -11,31 +11,32 @@ export const NOAH=freezeDeep({
  bye:[
   {if:{tierMin:'friend'},t:'See you round, my friend. Mind the kerb outside.'},
   {if:{mood:['miserable','low']},t:'I had better check the crates out back. See you.'},
-  {t:'Always good talking. Doors stay open until ten.'}
+  {if:{period:['morning','afternoon','evening']},t:'Always good talking. Doors stay open until ten.'},
+  {t:'Always good talking. See you.'}
  ],
  nodes:[
   {id:'noah.door',entry:true,when:{place:['door','doorway']},do:[{meet:true}],say:[
    {if:{period:'night',met:true},t:['Sorry, clocked off for the day. Flat eight is quiet hours now.','Catch me behind the counter from seven.']},
-   {if:{period:'night',met:false},t:['Oh, hello on the landing. I am Noah from down the hall, Flat eight.','You have caught me off shift. Come by the Corner Market tomorrow.']},
-   {if:{period:'morning',met:true},t:['Just locking up my flat before the counter rush.','Walk down with me if you are headed to the shop.']},
+   {if:{period:'night',met:false},t:['Oh, hello! Noah here, Flat eight.','You have caught me off shift. Come by the Corner Market from seven.']},
+   {if:{period:'morning',met:true},t:['Just heading out for the counter rush.','Walk over with me if you are going to the shop.']},
    {if:{period:'evening',met:true},t:['Still counting tomorrow’s produce order in my head.','Drop by the market before ten if you need anything.']},
-   {if:{met:false},t:['Oh, hello! You must be new at Studio 2B. I am Noah.','I run the Corner Market across the street.']},
-   {t:['Good to bump into you on the stairs.','Need something from the shop, or just stretching your legs?']}
+   {if:{met:false},t:['Oh, hello! You must be new on Oak Street. I am Noah.','I run the Corner Market just down the street.']},
+   {t:['Hello! You caught me between chores.','Need something from the shop, or just stretching your legs?']}
   ],replies:[
    {label:'What is on the shelves today?',go:'noah.shelves'},
    {label:'Any work going at the market?',go:'noah.work'},
-   {label:'How did Sophie settle her grocery order?',if:{beat:'sophie.groceries-delivered'},go:'noah.sophie'},
+   {label:'How did Sophie settle her grocery order?',if:{story:[2,10],notBeat:'is.skipped'},go:'noah.sophie'},
    {label:'Hear anything round Oak Street?',go:'noah.town'}
   ]},
 
   {id:'noah.counter',entry:true,when:{place:'counter'},do:[{meet:true}],say:[
-   {if:{met:false,story:[0,1],storyDone:false},w:5,t:['Welcome in! I am Noah, and you look like you just moved into the studio.','We keep fresh food, tools and packs from seven until ten. Could you help me with one bag?']},
+   {if:{met:false,story:[0,1],storyDone:false},w:5,t:['Welcome in! I am Noah, and you look new to Oak Street.','We keep fresh food, tools and packs from seven until ten. If you can carry a bag, ask me about work.']},
    {if:{gig:'need-restock',gigClient:'noah'},w:6,t:['Is that my restock run? Back your truck to the door and we will count crates.','The shelves could really use it.']},
    {if:{story:[2,2],storyDone:false},w:4,t:['Glad you are back before setting out.','Willow Farm is a long walk up the county road, so grab a bite and a drink first.']},
    {if:{story:[3,3],storyDone:false},w:4,t:['Hal Brennan is expecting those groceries up at Willow Farmhouse.','Follow the arrow north over the river bridge and he will sort you out.']},
    {if:{story:[4,4],storyDone:false},w:4,t:['Still counting shelf space for Hal’s four egg crates!','Bring his truck up to the front when they are loaded, and go easy over the bridge.']},
    {if:{recent:'promoted'},w:3,t:['Word travels fast on Oak Street—congrats on making the step up at Ridgeline!','Picking up supplies before your next shift?']},
-   {if:{recent:'delivered:sophie'},w:3,t:['That grocery bag made Sophie’s day across the street!','Three dollars for your pocket and a grateful neighbour to boot.']},
+   {if:{recent:'delivered:sophie'},w:3,t:['That grocery bag made Sophie’s day!','Twelve dollars for you and a grateful neighbour to boot.']},
    {if:{recent:'egg-run',tierMin:'acquaintance'},w:3,t:['Those eggs moved off the shelf faster than I could price them.','Thank you again for hauling the crates.']},
    {if:{period:'morning',mood:['good','delighted']},w:2,t:['Good morning! Bread just came up from Ironwood Bakery and I counted every loaf twice.','Need anything off the racks, or looking for a gig?']},
    {if:{period:'morning',mood:['miserable','low']},w:2,t:['Quiet morning, and two crates short on my tally.','What are you after today?']},
@@ -50,7 +51,7 @@ export const NOAH=freezeDeep({
    {label:'What is on the shelves today?',go:'noah.shelves'},
    {label:'Any work going?',go:'noah.work'},
    {label:'Let me browse items for sale.',act:'openStore'},
-   {label:'Did Sophie get her groceries?',if:{story:[2,10]},go:'noah.sophie'},
+   {label:'Did Sophie get her groceries?',if:{story:[2,10],notBeat:'is.skipped'},go:'noah.sophie'},
    {label:'Tell me about Hal’s egg crates.',if:{story:[4,10]},go:'noah.eggs'},
    {label:'What is new round town?',go:'noah.town'}
   ]},
@@ -88,13 +89,14 @@ export const NOAH=freezeDeep({
   ]},
 
   {id:'noah.work',say:[
-   {if:{story:[0,1],storyDone:false,place:'counter'},t:['Sophie across at 18 Oak Street ordered a bag of groceries, three dollars on delivery.','Or if you already know the ropes, you can skip the starter errands.']},
-   {if:{story:[0,1],storyDone:false},t:['Come inside to the market counter while we are open, seven to ten.','I have a bag ready for Sophie across the street at 18 Oak Street.']},
-   {if:{story:[2,3],storyDone:false},t:['Next run is Hal Brennan out at Willow Farmhouse. Take his groceries up north over the bridge.','Remember to buy food and eat first so your legs hold out.']},
+   {if:{story:[0,1],storyDone:false,place:'counter'},t:['Sophie in Flat two at 18 Oak Street ordered a bag of groceries, twelve dollars on delivery.','Or if you already know the ropes, you can skip the starter errands.']},
+   {if:{story:[0,1],storyDone:false},t:['Come inside to the market counter while we are open, seven to ten.','I have a bag ready for Sophie at 18 Oak Street, just up the road.']},
+   {if:{story:[2,2],storyDone:false},t:['Next run is Hal Brennan out at Willow Farmhouse. Take his groceries up north over the bridge.','Remember to buy food and eat first so your legs hold out.']},
+   {if:{story:[3,3],storyDone:false},t:['Hal Brennan is waiting at Willow Farmhouse for his groceries. Head up north over the bridge.','Mind the bridge curve on the way.']},
    {if:{gig:true},t:['Finish the gig you already accepted before taking another on the board.','Check your phone tracker if you lose the marker.']},
    {t:['Between local deliveries and town gigs there is nearly always something posted.','Egg runs for Willow Farm and timber hauls pay the best once you have a truck.']}
   ],replies:[
-   {label:'Take Sophie’s grocery order ($3.00).',if:{story:[0,1],storyDone:false,place:'counter'},go:'noah.sophie-order'},
+   {label:'Take Sophie’s grocery order ($12.00).',if:{story:[0,1],storyDone:false,place:'counter'},go:'noah.sophie-order'},
    {label:'Skip the introduction.',if:{story:[0,1],storyDone:false,place:'counter'},go:'noah.skip'},
    {label:'Check today’s delivery & gig board.',act:'gigBoard',if:{place:'counter'}},
    {label:'What is new round town?',go:'noah.town'},
@@ -102,7 +104,7 @@ export const NOAH=freezeDeep({
   ]},
 
   {id:'noah.sophie-order',do:[{act:'job.pickup'}],say:[
-   {t:['Thank you! Take the bag straight across to the awning at 18 Oak Street.','Check back in with me once Sophie has her groceries.']}
+   {t:['Thank you! Take the bag straight along to the awning at 18 Oak Street.','Check back in with me once Sophie has her groceries.']}
   ],end:true},
 
   {id:'noah.skip',say:[
@@ -113,9 +115,9 @@ export const NOAH=freezeDeep({
   ]},
 
   {id:'noah.keep-story',say:[
-   {t:['Good call! Take Sophie’s bag across to 18 Oak Street whenever you are ready.']}
+   {t:['Good call! Take Sophie’s bag over to 18 Oak Street whenever you are ready.']}
   ],replies:[
-   {label:'Take Sophie’s grocery order ($3.00).',if:{place:'counter'},act:'job.pickup'},
+   {label:'Take Sophie’s grocery order ($12.00).',if:{place:'counter'},act:'job.pickup'},
    {label:'I will come back to the counter in a minute.',go:'noah.wrap'}
   ]},
 
@@ -124,13 +126,13 @@ export const NOAH=freezeDeep({
    {if:{cafe:'none'},t:['Elena next door at Alder Coffee was asking for an extra hand behind the espresso bar.','Her shifts pay twenty-four dollars for serving two regulars and wiping down.']},
    {t:['Eastbank fuel tanker rolls in once a week with four-dollar gas and four-twenty diesel.','Do not run a truck dry north of the bridge!']}
   ],replies:[
-   {label:'How did Sophie find her groceries?',if:{story:[2,10]},go:'noah.sophie'},
+   {label:'How did Sophie find her groceries?',if:{story:[2,10],notBeat:'is.skipped'},go:'noah.sophie'},
    {label:'Tell me about Hal’s egg crates.',if:{story:[4,10]},go:'noah.eggs'},
    {label:'Catch you behind the counter later.',go:'noah.wrap'}
   ]},
 
   {id:'noah.sophie',say:[
-   {if:{notBeat:'noah.sophie-praised'},t:['Sophie popped down earlier just to say thank you for bringing those groceries intact.','She is in Flat two across the street. Give her buzzer a ring sometime!'],do:[{beat:'noah.sophie-praised'},{standing:1},{mood:2}]},
+   {if:{notBeat:'noah.sophie-praised'},t:['Sophie popped down earlier just to say thank you for bringing those groceries intact.','She is in Flat two, same building as me. Give her buzzer a ring sometime!'],do:[{beat:'noah.sophie-praised'},{standing:1},{mood:2}]},
    {t:['Sophie still mentions how fast you brought that first bag over.','She lives in Flat two, right above the buzzer if you ever fancy checking in.']}
   ],replies:[
    {label:'Tell me about Hal’s egg crates.',if:{story:[4,10]},go:'noah.eggs'},
@@ -139,7 +141,7 @@ export const NOAH=freezeDeep({
 
   {id:'noah.eggs',say:[
    {if:{story:[4,4],storyDone:false},t:['Four crates fit neatly on Hal’s Shortbed. Watch the kerb over the bridge!','Smooth driving keeps quality at a hundred percent and pays the full forty dollars.']},
-   {if:{recent:'egg-run',notBeat:'noah.eggs-checked'},t:['All sixteen dozen stacked clean on the rack! Hal knows who to trust with a full bed.','Keep your eye on the Gigs app whenever our egg basket dips.'],do:[{beat:'noah.eggs-checked'},{standing:1}]},
+   {if:{recent:'egg-run',notBeat:'noah.eggs-checked'},t:['Every dozen stacked clean on the rack! Hal knows who to trust with a full bed.','Keep your eye on the Gigs app whenever our egg basket dips.'],do:[{beat:'noah.eggs-checked'},{standing:1}]},
    {t:['Hal’s hens lay faster than he can haul with that bad knee of his.','A clean four-crate run always beats twenty-eight dollars minimum, up to forty flat.']}
   ],replies:[
    {label:'Show me the shelf prices.',act:'shelves',if:{place:'counter'}},
@@ -147,6 +149,7 @@ export const NOAH=freezeDeep({
   ]},
 
   {id:'noah.wrap',say:[
+   {if:{period:'morning'},t:['Off you go. I have a delivery to count before noon.']},
    {t:['Holler if you see an empty shelf! Keeping Oak Street fed takes both of us.']}
   ],end:true}
  ]
@@ -165,10 +168,11 @@ export const HAL=freezeDeep({
  ],
  nodes:[
   {id:'hal.open',entry:true,do:[{meet:true}],say:[
-   {if:{gig:'need-harvest',gigClient:'hal',storyDone:true},w:6,t:['You took the harvest job? Load the egg crates straight off the pallet by the barn.']},
+   {if:{gig:'need-harvest',gigClient:'hal',storyDone:true},w:6,t:['You took the harvest job? Good. The shed is fuller than I can sell.']},
+   {if:{gig:'need-restock',storyDone:true},w:6,t:['On the egg run? Crates are on the pallet by the barn. Back the truck up and load.']},
    {if:{story:[0,2],storyDone:false},w:5,t:['Haven\'t seen you around. Noah said he might send someone out with my groceries.']},
    {if:{story:[3,3],storyDone:false},w:5,t:['You must be Noah\'s helper. My knee says thank you.','My old Shortbed has stood since spring. Take her for the day if you can drive.']},
-   {if:{story:[4,4],storyDone:false,beat:'hal.loaded'},w:6,t:['The crates are on. Noah is waiting, so mind the bumps.']},
+   {if:{story:[4,4],storyDone:false,beat:'is.loaded'},w:6,t:['The crates are on. Noah is waiting, so mind the bumps.']},
    {if:{story:[4,4],storyDone:false},w:5,t:['Four crates of eggs are on the pallet by the barn. Park the truck beside them, load up, and run them to Noah.']},
    {if:{story:[5,5],storyDone:false},w:5,t:['She is nearly dry. I left cash for gas. The pump is in Eastbank.']},
    {if:{story:[6,8],storyDone:false},w:5,t:['Walt at the Ridgeline office is expecting my note. Take a gig if you want the money.']},
@@ -195,25 +199,26 @@ export const HAL=freezeDeep({
   ],end:true},
 
   {id:'hal.truck',say:[
-   {if:{storyDone:true},t:['The Shortbed is still in my yard if you have room for her. She is $500, and she runs fine.','Takes gasoline, carries four crates or forty-four planks. Keep oil and fuel in her.']},
+   {if:{beat:'is.ownsShortbed'},t:['She is yours now. Keep oil in her and she will outlast us both.']},
+   {if:{storyDone:true,notBeat:'is.ownsShortbed'},t:['The Shortbed is still in my yard if you have room for her. She is $500, and she runs fine.','Takes gasoline, carries four crates or forty-four planks. Keep oil and fuel in her.']},
    {if:{story:[4,5],storyDone:false},t:['Kasumuchi S70 takes regular gasoline, twenty-gallon tank, holds four crates cleanly.','Treat the gears gently over bumps so Noah’s cartons stay intact.']},
-   {t:['That little white S70 pulls up to sixty-five miles an hour and five miles to the gallon.','Damage costs twenty-five percent of her value at Eastbank Garage, minimum twenty-five dollars.']}
+   {t:['That little S70 pulls up to sixty-five miles an hour and five miles to the gallon.','Wreck her and the Eastbank repair shop charges up to a quarter of her price. Twenty-five dollars at least.']}
   ],replies:[
-   {label:'Buy the truck · $500',if:{storyDone:true},act:'hal.buy'},
+   {label:'Buy the truck · $500',if:{storyDone:true,notBeat:'is.ownsShortbed'},act:'hal.buy'},
    {label:'What happens if I wreck it?',go:'hal.garage'},
    {label:'How is the egg coop looking?',go:'hal.coop'},
    {label:'I will take care of her.',go:'hal.wrap'}
   ]},
 
   {id:'hal.garage',say:[
-   {t:['Eastbank Garage patches up scrapes, and a repair kit in your bag gives fifteen percent back up to forty.','Better not hitting a tree in the first place.']}
+   {t:['The Eastbank repair shop patches up scrapes, and a repair kit in your bag gives fifteen percent back up to forty.','Better not hitting a tree in the first place.']}
   ],replies:[
    {label:'How is the egg coop looking?',go:'hal.coop'},
    {label:'Fair enough, Hal.',go:'hal.wrap'}
   ]},
 
   {id:'hal.coop',do:[{topic:'haul'}],say:[
-   {if:{gig:'need-harvest',gigClient:'hal'},t:['You took the harvest run? Good. Load the crates straight off the pallet by the barn.']},
+   {if:{gig:'need-harvest',gigClient:'hal'},t:['The harvest run, eh? Good. Take what the shed holds; it is fuller than I can sell.']},
    {if:{notBeat:'hal.coop-tip'},t:['Hens put out eight dozen eggs a day, plus six jugs of milk and ten bags of produce.','Wait till the shed hits ninety percent and the phone board opens an egg run for Noah.'],do:[{beat:'hal.coop-tip'}]},
    {t:['Coop lays every day whether my knee cooperates or not. Watch the board whenever stock creeps up.']}
   ],replies:[
@@ -240,9 +245,9 @@ export const HAL=freezeDeep({
    {label:'I will see Walt soon.',go:'hal.wrap'}
   ]},
 
-  {id:'hal.peter',do:[{beat:'hal.peter'}],say:[
-   {if:{tierMin:'friend'},t:['Peter went off to fell pines for Ridgeline instead of milking cows at five AM.','Can’t blame the lad—eight bucks an hour beats waiting on hens, though I miss the help.']},
-   {t:['My boy Peter walks into Pine Ridge most days for Walt Hargrove.','Hard-hat work suits him. Sends a quiet word back whenever I need fence rails.']}
+  {id:'hal.peter',say:[
+   {if:{tierMin:'friend'},t:['Peter went off to fell pines for Ridgeline instead of milking cows at five AM.','Can’t blame the lad—ten dollars an hour beats waiting on hens, though I miss the help.']},
+   {t:['My boy Peter walks into Pine Ridge most days for Walt Hargrove.','Hard-hat work suits him. He still mends my fence rails when he gets home.']}
   ],replies:[
    {label:'How is that knee holding up?',go:'hal.knee'},
    {label:'Good talking about the family.',go:'hal.wrap'}
@@ -257,6 +262,7 @@ export const HAL=freezeDeep({
   ]},
 
   {id:'hal.wrap',say:[
+   {if:{mood:['miserable','low']},t:['Go on. I will sit a minute.']},
    {t:['Mind the bridge curve on the way out, and bring good news next trip.']}
   ],end:true}
  ]
@@ -275,9 +281,10 @@ export const WALT=freezeDeep({
  ],
  nodes:[
   {id:'walt.office',entry:true,when:{place:'office'},do:[{meet:true}],say:[
-   {if:{story:[6,8],storyDone:false,notBeat:'walt.note'},w:6,t:['Hal Brennan sent word you had a hand with his crates. If Hal vouches for you, my counter is open.','Come up to the desk—let us get you sorted. Can I help you with work?'],do:[{beat:'walt.note'},{standing:1}]},
-   {if:{hired:'ridgeline',rankMin:5},w:4,t:['Good to see you, Sawyer. Planks are moving well through the Eastbank warehouse today.','What do you need?']},
-   {if:{hired:'ridgeline',period:'morning'},w:3,t:['Good to see you on time this morning. Keep your gloves on and check the notice board.','Daylight will not wait—state what brings you to the desk.']},
+   {if:{story:[6,8],storyDone:false,hired:false,notBeat:'walt.note'},w:6,t:['Hal Brennan sent word you had a hand with his crates. If Hal vouches for you, my counter is open.','Come up to the desk—let us get you sorted. Can I help you with work?'],do:[{beat:'walt.note'},{standing:1}]},
+   {if:{hired:'ridgeline',rankMin:6},w:5,t:['Good to see you, Foreman. The crew sets its pace by you now.','What can I do for you?']},
+   {if:{hired:'ridgeline',rankMin:5},w:4,t:['Good to see you. Planks are moving well through the Eastbank warehouse today.','What do you need?']},
+   {if:{hired:'ridgeline',hour:[5,8]},w:3,t:['Good to see you on time this morning. Keep your gloves on and check the notice board.','Daylight will not wait—state what brings you to the desk.']},
    {if:{hired:'ridgeline'},w:2,t:['Good to see you. Keep your gloves on and your eyes on the work.','Office runs six AM to six PM if you need promotion papers or gear.']},
    {if:{hired:false,period:'morning'},w:1,t:['Morning. Ridgeline Timber Co. Can I help you?']},
    {if:{hired:false,period:'afternoon'},w:1,t:['Afternoon. Ridgeline Timber Co. Desk stays open until six—can I help you?']},
@@ -292,10 +299,11 @@ export const WALT=freezeDeep({
   ]},
 
   {id:'walt.open',entry:true,do:[{meet:true}],say:[
-   {if:{hired:'ridgeline',rankMin:2,period:['evening','night']},t:['Off the clock now—office shut at six.','Feller rank suits you, by the way. Tomorrow starts at six sharp.']},
+   {if:{hired:'ridgeline',rankMin:2,period:['evening','night']},t:['Off the clock now. Office shut at six.','The new rank suits you. Doors open again at six sharp.']},
    {if:{hired:'ridgeline'},t:['Good to see you out here. Keep your axe sharp and stay inside marked blocks on shift.','Catch me at the Eastbank office between six and six.']},
    {if:{period:['evening','night']},t:['Office is shut. Come to Eastbank between six AM and six PM if you want work on the crew.']},
    {if:{beat:'walt.note'},t:['Hal put in a good word for you. Door to the Eastbank office is open whenever you want a shift.']},
+   {if:{hired:false,period:['morning','afternoon']},t:['Walt Hargrove. Ridgeline always needs steady hands on the crew.','Come by the Eastbank office and ask about a shift.']},
    {t:['Walt Hargrove, Ridgeline Timber Co. Visit the Eastbank office between six AM and six PM if you want steady work.']}
   ],replies:[
    {label:'Tell me how a Ridgeline shift works.',go:'walt.shift'},
@@ -316,7 +324,7 @@ export const WALT=freezeDeep({
   ],end:true},
 
   {id:'walt.hired-confirm',say:[
-   {t:['You are on the crew. Here is your starter axe, and I buy back any old logs in your bag.','Clock in on your phone or by the office wall, and start with the marked pines in Pine Ridge.']}
+   {t:['Welcome to the crew. Start with the marked pines in Pine Ridge.','Clock in on your phone or at the wall clock.']}
   ],replies:[
    {label:'Tell me the safety rules first.',go:'walt.safety'},
    {label:'How is the plank yard set up?',go:'walt.mill'}
@@ -324,8 +332,8 @@ export const WALT=freezeDeep({
 
   {id:'walt.promote',say:[
    {if:{rankMin:6},t:['Foreman is as high as I can put you. The chainsaw shelf in the back corner is open to you now.']},
-   {if:{rankMin:2},t:['You have earned it. Feller pays $10.00 an hour, and harder ranks unlock trucks and warehouse tickets.','Want me to check your next rank papers?']},
-   {t:['Not yet, or maybe you are close! To make Feller I want level 3, three shifts worked, and a reputation of 20.','Want me to stamp the promotion sheet now?']}
+   {if:{rankMin:2},t:['Promotions go by the sheet: your level, shifts worked and reputation. Nothing else.','Want me to check it now?']},
+   {t:['Feller needs level 3, three shifts worked and a reputation of 20.','Not yet met all three? Then come back. Want me to check the sheet?']}
   ],replies:[
    {label:'Check and promote me if ready.',act:'walt.promote'},
    {label:'How does a shift work in detail?',go:'walt.shift'},
@@ -350,8 +358,8 @@ export const WALT=freezeDeep({
   ]},
 
   {id:'walt.safety',say:[
-   {if:{rankMin:4},t:['Yard hands watch the forklift tail swing—never drive through shut warehouse rollers.','At Foreman and level 15, the $600 Chainsaw opens in our company store.']},
-   {t:['Stand clear of a falling pine and the sawmill switch when the red beacon lights up.','Lumberjack level 5 unlocks the $8,000 Tylan Flatbed for hauling up to 120 planks.']}
+   {if:{rankMin:4},t:['Yard hands watch the forklift tail swing—never drive through shut warehouse rollers.','At Hauler and level 5, the $350 Chainsaw opens in our company store.']},
+   {t:['Stand clear when a pine starts to go, and never reach past the blade.','When the beacon turns red the belt is full. Take planks off before you feed another log.']}
   ],replies:[
    {label:'How are orders looking at the mill?',go:'walt.mill'},
    {label:'I will keep clear of the blade.',go:'walt.wrap'}
@@ -365,7 +373,8 @@ export const WALT=freezeDeep({
   ]},
 
   {id:'walt.wrap',say:[
-   {t:['Stay sharp on the bridge and punch the clock before five-thirty if you want full pay.']}
+   {if:{hired:'ridgeline'},t:['Stay sharp on the bridge. Last clock-in is half past five.']},
+   {t:['Office shuts at six sharp. Mind the bridge on the way back.']}
   ],end:true}
  ]
 });
@@ -383,8 +392,8 @@ export const ELENA=freezeDeep({
  ],
  nodes:[
   {id:'elena.door',entry:true,when:{place:['door','doorway']},do:[{meet:true}],say:[
-   {if:{period:'night'},t:['Quiet down here after closing! Flat seven smells faintly of roasted beans, sorry.','Cafe opens at eight tomorrow.']},
-   {if:{cafe:'employed'},t:['Fancy bumping into my barista on the landing! Do not forget—shifts start at eight.']},
+   {if:{period:'night'},t:['Quiet down here after closing! Flat seven smells faintly of roasted beans, sorry.','Cafe opens again at eight.']},
+   {if:{cafe:'employed'},t:['Fancy bumping into my cafe assistant! Do not forget—shifts start at eight.']},
    {t:['Oh, hello! I am Elena, Flat seven—and manager over at Alder Coffee.','Pop over to the counter between eight and six if you want a coffee or work.']}
   ],replies:[
    {label:'How are shifts going at Alder Coffee?',go:'elena.work'},
@@ -397,24 +406,24 @@ export const ELENA=freezeDeep({
    {if:{gig:'need-restock',gigClient:'elena'},w:6,t:['Wait—are you carrying milk or egg crates for my cafe counter? Drop them in and we will square up.']},
    {if:{story:[2,2],storyDone:false},w:5,t:['Noah tell you to fuel up before walking out to Willow Farm?','Our six-dollar sandwich and coffee will set your feet straight for the hike.']},
    {if:{cafe:'onShift'},w:4,t:['Good timing! Two tables to keep happy and I have one eye on the timer.','Need your next task or ready to square up your shift?']},
-   {if:{recent:'cafe-shift',cafe:'employed'},w:3,t:['Sharp shift earlier! The cups are stacked and Maya even left a tip on the saucer.']},
+   {if:{recent:'cafe-shift',cafe:'employed'},w:3,t:['Sharp shift earlier! The cups are stacked and Maya said it was the best latte all week.']},
    {if:{cafe:'employed',period:'morning'},w:3,t:['Morning! Machine is hot and we open for shift clock-ins from eight AM until four.','Ready to step behind the counter?']},
    {if:{cafe:'employed'},w:2,t:['Good to see you back at the counter. Plenty of steady customers on Oak Street today.','Clocking in for $24, or stopping for food?']},
    {if:{mood:['miserable','low']},w:1,t:['Rush nearly had me behind two customers short, though the roast is still spot-on.','What can I brew for you?']},
    {t:['Hi there! Fresh roast is on and the tables are spotless.','What can I help you with?']}
   ],replies:[
    {label:'Let us talk about cafe work.',go:'elena.work'},
-   {label:'I have your produce delivery from the market.',if:{story:[1,10]},go:'elena.delivery'},
+   {label:'I have your produce delivery from the market.',if:{beat:'is.carryingCafe'},go:'elena.delivery'},
    {label:'I would like something to eat and drink.',go:'elena.meal'},
    {label:'How are supplies holding up?',go:'elena.stock'},
    {label:'How do Oak Street regulars treat you?',go:'elena.regulars'}
   ]},
 
   {id:'elena.open',entry:true,do:[{meet:true}],say:[
-   {if:{cafe:'employed',period:'morning'},t:['Morning! See you behind the machine at eight sharp—customers will not wait for their lattes.']},
+   {if:{cafe:'employed',hour:[5,8]},t:['Morning! See you behind the machine at eight sharp—customers will not wait for their lattes.']},
    {if:{cafe:'employed'},t:['Good catching you outside! Remember shift clock-in closes at four PM, and I pay $24 a shift.']},
    {if:{period:['evening','night']},t:['Just locked the double glass doors after six. Nothing beats fresh air after steaming milk all day!']},
-   {if:{met:false},t:['Hi! I am Elena, I manage Alder Coffee right across from Studio 2B.','Drop in between eight AM and six PM sometime.']},
+   {if:{met:false},t:['Hi! I am Elena, I manage Alder Coffee a few doors down from 18 Oak Street.','Drop in between eight AM and six PM sometime.']},
    {t:['Hello there! Walking past Alder Coffee today, or headed up Oak Street?']}
   ],replies:[
    {label:'Are you hiring at the cafe?',go:'elena.work'},
@@ -444,7 +453,7 @@ export const ELENA=freezeDeep({
 
   {id:'elena.feedback',say:[
    {if:{cafe:'employed'},t:['Maya always asks for a latte and Theo takes an espresso. Never mix up the roast on the machine!','Wipe the mug off the table right after each leaves.']},
-   {t:['Only two tables per shift—Maya orders a latte, Theo orders an espresso.','Quick, calm work, and a clean bench keeps tips and reputation tidy.']}
+   {t:['Only two tables per shift—Maya orders a latte, Theo orders an espresso.','Quick, calm work, and a clean bench keeps the regulars happy.']}
   ],replies:[
    {label:'Tell me about your sandwich and coffee.',go:'elena.meal'},
    {label:'How are supplies holding up?',go:'elena.stock'},
@@ -476,14 +485,15 @@ export const ELENA=freezeDeep({
   ]},
 
   {id:'elena.regulars',say:[
-   {if:{notBeat:'elena.sophie-latte'},t:['Naomi handles the late shifts—between us, she practically keeps the grinder running smooth.','And Sophie from Flat two lives on my lattes whenever she is not rushing errands!'],do:[{beat:'elena.sophie-latte'},{mood:2}]},
+   {if:{notBeat:'elena.sophie-latte'},t:['Naomi works the bar with me most days—between us, she keeps the grinder running smooth.','And Sophie from Flat two lives on my lattes whenever she is not rushing errands!'],do:[{beat:'elena.sophie-latte'},{mood:2}]},
    {t:['Naomi still sets the grinder up like clockwork every shift, and Sophie pops over whenever she catches her breath.']}
   ],replies:[
    {label:'Catch you behind the bar, Elena.',go:'elena.wrap'}
   ]},
 
   {id:'elena.wrap',say:[
-   {t:['Eight to six every day—door chime always tells me when a friend walks in.']}
+   {if:{cafe:'employed'},t:['See you behind the bar.']},
+   {t:['Eight to six, every day. The door chime always tells me you are here.']}
   ],end:true}
  ]
 });
@@ -496,16 +506,16 @@ export const SOPHIE=freezeDeep({
  voice:'Kind, slightly rushed Flat 2 neighbour who apologises when busy and warms up with neighbourhood gossip.',
  facts:{flat:'Flat 2',building:'18 Oak Street',studio:'Studio 2B'},
  bye:[
-  {if:{tierMin:'friend'},t:'Text if you run into Oscar—and thanks for making Oak Street feel friendlier!'},
+  {if:{tierMin:'friend'},t:'Thanks for making Oak Street feel friendlier!'},
   {t:'Sorry to dash! Catch you on the stairs later.'}
  ],
  nodes:[
   {id:'sophie.door',entry:true,when:{place:['door','doorway']},do:[{meet:true}],say:[
-   {if:{story:[2,10],notBeat:'sophie.thanked'},t:['Oh, you are the one who carried Noah’s bag over! I was dashing down to thank you properly.','Come round anytime, Flat two is always chaotic with parcels.'],do:[{beat:'sophie.thanked'},{standing:1},{mood:2}]},
-   {if:{beat:'sophie.groceries-delivered',notBeat:'sophie.thanked'},t:['Hello from upstairs! Thank you again for hauling those heavy tins over for me earlier.'],do:[{beat:'sophie.thanked'},{standing:1},{mood:2}]},
-   {if:{period:'night'},t:['Keeping my voice down on the landing—everyone else in 18 Oak Street is half asleep!','Fancy a quick word?']},
+   {if:{story:[2,10],notBeat:['sophie.thanked','is.skipped']},t:['Oh, you are the one who carried Noah’s bag over! I was dashing down to thank you properly.','Come round anytime, Flat two is always chaotic with parcels.'],do:[{beat:'sophie.thanked'},{standing:1},{mood:2}]},
+   {if:{beat:'sophie.groceries-delivered',notBeat:['sophie.thanked','is.skipped']},t:['Hello from upstairs! Thank you again for hauling those heavy tins over for me earlier.'],do:[{beat:'sophie.thanked'},{standing:1},{mood:2}]},
+   {if:{period:'night'},t:['Keeping my voice down on the intercom—everyone else in 18 Oak Street is half asleep!','Fancy a quick word?']},
    {if:{story:[0,1],storyDone:false},t:['Oh, sorry—thought you were the delivery from Corner Market!','Noah promised someone might bring my bag over before long.']},
-   {t:['Oh, hi! Excuse the stack of empty crates by my doormat—I am Sophie, Flat two.','What brings you up the hall?']}
+   {t:['Oh, hi! Excuse the stack of empty crates by my doormat—I am Sophie, Flat two.','What brings you to my buzzer?']}
   ],replies:[
    {label:'Checking in on your grocery order.',go:'sophie.groceries'},
    {label:'Who else lives here at 18 Oak Street?',go:'sophie.neighbours'},
@@ -516,9 +526,9 @@ export const SOPHIE=freezeDeep({
 
   {id:'sophie.open',entry:true,do:[{meet:true}],say:[
    {if:{recent:'delivered:sophie',notBeat:'sophie.thanked'},w:6,t:['You just dropped my groceries at the awning—thank you! Noah always packs the apples like bricks.'],do:[{beat:'sophie.thanked'},{standing:1},{mood:2}]},
-   {if:{story:[2,10],notBeat:'sophie.thanked'},w:5,t:['Hey! You are Noah’s runner who dropped my groceries by 18 Oak Street, aren’t you? Thank you!','Saved me two trips with sore arms.'],do:[{beat:'sophie.thanked'},{standing:1},{mood:2}]},
-   {if:{beat:'sophie.groceries-delivered',notBeat:'sophie.thanked'},w:5,t:['Hey! Almost missed you on the pavement—thanks again for my Corner Market groceries!'],do:[{beat:'sophie.thanked'},{standing:1},{mood:2}]},
-   {if:{story:[0,1],storyDone:false,met:false},w:4,t:['Oh, hello! Sorry to rush past—waiting on a Corner Market bag while I answer emails.','Sophie, Flat two across the street.']},
+   {if:{story:[2,10],notBeat:['sophie.thanked','is.skipped']},w:5,t:['Hey! You are Noah’s runner who dropped my groceries by 18 Oak Street, aren’t you? Thank you!','Saved me two trips with sore arms.'],do:[{beat:'sophie.thanked'},{standing:1},{mood:2}]},
+   {if:{beat:'sophie.groceries-delivered',notBeat:['sophie.thanked','is.skipped']},w:5,t:['Hey! Almost missed you on the pavement—thanks again for my Corner Market groceries!'],do:[{beat:'sophie.thanked'},{standing:1},{mood:2}]},
+   {if:{story:[0,1],storyDone:false,met:false},w:4,t:['Oh, hello! Sorry to rush past—waiting on a Corner Market bag while I answer emails.','Sophie, Flat two at 18 Oak Street.']},
    {if:{period:'morning'},w:1,t:['Morning! Trying to catch Elena’s coffee counter before my errands start piling up.']},
    {if:{period:'afternoon',mood:['miserable','low']},w:2,t:['Sorry, slow afternoon and my list still reaches my elbow. Lovely seeing a friendly face though!']},
    {if:{period:'afternoon'},w:1,t:['Afternoon! Walking the length of Oak Street before the market queues form.']},
@@ -536,6 +546,7 @@ export const SOPHIE=freezeDeep({
   {id:'sophie.groceries',say:[
    {if:{story:[0,1],storyDone:false},t:['I placed an order with Noah over at the Corner Market—just one heavy bag to bring over to the awning.']},
    {if:{story:[2,3],storyDone:false},t:['Noah told me he is sending you out to Hal Brennan’s farm next.','Wear good boots—the bridge walk up to Willow Farm takes a fair hike!'],do:[{beat:'sophie.thanked'}]},
+    {if:{beat:'is.skipped'},t:['Noah sends my orders over now and then. The bigger runs go up on the Gigs board.']},
    {t:['Everything from the market arrived unbruised, even the eggs! You are much steadier than the old carrier.'],do:[{beat:'sophie.thanked'}]}
   ],replies:[
    {label:'Who else lives in 18 Oak Street?',go:'sophie.neighbours'},
@@ -572,7 +583,7 @@ export const SOPHIE=freezeDeep({
    {if:{mood:['miserable','low']},t:['Could honestly use two pairs of hands today. Watch the phone board—when things pile up I post errands there.']},
    {t:['Whenever I fall behind on post or groceries, I post small runs on the town Gigs board.','Better money than standing idle, plus Noah appreciates the foot traffic.']}
   ],replies:[
-   {label:'How is the coffee across the street?',go:'sophie.coffee'},
+   {label:'How is the coffee down the street?',go:'sophie.coffee'},
    {label:'Know the story with Studio 2B?',go:'sophie.studio'},
    {label:'I will check my phone for your runs.',go:'sophie.wrap'}
   ]},
@@ -580,19 +591,21 @@ export const SOPHIE=freezeDeep({
   {id:'sophie.coffee',say:[
    {if:{tierMin:'friend',notBeat:'sophie.coffee-invite'},t:['Truthfully, I live on Elena’s lattes—we ought to grab two chairs at Alder Coffee once your truck runs steady.'],do:[{beat:'sophie.coffee-invite'},{mood:2}]},
    {if:{tierMin:'friend'},t:['My Alder Coffee invite still stands whenever you catch a quiet ten minutes between runs.']},
-   {t:['Elena runs Alder Coffee across from us, open eight until six.','Six dollars gets you a fresh sandwich and coffee—lifesaver when your energy drops!']}
+   {t:['Elena runs Alder Coffee just down the street, open eight until six.','Six dollars gets you a fresh sandwich and coffee—lifesaver when your energy drops!']}
   ],replies:[
    {label:'Tell me about renting Studio 2B.',go:'sophie.studio'},
    {label:'Catch you there soon.',go:'sophie.wrap'}
   ]},
 
   {id:'sophie.studio',say:[
+   {if:{beat:'is.rented'},t:['How is the studio treating you? The radiator knocks, but you get used to it.']},
    {t:['Studio 2B right beside us is ninety dollars to move in—thirty deposit and sixty for your first week, plus seven dollars base utilities.','Comes with a car bay out front if Hal lets you keep his truck!']}
   ],replies:[
    {label:'Thanks for showing me the ropes, Sophie.',go:'sophie.wrap'}
   ]},
 
   {id:'sophie.wrap',say:[
+   {if:{tierMin:'friend'},t:['Anyway, must run. Buzz Flat two anytime, you know that!']},
    {t:['Anyway, must run—buzz Flat two anytime if you have five minutes!']}
   ],end:true}
  ]

@@ -15,7 +15,7 @@ assert.equal(loadFactor(100),MIN_FACTOR);assert.equal(loadFactor(5000),.6);asser
 let last=2;for(let kg=0;kg<=200;kg+=3){const f=loadFactor(kg);assert(f<=last&&f>=.6&&f<=1,'monotonic, 0.6..1');last=f}
 assert(DRAG_PER_KG*10>=.03&&DRAG_PER_KG*10<=.04,'3 to 4 % per 10 kg');
 // masses
-assert.deepEqual({...MASS_KG},{log:40,plank:6,crate:12,parcelSmall:3,parcelMedium:6});
+assert.deepEqual({...MASS_KG},{log:40,trunk:80,slab:25,plank:6,crate:12,parcelSmall:3,parcelMedium:6});
 assert.equal(cargoMassKg(null),0);assert.equal(cargoMassKg([{k:'log'},{k:'planks',n:4},{k:'crate'}]),40+24+12);
 assert.equal(parcelMassKg(null),0);assert.equal(parcelMassKg({large:false}),3);assert.equal(parcelMassKg({large:true}),6);
 assert(isHeavy(40)&&!isHeavy(24)&&!isHeavy(3)&&HEAVY_BELOW===.85,'a log is heavy, a plank stack or a parcel is not');

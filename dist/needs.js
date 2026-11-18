@@ -19,7 +19,7 @@ export const URGENCY_MIN_PCT=100,URGENCY_MAX_PCT=130; // value multiplier from t
 export const LATE_FILL_PCT=40,MOOD_HIT=-8,MOOD_HIT_PARTIAL=-4,PROSPERITY_HIT=-1;
 export const CHORE_UNIT_CENTS=800;      // value of one unit of work for clear/repair/tend/tow/serve (placeholder)
 export const VEHICLE_QTY=12;             // a need of this many units or more is a vehicle job
-export const KEEPERS=Object.freeze({'shop:market':'noah','shop:cafe':'sophie','property:farm-house':'hal','property:alder-bakery':'baker'}); // UNVERIFIED ids (gig-clients HAL_ID is a guess too); ctx.keeperOf overrides
+export const KEEPERS=Object.freeze({'shop:market':'noah','shop:cafe':'elena','property:farm-house':'hal','property:alder-bakery':'baker'}); // UNVERIFIED ids (gig-clients HAL_ID is a guess too); ctx.keeperOf overrides
 // OFF_KINDS: need kinds that must never become a gig yet, because the game has no real obstacle to clear and nothing broken to repair (the card walked you to a marker and paid you for nothing).
 // Kept in KINDS, TEMPLATES and the gig types so old saves load; stage P-F (construction and plank repairs) wires real obstacles and re-enables them by emptying this list.
 export const OFF_KINDS=Object.freeze(['clear','repair']);

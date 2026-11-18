@@ -10,14 +10,14 @@ import {logGathered,stumpCleared,saplingPlanted,markedTrees} from '../dist/fores
 import {clearStump,plantSapling,regrowTrees,treeStage,felledStages,normalizePlots,SAPLING_AFTER,MATURE_AFTER,CLEARED_HOLD} from '../dist/grid.js';
 import {trackerItems} from '../dist/tracker.js';
 
-// The new Ridgeline tasks (0.35): gather fallen logs, dig out stumps, plant saplings in the cleared ground.
+// The new Ridgeline tasks (0.35): pick up fallen trunks, dig out stumps, plant saplings in the cleared ground.
 const trees=worldLayout().cuttable,DAY=3,tree=markedTrees(trees,DAY)[0],key=tree.key;
 assert(TASKS.gather&&TASKS.stumps&&TASKS.replant,'the three kinds exist');assert(PIECE_PAY.gathered>0&&PIECE_PAY.stumps>0&&PIECE_PAY.saplings>0,'and each piece pays');
-assert(MAP.employers[0].ranks[0].tasks.includes('gather'),'trainees gather logs');assert(MAP.employers[0].ranks[1].tasks.includes('stumps'),'fellers dig out stumps');assert(MAP.employers[0].ranks[4].tasks.includes('replant'),'sawyers replant');
+assert(MAP.employers[0].ranks[0].tasks.includes('gather'),'trainees pick up trunks');assert(MAP.employers[0].ranks[1].tasks.includes('stumps'),'fellers dig out stumps');assert(MAP.employers[0].ranks[4].tasks.includes('replant'),'sawyers replant');
 
 // pure rules ------------------------------------------------------------------------------------------------------------
 const base=hire(freshProgress(),'ridgeline').state,onShift=equipTool(clockIn({...base,housing:{...base.housing,day:DAY},routine:{...base.routine,minutes:600}},'ridgeline').state,'axe').state;
-{ // gathered: once per log per shift
+{ // gathered: once per trunk per shift (quest rework: game.js only calls logGathered for a trunk)
  const none=logGathered(base,7);assert.equal(none.counted,false,'off shift nothing counts');
  const a=logGathered({...onShift,shift:{...onShift.shift,tasks:[{kind:'gather',piece:'gathered',target:2,done:0}]}},7);assert.equal(a.counted,true);assert.equal(a.state.shift.pieces.gathered,1);assert.deepEqual(a.state.shift.gathered,[7]);
  const again=logGathered(a.state,7);assert.equal(again.counted,false,'the same log counts once (put down and picked up again pays nothing)');assert.equal(again.state.shift.pieces.gathered,1);
@@ -44,8 +44,8 @@ const base=hire(freshProgress(),'ridgeline').state,onShift=equipTool(clockIn({..
  assert.equal(normalizePlots(r.state.plots)[key].clearedAt,r.state.plots[key].clearedAt);assert.deepEqual(felledStages(r.state,now).find(([k])=>k===key),[key,'cleared']);
 }
 { // the tracker points at them
- const pr={...onShift,shift:{...onShift.shift,tasks:[{kind:'gather',piece:'gathered',target:6,done:0},{kind:'stumps',piece:'stumps',target:3,done:0},{kind:'replant',piece:'saplings',target:6,done:0}]},logs:[{id:1,x:100,z:-250,rot:0,t:0}],plots:{[key]:{type:'forest',tree:null,hits:0,felledAt:600}}};
- const items=trackerItems(pr,{x:0,z:0});assert.deepEqual(items.map(i=>i.id),['task:gather','task:stumps','task:replant']);assert.deepEqual(items[0].pos,{x:100,z:-250},'gather points at the nearest log');
+ const pr={...onShift,shift:{...onShift.shift,tasks:[{kind:'gather',piece:'gathered',target:6,done:0},{kind:'stumps',piece:'stumps',target:3,done:0},{kind:'replant',piece:'saplings',target:6,done:0}]},logs:[{id:1,x:100,z:-250,rot:0,t:0,kind:'trunk'},{id:2,x:10,z:-20,rot:0,t:0}],plots:{[key]:{type:'forest',tree:null,hits:0,felledAt:600}}};
+ const items=trackerItems(pr,{x:0,z:0});assert.deepEqual(items.map(i=>i.id),['task:gather','task:stumps','task:replant']);assert.deepEqual(items[0].pos,{x:100,z:-250},'gather points at the nearest trunk (not a log)');
  assert(Math.abs(items[1].pos.x-(Math.floor(tree.x)+.5))<1.01,'stumps point at the stump');assert.equal(items[2].title,'Plant 6 saplings in a cleared block');
 }
 
@@ -58,9 +58,10 @@ try{
  GameState.progress={...clockIn(p(),'ridgeline').state,};
  GameState.progress={...p(),shift:{...p().shift,tasks:[{kind:'gather',piece:'gathered',target:2,done:0},{kind:'stumps',piece:'stumps',target:1,done:0},{kind:'replant',piece:'saplings',target:1,done:0}]}};pump(1);
  hold(7);assert.equal(p().plots[key].tree,null,'the pine was felled');pump(2);
- // gather: pick a log off the ground
- const log=p().logs[0];assert(log,'the felled pine left logs');me().x=log.x;me().z=log.z;pump(.6);assert(/Pick up wood log/.test(prompt()),prompt());hold(.2);pump(1.5);
- assert.equal(p().shift.pieces.gathered,1,'the log counted as gathered');assert(p().carry,'and is on the shoulder');
+ // gather: pick the trunk up off the ground (quest rework: a trunk counts, a log does not)
+ const trunk=p().logs[0];assert.equal(trunk?.kind,'trunk','T-E: the felled pine left a trunk');me().x=trunk.x;me().z=trunk.z;pump(.6);assert(/Cut the trunk into logs/.test(prompt()),'the axe in hand offers to buck it: '+prompt());
+ GameState.progress=equipTool(p(),'axe').state;pump(.6);assert.equal(p().equipped,null,'axe put away (toggle)');pump(.6);assert(/Pick up the trunk/.test(prompt()),prompt());hold(.2);pump(1.5);
+ assert.equal(p().shift.pieces.gathered,1,'the trunk counted as gathered');assert.equal(p().carry?.kind,'trunk','and is on the shoulder');
  // the stump: dig it out
  me().x=tree.x-1.4;me().z=tree.z;GameState.progress={...p(),carry:null};pump(.8);
  assert(/Dig out the stump|equip your axe/.test(prompt()),'the stump offers itself: '+prompt());
@@ -70,5 +71,5 @@ try{
  // the bare ground takes a sapling
  pump(.6);assert(/Plant a sapling/.test(prompt()),'the bare ground offers a sapling: '+prompt());hold(.2);pump(.5);
  assert.equal(p().plots[key].clearedAt,undefined);assert.equal(treeStage(p().plots[key],(p().housing.day-1)*1440+p().routine.minutes),'sapling');assert.equal(p().shift.pieces.saplings,1,'and counted');
- console.log('Forest tasks: gathering counts a log once a shift, a fresh stump is dug out with the axe (bare ground, three days to seed), a sapling goes in the bare ground (a pine again after four days), the tracker points at logs, stumps and bare ground, and the whole run works in the game.');
+ console.log('Forest tasks: gathering counts a trunk once a shift, a fresh stump is dug out with the axe (bare ground, three days to seed), a sapling goes in the bare ground (a pine again after four days), the tracker points at trunks, stumps and bare ground, and the whole run works in the game.');
 }finally{g.close?.()}

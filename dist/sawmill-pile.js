@@ -2,7 +2,7 @@
 // Model coordinates of the rigged sawmill (assets-src/assets/sawmill_spec.md): main deck x -4.3..4.3, z -3.3..3.3, top y 0.3; the bench is z -0.6..0.6, the feed rails z +-0.95,
 // the posts x -4/0/4 at z +-3, the lowest beam over the deck y 2.38. The plank pile fills the deck's back strip (between the rails and the back posts, open to the yard);
 // the waiting logs lie on the ground at the feed end (x < -4.3), beside the bench. A stack is PLANKS_PER_STACK planks; layers cross like a real lumber pile.
-import {PLANKS_PER_STACK,YARD_MAX_PLANKS,YARD_MAX_LOGS} from './sawmill-yard.js';
+import {PLANKS_PER_STACK,YARD_MAX_PLANKS,YARD_MAX_LOGS,YARD_MAX_TRUNKS,YARD_MAX_SLABS} from './sawmill-yard.js';
 import {PLANK_REST,PLANK_LENGTH} from './carry.js';
 
 export const PLANK_WIDTH=.45,PLANK_PITCH=.12; // a sawmill plank is 1.2 x 0.45 m; planks in a stack are 0.12 m apart (carry.js, sawmill.js)
@@ -52,3 +52,26 @@ export function logSlot(i){
 export const logPile=logs=>Array.from({length:int(logs,LOG_SLOTS)},(_,i)=>logSlot(i));
 export const logBounds=logs=>union(logPile(logs).map(s=>({x0:s.x-LOG_LENGTH/2,x1:s.x+LOG_LENGTH/2,z0:s.z-LOG_RADIUS,z1:s.z+LOG_RADIUS})));
 export const LOGS_NEEDED=YARD_MAX_LOGS; // 40
+
+// Timber redesign T-B (owner 2026-11-18: boards keep the whole deck strip; trunks and slabs go on the ground at the feed end, west of the log deck, clear of the switch at (-4, 3.9)).
+// Waiting trunks (2.25 m long, 0.35 m across): along x at x -6.8, nested rows of 6, 5, 5, 4 from z -0.4 southward (the log deck's side), on the ground.
+export const TRUNK_LENGTH=2.25,TRUNK_RADIUS=.175,TRUNK_PITCH=.4,TRUNK_X=-6.8,TRUNK_Z0=-.4,TRUNK_ROWS=[6,5,5,4];
+export const TRUNK_SLOTS=TRUNK_ROWS.reduce((a,b)=>a+b,0); // 20 = YARD_MAX_TRUNKS
+const TRUNK_RISE=TRUNK_PITCH*Math.sqrt(3)/2;
+export function trunkSlot(i){
+ if(!Number.isInteger(i)||i<0||i>=TRUNK_SLOTS)return null;
+ let layer=0,j=i;while(j>=TRUNK_ROWS[layer]){j-=TRUNK_ROWS[layer];layer++}
+ return Object.freeze({x:TRUNK_X,y:TRUNK_RADIUS+layer*TRUNK_RISE,z:TRUNK_Z0-layer*TRUNK_PITCH/2-j*TRUNK_PITCH,layer});
+}
+export const trunkPile=trunks=>Array.from({length:int(trunks,TRUNK_SLOTS)},(_,i)=>trunkSlot(i));
+export const trunkBounds=trunks=>union(trunkPile(trunks).map(s=>({x0:s.x-TRUNK_LENGTH/2,x1:s.x+TRUNK_LENGTH/2,z0:s.z-TRUNK_RADIUS,z1:s.z+TRUNK_RADIUS})));
+// Slabs (2.25 m long, 0.36 m wide, 0.06 m thick) lie flat in 6 columns along x at x -6.2, z 0.6..2.6 (the north side of the log deck), stacked up to 14 high (0.07 m pitch).
+export const SLAB_LENGTH=2.25,SLAB_WIDTH=.36,SLAB_THICK=.06,SLAB_PITCH=.07,SLAB_X=-6.2,SLAB_Z0=.6,SLAB_COLS=6,SLAB_COL_PITCH=.4,SLAB_LAYERS=14;
+export const SLAB_SLOTS=SLAB_COLS*SLAB_LAYERS; // 84 >= YARD_MAX_SLABS (80)
+export function slabSlot(i){
+ if(!Number.isInteger(i)||i<0||i>=SLAB_SLOTS)return null;
+ const layer=Math.floor(i/SLAB_COLS),j=i%SLAB_COLS;
+ return Object.freeze({x:SLAB_X,y:SLAB_THICK/2+layer*SLAB_PITCH,z:SLAB_Z0+j*SLAB_COL_PITCH,layer});
+}
+export const slabPile=slabs=>Array.from({length:int(slabs,SLAB_SLOTS)},(_,i)=>slabSlot(i));
+export const slabBounds=slabs=>union(slabPile(slabs).map(s=>({x0:s.x-SLAB_LENGTH/2,x1:s.x+SLAB_LENGTH/2,z0:s.z-SLAB_WIDTH/2,z1:s.z+SLAB_WIDTH/2})));

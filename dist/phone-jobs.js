@@ -13,7 +13,7 @@ import {openTickets,takenBy,ticketText,dueText,TAKE_RANK} from './tickets.js';
 const TABS=[['shift','Shift'],['job','My job'],['employers','Employers'],['pay','Pay']];
 const hours=m=>{const h=Math.floor(m/60),r=Math.round(m%60);return h?`${h} h ${String(r).padStart(2,'0')} min`:`${r} min`};
 
-export function createPhoneJobs({document:doc,getState,isOnSite,onClockIn,onClockOut,onQuit,onCollect,say}){
+export function createPhoneJobs({document:doc,getState,isOnSite,onClockIn,onClockOut,onQuit,onCollect,onLoggingGuide,say}){
   const root=doc.getElementById('phoneJobs');let tab='shift',confirmQuit=null;
   const el=(tag,className,text)=>{const e=doc.createElement(tag);if(className)e.className=className;if(text!==undefined)e.textContent=text;return e};
   const button=(label,onclick,{disabled=false,id}={})=>{const b=el('button','phone-accept',label);b.type='button';b.disabled=disabled;if(id)b.id=id;b.onclick=onclick;return b};
@@ -39,6 +39,7 @@ export function createPhoneJobs({document:doc,getState,isOnSite,onClockIn,onCloc
         for(const k of open){const row=el('div','phone-need');row.append(el('label',null,ticketText(k)+' · '+dueText(k,now)),el('strong',null,careerOf(progress,'ridgeline').rank<TAKE_RANK[k.kind]?'Needs rank '+TAKE_RANK[k.kind]:'Open'));out.push(row)}
         out.push(el('p','phone-subtitle',mine.length||open.length?'Take an open order at the order table in the warehouse.':'No orders right now: new ones come in during the shift.'));
       }
+      if(sh.employer==='ridgeline'&&onLoggingGuide)out.push(button('Logging guide',()=>onLoggingGuide(),{id:'jobs-logging-guide'})); // the first-day tutorial (logging-tutorial.js), open again any time
       out.push(button('Clock out',()=>act(onClockOut),{id:'jobs-clockout'}));
       return out;
     }
@@ -49,7 +50,7 @@ export function createPhoneJobs({document:doc,getState,isOnSite,onClockIn,onCloc
       const card=el('article','phone-contract'),can=canClockIn(progress,e.id);
       card.append(el('h3',null,employerName(progress,e.id)),el('p',null,`${e.ranks[careerOf(progress,e.id).rank-1].name} · ${money(e.ranks[careerOf(progress,e.id).rank-1].wage)} an hour on site`));
       if(can.error)card.append(el('p','phone-home-status',can.error));
-      card.append(button('Clock in',()=>act(()=>onClockIn(e.id)),{disabled:!!can.error,id:'jobs-clockin-'+e.id}));out.push(card)}
+      card.append(button('Clock in',()=>act(()=>onClockIn(e.id)),{disabled:!!can.error,id:'jobs-clockin-'+e.id}));if(e.id==='ridgeline'&&onLoggingGuide)card.append(button('Logging guide',()=>onLoggingGuide(),{id:'jobs-logging-guide'}));out.push(card)}
     return out;
   }
 

@@ -22,6 +22,7 @@ export const CAFE_STATES=Object.freeze(['none','employed','onShift']);
 export const CONDITION_KEYS=Object.freeze(['period','hour','weather','place','met','tierMin','tierMax','mood','story','storyDone','gig','gigClient','hired','rankMin','cafe','beat','notBeat','seen','daysSince','recent']);
 export const EFFECT_KEYS=Object.freeze(['meet','standing','mood','beat','topic','act']);
 export const MAX_REPLIES=6,MAX_BUBBLES=3,MAX_BUBBLE_CHARS=160,MAX_LABEL_CHARS=60,LAST_CAP=6,SEEN_CAP=32,BEATS_CAP=16,RECENT_CAP=8,NEVER_DAYS=9999;
+export const DERIVED_FLAGS=Object.freeze(['skipped','loaded','ownsShortbed','rented','carryingCafe']);
 export const BYE_ID='bye',BYE_LABEL='See you';
 // ---- helpers
 const isObj=v=>!!v&&typeof v==='object'&&!Array.isArray(v);
@@ -73,7 +74,12 @@ export function talkContext(progress,who,env){
   let tier='stranger';try{if(isObj(p.standing)&&id)tier=tierFor(p.standing,id)}catch(_){}
   const st=isObj(p.starter)?p.starter:{},gig=isObj(p.gigs)&&isObj(p.gigs.active)?p.gigs.active:{},cafe=isObj(p.cafe)?p.cafe:{};
   const hired={};if(isObj(p.careers))for(const k of Object.keys(p.careers)){const c=p.careers[k];if(safeKey(k)&&isObj(c)&&c.hired===true)hired[k]=num(c.rank)?c.rank:1}
-  return baseContext({who:id,day:e.day,minute:e.minute,weather:e.weather,place:e.place,seed:e.seed,recent:e.recent,mem:memRaw,met:metDay>=0,tier,mood:npc&&num(npc.mood)?npc.mood:50,
+  // derived beats: env.flags (an object {skipped:true,...} or a list of names) become the beats 'is.skipped' etc. They are computed fresh each turn by the caller and never saved (remember() keeps only session beats).
+  const fl=[];if(Array.isArray(e.flags)){for(const f of e.flags)if(typeof f==='string')fl.push(f.replace(/^is\./,''))}else if(isObj(e.flags)){for(const k of Object.keys(e.flags))if(e.flags[k]===true)fl.push(k)}
+  const derived=uniq(fl.filter(f=>DERIVED_FLAGS.includes(f)).map(f=>'is.'+f));
+  const mb=cleanMem(memRaw).beats.filter(b=>!derived.includes(b));
+  const beats=[...mb.slice(Math.max(0,mb.length-(BEATS_CAP-derived.length))),...derived];
+  return baseContext({who:id,day:e.day,minute:e.minute,weather:e.weather,place:e.place,seed:e.seed,recent:e.recent,mem:memRaw,beats,met:metDay>=0,tier,mood:npc&&num(npc.mood)?npc.mood:50,
    story:st.step,storyDone:st.done===true||st.skipped===true,gig:str(gig.type),gigClient:str(gig.client),hired,cafe:cafe.employed===true?(str(cafe.stage,'off')!=='off'?'onShift':'employed'):'none'});
  }catch(_){return baseContext({})}
 }

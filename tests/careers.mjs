@@ -68,9 +68,9 @@ assert.equal(canManage(p,R),false,'an NPC-owned company takes no decisions from 
  const saved=normalizeProgress(JSON.parse(JSON.stringify(s)));assert.equal(employerName(saved,R),'Pine & Co');assert.deepEqual(saved.companies[R].coOwners,['ana'])}
 
 // ── Daily tasks: by counters, never random ──
-{const t1=dailyTasks(E,1,0,1);assert.equal(t1.length,2);assert.deepEqual(t1.map(t=>t.kind).sort(),['fell','landing']);assert.deepEqual(dailyTasks(E,1,0,1),t1,'same day, same tasks');
+{const t1=dailyTasks(E,1,0,1);assert.equal(t1.length,2);assert.deepEqual(t1.map(t=>t.kind).sort(),['buck','fell']);assert.deepEqual(dailyTasks(E,1,0,1),t1,'same day, same tasks');
  assert.notDeepEqual(dailyTasks(E,1,1,2).map(t=>t.target),t1.map(t=>t.target),'targets vary day to day');
- const t2=dailyTasks(E,2,3,4);assert.equal(t2.length,3);assert(t2.some(t=>t.kind==='mill'),'a new Feller gets a milling task');
+ const t2=dailyTasks(E,2,3,4);assert.equal(t2.length,3);assert(t2.some(t=>t.kind==='feed_saw'),'a new Feller gets the newest sawmill task');
  const t4=dailyTasks(E,4,0,9);assert.equal(t4.length,4);assert(t4.some(t=>t.kind==='stack'||t.kind==='pick'),'a Yard hand gets warehouse work');
  for(let d=1;d<20;d++)for(const t of dailyTasks(E,5,d,d))assert(TASKS[t.kind].amounts.includes(t.target));}
 

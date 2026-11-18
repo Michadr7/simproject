@@ -19,7 +19,7 @@ import {createPhoneCall} from './phone-call.js';
 import {createPhonePeople} from './phone-people.js'; // W-D3: the People app (the named people you have met)
 
 // UI only: transactions and movement/cursor ownership stay in game.js.
-export function createPhone({document:doc,getState,canOpen,onOpen,onClose,onAccept,onRefresh,onHomeAction,onOrder,onOrderVehicle,onSetMain,isOnSite,onClockIn,onClockOut,onQuit,onCollect,onRead,onGiveUp,onTow,pullInfo,onPull,inVehicle,audio,gps}){
+export function createPhone({document:doc,getState,canOpen,onOpen,onClose,onAccept,onRefresh,onHomeAction,onOrder,onOrderVehicle,onSetMain,isOnSite,onClockIn,onClockOut,onQuit,onCollect,onLoggingGuide,onRead,onGiveUp,onTow,pullInfo,onPull,inVehicle,audio,gps}){
   const $=id=>doc.getElementById(id);
   let opened=false,screen='home',previousFocus=null;
   // unread counts come from the saved messages (messages.js): the phone button shows the total, each app icon its own, Messages the total again
@@ -30,7 +30,7 @@ export function createPhone({document:doc,getState,canOpen,onOpen,onClose,onAcce
   const gpsUi=gps?createPhoneGps({document:doc,gps:gps.state,mapOptions:gps.mapOptions}):null;
    const store=createPhoneStore({document:doc,getState,onOrderVehicle:(model,colour,home)=>onOrderVehicle?.(model,colour,home)||{error:'Ordering is not available.'},onOrder:(cart,home)=>onOrder?.(cart,home)||{error:'Ordering is not available.'},onSetMain:id=>onSetMain?.(id)||{error:'Not available.'},say:text=>{$('phoneMessage').textContent=text}});
   const people=createPhonePeople({document:doc,getState});
-  const jobs=createPhoneJobs({document:doc,getState,isOnSite:id=>isOnSite?.(id)??false,onClockIn:id=>onClockIn?.(id)||{error:'Not available.'},onClockOut:()=>onClockOut?.()||{error:'Not available.'},onQuit:id=>onQuit?.(id)||{error:'Not available.'},onCollect:id=>onCollect?.(id)||{error:'Not available.'},say:text=>{$('phoneMessage').textContent=text}});
+  const jobs=createPhoneJobs({document:doc,getState,isOnSite:id=>isOnSite?.(id)??false,onClockIn:id=>onClockIn?.(id)||{error:'Not available.'},onClockOut:()=>onClockOut?.()||{error:'Not available.'},onQuit:id=>onQuit?.(id)||{error:'Not available.'},onCollect:id=>onCollect?.(id)||{error:'Not available.'},onLoggingGuide:onLoggingGuide?()=>onLoggingGuide():null,say:text=>{$('phoneMessage').textContent=text}});
   const call=createPhoneCall({document:doc,getState,inVehicle:()=>inVehicle?.()??false,onTow:uid=>{const r=onTow?.(uid)||{error:'Not available.'};refresh();return r},pullInfo:()=>pullInfo?.()||null,onPull:()=>{const r=onPull?.()||{error:'Not available.'};refresh();return r},audio}); // PH1: the Call app (a tow is called from here)
   const cards=CONTRACTS.map(job=>{
     const card=doc.createElement('article');card.className='phone-contract';

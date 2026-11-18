@@ -32,13 +32,17 @@ export function createCameraController(camera, solids, trees, lamps = []) {
   const foliage = trees.map(tree => ({...tree,
     sphere: new THREE.Sphere(new THREE.Vector3(tree.x,4.7,tree.z),1.5)
   }));
+  const dir = new THREE.Vector3();
+  let dist = null; // the eased distance from the player: ONLY the distance is smoothed. The direction comes from yaw and pitch every frame, so turning the view while walking follows the mouse exactly (before, the whole camera position was lerped: it lagged behind a moving player and cut the corner of every turn, which felt glitchy when looking sideways while moving)
   return function update(player, yaw, pitch, zoom, dt) {
     target.copy(player.position); target.y += 1.5;
-    desired.set(Math.sin(yaw)*Math.cos(pitch)*zoom,Math.sin(pitch)*zoom,Math.cos(yaw)*Math.cos(pitch)*zoom).add(target);
+    dir.set(Math.sin(yaw)*Math.cos(pitch),Math.sin(pitch),Math.cos(yaw)*Math.cos(pitch));
+    desired.copy(dir).multiplyScalar(zoom).add(target);
     constrainCamera(target, desired, bounds);
-    const currentDistance = camera.position.distanceTo(target);
+    const want = desired.distanceTo(target);
     // Move inward immediately at a wall, and ease back out after leaving it.
-    camera.position.lerp(desired, desired.distanceTo(target)<currentDistance ? 1 : 1-Math.exp(-dt*12));
+    dist = dist===null||!Number.isFinite(dist) ? want : want<dist ? want : dist+(want-dist)*(1-Math.exp(-dt*12));
+    camera.position.copy(target).addScaledVector(dir, dist);
     constrainCamera(target, camera.position, bounds);
     camera.lookAt(target);
     chest.copy(target); chest.y -= .7;

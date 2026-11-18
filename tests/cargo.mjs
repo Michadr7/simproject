@@ -46,7 +46,7 @@ assert.deepEqual(normalizeCargo({kind:'planks',count:10},'flatbed'),[P(4),P(4),P
  d.setWalker({x:150,z:60});for(let i=0;i<40;i++)d.update(1/30);assert(Math.abs(tg.rotation.x-TAILGATE_OPEN)<1e-6,'walking away leaves it open');assert.equal(d.toggleGate('v1'),false);for(let i=0;i<40;i++)d.update(1/30);assert(Math.abs(tg.rotation.x)<1e-9,'and toggling again shuts it')}
 // ---- G3b: the crate piece (one InstancedMesh, never carried by hand, never mixed with timber, not on the timber flatbed)
 {const C=await import('../dist/cargo.js'),{createCargoView}=await import('../dist/cargo-view.js');
- assert.deepEqual(Object.keys(C.CARGO_KINDS).sort(),['crate','log','planks'],'three kinds');
+ assert.deepEqual(Object.keys(C.CARGO_KINDS).sort(),['crate','log','planks','slab','trunk'],'five kinds (trunk and slab: timber redesign T-A)');
  assert.deepEqual(Object.entries(BEDS).filter(([,b])=>b.crates).map(([m])=>m).sort(),['atv','offroad','shortbed','worktruck'],'the pickups and the ATV rack take crates');assert(!BEDS.flatbed.crates&&!C.acceptsCrates('flatbed')&&C.acceptsCrates('shortbed'),'the timber flatbed refuses them');
  assert.equal(capacity('shortbed','crate'),22,'22 crates on the Shortbed (2 units each of 44)');assert.equal(capacity('flatbed','crate'),0);assert.equal(capacity('worktruck','crate'),16);
  const four=C.addCrates(null,'shortbed',4);assert.equal(four.error,undefined);assert.equal(four.cargo.length,4);assert.equal(C.countOf(four.cargo,'crate'),4);assert.equal(C.usedSpace(four.cargo),8);assert.equal(C.cargoText(four.cargo),'4 crates');assert.equal(C.cargoText(C.addCrates(null,'shortbed',1).cargo),'1 crate');

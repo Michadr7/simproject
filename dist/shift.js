@@ -5,25 +5,32 @@
 import {MAP} from './map-definition.js';
 import {employerById,careerOf,employerName,taskKinds,changeRep} from './careers.js';
 import {normalizeTruck} from './customers.js';
-import {PAY} from './plank-economy.js'; // P-C wiring: a full rack cell pays PAY.rackCell (the planks chain's one table)
+import {PAY,TIMBER_PAY} from './plank-economy.js'; // P-C wiring: a full rack cell pays PAY.rackCell (the planks chain's one table)
 
 export const OFF_SITE_LIMIT=60,MIN_COUNTED_SHIFT=60,STUBS_KEPT=7;
 // Task kinds: the piece they count and the amounts handed out (picked by counters, so a save always gets the same day). Placeholders.
 export const TASKS=Object.freeze({
- fell:{piece:'trees',amounts:[4,6,8],label:n=>`Fell ${n} marked pines`},
- landing:{piece:'logs',amounts:[8,12,16],label:n=>`Carry ${n} logs to the landing`},
- gather:{piece:'gathered',amounts:[6,10,14],label:n=>`Gather ${n} fallen logs`}, // pick up logs lying on the ground (each log counts once a shift)
+ fell:{piece:'trees',amounts:[4,6,8],label:n=>`Fell ${n} marked pine${n===1?'':'s'}`},
+ buck:{piece:'bucked',amounts:[3,5,8],label:n=>`Cut ${n} trunk${n===1?'':'s'} into logs`}, // quest rework: a trunk from a marked pine, cut on shift (100 c each)
+ gather:{piece:'gathered',amounts:[4,6,8],label:n=>`Pick up ${n} trunk${n===1?'':'s'}`}, // a trunk lifted off the ground counts once per shift (game.js pickUpLog only counts trunks)
+ feed_saw:{piece:'fed',amounts:[6,10,14],label:n=>`Bring ${n} logs or trunks to the sawmill`}, // logsFed 120 c, trunksFed 150 c; both count as 'fed' (COUNTS_AS)
  stumps:{piece:'stumps',amounts:[3,5,8],label:n=>`Dig out ${n} stump${n===1?'':'s'}`},
- mill:{piece:'planks',amounts:[20,30,40],label:n=>`Mill ${n} planks`},
- haul:{piece:'delivered',amounts:[12,24,40],label:n=>`Deliver ${n} planks to the lumberyard`},
+ mill:{piece:'planks',amounts:[20,30,40],label:n=>`Saw ${n} boards or slabs`}, // a board off the pile pays 25 c, a slab 40 c and counts too (COUNTS_AS)
+ haul:{piece:'delivered',amounts:[12,24,40],label:n=>`Deliver ${n} boards or slabs to the lumberyard`}, // 730 c a board, 1400 c a slab (slabsDelivered counts as delivered)
  load:{piece:'shipped',amounts:[20,40],label:n=>`Load a customer's truck with ${n} planks`},
  stack:{piece:'racks',amounts:[2,3],label:n=>`Stack ${n} racks in the warehouse`},
  pick:{piece:'orders',amounts:[1,2],label:n=>`Pick ${n} customer order${n===1?'':'s'}`},
  deliver:{piece:'deliveries',amounts:[1],label:n=>`Deliver ${n} plank order${n===1?'':'s'}`},
- replant:{piece:'saplings',amounts:[6,10],label:n=>`Plant ${n} saplings in a cleared block`}
+ replant:{piece:'saplings',amounts:[6,10],label:n=>`Plant ${n} saplings in a cleared block`},
+ // RETIRED (quest rework, owner 2026-11-18): never offered (no rank lists it), kept so a shift saved before the rework still loads and counts its landing task
+ landing:{piece:'logs',amounts:[8,12,16],label:n=>`Carry ${n} logs to the landing`,retired:true}
 });
 // Piece pay in cents. Placeholders (DESIGN 4.15 K): the finished planks pay the most.
-export const PIECE_PAY=Object.freeze({trees:300,stray:75,logs:25,gathered:25,stumps:150,planks:0,delivered:100,shipped:50,racks:PAY.rackCell,orders:800,deliveries:2500,saplings:50}); // trees: a marked pine felled; stray: an unmarked one; logs: stacked at the landing; planks: milled (counted, paid on delivery); delivered: a plank at the lumberyard
+// Quest rework (owner 2026-11-18): the logging chain pays the plank-economy.js PAY and TIMBER_PAY rates. trees: a marked pine felled; stray: an unmarked one; bucked: a trunk from a marked pine cut into logs; logsFed/trunksFed: carried to the saw; planks: a board off the pile (25 c, counts for Mill);
+// slabs: a slab off the pile (40 c, counts for Mill); delivered: a board at the lumberyard (730 c, was 100); slabsDelivered: a slab at the lumberyard (1400 c, counts for Haul); logs: stacked at the landing (the landing task is retired, the pile and its 25 c stay); fed: counts only (pays 0).
+export const PIECE_PAY=Object.freeze({trees:300,stray:75,bucked:TIMBER_PAY.buckTrunk,logsFed:PAY.logToSaw,trunksFed:TIMBER_PAY.trunkToSaw,fed:0,logs:25,gathered:25,stumps:150,planks:PAY.plankOffBelt,slabs:TIMBER_PAY.slabOffBelt,delivered:PAY.plankDelivered,slabsDelivered:TIMBER_PAY.slabDelivered,shipped:50,racks:PAY.rackCell,orders:800,deliveries:0,saplings:50});
+// A piece that also counts for another piece's tasks (it pays under its own name only): a slab counts for Mill, a slab delivered for Haul, a log or trunk carried to the saw for the Feed task.
+export const COUNTS_AS=Object.freeze({slabs:['planks'],slabsDelivered:['delivered'],logsFed:['fed'],trunksFed:['fed']});
 export const BONUS_PER_RANK=2500;
 export const REP={allTasks:5,fullShift:2,unfinishedTask:-2};
 export const taskText=t=>TASKS[t.kind].label(t.target);
@@ -102,10 +109,10 @@ export function tickShift(progress,{onSite},map=MAP){
  return {state:s};
 }
 
-// A piece of work done on shift (a log at the landing, a plank milled, a load hauled...). Off shift it counts for nothing.
+// A piece of work done on shift (a trunk bucked, a plank milled, a load hauled...). Off shift it counts for nothing.
 export function recordPiece(progress,piece,count=1){
  const sh=progress.shift;if(!sh||!(piece in PIECE_PAY)||!(count>0))return {state:progress,finished:[]};
- const finished=[];const tasks=sh.tasks.map(t=>{if(t.piece!==piece||t.done>=t.target)return t;const done=Math.min(t.target,t.done+count);if(done>=t.target)finished.push(taskText(t));return {...t,done}});
+ const finished=[],counts=[piece,...(COUNTS_AS[piece]||[])];const tasks=sh.tasks.map(t=>{if(!counts.includes(t.piece)||t.done>=t.target)return t;const done=Math.min(t.target,t.done+count);if(done>=t.target)finished.push(taskText(t));return {...t,done}});
  return {state:{...progress,shift:{...sh,tasks,pieces:{...sh.pieces,[piece]:(sh.pieces[piece]||0)+count}}},finished};
 }
 

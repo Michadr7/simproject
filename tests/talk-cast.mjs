@@ -110,7 +110,7 @@ const allText=res=>res.lines.map(l=>l.text).join(' ');
  const s4=baseContext({who:'hal',minute:600,place:'farm',story:4,storyDone:false});
  const o4=openConversation(HAL,'hal',s4,undefined,{strict:true});
  assert(allText(o4).includes('Four crates')&&/waiting|Noah/.test(allText(o4)));
- const s4b=baseContext({who:'hal',minute:600,place:'farm',story:4,storyDone:false,beats:['hal.loaded']});
+ const s4b=baseContext({who:'hal',minute:600,place:'farm',story:4,storyDone:false,beats:['is.loaded']});
  assert(/waiting|Noah/.test(allText(openConversation(HAL,'hal',s4b,undefined,{strict:true}))));
  const sDone=baseContext({who:'hal',minute:14*60,place:'farm',story:10,storyDone:true,met:true});
  const oDone=openConversation(HAL,'hal',sDone,undefined,{strict:true});
@@ -130,7 +130,7 @@ const allText=res=>res.lines.map(l=>l.text).join(' ');
  assert(/bottom/i.test(allText(offer))&&/axe/i.test(allText(offer)));
  const hired=step(WALT,offer,/take it/i,wu);
  assert(hired.effects.some(e=>e.kind==='act'&&e.id==='walt.hire'));
- assert(/crew/.test(allText(hired))&&/axe/.test(allText(hired))&&/logs/.test(allText(hired)));
+ assert(/crew/.test(allText(hired))&&!/axe|logs/.test(allText(hired)),'walt.hired-confirm no longer repeats the act text');
  const wh1=baseContext({who:'walt',minute:780,place:'office',hired:{ridgeline:1},met:true});
  const owh1=openConversation(WALT,'walt',wh1,undefined,{strict:true});
  assert(/Good to see you/.test(allText(owh1)));
@@ -139,7 +139,7 @@ const allText=res=>res.lines.map(l=>l.text).join(' ');
  assert(/Not yet/.test(allText(p1))&&/level 3/.test(allText(p1)));
  const wh2=baseContext({who:'walt',minute:780,place:'office',hired:{ridgeline:2},met:true});
  const p2=step(WALT,openConversation(WALT,'walt',wh2,undefined,{strict:true}),/promotion/i,wh2);
- assert(/Feller/.test(allText(p2))&&/earned it/i.test(allText(p2)));
+ assert(/sheet/.test(allText(p2))&&!/earned it/i.test(allText(p2)),'rank 2 is not told it earned Feller before the check');
  assert(step(WALT,p2,/promote me/i,wh2).effects.some(e=>e.kind==='act'&&e.id==='walt.promote'));
 }
 
@@ -184,4 +184,43 @@ const allText=res=>res.lines.map(l=>l.text).join(' ');
  assert(so.effects.some(e=>e.kind==='beat'&&e.id==='sophie.oscar-hint'));
 }
 
+// 4f. Opus review blockers (notes/eval/outbox/OPUS-cast-review.md B1-B6): derived beats, rank, truck, skippers.
+{
+ // B2: Elena offers the produce delivery only while carrying it (derived beat is.carryingCafe)
+ const ed=baseContext({who:'elena',minute:600,place:'cafe',story:5,storyDone:false,met:true});
+ assert(!replyBy(openConversation(ELENA,'elena',ed,undefined,{strict:true}),/produce delivery/),'no delivery reply when nothing is carried');
+ const edc=baseContext({who:'elena',minute:600,place:'cafe',story:5,storyDone:false,met:true,beats:['is.carryingCafe']});
+ assert(replyBy(openConversation(ELENA,'elena',edc,undefined,{strict:true}),/produce delivery/),'delivery reply while carrying');
+ // B3: skippers are not thanked for groceries; Noah offers the Sophie reply to story-done non-skippers only
+ const nd=baseContext({who:'noah',minute:600,place:'door',story:4,storyDone:false,met:true});
+ assert(replyBy(openConversation(NOAH,'noah',nd,undefined,{strict:true}),/Sophie settle/),'Noah door offers the Sophie reply after the delivery');
+ const ndSkip=baseContext({who:'noah',minute:600,place:'door',story:10,storyDone:true,met:true,beats:['is.skipped']});
+ assert(!replyBy(openConversation(NOAH,'noah',ndSkip,undefined,{strict:true}),/Sophie settle/),'no Sophie reply for skippers');
+ const sk=baseContext({who:'sophie',minute:600,place:'door',story:10,storyDone:true,met:true,beats:['is.skipped']});
+ assert(!openConversation(SOPHIE,'sophie',sk,undefined,{strict:true}).effects.some(e=>e.kind==='beat'&&e.id==='sophie.thanked'),'skippers are not thanked');
+ const sn=baseContext({who:'sophie',minute:600,place:'door',story:10,storyDone:true,met:true});
+ assert(openConversation(SOPHIE,'sophie',sn,undefined,{strict:true}).effects.some(e=>e.kind==='beat'&&e.id==='sophie.thanked'),'non-skippers are thanked');
+ const skG=step(SOPHIE,openConversation(SOPHIE,'sophie',sk,undefined,{strict:true}),/grocery order/i,sk);
+ assert(/Gigs board/.test(allText(skG))&&!/unbruised/.test(allText(skG)),'skipper groceries line');
+ // B4: Walt reads the real rank
+ const wf=baseContext({who:'walt',minute:780,place:'office',hired:{ridgeline:6},met:true});
+ const wfo=openConversation(WALT,'walt',wf,undefined,{strict:true});
+ assert(/Foreman/.test(allText(wfo))&&!/Sawyer/.test(allText(wfo)),'a Foreman is greeted as Foreman');
+ const wn=baseContext({who:'walt',minute:20*60,place:'street',hired:{ridgeline:3},met:true});
+ assert(!/Feller rank/.test(allText(openConversation(WALT,'walt',wn,undefined,{strict:true}))),'no stale Feller rank line');
+ // B5: Hal does not sell the truck to an owner
+ const ho=baseContext({who:'hal',minute:14*60,place:'farm',story:10,storyDone:true,met:true,beats:['is.ownsShortbed']});
+ const hot=step(HAL,openConversation(HAL,'hal',ho,undefined,{strict:true}),/Shortbed/,ho);
+ assert(/yours now/.test(allText(hot))&&!replyBy(hot,/Buy the truck/),'no sale to an owner');
+ // B6: the loaded line is derived, and absent without it
+ const hl=baseContext({who:'hal',minute:600,place:'farm',story:4,storyDone:false});
+ assert(!/crates are on/i.test(allText(openConversation(HAL,'hal',hl,undefined,{strict:true}))),'no "crates are on" before loading');
+ // H1: Sophie pays $12
+ const n0=baseContext({who:'noah',minute:540,place:'counter',story:0,storyDone:false,met:false});
+ const nw0=step(NOAH,openConversation(NOAH,'noah',n0,undefined,{strict:true}),/Any work going/,n0);
+ assert(replyBy(nw0,/\$12\.00/)&&!replyBy(nw0,/\$3\.00/),'Sophie run is $12');
+ // H3: no "Studio 2B" for a new player at the door
+ const nn=baseContext({who:'noah',minute:600,place:'door',met:false});
+ assert(!/Studio 2B|across the street/.test(allText(openConversation(NOAH,'noah',nn,undefined,{strict:true}))),'no home or street-geography slip');
+}
 console.log(`PASS talk-cast.mjs: ${CASTS.length} early casts validated (0 errors, 0 warnings), ${contextsChecked} sweep contexts (${walksChecked} terminal walks, ${bubblesChecked} bubbles, zero cycles/repeats/time-leaks), castOf + pinned phrases passed.`);

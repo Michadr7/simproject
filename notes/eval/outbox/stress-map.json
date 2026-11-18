@@ -1,0 +1,547 @@
+{
+  "timestamp": "2026-11-18T06:08:45.387Z",
+  "browser": {
+    "protocolVersion": "1.3",
+    "product": "Chrome/157.0.8103.79",
+    "revision": "@6dc9bc3bdaea5c35ed6d41fceab2f7a3a2227c4f",
+    "userAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/157.0.0.0 Safari/537.36",
+    "jsVersion": "15.7.112.43"
+  },
+  "gpu": {
+    "vendor": "Google Inc. (NVIDIA)",
+    "renderer": "ANGLE (NVIDIA, NVIDIA GeForce RTX 4070 Ti (0x00002782) Direct3D11 vs_5_0 ps_5_0, D3D11)",
+    "version": "WebGL 2.0 (OpenGL ES 3.0 Chromium)"
+  },
+  "sysInfoGpu": null,
+  "startupMs": 3095,
+  "consoleErrors": [
+    "Failed to load resource: the server responded with a status of 404 (Not Found)",
+    "Failed to load resource: the server responded with a status of 404 (Not Found)",
+    "Failed to load resource: the server responded with a status of 404 (Not Found)"
+  ],
+  "rows": [
+    {
+      "spotId": "spawn",
+      "spot": "Spawn",
+      "timeId": "noon",
+      "timeLabel": "12:00",
+      "count": 1584,
+      "mean": 6.32,
+      "p95": 6.2,
+      "max": 18.2,
+      "fps": 158.3,
+      "calls": 528,
+      "triangles": 3971037,
+      "programs": 78,
+      "textures": 48,
+      "geometries": 724,
+      "jsHeapMB": 175.6,
+      "pos": {
+        "x": -5,
+        "z": 15,
+        "ry": 0
+      }
+    },
+    {
+      "spotId": "oak-street",
+      "spot": "Oak Street",
+      "timeId": "noon",
+      "timeLabel": "12:00",
+      "count": 1504,
+      "mean": 6.65,
+      "p95": 12.1,
+      "max": 24.2,
+      "fps": 150.3,
+      "calls": 627,
+      "triangles": 3083404,
+      "programs": 78,
+      "textures": 86,
+      "geometries": 1017,
+      "jsHeapMB": 156.9,
+      "pos": {
+        "x": 0,
+        "z": 6,
+        "ry": 0
+      }
+    },
+    {
+      "spotId": "market",
+      "spot": "Corner Market",
+      "timeId": "noon",
+      "timeLabel": "12:00",
+      "count": 1634,
+      "mean": 6.12,
+      "p95": 6.2,
+      "max": 18.2,
+      "fps": 163.4,
+      "calls": 788,
+      "triangles": 4003716,
+      "programs": 78,
+      "textures": 89,
+      "geometries": 1041,
+      "jsHeapMB": 164.9,
+      "pos": {
+        "x": 19,
+        "z": -4.5,
+        "ry": 0
+      }
+    },
+    {
+      "spotId": "ridgeline-warehouse",
+      "spot": "Ridgeline Warehouse",
+      "timeId": "noon",
+      "timeLabel": "12:00",
+      "count": 1648,
+      "mean": 6.07,
+      "p95": 6.2,
+      "max": 12.2,
+      "fps": 164.8,
+      "calls": 256,
+      "triangles": 3239389,
+      "programs": 79,
+      "textures": 95,
+      "geometries": 1062,
+      "jsHeapMB": 111.3,
+      "pos": {
+        "x": 166.9,
+        "z": 28,
+        "ry": 0
+      }
+    },
+    {
+      "spotId": "sawmill-yard",
+      "spot": "Sawmill Yard",
+      "timeId": "noon",
+      "timeLabel": "12:00",
+      "count": 1644,
+      "mean": 6.08,
+      "p95": 6.2,
+      "max": 12.2,
+      "fps": 164.4,
+      "calls": 272,
+      "triangles": 6161970,
+      "programs": 82,
+      "textures": 98,
+      "geometries": 1101,
+      "jsHeapMB": 150.5,
+      "pos": {
+        "x": 94,
+        "z": -278,
+        "ry": 0
+      }
+    },
+    {
+      "spotId": "pine-ridge",
+      "spot": "Pine Ridge Forest",
+      "timeId": "noon",
+      "timeLabel": "12:00",
+      "count": 1650,
+      "mean": 6.06,
+      "p95": 6.1,
+      "max": 6.2,
+      "fps": 165,
+      "calls": 227,
+      "triangles": 7846549,
+      "programs": 82,
+      "textures": 98,
+      "geometries": 1120,
+      "jsHeapMB": 113.7,
+      "pos": {
+        "x": 82,
+        "z": -270,
+        "ry": 0
+      }
+    },
+    {
+      "spotId": "farm",
+      "spot": "Willow Fields (Farm)",
+      "timeId": "noon",
+      "timeLabel": "12:00",
+      "count": 1650,
+      "mean": 6.06,
+      "p95": 6.1,
+      "max": 6.2,
+      "fps": 165,
+      "calls": 124,
+      "triangles": 6793717,
+      "programs": 82,
+      "textures": 99,
+      "geometries": 1128,
+      "jsHeapMB": 123.1,
+      "pos": {
+        "x": -102,
+        "z": -230,
+        "ry": 0
+      }
+    },
+    {
+      "spotId": "bridge",
+      "spot": "County Bridge",
+      "timeId": "noon",
+      "timeLabel": "12:00",
+      "count": 1650,
+      "mean": 6.06,
+      "p95": 6.1,
+      "max": 6.2,
+      "fps": 165,
+      "calls": 138,
+      "triangles": 5332729,
+      "programs": 82,
+      "textures": 100,
+      "geometries": 1127,
+      "jsHeapMB": 108.9,
+      "pos": {
+        "x": -30,
+        "z": -160,
+        "ry": 0
+      }
+    },
+    {
+      "spotId": "lake-shore",
+      "spot": "Lake Shore",
+      "timeId": "noon",
+      "timeLabel": "12:00",
+      "count": 1650,
+      "mean": 6.06,
+      "p95": 6.2,
+      "max": 6.5,
+      "fps": 165,
+      "calls": 91,
+      "triangles": 5040322,
+      "programs": 82,
+      "textures": 100,
+      "geometries": 1063,
+      "jsHeapMB": 103.3,
+      "pos": {
+        "x": 620,
+        "z": -435,
+        "ry": 0
+      }
+    },
+    {
+      "spotId": "estuary-coast",
+      "spot": "Estuary / Coast",
+      "timeId": "noon",
+      "timeLabel": "12:00",
+      "count": 1650,
+      "mean": 6.06,
+      "p95": 6.2,
+      "max": 6.2,
+      "fps": 165,
+      "calls": 132,
+      "triangles": 1794767,
+      "programs": 82,
+      "textures": 100,
+      "geometries": 1083,
+      "jsHeapMB": 124.6,
+      "pos": {
+        "x": 125,
+        "z": 420,
+        "ry": 0
+      }
+    },
+    {
+      "spotId": "far-east",
+      "spot": "Far East Edge",
+      "timeId": "noon",
+      "timeLabel": "12:00",
+      "count": 1650,
+      "mean": 6.06,
+      "p95": 6.2,
+      "max": 6.2,
+      "fps": 165,
+      "calls": 53,
+      "triangles": 2765781,
+      "programs": 82,
+      "textures": 100,
+      "geometries": 1057,
+      "jsHeapMB": 108.9,
+      "pos": {
+        "x": 1020,
+        "z": 68,
+        "ry": 0
+      }
+    },
+    {
+      "spotId": "spawn",
+      "spot": "Spawn",
+      "timeId": "night",
+      "timeLabel": "20:00",
+      "count": 1639,
+      "mean": 6.11,
+      "p95": 6.2,
+      "max": 12.2,
+      "fps": 163.8,
+      "calls": 532,
+      "triangles": 3982059,
+      "programs": 82,
+      "textures": 101,
+      "geometries": 1115,
+      "jsHeapMB": 127.1,
+      "pos": {
+        "x": -5,
+        "z": 15,
+        "ry": 0
+      }
+    },
+    {
+      "spotId": "oak-street",
+      "spot": "Oak Street",
+      "timeId": "night",
+      "timeLabel": "20:00",
+      "count": 1545,
+      "mean": 6.48,
+      "p95": 12.1,
+      "max": 12.3,
+      "fps": 154.4,
+      "calls": 974,
+      "triangles": 3172758,
+      "programs": 82,
+      "textures": 102,
+      "geometries": 1133,
+      "jsHeapMB": 111,
+      "pos": {
+        "x": 0,
+        "z": 6,
+        "ry": 0
+      }
+    },
+    {
+      "spotId": "market",
+      "spot": "Corner Market",
+      "timeId": "night",
+      "timeLabel": "20:00",
+      "count": 1627,
+      "mean": 6.15,
+      "p95": 6.2,
+      "max": 12.3,
+      "fps": 162.7,
+      "calls": 813,
+      "triangles": 4023826,
+      "programs": 82,
+      "textures": 102,
+      "geometries": 1147,
+      "jsHeapMB": 117.4,
+      "pos": {
+        "x": 19,
+        "z": -4.5,
+        "ry": 0
+      }
+    },
+    {
+      "spotId": "ridgeline-warehouse",
+      "spot": "Ridgeline Warehouse",
+      "timeId": "night",
+      "timeLabel": "20:00",
+      "count": 1649,
+      "mean": 6.06,
+      "p95": 6.2,
+      "max": 12.1,
+      "fps": 164.9,
+      "calls": 152,
+      "triangles": 3196763,
+      "programs": 82,
+      "textures": 102,
+      "geometries": 1141,
+      "jsHeapMB": 119.9,
+      "pos": {
+        "x": 166.9,
+        "z": 28,
+        "ry": 0
+      }
+    },
+    {
+      "spotId": "sawmill-yard",
+      "spot": "Sawmill Yard",
+      "timeId": "night",
+      "timeLabel": "20:00",
+      "count": 1650,
+      "mean": 6.06,
+      "p95": 6.2,
+      "max": 6.2,
+      "fps": 165,
+      "calls": 149,
+      "triangles": 5790398,
+      "programs": 82,
+      "textures": 102,
+      "geometries": 1134,
+      "jsHeapMB": 100.9,
+      "pos": {
+        "x": 94,
+        "z": -278,
+        "ry": 0
+      }
+    },
+    {
+      "spotId": "pine-ridge",
+      "spot": "Pine Ridge Forest",
+      "timeId": "night",
+      "timeLabel": "20:00",
+      "count": 1650,
+      "mean": 6.06,
+      "p95": 6.1,
+      "max": 6.2,
+      "fps": 165,
+      "calls": 108,
+      "triangles": 7409209,
+      "programs": 82,
+      "textures": 102,
+      "geometries": 1153,
+      "jsHeapMB": 108.9,
+      "pos": {
+        "x": 82,
+        "z": -270,
+        "ry": 0
+      }
+    },
+    {
+      "spotId": "farm",
+      "spot": "Willow Fields (Farm)",
+      "timeId": "night",
+      "timeLabel": "20:00",
+      "count": 1650,
+      "mean": 6.06,
+      "p95": 6.1,
+      "max": 6.3,
+      "fps": 165,
+      "calls": 167,
+      "triangles": 7014721,
+      "programs": 82,
+      "textures": 102,
+      "geometries": 1143,
+      "jsHeapMB": 115.7,
+      "pos": {
+        "x": -102,
+        "z": -230,
+        "ry": 0
+      }
+    },
+    {
+      "spotId": "bridge",
+      "spot": "County Bridge",
+      "timeId": "night",
+      "timeLabel": "20:00",
+      "count": 1650,
+      "mean": 6.06,
+      "p95": 6.2,
+      "max": 6.2,
+      "fps": 165,
+      "calls": 141,
+      "triangles": 5343369,
+      "programs": 82,
+      "textures": 102,
+      "geometries": 1140,
+      "jsHeapMB": 120.6,
+      "pos": {
+        "x": -30,
+        "z": -160,
+        "ry": 0
+      }
+    },
+    {
+      "spotId": "lake-shore",
+      "spot": "Lake Shore",
+      "timeId": "night",
+      "timeLabel": "20:00",
+      "count": 1650,
+      "mean": 6.06,
+      "p95": 6.1,
+      "max": 6.2,
+      "fps": 165,
+      "calls": 64,
+      "triangles": 5032872,
+      "programs": 82,
+      "textures": 102,
+      "geometries": 1077,
+      "jsHeapMB": 103.4,
+      "pos": {
+        "x": 620,
+        "z": -435,
+        "ry": 0
+      }
+    },
+    {
+      "spotId": "estuary-coast",
+      "spot": "Estuary / Coast",
+      "timeId": "night",
+      "timeLabel": "20:00",
+      "count": 1650,
+      "mean": 6.06,
+      "p95": 6.1,
+      "max": 6.2,
+      "fps": 165,
+      "calls": 135,
+      "triangles": 1805407,
+      "programs": 82,
+      "textures": 102,
+      "geometries": 1097,
+      "jsHeapMB": 101,
+      "pos": {
+        "x": 125,
+        "z": 420,
+        "ry": 0
+      }
+    },
+    {
+      "spotId": "far-east",
+      "spot": "Far East Edge",
+      "timeId": "night",
+      "timeLabel": "20:00",
+      "count": 1650,
+      "mean": 6.06,
+      "p95": 6.2,
+      "max": 6.2,
+      "fps": 165,
+      "calls": 56,
+      "triangles": 2776421,
+      "programs": 82,
+      "textures": 102,
+      "geometries": 1071,
+      "jsHeapMB": 105.8,
+      "pos": {
+        "x": 1020,
+        "z": 68,
+        "ry": 0
+      }
+    }
+  ],
+  "hitch": {
+    "startX": 212,
+    "endX": 248.28,
+    "z": 68,
+    "count": 1321,
+    "mean": 6.06,
+    "p95": 6.2,
+    "max": 6.2,
+    "fps": 165
+  },
+  "worst3": [
+    {
+      "spot": "Oak Street",
+      "time": "12:00",
+      "mean": 6.65,
+      "p95": 12.1,
+      "max": 24.2,
+      "calls": 627,
+      "triangles": 3083404
+    },
+    {
+      "spot": "Oak Street",
+      "time": "20:00",
+      "mean": 6.48,
+      "p95": 12.1,
+      "max": 12.3,
+      "calls": 974,
+      "triangles": 3172758
+    },
+    {
+      "spot": "Spawn",
+      "time": "12:00",
+      "mean": 6.32,
+      "p95": 6.2,
+      "max": 18.2,
+      "calls": 528,
+      "triangles": 3971037
+    }
+  ]
+}

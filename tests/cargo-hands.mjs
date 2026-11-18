@@ -16,7 +16,7 @@ same(normalizeCarry({kind:'crate',junk:1}),{kind:'crate'});same(normalizeCarry({
 assert.equal(normalizeCarry({kind:'planks',count:5}),null);assert.equal(normalizeCarry({kind:'planks'}),null);assert.equal(normalizeCarry({kind:'sofa'}),null);assert.equal(normalizeCarry(null),null);assert.equal(normalizeCarry('crate'),null);assert.equal(normalizeCarry(7),null);
 const pc=normalizeCarry({kind:'parcel',gig:4,model:'prop.carton-medium',large:true});same(pc,{kind:'parcel',gig:4,model:'prop.carton-medium',large:true});same(normalizeCarry(pc),pc,'twice the same');
 assert.equal(normalizeCarry({kind:'parcel',gig:0}),null);assert.equal(normalizeCarry({kind:'parcel',gig:'4'}),null);assert.match(normalizeCarry({kind:'parcel',gig:2}).model,/^prop\.carton/);assert.equal(normalizeCarry({kind:'parcel',gig:2,large:1}).large,undefined);
-same(carryEffects(null),{speed:1,sprint:true,load:1});same(carryEffects({kind:'log'}),{speed:.8,sprint:false,load:1.5});same(carryEffects({kind:'planks',count:2}),{speed:.85,sprint:false,load:1.25});
+same(carryEffects(null),{speed:1,sprint:true,load:1});same(carryEffects({kind:'log'}),{speed:.95,sprint:false,load:1.5});same(carryEffects({kind:'planks',count:2}),{speed:.85,sprint:false,load:1.25});
 assert.equal(carryEffects({kind:'crate'}).speed,.6);assert.equal(carryEffects({kind:'crate'}).sprint,false);assert.equal(carryEffects({kind:'parcel',gig:1}).speed,.9);assert.equal(carryEffects({kind:'__proto__'}).sprint,true);assert.equal(carryEffects({kind:'toString'}).sprint,true);
 for(const k of ['log','planks','crate','parcel','box'])assert.equal(handsRule({kind:k,count:1,gig:1}).speedMul,HANDS_SPEED[k],'cargo-items handsRule reads the carry.js table: '+k);
 

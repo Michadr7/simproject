@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import {tickSupply,shortfall,planksNeeded,planksHeld,supplyOrder,normalizeSupply,returnPlanks,SUPPLY} from '../dist/supply.js';
 import {normalizeCompanies} from '../dist/careers.js';
 import {palletsOf,racksMap,totalPlanks} from '../dist/pallets.js';
+import {normalizeYard} from '../dist/sawmill-yard.js';
 
 // The warehouse's plank supply (DESIGN 4.16 H and I): a crew brings what the open orders need and the warehouse lacks, as pallets in the racks.
 const DAY=3,at=m=>(DAY-1)*1440+m;
@@ -20,26 +21,31 @@ assert.equal(shortfall(co([k(1,40),k(2,24)],{racks:{'A1-1':20}})),44);
 assert.equal(supplyOrder(1),40);assert.equal(supplyOrder(40),40);assert.equal(supplyOrder(41),80);assert.equal(supplyOrder(500),120);
 
 // short on planks in the working day: a delivery is scheduled an hour out, and only one at a time
-let r=tickSupply(co([k(1,40),k(2,24)]),{now:at(480)});
-assert.deepEqual(r.scheduled,{at:at(480)+SUPPLY.delay,planks:80},'64 missing -> two batches of 40');assert.deepEqual(r.company.supply,{at:at(540),planks:80});assert.equal(r.delivered,0);
-const again=tickSupply(r.company,{now:at(490)});assert.equal(again.company,r.company,'nothing changes while one is on its way');assert.equal(again.scheduled,null);
-// it lands when due, as pallets of 40 in the racks (the lumberyard has none, so they come from the mill off the map), and the order is cleared
-r=tickSupply(r.company,{now:at(541)});assert.equal(r.delivered,80);assert.equal(r.pallets,2);assert.equal(r.fromStock,0);assert.equal(totalPlanks(r.company),80);assert.equal(palletsOf(r.company).length,2);assert.equal(r.company.supply,undefined);assert.match(r.message,/2 pallets \(80 planks\)/);
+const Y=normalizeYard({planks:100}); // W3 (owner answer 4): the sawmill yard is the second source; nothing comes from off the map
+let r=tickSupply(co([k(1,40),k(2,24)]),{now:at(480),yard:Y});
+assert.deepEqual(r.scheduled,{at:at(480)+SUPPLY.delay,planks:80},'64 missing -> two batches of 40');assert.deepEqual(r.company.supply,{at:at(540),planks:80});assert.equal(r.delivered,0);assert.equal(r.yard,null,'scheduling takes nothing');
+const again=tickSupply(r.company,{now:at(490),yard:Y});assert.equal(again.company,r.company,'nothing changes while one is on its way');assert.equal(again.scheduled,null);
+// it lands when due, as pallets of 40 in the racks (the lumberyard has none, so they come out of the sawmill yard), and the order is cleared
+r=tickSupply(r.company,{now:at(541),yard:Y});assert.equal(r.delivered,80);assert.equal(r.pallets,2);assert.equal(r.fromStock,0);assert.equal(r.fromYard,80);assert.equal(r.yard.planks,20,'the yard gave up the 80');assert.equal(Y.planks,100,'input not mutated');assert.equal(totalPlanks(r.company),80);assert.equal(palletsOf(r.company).length,2);assert.equal(r.company.supply,undefined);assert.match(r.message,/2 pallets \(80 planks\)/);
+// no free planks: both sources empty -> no crew goes out, and a delivery already on its way lands nothing
+{const n=co([k(1,40)]);const s=tickSupply(n,{now:at(480)});assert.equal(s.scheduled,null,'no lumberyard stock and no yard: nothing scheduled');assert.equal(s.company,n);
+ const e=tickSupply({...n,supply:{at:at(500),planks:40}},{now:at(500),yard:normalizeYard({planks:0})});assert.equal(e.delivered,0);assert.equal(totalPlanks(e.company),0);assert.match(e.message,/out of planks/);assert.equal(e.company.supply,undefined);
+ const small=tickSupply(n,{now:at(480),yard:normalizeYard({planks:12})});assert.equal(small.scheduled.planks,12,'only what the sources hold is sent for')}
 assert(Object.keys(racksMap(r.company)).every(slot=>/-1$/.test(slot)),'on the floor level first: '+Object.keys(racksMap(r.company)));
 // then there is enough: no more are sent
-assert.equal(tickSupply(r.company,{now:at(542)}).company,r.company);
+assert.equal(tickSupply(r.company,{now:at(542),yard:r.yard}).company,r.company);
 // the lumberyard's own planks go first
-{const y=tickSupply({...co([k(1,40)]),stock:{logs:3,planks:25},supply:{at:at(500),planks:40}},{now:at(500)});assert.equal(y.fromStock,25,'25 of the 40 came out of the lumberyard stock');assert.equal(y.company.stock.planks,0);assert.equal(y.company.stock.logs,3,'logs untouched');assert.equal(totalPlanks(y.company),40)}
+{const y=tickSupply({...co([k(1,40)]),stock:{logs:3,planks:25},supply:{at:at(500),planks:40}},{now:at(500),yard:Y});assert.equal(y.fromStock,25,'25 of the 40 came out of the lumberyard stock');assert.equal(y.fromYard,15,'the rest out of the sawmill yard');assert.equal(y.yard.planks,85);assert.equal(y.company.stock.planks,0);assert.equal(y.company.stock.logs,3,'logs untouched');assert.equal(totalPlanks(y.company),40)}
 // already enough, or no orders: nothing happens (the same object comes back)
 const quiet=co([k(1,12)],{racks:{'A1-1':50}});assert.equal(tickSupply(quiet,{now:at(480)}).company,quiet);const none=co([]);assert.equal(tickSupply(none,{now:at(480)}).company,none);assert.equal(tickSupply(undefined,{now:at(480)}).company,undefined);
 // not at night: the crew only goes for planks in the working day (6 AM to 6 PM), but a delivery on its way still lands
-const needy=co([k(1,40)]);assert.equal(tickSupply(needy,{now:at(300)}).scheduled,null,'before 6 AM');assert.equal(tickSupply(needy,{now:at(1090)}).scheduled,null,'after 6 PM');
-assert.equal(tickSupply({...needy,supply:{at:at(1100),planks:40}},{now:at(1100)}).delivered,40,'a late delivery still lands');
+const needy=co([k(1,40)]);assert.equal(tickSupply(needy,{now:at(300),yard:Y}).scheduled,null,'before 6 AM');assert.equal(tickSupply(needy,{now:at(1090),yard:Y}).scheduled,null,'after 6 PM');
+assert.equal(tickSupply({...needy,supply:{at:at(1100),planks:40}},{now:at(1100),yard:Y}).delivered,40,'a late delivery still lands');
 // a day jump (sleep) lands it too
-assert.equal(tickSupply({...needy,supply:{at:at(600),planks:40}},{now:at(600)+1440}).delivered,40);
-// full racks: what does not fit is not delivered
+assert.equal(tickSupply({...needy,supply:{at:at(600),planks:40}},{now:at(600)+1440,yard:Y}).delivered,40);
+// full racks: what does not fit is not delivered (and stays in the yard)
 {const full={...needy,pallets:[...Array(120)].map((_,i)=>({id:i+1,product:'planks',count:40,at:{rack:['A','B','C','D','E'][Math.floor(i/24)]+(Math.floor((i%24)/3)+1)+'-'+((i%3)+1)}})),supply:{at:at(500),planks:40}};
- const f=tickSupply(full,{now:at(500)});assert.equal(f.delivered,0);assert.match(f.message,/racks are full/);assert.equal(f.company.supply,undefined,'the order is closed; a new one goes out if orders still need it')}
+ const f=tickSupply(full,{now:at(500),yard:Y});assert.equal(f.yard,null,'the yard keeps its planks');assert.equal(f.delivered,0);assert.match(f.message,/racks are full/);assert.equal(f.company.supply,undefined,'the order is closed; a new one goes out if orders still need it')}
 
 // planks coming back (an order failed): they go to open rack space as pallets, floor level nearest the door first; what does not fit goes to the lumberyard, nothing is lost
 {const r=returnPlanks({stock:{logs:2,planks:5}},12);assert.equal(r.placed,12);assert.equal(r.toStock,0);assert.equal(totalPlanks(r.company),12);assert.equal(palletsOf(r.company).length,1);assert.deepEqual(r.cells.length,1);assert(/-1$/.test(r.cells[0]),'floor level first: '+r.cells[0]);assert.deepEqual(r.company.stock,{logs:2,planks:5},'the stock is untouched');

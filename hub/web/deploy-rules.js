@@ -5,10 +5,15 @@
 export const LIVE_URL='https://simproject.ghostjumper007.workers.dev/version.json';
 export const SITE_URL='https://simproject.ghostjumper007.workers.dev/';
 const PARTS=/^(\d+)\.(\d+)\.(\d+)$/;
+const RELEASE_DIR=/^dist\/releases\/([^/]+)\//;
 // -1, 0 or 1; null when either is not a plain x.y.z version.
 export function cmpVersion(a,b){const x=PARTS.exec(String(a)),y=PARTS.exec(String(b));if(!x||!y)return null;for(let i=1;i<=3;i++){const d=Number(x[i])-Number(y[i]);if(d)return d<0?-1:1}return 0}
+// dist/ or tests/ path counted for test freshness, excluding old untouched release folders under dist/releases/<other>/.
+export function isTrackedCodePath(p,currentVersion=''){const s=String(p||'').replace(/\\/g,'/');const m=RELEASE_DIR.exec(s);if(m)return m[1]===String(currentVersion||'');return s.startsWith('dist/')||s.startsWith('tests/')}
+export function newestCodeMtime(entries=[],currentVersion=''){let max=0;for(const e of Array.isArray(entries)?entries:[]){if(!e||e.oldRelease===true||!isTrackedCodePath(e.path,currentVersion))continue;const mt=Number.isFinite(e.mtime)?e.mtime:Number.isFinite(e.mtimeMs)?e.mtimeMs:0;if(mt>max)max=mt}return max}
+export const shipButtonText=v=>v&&PARTS.test(String(v))?`Ship ${v}`:'Ship';
 export function deployChecks(f={}){
- const out=[],add=(key,label,state,text)=>out.push({key,label,state,text});
+ const out=[],add=(key,label,state,text,href)=>out.push(href?{key,label,state,text,href}:{key,label,state,text});
  const v=String(f.version||'');
  if(!PARTS.test(v))add('version','Version','fail','package.json has no plain version number (like 0.35.4).');
  else if(!f.releaseFolder)add('version','Version','fail',`${v}: the release folder dist/releases/${v} is missing. Run "Make a release" on the Tools page first.`);
@@ -21,12 +26,20 @@ export function deployChecks(f={}){
   else if(c===0)add('live','Live now','fail',`${live} is already live. A deployed version must never be reused: raise "version" in package.json, then make a release.`);
   else if(c<0)add('live','Live now','fail',`${live} is live and newer than ${v}. Publishing would put an older game online.`);
   else add('live','Live now','ok',`${live} is live; ${v} is newer.`)}
- const t=f.tests;
- if(!t)add('tests','Tests','warn','No test run is recorded. Run "Check" on the Tools page first.');
+ const t=f.tests??f.lastTest??null;
+ const testAt=t&&(Number.isFinite(t.endedAt)?t.endedAt:Number.isFinite(t.at)?t.at:null);
+ const newest=Math.max(
+  Number.isFinite(f.newestChangedMtime)?f.newestChangedMtime:0,
+  Number.isFinite(f.newestMtime)?f.newestMtime:0,
+  t&&Number.isFinite(t.newestChangedMtime)?t.newestChangedMtime:0,
+  newestCodeMtime(f.changedFiles||f.files,v)
+ );
+ if(!t)add('tests','Tests','fail','No test run is recorded. Run "Check" on the Tools page first.');
  else if(!t.ok)add('tests','Tests','fail','The last test run had failures. Fix them, then run "Check" again.');
+ else if(newest>0&&(testAt===null||testAt<newest))add('tests','Tests','fail','A dist/ or tests/ file changed after the last passing test run. Run "Check" on the Tools page first.');
  else add('tests','Tests','ok','The last test run passed.');
  if(f.changed==null)add('changed','Uncommitted files','unknown','The hub could not read the git status.');
- else if(f.changed>0)add('changed','Uncommitted files','warn',`${f.changed} file${f.changed===1?'':'s'} changed since the last commit. The game goes online from this folder, not from GitHub, so commit and push too.`);
+ else if(f.changed>0)add('changed','Uncommitted files','warn',`${f.changed} file${f.changed===1?'':'s'} changed since the last commit. The game goes online from this folder, not from GitHub, so commit and push on #commit too.`,'#commit');
  else add('changed','Uncommitted files','ok','Everything is committed.');
  if(f.devMode===true)add('dev','Dev Mode','warn','Dev Mode is on in this build: anyone who opens the site can show the Dev Mode button (free money, teleport). Fine for testers; turn it off for a public build.');
  else if(f.devMode===false)add('dev','Dev Mode','ok','Dev Mode is off.');

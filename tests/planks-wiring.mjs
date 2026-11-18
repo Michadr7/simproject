@@ -37,17 +37,18 @@ for(const junk of ['x',[],5,{logs:-5,planks:'q',on:'yes'},{planks:1e9,logs:1e9}]
 // 3. the daily tick: the trickle goes into the yard, the supply takes from it, nothing else is made (conservation over 10 days)
 {let P=at({...base,world:normalizeWorld(null,MAP.seed,100),sawmillYard:normalizeYard({planks:20})},100,400);
  const T=Q=>Q.sawmillYard.planks+totalOf(Q.world,'planks')-Q.world.stock[SAWMILL_PLACE].planks; // the world's sawmill IS the yard: count it once
- let t0=T(P),made=0,used=0,moved=0;
- for(let d=101;d<=110;d++){P=runWorldDay(at(P,d,400));const L=P.world.last;assert.equal(L.produced.planks,undefined,'the world sawmill makes no planks');
-  assert.equal(P.world.stock[SAWMILL_PLACE].planks,P.sawmillYard.planks,'the world sawmill shows the yard');made+=TRICKLE_PER_DAY;used+=L.consumed.planks||0;moved+=L.supplied.planks||0}
- assert.equal(T(P),t0+made-used,'planks in = the trickle only; out = what the town used');assert.ok(moved>0,'the supplier was still supplied from the yard');assert.equal(P.sawmillYard.lastTrickleDay,110)}
+ let t0=T(P),made=0,used=0,moved=0,sawn=0;
+ for(let d=101;d<=110;d++){const logs0=totalOf(P.world,'logs');P=runWorldDay(at(P,d,400));const L=P.world.last;assert.equal(L.produced.planks,undefined,'the world sawmill makes no planks');
+  const fed=logs0+(L.produced.logs||0)-(L.consumed.logs||0)-totalOf(P.world,'logs');assert.ok(fed>=0&&fed<=4,'W3: the crew saws at most 4 real forest logs a day: '+fed); // logs live only in the forest: what left it went to the saw
+  assert.equal(P.world.stock[SAWMILL_PLACE].planks,P.sawmillYard.planks,'the world sawmill shows the yard');made+=TRICKLE_PER_DAY;sawn+=fed*4;used+=L.consumed.planks||0;moved+=L.supplied.planks||0}
+ assert.equal(T(P),t0+made+sawn-used,'planks in = the trickle + 4 per real log sawn; out = what the town used');assert.ok(sawn>0,'the crew sawed logs');assert.ok(moved>0,'the supplier was still supplied from the yard');assert.equal(P.sawmillYard.lastTrickleDay,110)}
 // a second call the same day changes nothing; a catch-up trickles once per ticked day (14 at most, like the world)
 {const P=at({...base,world:normalizeWorld(null,MAP.seed,100),sawmillYard:normalizeYard({planks:0})},100,400),Q=runWorldDay(at(P,101,400));assert.equal(JSON.stringify(runWorldDay(Q)),JSON.stringify(Q));
  const far=runWorldDay(at({...base,world:{...normalizeWorld(null,MAP.seed,0),stock:{...normalizeWorld(null,MAP.seed,0).stock,'property:eastbank-supply':{planks:100}}},sawmillYard:normalizeYard({planks:0})},40,400));
- assert.equal(far.sawmillYard.planks,14*TRICKLE_PER_DAY,'14 days of trickle, supplier full so nothing moved');assert.equal(far.sawmillYard.lastTrickleDay,40)}
+ assert.ok(far.sawmillYard.planks>0&&far.sawmillYard.planks<48+TRICKLE_PER_DAY+16,'14 days of trickle and crew sawing (paused at 48) less the crew\'s haul to the warehouse: '+far.sawmillYard.planks);assert.equal(far.sawmillYard.lastTrickleDay,40)}
 // a progress without a yard (never normalised): the world's sawmill planks become the yard, nothing lost
 {const w=normalizeWorld(null,MAP.seed,100);w.stock[SAWMILL_PLACE].planks=30;w.stock['property:eastbank-supply'].planks=100;const P={...at({...base,world:w},101,400)};delete P.sawmillYard;
- assert.equal(yardOf(P,w).planks,30);assert.equal(runWorldDay(P).sawmillYard.planks,36)}
+ assert.equal(yardOf(P,w).planks,30);assert.equal(runWorldDay(P).sawmillYard.planks,48,'30 + the trickle 6 + 3 real logs sawn (12): the crew stops at 48')}
 
 // 4. the saw: a fed log becomes 4 planks after 4 game minutes at any frame rate; a stack of 4 comes off
 {let y=feed(normalizeYard({}),1).state;assert.equal(y.on,true);for(let i=0;i<240;i++)y=tick(y,1/60);assert.equal(y.planks,4);assert.equal(y.logs,0);assert.equal(y.on,false);
@@ -63,6 +64,6 @@ assert.equal(PIECE_PAY.racks,PAY.rackCell);assert.equal(RACK_CELL_PAY,PAY.rackCe
 
 // 6. game.js uses the yard (source checks: no browser here)
 {const g=fs.readFileSync(new URL('../dist/game.js',import.meta.url),'utf8');
- for(const s of ['tickSawYard();syncSawmill();','feedYard(p.sawmillYard,1)','takeStack(p.sawmillYard)','switchSaw(y,want)','yardSummary(y)'])assert.ok(g.includes(s),'game.js: '+s);
+ for(const s of ['tickSawYard();syncSawmill();','feedYard(p.sawmillYard,want,k)','takeStack(p.sawmillYard)','switchSaw(y,want)','yardSummary(y)'])assert.ok(g.includes(s),'game.js: '+s);
  assert.ok(!/nameTagsTick|name-tag/.test(g),'the floating name tags are gone (owner 2026-11-17)');assert.ok(!g.includes('feedLog(GameState.progress'),'the old belt feed is not used')}
 console.log('PASS planks-wiring: one plank source (world sawmill rate gone, trickle '+TRICKLE_PER_DAY+'/day into the yard, supply to the supplier from the yard, 10-day conservation), old saves move world planks + belt into the yard once, junk yards load, 1 log = 4 planks in 4 game min, rack cell pays $'+(PAY.rackCell/100).toFixed(2)+' once per shift with leftovers in the hands, game.js wired, name tags removed');

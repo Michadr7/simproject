@@ -72,7 +72,7 @@ assert(canLoad('atv',[],planks(4)).ok);assert(canLoad('atv',[],log()).ok);
  assert.deepEqual(summarize([]),[]);assert.equal(massOf([log(),planks(2),crate(),parcel()]),40+12+12+3)}
 
 // 9. Hands rule: crates carried slowly, no sprint; nothing in hands walks freely.
-{assert.deepEqual(handsRule(crate()),{carryable:true,speedMul:.6,sprint:false});assert.equal(handsRule(log()).speedMul,.8);assert.equal(handsRule(planks(2)).speedMul,.85);assert.equal(handsRule(parcel()).sprint,false);
+{assert.deepEqual(handsRule(crate()),{carryable:true,speedMul:.6,sprint:false});assert.equal(handsRule(log()).speedMul,.95);assert.equal(handsRule(planks(2)).speedMul,.85);assert.equal(handsRule(parcel()).sprint,false);
  for(const k of KIND_ORDER)assert(handsRule(itemOf(k,{count:1,gig:1})).speedMul<1,k);assert.deepEqual(handsRule({kind:'crate'}),handsRule(crate()),'a loose object is normalised')}
 
 // 10. Legacy conversion: round trips equal the original.

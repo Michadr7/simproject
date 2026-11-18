@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import {worldLayout,FIELDS} from '../dist/world.js';
-import {TREE_HITS,CHOP_RANGE,SAPLING_AFTER,MATURE_AFTER,MAX_LOGS,LOG_LIFETIME,defaultPlot,normalizePlots,plotAt,setPlot,chopTree,felledTrees,normalizeLogs,nextLogIdFor,expireLogs,treeStage,felledStages,regrowTrees} from '../dist/grid.js';
+import {TREE_HITS,CHOP_RANGE,SAPLING_AFTER,MATURE_AFTER,MAX_LOGS,LOG_LIFETIME,defaultPlot,normalizePlots,plotAt,setPlot,chopTree,felledTrees,normalizeLogs,nextLogIdFor,expireLogs,treeStage,felledStages,regrowTrees,buckTrunk} from '../dist/grid.js';
 import {shoulderLog} from '../dist/carry.js';
 import {freshProgress,normalizeProgress,saveProgress,loadProgress} from '../dist/jobs.js';
 import {addItem,countItem,inventoryCapacity,equipTool} from '../dist/inventory.js';
@@ -32,14 +32,14 @@ const hit1=chopTree(s,pine.key,near);assert.deepEqual([hit1.hits,hit1.need,hit1.
 const hit2=chopTree(s,pine.key,near);s=hit2.state;assert.equal(plotAt(s,pine.key).hits,2);
 // Hits survive a save and load.
 let raw;const storage={getItem:()=>raw,setItem:(k,v)=>raw=v};saveProgress(storage,s);s=loadProgress(storage);assert.equal(plotAt(s,pine.key).hits,2);assert.equal(s.equipped,'axe');assert.equal(s.skills.lumberjack.xp,4);
-const hit3=chopTree(s,pine.key,near);assert.equal(hit3.felled,false);s=hit3.state;const fell=chopTree(s,pine.key,near);assert(fell.felled);assert.match(fell.message,/2 logs/);
+const hit3=chopTree(s,pine.key,near);assert.equal(hit3.felled,false);s=hit3.state;const fell=chopTree(s,pine.key,near);assert(fell.felled);assert.equal(fell.message,'Timber! A trunk is down.');
 assert.deepEqual(plotAt(fell.state,pine.key),{type:'forest',tree:null,hits:0,felledAt:540});
 assert.equal(fell.state.skills.lumberjack.xp,18);assert.deepEqual(fell.state.stats,{treesFelled:1,logsCollected:0});assert.equal(countItem(fell.state,'wood-log'),0,'logs lie on the ground, not in the bag');
-assert.equal(fell.logs.length,2);assert.deepEqual(fell.state.logs,fell.logs);assert.deepEqual(fell.logs.map(l=>l.id),[1,2]);assert.equal(fell.state.nextLogId,3);
+assert.equal(fell.logs.length,1,'T-E: one trunk');assert.equal(fell.logs[0].kind,'trunk');assert.deepEqual(fell.state.logs,fell.logs);assert.deepEqual(fell.logs.map(l=>l.id),[1]);assert.equal(fell.state.nextLogId,2);
 for(const log of fell.logs){assert(Math.hypot(log.x-pine.x,log.z-pine.z)<2.5,'near the stump');assert(log.x>pine.x,'fell away from the player (who stood to the west)')}
 assert.match(chopTree(fell.state,pine.key,near).error,/no tree/,'cannot chop a stump');assert.deepEqual(felledTrees(fell.state),[pine.key]);
 // Level-ups and perks: at level 6 the starter Axe still needs four swings (a better axe is what shortens it), level 3+ drops a third log.
-const swift={...withAxe(),skills:{lumberjack:{xp:levelXp(6)}}};let q=chopTree(swift,pine.key,near);assert.equal(q.need,4);for(let i=0;i<3;i++)q=chopTree(q.state,pine.key,near);assert(q.felled&&q.logs.length===3);
+const swift={...withAxe(),skills:{lumberjack:{xp:levelXp(6)}}};let q=chopTree(swift,pine.key,near);assert.equal(q.need,4);for(let i=0;i<3;i++)q=chopTree(q.state,pine.key,near);assert(q.felled&&q.logs.length===1);{const b=buckTrunk(q.state,q.logs[0].id,near);assert.equal(b.logs.length,3,'level 3+ bucks a bonus log');assert(!b.state.logs.some(l=>l.kind==='trunk'))}
 const upLevel=chopTree({...withAxe(),skills:{lumberjack:{xp:levelXp(2)-2}}},pine.key,near);assert(upLevel.leveledUp&&upLevel.level===2);
 assert.equal(chopTree({...withAxe(),skills:{lumberjack:{xp:levelXp(6)}}},second,{x:0,z:0}).error,'Move closer to the tree.');
 // The Steel Axe at level 10 needs two swings: a tree already hit once falls on the next one. A Logging Axe at level 5 needs three.
@@ -47,8 +47,10 @@ assert.equal(chopTree({...withAxe(),skills:{lumberjack:{xp:levelXp(6)}}},second,
  const mid={...equipTool(addItem(freshProgress(),'logging-axe').state,'logging-axe').state,skills:{lumberjack:{xp:levelXp(5)}}};assert.equal(chopTree(mid,pine.key,near).need,3)}
 assert.match(chopTree({...withAxe(),equipped:null},pine.key,near).error,/Equip your axe/);
 // ── Logs ──────────────────────────────────────────────────────────────────────
-let c=shoulderLog(fell.state,1);assert.equal(countItem(c.state,'wood-log'),0,'a picked-up log is on the shoulder, not in the bag');assert.deepEqual(c.state.carry,{kind:'log'});assert.deepEqual(c.state.stats,{treesFelled:1,logsCollected:1});assert.deepEqual(c.state.logs.map(l=>l.id),[2]);assert.match(c.message,/shoulder/);
-assert.match(shoulderLog({...c.state,carry:null},1).error,/gone/);assert.match(shoulderLog(c.state,2).error,/hands are full/,'one thing at a time');
+const bucked=buckTrunk(fell.state,1,near);assert.deepEqual(bucked.state.logs.map(l=>l.id),[2,3],'bucked into 2 logs at level 1');assert(bucked.state.logs.every(l=>!l.kind&&Math.hypot(l.x-fell.logs[0].x,l.z-fell.logs[0].z)<1));
+assert.match(buckTrunk(fell.state,1,{x:pine.x+20,z:pine.z}).error,/closer/);assert.match(buckTrunk({...fell.state,equipped:null},1,near).error,/Equip an axe or a chainsaw/);assert.match(buckTrunk(bucked.state,1,near).error,/gone/);
+let c=shoulderLog(bucked.state,2);assert.equal(countItem(c.state,'wood-log'),0,'a picked-up log is on the shoulder, not in the bag');assert.deepEqual(c.state.carry,{kind:'log'});assert.deepEqual(c.state.stats,{treesFelled:1,logsCollected:1});assert.deepEqual(c.state.logs.map(l=>l.id),[3]);assert.match(c.message,/shoulder/);
+assert.match(shoulderLog({...c.state,carry:null},2).error,/gone/);assert.deepEqual(shoulderLog(c.state,3).state.carry,{kind:'log',count:2},'a second log joins the first');assert.match(shoulderLog({...c.state,carry:{kind:'planks',count:4}},3).error,/hands are full/,'one thing at a time');
 let logs=fresh;for(let i=0;i<12;i++)logs=addItem(logs,'wood-log').state;assert.deepEqual(logs.inventory.slots.map(x=>x.quantity),[10,2]);
 assert.deepEqual(normalizeLogs([{id:1,x:100,z:-250,rot:1,t:30},{id:1,x:101,z:-250},{id:2,x:900,z:0},{id:3,x:NaN,z:0},{id:0,x:100,z:-250},{id:4,x:101,z:-249,rot:'x',t:-1},null,'x']),[{id:1,x:100,z:-250,rot:1,t:30},{id:4,x:101,z:-249,rot:0,t:0}]);
 assert.equal(normalizeLogs(Array.from({length:200},(_,i)=>({id:i+1,x:100,z:-250}))).length,MAX_LOGS);assert.deepEqual(normalizeLogs('nope'),[]);
@@ -66,7 +68,7 @@ const blocked=regrowTrees(grown,felledAt+MATURE_AFTER,key=>key===pine.key);asser
 r=regrowTrees(grown,felledAt+MATURE_AFTER);assert.deepEqual(r.restored,[pine.key]);assert.equal(r.state.plots[pine.key],undefined,'back to the default pine');assert.deepEqual(plotAt(r.state,pine.key),{type:'forest',tree:'pine',hits:0});
 assert.equal(regrowTrees(fresh,5).state,fresh,'nothing to do leaves the state alone');
 // ── Saves ─────────────────────────────────────────────────────────────────────
-saveProgress(storage,fell.state);const back=loadProgress(storage);assert.deepEqual(back.logs,fell.state.logs);assert.equal(back.nextLogId,3);assert.equal(back.skills.lumberjack.xp,18);assert.deepEqual(back.stats,{treesFelled:1,logsCollected:0});assert.equal(back.equipped,'axe');assert.deepEqual(felledTrees(back),[pine.key]);
+saveProgress(storage,fell.state);const back=loadProgress(storage);assert.deepEqual(back.logs,fell.state.logs);assert.equal(back.logs[0].kind,'trunk','a trunk stays a trunk through a save');assert.equal(back.nextLogId,2);assert.equal(back.skills.lumberjack.xp,18);assert.deepEqual(back.stats,{treesFelled:1,logsCollected:0});assert.equal(back.equipped,'axe');assert.deepEqual(felledTrees(back),[pine.key]);
 assert.equal(normalizeProgress({equipped:'axe'}).equipped,null,'cannot equip a tool you do not own');assert.equal(normalizeProgress({equipped:'apple',inventory:withAxe().inventory}).equipped,null);
 assert.deepEqual(normalizeProgress({position:{x:120,z:-250}}).position,{x:120,z:-250});assert.deepEqual(normalizeProgress({position:{x:-150,z:-230}}).position,{x:-150,z:-230});assert.equal(normalizeProgress({position:{x:500,z:0}}).position,null);
 initializeState({progress:freshProgress()});assert.deepEqual(getPlot(pine.key),{type:'forest',tree:'pine',hits:0});setStatePlot(farmKey,{type:'farm',crop:null,tilled:true});assert.equal(GameState.progress.plots[farmKey].tilled,true);

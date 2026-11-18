@@ -16,11 +16,11 @@ assert.equal(Y.TRICKLE_PER_DAY,6);
 assert.equal(Y.SAW_MIN_PER_LOG,SAW_MIN_PER_LOG);
 assert.equal(Y.YARD_MAX_PLANKS,PLACES['property:sawmill'].goods.planks.max);
 assert.equal(Y.YARD_CAPACITY,Y.YARD_MAX_PLANKS);
-assert.equal(Y.YARD_VERSION,1);
+assert.equal(Y.YARD_VERSION,2);
 
 // 2. 1 log = 4 planks; multiple logs work across tick.
 const y0=Y.freshYard();
-assert.deepEqual(y0,{v:1,logs:0,logsSawn:0,planks:0,cutMin:0,on:false,lastTrickleDay:0});
+assert.deepEqual(y0,{v:2,trunks:0,logs:0,trunksSawn:0,logsSawn:0,planks:0,slabs:0,cutMin:0,cutKind:null,on:false,lastTrickleDay:0});
 const f1=Y.feed(y0,1);
 assert.equal(f1.accepted,1);assert.equal(f1.refused,0);assert.equal(f1.state.logs,1);assert.equal(f1.state.on,true);
 const s1=Y.tick(f1.state,Y.SAW_MIN_PER_LOG);
@@ -96,7 +96,7 @@ assert.equal(sum.cutProgress,0.5);assert.equal(sum.minutesLeft,2*Y.SAW_MIN_PER_L
 assert.deepEqual(Y.normalizeYard(null),y0);
 assert.deepEqual(Y.normalizeYard({}),y0);
 const oldSave=Y.normalizeYard({v:0,logsWaiting:2,logsSawn:5,stock:8,cutMin:1.5,lastTrickleDay:3});
-assert.deepEqual(oldSave,{v:1,logs:2,logsSawn:5,planks:8,cutMin:1.5,on:true,lastTrickleDay:3});
+assert.deepEqual(oldSave,{v:2,trunks:0,logs:2,trunksSawn:0,logsSawn:5,planks:8,slabs:0,cutMin:1.5,cutKind:'log',on:true,lastTrickleDay:3});
 
 const frozenInput=Y.feed(y0,2).state;
 const beforeSnap=structuredClone(frozenInput);
@@ -104,7 +104,7 @@ assert.ok(Object.isFrozen(frozenInput));
 const gBad=[undefined,null,NaN,Infinity,-Infinity,-5,0,'x','4',{},[],{v:0,logs:-3,planks:'bad',cutMin:NaN,on:'yes',lastTrickleDay:-9}];
 for(const bad of gBad){
  const ny=Y.normalizeYard(bad);
- assert.equal(ny.v,1);assert.ok(ny.logs>=0&&ny.logs<=Y.YARD_MAX_LOGS);assert.ok(ny.planks>=0&&ny.planks<=Y.YARD_MAX_PLANKS);
+ assert.equal(ny.v,2);assert.ok(ny.logs>=0&&ny.logs<=Y.YARD_MAX_LOGS);assert.ok(ny.planks>=0&&ny.planks<=Y.YARD_MAX_PLANKS);
  assert.ok(Object.isFrozen(ny));
  assert.ok(Object.isFrozen(Y.feed(frozenInput,bad).state));
  assert.ok(Object.isFrozen(Y.tick(frozenInput,bad)));

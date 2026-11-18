@@ -24,7 +24,7 @@ try{
  const place=(x,z,yaw,lift)=>{fork().state={x,z,yaw,speed:0,lift,steer:0,roll:0};pump(.3)};
  // a Yard hand on shift, a pallet of 40 on level two of B4, a taken pickup order for 12 planks
  GameState.progress=hire(p(),'ridgeline').state;while(careerOf(p(),'ridgeline').rank<4)GameState.progress=promote(p(),'ridgeline',undefined,{force:true}).state;
- GameState.progress={...p(),housing:{...p().housing,day:DAY},routine:{...p().routine,minutes:700}};GameState.progress=clockIn(p(),'ridgeline').state;
+ GameState.progress={...p(),housing:{...p().housing,day:DAY},routine:{...p().routine,minutes:700},world:{...p().world,day:DAY-1}};GameState.progress=clockIn(p(),'ridgeline').state; // world.day: today's 05:00 tick already ran (W3: the crew's day would haul planks into these racks)
  const order={id:1,customer:'Greenway Builders',kind:'pickup',planks:12,issuedAt:(DAY-1)*1440+420,dueAt:(DAY-1)*1440+1080,status:'taken',staged:0,takenBy:'me'};
  GameState.progress={...p(),companies:{...p().companies,ridgeline:{...p().companies.ridgeline,racks:{'B4-2':40},tickets:{nextId:2,day:DAY,released:[0,1,2,3],list:[order]}}}};
  pump(1.2);pump(.6);assert(/Enter · Ridgeline Warehouse/.test(prompt()),prompt());press('KeyE',2.5);await wait(300);pump(.8);

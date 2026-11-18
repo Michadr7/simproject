@@ -11,6 +11,7 @@ import {BAY} from '../dist/forklift.js';
 import {CARRY_Z} from '../dist/fork-pallets.js';
 globalThis.location={search:'?debug',hostname:'localhost',href:'http://localhost/?debug',origin:'http://localhost',protocol:'http:',host:'localhost'};
 const {bootGame}=await import('./support/boot-game.mjs');
+import {deliveryPay} from '../dist/plank-delivery.js';import {priceTable} from '../dist/plank-economy.js';
 import {addPlanks,removePlanks,countOf,freeCount,orderCount,orderIdsOf,removeOrderPlanks,takeAll,unloadOne,unloadKind,normalizeCargo,cargoText} from '../dist/cargo.js';
 
 // Delivery orders (0.35 step 4, DESIGN 4.16 C): a staged delivery is loaded through the loading door onto a truck with a bed parked outside, driven to the house, and unloaded at its drop spot.
@@ -61,6 +62,12 @@ const orderPallet=[{id:1,product:'planks',count:12,at:{fork:true},order:1}];
   setup(g,ticket('staged'),orderPallet);const z=await toTheZone(g);pump(.3);assert.match(z.note(),/Park a truck with a bed beside the loading zone/,z.note());z.drop();
   assert.equal(ticketsOf(p().companies.ridgeline).list[0].status,'staged');assert((p().companies.ridgeline.pallets||[]).some(q=>q.order===1&&q.at.fork),'the pallet is still on the forks');
  }finally{g.close?.()}}
+// 1c) P-D: the bed decides the run size: a 40-plank order does not fit the work truck (32), and the panel says so instead of a silent refusal
+{const g=await bootGame({position:{x:W.door.out.x,z:W.door.out.z},progress:{vehicles:[{...flat(DOCK_BAY.x,DOCK_BAY.z,Math.PI),model:'worktruck'}],orders:{nextVehicle:2}}});
+ try{const {GameState,pump}=g,p=()=>GameState.progress;
+  setup(g,{...ticket('staged'),list:[{...ticket('staged').list[0],planks:40,staged:40}]},[{id:1,product:'planks',count:40,at:{fork:true},order:1}]);const z=await toTheZone(g);pump(.3);
+  assert.match(z.note(),/does not fit on that bed.*carries 32 planks; order #1 is 40/,z.note());z.drop();assert.equal(ticketsOf(p().companies.ridgeline).list[0].status,'staged','not loaded');
+ }finally{g.close?.()}}
 // 2) unloading: the loaded order, the truck at the house, E at the drop spot
 {const d=dropSpot(DEST),at={x:d.x-12,z:d.z-9};
  const g=await bootGame({position:{x:d.x,z:d.z},progress:{vehicles:[flat(at.x,at.z,0,[{k:'planks',n:4},{k:'planks',n:4},{k:'planks',n:4}])],orders:{nextVehicle:2}}});
@@ -68,8 +75,11 @@ const orderPallet=[{id:1,product:'planks',count:12,at:{fork:true},order:1}];
   const planks=()=>scene().getObjectByName('vehicle-v1').getObjectByName('cargo-planks').count,list=()=>ticketsOf(p().companies.ridgeline).list;
   setup(g,ticket('loaded',{vehicle:'v1'}));pump(1.2);assert(planks()>0,'planks on the bed to begin with');
   pump(.6);assert(new RegExp('Unload order #1 here · 12 planks for Greenway Builders').test(prompt()),'the drop spot offers it: '+prompt());
-  const pieces0=p().shift.pieces.deliveries||0;press('KeyE',1.2);
-  assert.equal(list()[0].status,'done','delivered');assert.equal(p().shift.pieces.deliveries,pieces0+1,'counted as a delivery');assert.equal(planks(),0,'the planks left the bed');
+  const pieces0=p().shift.pieces.deliveries||0,cash0=p().cash;press('KeyE',1.2);
+  assert.equal(list()[0].status,'done','delivered');assert.equal(planks(),0,'the planks left the bed');
+  // P-D: paid now by the plank price for the 12 planks that came off the bed (whole dollars), not the flat $25 piece at clock-out
+  {const paid=p().cash-cash0,pay=deliveryPay(12,priceTable(p().world,p().housing.day-1,p().routine.minutes),{placeKey:'warehouse'});assert.equal(paid%100,0,'whole dollars');assert.ok(Math.abs(paid-pay.payCents)<=100,'paid by the plank price: '+paid+' vs '+pay.payCents);assert.ok(paid>2500,'more than the old flat $25 for 12 planks');
+   assert.equal(p().shift.pieces.deliveries||0,pieces0,'the flat piece is not paid on top');assert.ok(p().messages.some(m=>/Paid \$\d+\.00 \(12 planks at/.test(m.text)),'the phone says what it paid')}
   assert(/delivered/.test(ids.get('jobToast').textContent+prompt()+'')||p().messages.some(m=>/delivered/.test(m.text)),'it says so (the toast or the saved phone message: a town-news toast from the daily tick can be on screen first)');
  }finally{g.close?.()}}
 
@@ -90,4 +100,4 @@ const orderPallet=[{id:1,product:'planks',count:12,at:{fork:true},order:1}];
   assert(!list().some(k=>k.id===1&&k.status==='loaded'),'it is no longer a live order (failed, and an old one is cleared away)');assert.equal(planks(),0,'the planks are off the truck');assert.equal(p().vehicles.find(v=>v.uid==='v1').cargo??null,null,'and out of the saved truck');
   {const pallets=p().companies.ridgeline.pallets||[],back=pallets.filter(q=>q.at.rack).reduce((s,q)=>s+q.count,0);assert.equal(back,12,'the 12 planks are back in the racks as a pallet, not gone: '+JSON.stringify(pallets));assert(/-1$/.test(pallets[0].at.rack),'on a floor-level cell')}
  }finally{g.close?.()}}
-console.log('PASS delivery-game.mjs: a delivery takes a staging pallet, the pallet on the forklift lowered onto the loading zone loads it onto a truck with a bed parked beside it (refused with none), it is paid and counted only when unloaded at the house\'s drop spot with the truck near, and a truck left far away refuses; an order\'s planks are tagged (not yours to sell or take off) and are taken back when a delivery runs out of time.');
+console.log('PASS delivery-game.mjs: a delivery takes a staging pallet, the pallet on the forklift lowered onto the loading zone loads it onto a truck with a bed parked beside it (refused with none; a bed too small says how many planks it carries), it is paid by the plank price for the planks that moved, and counted, only when unloaded at the house\'s drop spot with the truck near, and a truck left far away refuses; an order\'s planks are tagged (not yours to sell or take off) and are taken back when a delivery runs out of time.');

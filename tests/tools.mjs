@@ -57,13 +57,13 @@ for(const id of AXE_IDS){
 // ── Chainsaws (user-supplied models): company only ──
 assert.deepEqual(SAW_IDS,['chainsaw','logging-chainsaw']);assert(isSaw('chainsaw')&&!isSaw('axe')&&!isSaw('toString'));assert(!isAxe('chainsaw'),'a saw is not an axe: it cannot fell a pine with the axe rules');
 for(const id of SAW_IDS){const item=itemById(id);assert.equal(item.type,'tool',id);assert(!isBuyable(item)&&!orderable(item),`${id}: not on the Corner Market's shelves or the phone Store`);assert.equal(item.companyOnly,'ridgeline')}
-assert.equal(itemById('chainsaw').price,60000);assert.equal(itemById('logging-chainsaw').price,150000);assert.equal(itemById('chainsaw').requires.level,15);assert.equal(itemById('logging-chainsaw').requires.level,20);
-{const E=MAP.employers.find(x=>x.id==='ridgeline'),foreman=E.ranks.length;assert.deepEqual(E.store,[{item:'chainsaw',rank:foreman},{item:'logging-chainsaw',rank:foreman}]);
+assert.equal(itemById('chainsaw').price,35000);assert.equal(itemById('logging-chainsaw').price,150000);assert.equal(itemById('chainsaw').requires.level,5);assert.equal(itemById('logging-chainsaw').requires.level,20);
+{const E=MAP.employers.find(x=>x.id==='ridgeline'),foreman=E.ranks.length;assert.deepEqual(E.store,[{item:'chainsaw',rank:3},{item:'logging-chainsaw',rank:foreman}],'T-E: the basic chainsaw from Rank 3 Hauler');
  assert.equal(storeItems('ridgeline').length,2);assert.match(storeLine(freshProgress(),'ridgeline','chainsaw').error,/staff/,'only staff');
  const lv=(level,rank)=>{let p=hire({...freshProgress(),cash:500000},'ridgeline').state;p={...p,skills:{lumberjack:{xp:xpFor(level)}},careers:{ridgeline:{...careerOf(p,'ridgeline'),rank}}};return p};
- assert.match(buyFromCompany(lv(20,5),'ridgeline','chainsaw').error,/Foreman rank up/,'a Sawyer cannot buy a chainsaw: '+buyFromCompany(lv(20,5),'ridgeline','chainsaw').error);
- assert.match(buyFromCompany(lv(10,6),'ridgeline','chainsaw').error,/level 15/,'a Foreman below level 15 cannot');
- const ok=buyFromCompany(lv(15,6),'ridgeline','chainsaw');assert(!ok.error);assert.equal(ok.state.cash,500000-60000);assert(ok.state.inventory.slots.some(s=>s.id==='chainsaw'));
+ assert.match(buyFromCompany(lv(20,2),'ridgeline','chainsaw').error,/Hauler rank up/,'a Feller cannot buy a chainsaw: '+buyFromCompany(lv(20,2),'ridgeline','chainsaw').error);assert.match(buyFromCompany(lv(20,5),'ridgeline','logging-chainsaw').error,/Foreman rank up/,'a Sawyer cannot buy the logging chainsaw');
+ assert.match(buyFromCompany(lv(4,3),'ridgeline','chainsaw').error,/level 5/,'a Hauler below level 5 cannot');
+ const ok=buyFromCompany(lv(5,3),'ridgeline','chainsaw');assert(!ok.error,ok.error);assert.equal(ok.state.cash,500000-35000);assert(ok.state.inventory.slots.some(s=>s.id==='chainsaw'));
  assert.match(buyFromCompany(lv(19,6),'ridgeline','logging-chainsaw').error,/level 20/);assert(!buyFromCompany(lv(20,6),'ridgeline','logging-chainsaw').error);
  assert.match(buyFromCompany({...lv(20,6),cash:100},'ridgeline','chainsaw').error,/cash/i,'and it costs cash');assert.match(buyFromCompany(lv(20,6),'ridgeline','axe').error,/does not sell/)}
 for(const id of SAW_IDS){
@@ -73,4 +73,4 @@ for(const id of SAW_IDS){
  // the bar (thin, few vertices) points forward (+z), the engine and handles are behind it
  const pos=held.children[0].geometry.attributes.position;let front=0,rear=0;for(let i=0;i<pos.count;i++){const z=(pos.getZ(i)-box.min.z)/size.z;if(z>.6)front++;if(z<.25)rear++}
  assert(front*4<rear,`${id}: the bar is at the front (${front} vertices ahead, ${rear} behind)`);assert(box.min.z<-.1&&box.max.z>.3,`${id}: the rear grip is near the origin`);disposeHeldItem(held)}
-console.log('PASS tools.mjs: the axe ladder (4/3/2 swings at level 1, levels shave swings), purchases need the level in the shop and on the phone, the company hands the tiers over at Hauler and Sawyer, the three converted axes stand in the held frame (handle along +z, head far, edge down, shared geometry), and the two chainsaws (company store only, Foreman rank and level 15 or 20) have their bar forward.');
+console.log('PASS tools.mjs: the axe ladder (4/3/2 swings at level 1, levels shave swings), purchases need the level in the shop and on the phone, the company hands the tiers over at Hauler and Sawyer, the three converted axes stand in the held frame (handle along +z, head far, edge down, shared geometry), and the two chainsaws (company store only: the basic one at Hauler and level 5 for $350, the logging one at Foreman and level 20) have their bar forward.');

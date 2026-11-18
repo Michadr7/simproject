@@ -21,8 +21,9 @@ export function addXp(progress,skill,amount){
 // Lumberjack perks by level.
 export const swingTime=level=>Math.max(.5,.8-.03*(level-1)); // seconds per swing
 export const logsPerTree=level=>2+(level>=3?1:0)+(level>=8?1:0);
+export const logsFromTrunk=logsPerTree; // timber redesign T-A: one felled trunk is bucked into 2 logs, plus a bonus log at lumberjack level 3 and 8 (owner 2026-11-18); logsPerTree stays until the wiring
 export function perkText(level){
- return level===3||level===8?'One more log per tree.':'Faster swings and harder hits.';
+ return level===3||level===8?'One more log from every trunk you cut.':'Faster swings and harder hits.'; // T-E: the bonus log comes when bucking a trunk
 }
 
 // Lifetime counters shown in the phone's Skills section.
@@ -32,4 +33,4 @@ export function normalizeStats(value){
  return {treesFelled:n(value?.treesFelled),logsCollected:n(value?.logsCollected)};
 }
 // hits: the swings a pine takes with the axe you have (tools.js hitsFor), or null when you have none
-export const perksText=(level,hits=null)=>`Swing ${swingTime(level).toFixed(2)} s · ${hits?hits+' swings per tree':'no axe'} · ${logsPerTree(level)} logs per tree`;
+export const perksText=(level,hits=null)=>`Swing ${swingTime(level).toFixed(2)} s · ${hits?hits+' swings per tree':'no axe'} · ${logsFromTrunk(level)} logs per trunk`; // T-E

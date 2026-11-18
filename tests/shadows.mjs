@@ -77,11 +77,10 @@ assert.equal(blobsShown({low:true,outdoors:false,opacity:.3}),false,'never in a 
  // the box
  const cam=sun.shadow.camera;assert.deepEqual([cam.left,cam.right,cam.top,cam.bottom,cam.far],[-45,45,45,-45,130],'a 90 m box');assert.equal(sun.shadow.mapSize.x*sun.shadow.mapSize.y,2048*2048,'the same map: 2048 x 2048');
  near(cam.projectionMatrix.elements[0],2/90,1e-9,'the projection was rebuilt for the new box');
- // the fade is in the shader text once, only in getShadow, and installing it again changes nothing
- const chunk=THREE.ShaderChunk.shadowmap_pars_fragment;assert.equal(chunk.split(FADE_GLSL).length,2,'the fade is in the shadow lookup once');assert.equal(chunk.length,before.length-'return shadow;'.length+FADE_GLSL.length);
- assert(chunk.indexOf(FADE_GLSL)>chunk.indexOf('float getShadow(')&&chunk.indexOf(FADE_GLSL)<chunk.indexOf('vec2 cubeToUV'),'inside getShadow, before the point-light code');
- assert.equal(installShadowFade(),true);assert.equal(THREE.ShaderChunk.shadowmap_pars_fragment,chunk);
- assert.equal(new THREE.DirectionalLight().shadow.radius,1,'every other light keeps full shadows (radius 1)');
+ // three.js r166+ fades natively: getShadow mixes by shadowIntensity, so the shader text is left alone, and installing again changes nothing
+ const chunk=THREE.ShaderChunk.shadowmap_pars_fragment;assert(chunk.includes('return mix( 1.0, shadow, shadowIntensity );'),'getShadow fades by the native shadowIntensity');assert.equal(chunk,before,'the shader text is not edited');
+ assert.equal(installShadowFade(),true);assert.equal(THREE.ShaderChunk.shadowmap_pars_fragment,before);
+ assert.equal(new THREE.DirectionalLight().shadow.intensity,1,'every other light keeps full shadows (intensity 1)');assert.equal(new THREE.DirectionalLight().shadow.radius,1,'default radius 1');
  // a frame: what sky.js does, then shadows.update
  const place=(minutes,x,z)=>{const s=skyAt(minutes);sun.position.set(x+s.lightDir[0]*60,s.lightDir[1]*60,z+s.lightDir[2]*60);sun.target.position.set(x,0,z);return s};
  const blobs=shadows.blobs;assert.equal(blobs.name,'blob-shadows');assert(blobs.isInstancedMesh&&!blobs.visible&&!blobs.castShadow&&!blobs.receiveShadow&&!blobs.material.depthWrite&&blobs.material.transparent);
@@ -90,11 +89,11 @@ assert.equal(blobsShown({low:true,outdoors:false,opacity:.3}),false,'never in a 
  {const s=place(720,-5.013,15.027),d=s.lightDir,{right,up}=shadowBasis(d),st=shadows.update({sky:s,low:false,centre:{x:-5,z:15}});
   const t=sun.target.position.toArray(),p=sun.position.toArray();near(dot(t,right)/SHADOW_TEXEL,Math.round(dot(t,right)/SHADOW_TEXEL),1e-6,'the target sits on a texel across');near(dot(t,up)/SHADOW_TEXEL,Math.round(dot(t,up)/SHADOW_TEXEL),1e-6,'and up');
   p.forEach((v,i)=>near(v-t[i],d[i]*60,1e-9,'the light still stands 60 m off in the same direction'));assert(Math.hypot(t[0]+5.013,t[1],t[2]-15.027)<SHADOW_TEXEL,'and has moved less than a texel');
-  assert.deepEqual([st.strength,st.pass,st.blobs,st.drawCalls],[1,true,0,0]);assert.equal(sun.shadow.radius,1);assert.equal(sun.shadow.autoUpdate,true);assert.equal(blobs.visible,false,'High has no patches');
+  assert.deepEqual([st.strength,st.pass,st.blobs,st.drawCalls],[1,true,0,0]);assert.equal(sun.shadow.intensity,1);assert.equal(sun.shadow.radius,1,'the blur radius is never touched');assert.equal(sun.shadow.autoUpdate,true);assert.equal(blobs.visible,false,'High has no patches');
   const again=shadows.update({sky:place(720,-5.013+SHADOW_TEXEL*.3,15.027),low:false});assert.deepEqual(again.cell,st.cell,'a small step does not move the box');near(sun.target.position.x,t[0],1e-9,'not at all')}
  // High at 06:10 and 17:50: faded out and the pass is skipped; back on later
- for(const m of [clock(6,10),clock(17,50)]){const st=shadows.update({sky:place(m,0,0),low:false});assert.deepEqual([st.strength,st.pass],[0,false]);assert.equal(sun.shadow.radius,0);assert.equal(sun.shadow.autoUpdate,false,'no shadow pass at '+m)}
- {const st=shadows.update({sky:place(clock(6,45),0,0),low:false});assert(st.strength>0&&st.strength<1&&st.pass&&sun.shadow.autoUpdate,'fading in at 06:45: '+st.strength);near(sun.shadow.radius,st.strength,1e-12,'the strength rides on shadow.radius')}
+ for(const m of [clock(6,10),clock(17,50)]){const st=shadows.update({sky:place(m,0,0),low:false});assert.deepEqual([st.strength,st.pass],[0,false]);assert.equal(sun.shadow.intensity,0);assert.equal(sun.shadow.radius,1);assert.equal(sun.shadow.autoUpdate,false,'no shadow pass at '+m)}
+ {const st=shadows.update({sky:place(clock(6,45),0,0),low:false});assert(st.strength>0&&st.strength<1&&st.pass&&sun.shadow.autoUpdate,'fading in at 06:45: '+st.strength);near(sun.shadow.intensity,st.strength,1e-12,'the strength rides on shadow.intensity')}
  {const st=shadows.update({sky:place(0,0,0),low:false});assert.deepEqual([st.strength,st.pass],[1,true],'moon shadows are on')}
  // a room in the world scene: full shadows whatever the clock says
  {const st=shadows.update({sky:place(clock(6,10),0,0),low:false,indoors:true,outdoors:false});assert.deepEqual([st.strength,st.pass],[1,true])}

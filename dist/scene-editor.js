@@ -101,7 +101,7 @@ export function createNamedView({chunks,map=MAP,height=heightAt,baseline=SCENE_E
    for(const mesh of dirty)mesh.instanceMatrix.needsUpdate=true;dirty.clear();
   },
   // [{key, shown:{x,z,yaw}|null}] for tests: what the instance matrices currently say.
-  shownAt(key){const slot=slots.get(key),t=slot?.targets[0];if(!t)return undefined;t.mesh.getMatrixAt(t.index,m4);const p=new THREE.Vector3(),qq=new THREE.Quaternion(),s=new THREE.Vector3();m4.decompose(p,qq,s);return s.x===0?null:{x:p.x,y:p.y,z:p.z,yaw:2*Math.atan2(qq.y,qq.w)}},
+  shownAt(key){const slot=slots.get(key),t=slot?.targets[0];if(!t)return undefined;t.mesh.getMatrixAt(t.index,m4);const e=m4.elements;if(e[0]*e[0]+e[1]*e[1]+e[2]*e[2]===0)return null;const p=new THREE.Vector3(),qq=new THREE.Quaternion(),s=new THREE.Vector3();m4.decompose(p,qq,s);return {x:p.x,y:p.y,z:p.z,yaw:2*Math.atan2(qq.y,qq.w)}},
  };
 }
 

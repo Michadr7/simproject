@@ -546,3 +546,4 @@ html[data-bot=open] .bot-face{display:none}
 .qarea{display:inline-flex;gap:8px;align-items:center}.qarea select{background:rgba(27,30,35,.95);color:var(--ink);border:1px solid var(--line);border-radius:8px;padding:3px 8px;font:12.5px var(--sans)}
 @container page (min-width:900px){.page.two.wf>.cols{grid-template-columns:minmax(240px,300px) minmax(0,1fr)}.wf>.cols>.wf-hero{align-self:start;max-height:100%}}
 @container page (max-width:899px){.wf-hero{padding:16px}}
+.dlink{color:var(--acc-ink);text-decoration:underline;text-underline-offset:2px}

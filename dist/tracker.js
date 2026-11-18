@@ -23,17 +23,17 @@ const nearest=(from,pts)=>pts.reduce((best,p)=>!best||Math.hypot(p.x-from.x,p.z-
 export function taskPlace(kind,progress,from){
  const day=progress.shift?.day||progress.housing?.day||1;
  if(kind==='fell')return nearest(from,markedBlocks(day).map(blockCentre));
- if(kind==='gather'){const logs=(progress.logs||[]).map(l=>({x:l.x,z:l.z}));return logs.length?nearest(from,logs):nearest(from,markedBlocks(day).map(blockCentre))}
+ if(kind==='gather'||kind==='buck'){const trunks=(progress.logs||[]).filter(l=>l.kind==='trunk').map(l=>({x:l.x,z:l.z}));return trunks.length?nearest(from,trunks):nearest(from,markedBlocks(day).map(blockCentre))} // quest rework: Pick up / Cut point at the nearest trunk on the ground, else the marked blocks
  if(kind==='stumps'||kind==='replant'){const now=((progress.housing?.day||1)-1)*1440+(progress.routine?.minutes||0),plots=felledStages(progress,now).map(([key,stage])=>({stage,...(c=>cellCenter(c.ix,c.iz))(parseCellKey(key))}));
   const want=kind==='stumps'?['stump']:['cleared','stump'];for(const s of want){const here=plots.filter(p=>p.stage===s);if(here.length)return nearest(from,here.map(p=>({x:p.x,z:p.z})))}return nearest(from,markedBlocks(day).map(blockCentre))}
  if(kind==='stack'||kind==='pick'||kind==='deliver'){const w=MAP.offices.find(o=>o.kind==='warehouse');return w?{x:w.door.out.x,z:w.door.out.z}:null} // the warehouse's person door
  if(kind==='landing')return {x:LANDING.x,z:LANDING.z};
- if(kind==='mill'){const s=MAP.landmarks.find(l=>l.id==='sawmill');return s?{x:s.x,z:s.z}:null}
+ if(kind==='mill'||kind==='feed_saw'){const s=MAP.landmarks.find(l=>l.id==='sawmill');return s?{x:s.x,z:s.z}:null}
  if(kind==='haul')return {x:(LUMBERYARD.x0+LUMBERYARD.x1)/2,z:(LUMBERYARD.z0+LUMBERYARD.z1)/2};
  if(kind==='load')return {x:BAY.x,z:BAY.z};
  return null;
 }
-const PLACE_NAME={stack:'Warehouse',pick:'Warehouse',deliver:'Warehouse',fell:'Marked block',gather:'Fallen logs',stumps:'Stumps',replant:'Cleared ground',landing:'The landing',mill:'Sawmill',haul:'Lumberyard',load:'Timber yard bay'};
+const PLACE_NAME={stack:'Warehouse',pick:'Warehouse',deliver:'Warehouse',fell:'Marked block',gather:'Fallen trunks',buck:'Fallen trunks',feed_saw:'Sawmill',stumps:'Stumps',replant:'Cleared ground',landing:'The landing',mill:'Sawmill',haul:'Lumberyard',load:'Timber yard bay'};
 
 export function trackerItems(progress,from,room=null){
  const items=[],shift=progress.shift;

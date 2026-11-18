@@ -87,7 +87,8 @@ for(const cellsSample of [{},{[W.INTAKE_ORDER[0]]:16,[W.INTAKE_ORDER[1]]:40},spr
  const base=freshProgress();
  const prog={...base,world:normalizeWorld({day:0,use:{}},MAP.seed,0),companies:{[PALLET_LINK.company]:co}};
  const ticked=runWorldDay(prog,1,{seed:MAP.seed});
- assert.equal(W.mirrorPlankSum(cellsSample),ticked.world.stock[PALLET_LINK.place][PALLET_LINK.good],'mirrorPlankSum matches world-tick mirrorPallets');
+ const after=ticked.companies[PALLET_LINK.company]; // W3: the crew's day may haul up to 12 planks into the racks; the world still shows exactly the pallets
+ assert.equal(W.mirrorPlankSum(W.normalizeCells(after)),ticked.world.stock[PALLET_LINK.place][PALLET_LINK.good],'mirrorPlankSum matches the world-tick mirror');assert.ok(totalPlanks(after)-totalPlanks(co)<=12,'at most 12 hauled');
 }
 
 // 7. summarize & normalizeCells round-trip with pallets company shape.

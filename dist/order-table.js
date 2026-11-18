@@ -4,6 +4,7 @@ import {MAP,zoneById} from './map-definition.js';
 import {dueText,TAKE_RANK,DONE_REP,FAIL_REP,openTickets,takenBy,stagingOf} from './tickets.js';
 import {PIECE_PAY} from './shift.js';
 import {money} from './jobs.js';
+import {deliveryPay} from './plank-delivery.js';
 
 export const BOARD_PAGE=3; // buttons on one screen of the board (with more orders, the last button is "More orders")
 // a house a delivery goes to, as a person would say it: "3 Cedar Loop, Cedar Heights" (never the id)
@@ -39,8 +40,8 @@ export function boardPage(entries,page=0){
 }
 
 // The card for one order. ctx: {now, rank, ranks, company}. Returns {title, text, canAccept, mine, next} where `next` is what to do now (for an order you hold) or null.
-export function orderCard(k,{now,rank,ranks,company}){
- const pickup=k.kind==='pickup',pay=money(pickup?PIECE_PAY.orders:PIECE_PAY.deliveries),need=TAKE_RANK[k.kind],locked=rank<need;
+export function orderCard(k,{now,rank,ranks,company,priceTable}){
+ const pickup=k.kind==='pickup',pay=money(pickup?PIECE_PAY.orders:deliveryPay(k.planks,priceTable,{placeKey:'warehouse'}).payCents),need=TAKE_RANK[k.kind],locked=rank<need;
  const mine=['taken','staged','loaded'].includes(k.status),sq=stagingOf(company).findIndex(s=>s&&s.id===k.id);
  let next=null;
  if(k.status==='taken')next=`Fill it: take planks from a pallet in the racks to square S${sq+1} (${k.staged} of ${k.planks} staged).`;

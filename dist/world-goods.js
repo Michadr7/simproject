@@ -10,6 +10,12 @@ export const GOODS=Object.freeze({
  bread:Object.freeze({id:'bread',label:'Bread',unit:'loaf',baseCents:350,decayDays:4,group:'food'}),
  planks:Object.freeze({id:'planks',label:'Planks',unit:'plank',baseCents:900,group:'lumber'}),   // price ASSUMED (no plank price exists in dist/)
  logs:Object.freeze({id:'logs',label:'Logs',unit:'log',baseCents:1500,group:'lumber'}),          // price ASSUMED
+ trunks:Object.freeze({id:'trunks',label:'Trunks',unit:'trunk',baseCents:2800,group:'lumber'}),   // timber redesign T-A, price ASSUMED
+ slabs:Object.freeze({id:'slabs',label:'Slabs',unit:'slab',baseCents:1800,group:'lumber'}),      // timber redesign T-A, price ASSUMED
+ posts:Object.freeze({id:'posts',label:'Posts',unit:'post',baseCents:3000,group:'lumber'}),
+ beams:Object.freeze({id:'beams',label:'Beams',unit:'beam',baseCents:3800,group:'lumber'}),
+ dowels:Object.freeze({id:'dowels',label:'Dowels',unit:'dowel',baseCents:700,group:'lumber'}),
+ chips:Object.freeze({id:'chips',label:'Chips',unit:'chip',baseCents:100,group:'lumber'}),   // warehouse timber machine M-A, prices PLACEHOLDER
  gas:Object.freeze({id:'gas',label:'Gasoline',unit:'gal',baseCents:400,group:'fuel'}),           // fuel.js:5 PRICE_CENTS_PER_GAL.gas (fuel.js counts milli-gallons: 1 unit = 1000 mgal)
  diesel:Object.freeze({id:'diesel',label:'Diesel',unit:'gal',baseCents:420,group:'fuel'})         // fuel.js:5
 });

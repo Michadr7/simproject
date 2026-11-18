@@ -9,6 +9,8 @@ import {parcelTaken,parcelModelId,PARCEL_DEFAULT} from './gig-parcel.js';
 // Per kind: space units per piece (planks: per plank), kg, whether hands may carry it, whether pieces pile up, hands speed multiplier. Sizes and masses reuse cargo.js and load-drag.js.
 export const ITEM_KINDS=Object.freeze({
  log:Object.freeze({unitSpace:CARGO_KINDS.log.space,unitKg:MASS_KG.log,hand:true,stackable:false,speedMul:HANDS_SPEED.log}),
+ trunk:Object.freeze({unitSpace:CARGO_KINDS.trunk.space,unitKg:MASS_KG.trunk,hand:true,stackable:false,speedMul:HANDS_SPEED.trunk}),
+ slab:Object.freeze({unitSpace:CARGO_KINDS.slab.space,unitKg:MASS_KG.slab,hand:true,stackable:false,speedMul:HANDS_SPEED.slab}),
  planks:Object.freeze({unitSpace:CARGO_KINDS.planks.space,unitKg:MASS_KG.plank,hand:true,stackable:true,speedMul:HANDS_SPEED.planks}), // stackable: up to PLANKS_PER_STACK planks make one piece
  crate:Object.freeze({unitSpace:CARGO_KINDS.crate.space,unitKg:MASS_KG.crate,hand:true,stackable:true,speedMul:HANDS_SPEED.crate}), // piles two high on a bed (cargo.js fits); one crate in hands, slow walk
  parcel:Object.freeze({unitSpace:1,unitKg:MASS_KG.parcelSmall,hand:true,stackable:false,speedMul:HANDS_SPEED.parcel}), // small carton; a large one takes 2 space and weighs MASS_KG.parcelMedium
@@ -16,7 +18,7 @@ export const ITEM_KINDS=Object.freeze({
 });
 // C-B: the switch for the parcel as a real piece (hands or bed). false = game.js still uses the old gigs.active flag only: save normalisation, gig end and the hands do nothing with pieces. The owner's main chat flips it to true when game.js is wired (syncParcel reads the piece).
 export const PARCEL_PIECES_ENABLED=true; // ON since the game.js wiring (OPUS-wiring 2026-11-17): X, E, the vehicle seat, syncParcel and the Cargo panel all use the piece
-export const KIND_ORDER=Object.freeze(['log','planks','crate','parcel','box']); // the wheel's slice order
+export const KIND_ORDER=Object.freeze(['log','trunk','slab','planks','crate','parcel','box']); // the wheel's slice order
 export const LARGE_PARCEL_SPACE=2;
 export const MIX_CRATES=false; // legacy rule: crates and timber do not mix on a bed. The wheel stage may turn it on (pass {mixCrates:true}); cargo.js normalizeCargo would then need the same change.
 export const NOT_CARGO='That cannot go on the bed.';
@@ -46,7 +48,7 @@ export function bedRules(model){
  return {model,space:b.space,maxPieces:b.maxPieces||Infinity,crates:!!b.crates,accepts:KIND_ORDER.filter(k=>k!=='crate'||!!b.crates)};
 }
 export const usedSpaceOf=items=>(items||[]).reduce((s,i)=>s+(i&&Number.isFinite(i.space)?i.space:0),0);
-const isTimber=i=>i.kind==='log'||i.kind==='planks';
+const isTimber=i=>i.kind==='log'||i.kind==='trunk'||i.kind==='slab'||i.kind==='planks';
 
 // canLoad(model,items,item,opts) -> {ok:true} | {error}. Checks the kind, the space, maxPieces (the ATV rack: one piece in total) and cargo.js fits() (height and cells) for the timber and crates.
 export function canLoad(model,items,item,opts={}){
@@ -101,7 +103,7 @@ export function handsRule(item){
 export function fromLegacyCargo(cargo){
  if(!Array.isArray(cargo))return [];const out=[];
  for(const p of cargo){if(!p||typeof p!=='object')continue;let it=null;
-  if(p.k==='log')it=itemOf('log');else if(p.k==='crate')it=itemOf('crate');else if(p.k==='planks')it=itemOf('planks',{count:p.n,o:p.o});
+  if(p.k==='log'||p.k==='trunk'||p.k==='slab')it=itemOf(p.k);else if(p.k==='crate')it=itemOf('crate');else if(p.k==='planks')it=itemOf('planks',{count:p.n,o:p.o});
   else if(p.k==='parcel')it=itemOf('parcel',{gig:p.g,model:p.m,large:p.l===1||p.l===true});else if(p.k==='box')it=itemOf('box');
   if(it)out.push(it)}
  return out;
@@ -109,7 +111,7 @@ export function fromLegacyCargo(cargo){
 // Items to the saved bed pieces cargo.js knows (log, planks, crate): parcels and boxes are NOT in this shape and are left out. null when empty.
 export function toLegacyCargo(items){
  const out=[];for(const it of normalizeItems(items)){
-  if(it.kind==='log')out.push({k:'log'});else if(it.kind==='crate')out.push({k:'crate'});else if(it.kind==='planks')out.push({k:'planks',n:it.count,...(it.o?{o:it.o}:{})})}
+  if(it.kind==='log'||it.kind==='trunk'||it.kind==='slab')out.push({k:it.kind});else if(it.kind==='crate')out.push({k:'crate'});else if(it.kind==='planks')out.push({k:'planks',n:it.count,...(it.o?{o:it.o}:{})})}
  return out.length?out:null;
 }
 // Items to the full saved bed list (adds the parcel {k:'parcel',g,m,l?} and {k:'box'}). null when empty. fromLegacyCargo reads it back.
@@ -123,7 +125,7 @@ export function fromLegacyCarry(carry){
  if(!carry||typeof carry!=='object')return null;
  if(carry.kind==='planks')return itemOf('planks',{count:carry.count,o:carry.o});
  if(carry.kind==='parcel')return itemOf('parcel',{gig:carry.gig,model:carry.model,large:carry.large===true});
- return carry.kind==='log'||carry.kind==='crate'||carry.kind==='box'?itemOf(carry.kind):null;
+ return carry.kind==='log'||carry.kind==='trunk'||carry.kind==='slab'||carry.kind==='crate'||carry.kind==='box'?itemOf(carry.kind):null;
 }
 export function toLegacyCarry(item){
  const it=normalizeItem(item);if(!it||!it.hand)return null;

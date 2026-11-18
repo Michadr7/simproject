@@ -2,6 +2,7 @@
 // panel shows (imperial: miles an hour, gallons). createVehicleHud writes that to the page, and only when something changed.
 import {fuelText,fuelTitle,mph} from './fuel.js';
 import {bandOf,percent,lampOf} from './damage.js';
+import {speedCard,fuelBar as fuelBarOf,damageBar} from './hud-cards.js'; // the three thin bars of the card style (hud-restyle-spec.md)
 export const SILHOUETTES=['shortbed','worktruck','offroad','flatbed','tractor_juff','tractor_kidbi']; // the drawn vehicles in index.html (#vpDamage); any other model shows the generic one
 export const STOP_SPEED=1; // m/s: below this you may get out (the same rule as game.js exitVehicle)
 
@@ -22,7 +23,8 @@ export function damageRow(d){if(!d)return null;const b=bandOf(d.cond);return {mo
 // TR4: the bog row (same idea as the damage row): bog is driving.bogOf() ({stuck, warn}) or null. Stuck says how to get out; the warning shows while the wheels sink.
 export const STUCK_TEXT='Stuck: rock it with W and S',SINK_TEXT='Sinking: ease off the throttle';
 export const stuckRow=b=>!b?null:b.stuck?{level:'stuck',text:STUCK_TEXT}:b.warn?{level:'warn',text:SINK_TEXT}:null;
-export function vehicleHudModel({driving=null,seat=null,name=null,speed=0,fuel=null,ground=null,forklift=null,lights=null,damage=null,bog=null,gps=null}={}){
+const bar=b=>({pct:Math.round(b.fraction*100),band:b.band}); // whole percents, so the model (and the DOM) only change when a bar moves a step
+export function vehicleHudModel({driving=null,seat=null,name=null,speed=0,fuel=null,ground=null,forklift=null,lights=null,damage=null,bog=null,gps=null,topSpeed=29}={}){
  if(forklift)return forkliftHudModel(forklift);
  const fuelShown=fuel?`${fuelTitle(fuel.type)} · ${fuelText(fuel.mgal,fuel.capacityMgal)}`:'—',empty=!!fuel&&fuel.mgal<=0;
  if(!driving)return {state:'off',name:'Not in a vehicle',speed:'—',fuel:'—',
@@ -34,7 +36,7 @@ export function vehicleHudModel({driving=null,seat=null,name=null,speed=0,fuel=n
  const stopped=Math.abs(speed)<STOP_SPEED;
  const wrecked=!!damage&&damage.cond<=0,engineNote=wrecked?'Wrecked: it will not start. E gets you out.':damage&&damage.engine==='off'?'The engine stalled. Press W to restart.':damage&&damage.engine==='crank'?'Starting the engine…':null;
  const stuck=stuckRow(bog);
- return {state:'driving',name:name||'Vehicle',speed:speedShown,fuel:fuelShown,damage:dmg,...(stuck?{stuck}:{}),...(gps?{gps}:{}),
+ return {state:'driving',name:name||'Vehicle',speed:speedShown,speedBar:bar(speedCard({speedMs:speed,topSpeedMs:topSpeed,engineMode:damage?.engine,cond:damage?damage.cond:1000})),fuelBar:fuel?bar(fuelBarOf(fuel)):null,dmgBar:damage?bar(damageBar(damage.cond)):null,fuel:fuelShown,damage:dmg,...(stuck?{stuck}:{}),...(gps?{gps}:{}),
   keys:[{kbd:'E',text:stopped?'Get out':'Stop to get out',muted:!stopped},...(lights?[{kbd:'L',text:lights}]:[])],
   note:engineNote?engineNote:empty?`Out of fuel. Fill up at the Eastbank gas station: this one takes ${fuel.type}.`:ground&&ground.factor<.95?`Off road · ${ground.label} · top speed ${Math.round(ground.factor*100)}%. Get back on the road to go faster.`:'W S accelerate and brake · A D steer · Space brakes'};
 }
@@ -47,6 +49,7 @@ export function createVehicleHud($){
   if(key===last)return;last=key;
   const panel=$('vehiclePanel');if(!panel)return;
   panel.dataset.state=model.state;
+  for(const [id,fid,b] of [['vpSpeedBar','vpSpeedFill',model.speedBar],['vpFuelBar','vpFuelFill',model.fuelBar],['vpDmgBar','vpDmgFill',model.dmgBar]]){const el=$(id);if(!el)continue;el.hidden=!b||(b.band==='off'&&id==='vpFuelBar');if(b){el.dataset.band=b.band;const f=$(fid);if(f)f.style.width=b.pct+'%'}}
   {const d=$('vpDamage');if(d){d.hidden=!model.damage;if(model.damage){if(d.dataset.model!==model.damage.model)d.dataset.model=model.damage.model;if(d.dataset.band!==model.damage.band)d.dataset.band=model.damage.band;const t=$('vpDmgText');if(t)t.textContent=model.damage.text;const l=$('vpLamp');if(l&&l.dataset.lamp!==model.damage.lamp)l.dataset.lamp=model.damage.lamp}}} // the band class changes only when the band does
   {const g=$('vpGps');if(g){g.hidden=!model.gps;if(model.gps){const a=$('vpGpsArrow'),t=$('vpGpsText');if(a)a.textContent=model.gps.arrow;if(t)t.textContent=model.gps.text}}}
   {const s=$('vpStuck');if(s){s.hidden=!model.stuck;if(model.stuck){s.dataset.level=model.stuck.level;s.textContent=model.stuck.text}}}

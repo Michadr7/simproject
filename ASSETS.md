@@ -401,3 +401,92 @@ Not imported: FlatMedium_clean, OpenMedium_clean, FlatBundle_dirty, ShipMedium_c
 
 ## Ground cover (GD5, Quaternius Stylized Nature MegaKit [Standard], CC0 1.0, already credited)
 Nine models, one per cover kind (variants = 1), baked by scripts/build-cover-assets.mjs into dist/cover-assets.js (about 0.29 MB, loaded lazily): Grass_Common_Short, Grass_Common_Tall, Clover_1, Fern_1, Flower_3_Group, Bush_Common (texture hue-shifted red to green), Pebble_Round_1, Rock_Medium_1, Mushroom_Common. Scaled once to real sizes, textures cropped into one 512 x 384 atlas. Reeds and wheat are code-made (dist/cover-pack.js).
+
+
+## Timber models (T-D, 2026-11-18): 	runk, logs2, slab, oards4 in dist/assets/timber/*.glb`n
+Four models of the project owner's own, built in Blender by Hydrogen from the T-D prompt; **own work**, no credit line. Source: ssets-src/timber/timber_models.blend; one 256 px atlas (the CC0 Stylized Nature MegaKit bark, procedural end grain and sawn pine), one material each, 48 to 140 triangles, 70 KB each. Sizes: trunk 2.30 x 0.35 x 0.36 m, logs2 1.15 x 0.24 x 0.47 m, slab 2.30 x 0.06 x 0.36 m, boards4 1.20 x 0.45 x 0.465 m (matches carry.js PLANK_LENGTH and sawmill-pile.js). NOT wired into the game yet: they are loaded with GLTFLoader in stage T-B/T-E (not through props-assets.js).
+
+
+## Timber, chainsaw and sawmill sounds (SND2, 2026-11-18, recorded, all CC0) in `dist/assets/sounds/`
+
+Found and processed 2026-11-18 for stage SND2 (`notes/eval/prompts/gemini-lumber-sounds.md`). Every file below is **CC0 1.0 (public domain dedication)**, verified on its Freesound page on 2026-11-18 (`Creative Commons 0`). Because Freesound original downloads require a login, the public high-quality MP3 preview (`cdn.freesound.org/previews/...-hq.mp3`) of each CC0 sound was downloaded as data and processed with Blender 5.2's `aud` module and `numpy` (no `ffmpeg` on this machine): mono, 22.05 kHz, Ogg Vorbis (`56 kbps`, `-q:a 3` equivalent), DC offset removed.
+
+- **Loops** (`chainsaw-idle`, `chainsaw-cut`, `sawmill-blade-idle`, `sawmill-blade-cut`, `conveyor-belt`): 0.30 s equal-power tail-to-head cross-fade for seamless looping, normalised to `-20.0 dBFS` rms (soft-limited at `-1.5 dBFS` peak if needed).
+- **One-shots** (all other clips): 10 ms fade-in, 30 ms fade-out, normalised to `-4.0 dBFS` peak.
+- **Note**: Cut points and loop windows were chosen by waveform/RMS/spectral-centroid measurement (`numpy`); nobody has listened to them yet.
+
+| File | Source title + id | Author + URL | Cut used | Loudness |
+|---|---|---|---|---|
+| `axe-chop-1.ogg` | Freesound 706978 "Chopping a tree trunk with an Axe. OWI.wav" | JesterWhoo (https://freesound.org/people/JesterWhoo/sounds/706978/) | 0.85 to 1.25 s (0.40 s, chop 1) | peak -4.0 dBFS, rms -29.1 dBFS |
+| `axe-chop-2.ogg` | Freesound 706978 "Chopping a tree trunk with an Axe. OWI.wav" | JesterWhoo (https://freesound.org/people/JesterWhoo/sounds/706978/) | 4.42 to 4.82 s (0.40 s, chop 2) | peak -4.0 dBFS, rms -30.1 dBFS |
+| `axe-chop-3.ogg` | Freesound 706978 "Chopping a tree trunk with an Axe. OWI.wav" | JesterWhoo (https://freesound.org/people/JesterWhoo/sounds/706978/) | 6.59 to 7.02 s (0.43 s, chop 3) | peak -4.0 dBFS, rms -27.2 dBFS |
+| `axe-chop-4.ogg` | Freesound 706978 "Chopping a tree trunk with an Axe. OWI.wav" | JesterWhoo (https://freesound.org/people/JesterWhoo/sounds/706978/) | 9.15 to 9.55 s (0.40 s, chop 4) | peak -4.0 dBFS, rms -28.4 dBFS |
+| `tree-fall.ogg` | Freesound 670300 "tree cut down.wav" | bruno.auzet (https://freesound.org/people/bruno.auzet/sounds/670300/) | 2.30 to 6.80 s (4.50 s, creaking/snapping into crash) | peak -4.0 dBFS, rms -25.7 dBFS |
+| `tree-thud.ogg` | Freesound 515313 "timber tree falling 1" | matt_beer (https://freesound.org/people/matt_beer/sounds/515313/) | 3.05 to 3.95 s (0.90 s, heavy trunk landing) | peak -4.0 dBFS, rms -25.6 dBFS |
+| `log-drop-1.ogg` | Freesound 681416 "wooden log drop" | ventousawins (https://freesound.org/people/ventousawins/sounds/681416/) | 6.48 to 7.08 s (0.60 s, heavy log drop) | peak -4.0 dBFS, rms -25.2 dBFS |
+| `log-drop-2.ogg` | Freesound 659430 "Wood log impact reverbed pack.wav" | Sadiquecat (https://freesound.org/people/Sadiquecat/sounds/659430/) | 8.22 to 8.77 s (0.55 s, take 1) | peak -4.0 dBFS, rms -25.0 dBFS |
+| `log-drop-3.ogg` | Freesound 659430 "Wood log impact reverbed pack.wav" | Sadiquecat (https://freesound.org/people/Sadiquecat/sounds/659430/) | 13.98 to 14.58 s (0.60 s, take 2) | peak -4.0 dBFS, rms -20.1 dBFS |
+| `chainsaw-start.ogg` | Freesound 637359 "chainsaw start, saw something quick, shut off1.flac" | kyles (https://freesound.org/people/kyles/sounds/637359/) | 0.05 to 2.55 s (2.50 s, pull-cord + catch) | peak -4.0 dBFS, rms -24.8 dBFS |
+| `chainsaw-idle.ogg` | Freesound 431741 "Chainsaw - Start Cut and Idle.wav" | Stefan021 (https://freesound.org/people/Stefan021/sounds/431741/) | 29.00 to 33.40 s (4.10 s loop after 0.30 s cross-fade) | rms -20.0 dBFS, peak -4.3 dBFS |
+| `chainsaw-cut.ogg` | Freesound 431741 "Chainsaw - Start Cut and Idle.wav" | Stefan021 (https://freesound.org/people/Stefan021/sounds/431741/) | 20.00 to 24.80 s (4.50 s loop after 0.30 s cross-fade) | rms -20.0 dBFS, peak -7.2 dBFS |
+| `chainsaw-stop.ogg` | Freesound 637359 "chainsaw start, saw something quick, shut off1.flac" | kyles (https://freesound.org/people/kyles/sounds/637359/) | 15.50 to 17.20 s (1.70 s, spin-down shut off) | peak -4.0 dBFS, rms -22.8 dBFS |
+| `sawmill-blade-idle.ogg` | Freesound 528163 "Vertical panel saw - Sawmill atmosphere - Industry saw" | Breviceps (https://freesound.org/people/Breviceps/sounds/528163/) | 13.00 to 18.00 s (4.70 s loop after 0.30 s cross-fade) | rms -20.0 dBFS, peak -5.8 dBFS |
+| `sawmill-blade-cut.ogg` | Freesound 501169 "Circular Saw Sawing 2x6.wav" | shelbyshark (https://freesound.org/people/shelbyshark/sounds/501169/) | 9.50 to 14.50 s (4.70 s loop after 0.30 s cross-fade) | rms -20.0 dBFS, peak -8.4 dBFS |
+| `sawmill-blade-stop.ogg` | Freesound 449118 "Elite 80 Table Saw 2.wav" | SampleDiaries (https://freesound.org/people/SampleDiaries/sounds/449118/) | 23.50 to 26.50 s (3.00 s, blade spin-down) | peak -4.0 dBFS, rms -26.3 dBFS |
+| `plank-drop-1.ogg` | Freesound 537755 "Wooden Planks 01.wav" | Tim_Verberne (https://freesound.org/people/Tim_Verberne/sounds/537755/) | 2.23 to 2.63 s (0.40 s, drop 1) | peak -4.0 dBFS, rms -31.7 dBFS |
+| `plank-drop-2.ogg` | Freesound 537755 "Wooden Planks 01.wav" | Tim_Verberne (https://freesound.org/people/Tim_Verberne/sounds/537755/) | 5.15 to 5.65 s (0.50 s, drop 2) | peak -4.0 dBFS, rms -28.1 dBFS |
+| `plank-drop-3.ogg` | Freesound 537755 "Wooden Planks 01.wav" | Tim_Verberne (https://freesound.org/people/Tim_Verberne/sounds/537755/) | 6.33 to 6.83 s (0.50 s, drop 3) | peak -4.0 dBFS, rms -27.0 dBFS |
+| `plank-stack.ogg` | Freesound 478238 "Planks Clattering" | Fission9 (https://freesound.org/people/Fission9/sounds/478238/) | 6.70 to 8.65 s (1.95 s, multiple boards laid down) | peak -4.0 dBFS, rms -23.3 dBFS |
+| `conveyor-belt.ogg` | Freesound 478247 "Conveyor belt" | TiesWijnen (https://freesound.org/people/TiesWijnen/sounds/478247/) | 1.00 to 6.00 s (4.70 s loop after 0.30 s cross-fade) | rms -20.0 dBFS, peak -7.1 dBFS |
+
+
+## Game-wide sound sweep (SND3, 2026-11-18, recorded, all CC0) in `dist/assets/sounds/`
+
+Found and processed 2026-11-18 for stage SND3 (`notes/eval/prompts/hydrogen-sound-sweep.md`). Every file below is **CC0 1.0 (public domain dedication)**, verified on its Freesound page on 2026-11-18 (`Creative Commons 0`). Because Freesound original downloads require a login, the public high-quality MP3 preview (`cdn.freesound.org/previews/...-hq.mp3`) of each CC0 sound was downloaded as data and processed with Blender 5.2's `aud` module and `numpy` (no `ffmpeg` on this machine): mono, 22.05 kHz, Ogg Vorbis (`56 kbps`), DC offset removed.
+
+- **Loops** (`fuel-flow`, `eng-atv`, `eng-tractor`, `forklift-beep`, `forklift-lift`, `amb-birds`, `amb-crickets`, `amb-wind`, `amb-water`): 0.30 s equal-power tail-to-head cross-fade for seamless looping, normalised to `-20.0 dBFS` rms (soft-limited at `-1.5 dBFS` peak if needed).
+- **One-shots** (all other 31 clips): 10 ms fade-in, 30 ms fade-out, normalised to `-4.0 dBFS` peak.
+- **Note**: Cut points and loop windows were chosen by waveform/RMS/onset measurement (`numpy`); nobody has listened to them yet.
+
+| File | Source title + id | Author + URL | Cut used | Loudness |
+|---|---|---|---|---|
+| `step-pave-1.ogg` | Freesound 465299 "Concrete Footsteps" | SoftDistortionFX (https://freesound.org/people/SoftDistortionFX/sounds/465299/) | 1.60 to 1.98 s (0.38 s, step 1) | peak -4.0 dBFS, rms -26.0 dBFS |
+| `step-pave-2.ogg` | Freesound 465299 "Concrete Footsteps" | SoftDistortionFX (https://freesound.org/people/SoftDistortionFX/sounds/465299/) | 2.02 to 2.40 s (0.38 s, step 2) | peak -4.0 dBFS, rms -24.5 dBFS |
+| `step-pave-3.ogg` | Freesound 465299 "Concrete Footsteps" | SoftDistortionFX (https://freesound.org/people/SoftDistortionFX/sounds/465299/) | 2.45 to 2.83 s (0.38 s, step 3) | peak -4.0 dBFS, rms -27.0 dBFS |
+| `step-grass-1.ogg` | Freesound 521587 "Hiking Boot Footsteps on Grass" | Fission9 (https://freesound.org/people/Fission9/sounds/521587/) | 0.05 to 0.55 s (0.50 s, step 1) | peak -4.0 dBFS, rms -24.6 dBFS |
+| `step-grass-2.ogg` | Freesound 521587 "Hiking Boot Footsteps on Grass" | Fission9 (https://freesound.org/people/Fission9/sounds/521587/) | 0.74 to 1.24 s (0.50 s, step 2) | peak -4.0 dBFS, rms -25.0 dBFS |
+| `step-grass-3.ogg` | Freesound 521587 "Hiking Boot Footsteps on Grass" | Fission9 (https://freesound.org/people/Fission9/sounds/521587/) | 2.98 to 3.48 s (0.50 s, step 3) | peak -4.0 dBFS, rms -24.7 dBFS |
+| `step-gravel-1.ogg` | Freesound 521588 "Hiking Boot Footsteps on Gravel" | Fission9 (https://freesound.org/people/Fission9/sounds/521588/) | 0.05 to 0.55 s (0.50 s, step 1) | peak -4.0 dBFS, rms -25.3 dBFS |
+| `step-gravel-2.ogg` | Freesound 521588 "Hiking Boot Footsteps on Gravel" | Fission9 (https://freesound.org/people/Fission9/sounds/521588/) | 0.80 to 1.30 s (0.50 s, step 2) | peak -4.0 dBFS, rms -29.1 dBFS |
+| `step-gravel-3.ogg` | Freesound 521588 "Hiking Boot Footsteps on Gravel" | Fission9 (https://freesound.org/people/Fission9/sounds/521588/) | 1.50 to 2.00 s (0.50 s, step 3) | peak -4.0 dBFS, rms -25.5 dBFS |
+| `step-wood-1.ogg` | Freesound 459970 "Footsteps on hollow wood" | florianreichelt (https://freesound.org/people/florianreichelt/sounds/459970/) | 0.02 to 0.42 s (0.40 s, step 1) | peak -4.0 dBFS, rms -22.8 dBFS |
+| `step-wood-2.ogg` | Freesound 459970 "Footsteps on hollow wood" | florianreichelt (https://freesound.org/people/florianreichelt/sounds/459970/) | 0.90 to 1.30 s (0.40 s, step 2) | peak -4.0 dBFS, rms -21.2 dBFS |
+| `step-wood-3.ogg` | Freesound 459970 "Footsteps on hollow wood" | florianreichelt (https://freesound.org/people/florianreichelt/sounds/459970/) | 5.90 to 6.30 s (0.40 s, step 3) | peak -4.0 dBFS, rms -26.1 dBFS |
+| `door-open.ogg` | Freesound 125958 "Wooden door open-close" | Ryding (https://freesound.org/people/Ryding/sounds/125958/) | 0.30 to 1.20 s (0.90 s, opening) | peak -4.0 dBFS, rms -28.9 dBFS |
+| `door-close.ogg` | Freesound 125958 "Wooden door open-close" | Ryding (https://freesound.org/people/Ryding/sounds/125958/) | 1.85 to 2.65 s (0.80 s, closing) | peak -4.0 dBFS, rms -23.5 dBFS |
+| `shop-bell.ogg` | Freesound 879804 "Shop Door Chime" | Qvantor (https://freesound.org/people/Qvantor/sounds/879804/) | 0.00 to 1.50 s (1.50 s) | peak -4.0 dBFS, rms -16.8 dBFS |
+| `gate-latch.ogg` | Freesound 710871 "Metal Gate Latch 02" | NapierFreesound (https://freesound.org/people/NapierFreesound/sounds/710871/) | 0.60 to 1.15 s (0.55 s) | peak -4.0 dBFS, rms -29.0 dBFS |
+| `ui-click.ogg` | Freesound 677861 "UI Button Click" | el_boss (https://freesound.org/people/el_boss/sounds/677861/) | 0.00 to 0.05 s (0.05 s) | peak -4.0 dBFS, rms -24.4 dBFS |
+| `ui-toast.ogg` | Freesound 879790 "Message Pop" | Qvantor (https://freesound.org/people/Qvantor/sounds/879790/) | 0.00 to 0.40 s (0.40 s) | peak -4.0 dBFS, rms -18.2 dBFS |
+| `phone-ping.ogg` | Freesound 879808 "Service Bell Ding" | Qvantor (https://freesound.org/people/Qvantor/sounds/879808/) | 0.00 to 1.20 s (1.20 s) | peak -4.0 dBFS, rms -20.8 dBFS |
+| `cash-register.ogg` | Freesound 351304 "Cha Ching.wav" | deleted_user_96253 (https://freesound.org/people/deleted_user_96253/sounds/351304/) | 0.05 to 1.55 s (1.50 s) | peak -4.0 dBFS, rms -21.8 dBFS |
+| `coins-pay.ogg` | Freesound 776101 "Coins Jingle" | yuliana_yurukova (https://freesound.org/people/yuliana_yurukova/sounds/776101/) | 0.04 to 1.20 s (1.16 s) | peak -4.0 dBFS, rms -29.2 dBFS |
+| `level-up.ogg` | Freesound 528958 "Level Up / Mission Complete" | Beetlemuse (https://freesound.org/people/Beetlemuse/sounds/528958/) | 0.00 to 1.90 s (1.90 s) | peak -4.0 dBFS, rms -18.9 dBFS |
+| `eat-bite.ogg` | Freesound 774782 "apple bite" | yuliana_yurukova (https://freesound.org/people/yuliana_yurukova/sounds/774782/) | 0.70 to 1.40 s (0.70 s) | peak -4.0 dBFS, rms -35.6 dBFS |
+| `sleep-chime.ogg` | Freesound 399538 "Windchime soft" | Vendarro (https://freesound.org/people/Vendarro/sounds/399538/) | 2.65 to 5.20 s (2.55 s) | peak -4.0 dBFS, rms -18.7 dBFS |
+| `breath-tired.ogg` | Freesound 682882 "Panting.wav" | drewsimko (https://freesound.org/people/drewsimko/sounds/682882/) | 1.15 to 2.65 s (1.50 s) | peak -4.0 dBFS, rms -23.4 dBFS |
+| `fuel-nozzle.ogg` | Freesound 750486 "Fuel pump" | Nomracer (https://freesound.org/people/Nomracer/sounds/750486/) | 4.35 to 4.95 s (0.60 s, nozzle click) | peak -4.0 dBFS, rms -28.1 dBFS |
+| `fuel-flow.ogg` | Freesound 236283 "Pressurized Hose Water Float.wav" | mffm (https://freesound.org/people/mffm/sounds/236283/) | 5.75 to 10.75 s (4.70 s loop after 0.30 s cross-fade) | rms -20.0 dBFS, peak -8.9 dBFS |
+| `car-door-open.ogg` | Freesound 556691 "Car Door open and close 2.wav" | NachtmahrTV (https://freesound.org/people/NachtmahrTV/sounds/556691/) | 0.45 to 1.20 s (0.75 s, open) | peak -4.0 dBFS, rms -21.0 dBFS |
+| `car-door-close.ogg` | Freesound 556691 "Car Door open and close 2.wav" | NachtmahrTV (https://freesound.org/people/NachtmahrTV/sounds/556691/) | 3.80 to 4.55 s (0.75 s, slam) | peak -4.0 dBFS, rms -16.9 dBFS |
+| `car-horn.ogg` | Freesound 349922 "Car Horn Honk.wav" | DeVern (https://freesound.org/people/DeVern/sounds/349922/) | 0.00 to 0.70 s (0.70 s) | peak -4.0 dBFS, rms -19.3 dBFS |
+| `brake-squeal.ogg` | Freesound 784172 "Honda CRV 2014 Interior Car stop" | loganzsound (https://freesound.org/people/loganzsound/sounds/784172/) | 2.80 to 4.10 s (1.30 s) | peak -4.0 dBFS, rms -29.7 dBFS |
+| `eng-atv.ogg` | Freesound 379915 "Quad Bike_ATV Engine.wav" | Alex_hears_things (https://freesound.org/people/Alex_hears_things/sounds/379915/) | 3.25 to 8.25 s (4.70 s loop after 0.30 s cross-fade) | rms -20.0 dBFS, peak -8.5 dBFS |
+| `eng-tractor.ogg` | Freesound 637884 "tractor idle engine motor close2.flac" | kyles (https://freesound.org/people/kyles/sounds/637884/) | 25.75 to 30.75 s (4.70 s loop after 0.30 s cross-fade) | rms -20.0 dBFS, peak -5.9 dBFS |
+| `crate-drop.ogg` | Freesound 465451 "foley_Cardboard Box Drop.wav" | ittou (https://freesound.org/people/ittou/sounds/465451/) | 3.50 to 4.20 s (0.70 s) | peak -4.0 dBFS, rms -31.7 dBFS |
+| `forklift-beep.ogg` | Freesound 449081 "Back Up BEEP Only" | Bon_Vivant_Pictures (https://freesound.org/people/Bon_Vivant_Pictures/sounds/449081/) | 0.00 to 2.30 s (2.00 s loop after 0.30 s cross-fade) | rms -20.0 dBFS, peak -6.0 dBFS |
+| `forklift-lift.ogg` | Freesound 877385 "Machine_Electric_Stacker_Forks_Raising_Sequence" | Nox_Sound (https://freesound.org/people/Nox_Sound/sounds/877385/) | 17.50 to 21.50 s (3.70 s loop after 0.30 s cross-fade) | rms -20.4 dBFS, peak -2.5 dBFS |
+| `amb-birds.ogg` | Freesound 624015 "Birds chirping.aif" | exvls (https://freesound.org/people/exvls/sounds/624015/) | 5.00 to 10.00 s (4.70 s loop after 0.30 s cross-fade) | rms -20.0 dBFS, peak -2.5 dBFS |
+| `amb-crickets.ogg` | Freesound 479041 "Crickets during the night" | felix.blume (https://freesound.org/people/felix.blume/sounds/479041/) | 251.25 to 256.25 s (4.70 s loop after 0.30 s cross-fade) | rms -20.0 dBFS, peak -5.9 dBFS |
+| `amb-wind.ogg` | Freesound 531016 "Wind Through Trees ambience.wav" | Noted451 (https://freesound.org/people/Noted451/sounds/531016/) | 31.00 to 36.00 s (4.70 s loop after 0.30 s cross-fade) | rms -20.0 dBFS, peak -5.2 dBFS |
+| `amb-water.ogg` | Freesound 318064 "Water_Lapping_River.wav" | ceich93 (https://freesound.org/people/ceich93/sounds/318064/) | 17.25 to 22.25 s (4.70 s loop after 0.30 s cross-fade) | rms -20.3 dBFS, peak -3.3 dBFS |

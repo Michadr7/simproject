@@ -64,6 +64,28 @@ export function takeFromRackCell(company,slot,n){
  const taken=Math.min(n,cur.count);
  return {company:withPallets(company,cur.count-taken>0?list.map(p=>p===cur?{...p,count:cur.count-taken}:p):list.filter(p=>p!==cur)),taken};
 }
+// Consumes up to `n` non-order units of `product` from rack cells first (put-away order), then floor/fork pallets if needed; keeps pallets === world truth.
+export function consumeFromRacks(company,n,product='planks'){
+ const want=Number.isFinite(n)?Math.max(0,Math.floor(n)):0;
+ if(!want)return {company,taken:0,left:0,cells:[]};
+ let cur=company,rem=want,taken=0;const cells=[];
+ for(const s of ORDER){
+  if(rem<=0)break;
+  const p=rackPallet(cur,s.id);if(!p||p.product!==product||isOrder(p))continue;
+  const r=takeFromRackCell(cur,s.id,rem);if(r.taken>0){cur=r.company;rem-=r.taken;taken+=r.taken;cells.push(s.id)}
+ }
+ if(rem>0){
+  const list=palletsOf(cur),next=[];
+  for(const p of list){
+   if(rem>0&&p.product===product&&!isOrder(p)&&(p.at?.floor||p.at?.fork)){
+    const take=Math.min(rem,p.count);rem-=take;taken+=take;
+    if(p.count-take>0)next.push({...p,count:p.count-take});
+   }else next.push(p);
+  }
+  if(next.length!==list.length||rem!==want-taken)cur=withPallets(cur,next);
+ }
+ return {company:taken?cur:company,taken,left:want-taken,cells};
+}
 // planks leave the forks (onto an order's staging square): the pallet shrinks and goes when empty
 export function useForkPlanks(company,n){
  const list=palletsOf(company),load=onForks(list);if(!load)return company;

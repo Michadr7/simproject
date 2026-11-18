@@ -1,7 +1,7 @@
 // Ridgeline's forest work (0.35 step 4, DESIGN 4.15 C): the cut blocks of Pine Ridge, which two are marked each day, the landing where logs are stacked, and what a felled tree or a
 // stacked log counts for on shift. Pure: (progress, ...) -> {state, ...}. Trees are cuttable trees from world.js (worldLayout().cuttable): {key, x, z}.
 import {MAP,zoneById} from './map-definition.js';
-import {recordPiece} from './shift.js';
+import {recordPiece,PIECE_PAY} from './shift.js';
 import {parcelHeld,PARCEL_HANDS} from './gig-parcel.js'; // G3b: no rack or pile pick-up while the gig box is in your arms
 import {RACK_IDS,reachableByHand} from './warehouse-layout.js';
 import {PALLET_CAP,racksMap,forkCount,addToRack,takeFromRackCell,useForkPlanks} from './pallets.js';
@@ -32,7 +32,14 @@ const onShift=progress=>progress.shift?.employer===EMPLOYER;
 const done=(r,plain)=>r.finished?.length?`Task done: ${r.finished[0]}.`:plain;
 
 // A pine was felled on a Ridgeline shift: a marked one pays as a tree ($3.00, the Fell task); an unmarked one pays less ($0.75) and counts for no task.
-export function treeFelled(progress,tree){
+// Quest rework: the trunk remembers where it came from. A trunk from an UNMARKED pine carries `unmarked:true` (grid.js keeps it); a trunk without the flag counts as marked, so every older save is unchanged.
+// logIds: the trunk entries the chop just made (grid.js chopTree). Off shift the day is the housing day.
+const tagUnmarked=(progress,tree,logIds)=>{
+ if(!logIds?.length)return progress;const day=progress.shift?.day||progress.housing?.day||1;if(isMarked(tree,day))return progress;
+ return {...progress,logs:(progress.logs||[]).map(l=>logIds.includes(l.id)&&l.kind==='trunk'?{...l,unmarked:true}:l)};
+};
+export function treeFelled(progress,tree,logIds=[]){
+ progress=tagUnmarked(progress,tree,logIds);
  if(!onShift(progress))return {state:progress,counted:false,message:''};
  if(isMarked(tree,progress.shift.day)){const r=recordPiece(progress,'trees',1);return {state:r.state,counted:true,marked:true,finished:r.finished,message:done(r,'A marked pine: $3.00.')}}
  const r=recordPiece(progress,'stray',1);return {state:r.state,counted:false,marked:false,finished:[],message:'Not a marked tree: it pays $0.75 instead of $3.00.'};
@@ -76,7 +83,7 @@ export function takeFromRack(progress,slot){
 export const forkLoadOf=(progress,id=EMPLOYER)=>forkCount(coOf(progress,id));// planks left the forks (onto a staging pallet): `used` of them
 export const forkUsed=(progress,used)=>setCo(progress,useForkPlanks(coOf(progress),used));
 // Anti-exploit note (DESIGN 4.16 I): a cell can be emptied and refilled to collect the Stack pay again; the put-away task (step 4) replaces the Stack piece with a per-pallet pay for pallets from outdoors.
-// A log picked up off the ground on a Ridgeline shift counts as gathered ($0.25), once per log per shift (putting it down and picking it up again pays nothing more).
+// A TRUNK picked up off the ground on a Ridgeline shift counts as gathered ($0.25, the Pick up task), once per trunk per shift (putting it down and picking it up again pays nothing more). The game only calls this for trunks.
 export function logGathered(progress,logId){
  if(!onShift(progress))return {state:progress,counted:false,message:''};
  const seen=progress.shift.gathered||[];if(seen.includes(logId))return {state:progress,counted:false,message:''};
@@ -86,6 +93,22 @@ export function logGathered(progress,logId){
 // A stump dug out on a Ridgeline shift ($1.50) and a sapling planted in cleared ground ($0.50).
 export function stumpCleared(progress){if(!onShift(progress))return {state:progress,counted:false,message:''};const r=recordPiece(progress,'stumps',1);return {state:r.state,counted:true,finished:r.finished,message:done(r,'Stump dug out: $1.50.')}}
 export function saplingPlanted(progress){if(!onShift(progress))return {state:progress,counted:false,message:''};const r=recordPiece(progress,'saplings',1);return {state:r.state,counted:true,finished:r.finished,message:done(r,'Sapling planted: $0.50.')}}
+// A trunk cut into logs (game.js strikeBuck, after grid.js buckTrunk): pays the Cut task piece ($1.00) on a Ridgeline shift, and only for a trunk from a MARKED pine (unmarked: the trunk entry's flag, see tagUnmarked).
+export function trunkBucked(progress,unmarked=false){
+ if(!onShift(progress))return {state:progress,counted:false,message:''};
+ if(unmarked)return {state:progress,counted:false,message:' · Not from a marked tree: no cutting pay.'};
+ const r=recordPiece(progress,'bucked',1);return {state:r.state,counted:true,finished:r.finished,message:r.finished.length?` · Task done: ${r.finished[0]}.`:' · $1.00'};
+}
+// Logs (120 c each) or a trunk (150 c) put on the sawmill bench on a Ridgeline shift; both count for the Bring task.
+export function sawFed(progress,kind,count=1){
+ if(!onShift(progress)||!(count>0))return {state:progress,counted:false,finished:[]};
+ const r=recordPiece(progress,kind==='trunk'?'trunksFed':'logsFed',count);return {state:r.state,counted:true,finished:r.finished};
+}
+// A slab taken off the sawmill pile on a Ridgeline shift: 40 c, counts for the Mill task like a board (a board is planksMilled).
+export function slabMilled(progress){
+ if(!onShift(progress))return {state:progress,counted:false,finished:[]};
+ const r=recordPiece(progress,'slabs',1);return {state:r.state,counted:true,finished:r.finished};
+}
 // A log stacked at the landing: it leaves your shoulder, joins the company's log pile, and counts as a log carried to the landing ($0.25).
 export function stackLog(progress,position){
  if(!onShift(progress))return {error:'Clock in to stack logs for Ridgeline Timber.'};
@@ -107,12 +130,19 @@ export function planksMilled(progress,count){
  if(!onShift(progress))return {state:progress,finished:[]};
  return recordPiece(progress,'planks',count);
 }
-// The lumberyard (the Eastbank timber yard, the UNLOAD sign): planks delivered here, by hand or off a truck's bed, join the company's stock and pay $1.00 each.
+// The lumberyard (the Eastbank timber yard, the UNLOAD sign): planks delivered here, by hand or off a truck's bed, join the company's stock and pay $7.30 each (PIECE_PAY.delivered).
 export const LUMBERYARD=Object.freeze({x0:80,x1:94,z0:44,z1:60,sign:Object.freeze({x:80.8,z:50})});
 export const inLumberyard=p=>!!p&&p.x>=LUMBERYARD.x0&&p.x<=LUMBERYARD.x1&&p.z>=LUMBERYARD.z0&&p.z<=LUMBERYARD.z1;
 export function deliverPlanks(progress,count){
  if(!onShift(progress))return {error:'Clock in to deliver planks to Ridgeline Timber.'};
  if(!(count>0))return {error:'There are no planks to deliver.'};
  const r=recordPiece(addStock(progress,{planks:count}),'delivered',count);
- return {state:r.state,finished:r.finished,message:done(r,`${count} plank${count===1?'':'s'} delivered · $${count.toFixed(2)} · ${stockOf(r.state).planks} at the lumberyard.`)};
+ return {state:r.state,finished:r.finished,message:done(r,`${count} plank${count===1?'':'s'} delivered · $${(count*PIECE_PAY.delivered/100).toFixed(2)} · ${stockOf(r.state).planks} at the lumberyard.`)};
+}
+// Slabs handed in at the lumberyard (by hand or off a bed): 1400 c each (PIECE_PAY.slabsDelivered), counts for the Deliver task. There is NO raw cash sale of a trunk or a slab (owner 2026-11-18); a slab leaves the world, no company stock is kept.
+export function deliverSlabs(progress,count){
+ if(!onShift(progress))return {error:'Clock in to deliver slabs to Ridgeline Timber.'};
+ if(!(count>0))return {error:'There are no slabs to deliver.'};
+ const r=recordPiece(progress,'slabsDelivered',count);
+ return {state:r.state,finished:r.finished,message:done(r,`${count} slab${count===1?'':'s'} delivered · $${(count*PIECE_PAY.slabsDelivered/100).toFixed(2)}`)};
 }

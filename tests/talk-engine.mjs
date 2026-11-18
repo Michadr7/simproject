@@ -151,6 +151,23 @@ assert.deepEqual(texts(openConversation({id:'f',facts:{shop:'the Market',n:3},no
  const ctx=deepFreeze(talkContext(prog,'noah',env)),mem=deepFreeze(cleanMem(prog.npcs.noah.mem)),a=openConversation(cast,'noah',ctx,mem,STRICT);deepFreeze(a.session);
  const b=chooseReply(a.session,cast,'r1',ctx,mem,STRICT),c=chooseReply(b.session,cast,'r2',ctx,mem,STRICT);remember(mem,c.session);remember(mem,b.session);assert.equal(b.session===a.session,false);assert(a.session.nodes.length===1&&b.session.nodes.length===2,'new sessions, old one untouched')}
 
+// ---- 11b. derived beats: env.flags become is.* beats for this turn only, never saved
+{const prog={npcs:{noah:{mem:{last:[],seen:{},beats:['noah.a'],lastMin:-1}}},starter:{step:4}};
+ const c=talkContext(prog,'noah',{day:1,minute:600,flags:{skipped:true,loaded:true,ownsShortbed:false,bogus:true}});
+ assert(c.beats.includes('is.skipped')&&c.beats.includes('is.loaded')&&c.beats.includes('noah.a'),'flags show as beats');
+ assert(!c.beats.includes('is.ownsShortbed')&&!c.beats.includes('is.bogus'),'false and unknown flags are dropped');
+ assert(c.beats.filter(b=>b==='is.skipped').length===1,'no duplicates');
+ const l=talkContext(prog,'noah',{flags:['is.rented','carryingCafe']});
+ assert(l.beats.includes('is.rented')&&l.beats.includes('is.carryingCafe'),'a list of names works, with or without the is. prefix');
+ assert(!talkContext(prog,'noah',{}).beats.includes('is.loaded'),'no flags, no derived beats');
+ const full={npcs:{noah:{mem:{beats:Array.from({length:BEATS_CAP},(_,i)=>'b'+i)}}}};
+ const f=talkContext(full,'noah',{flags:{skipped:true,loaded:true}});
+ assert(f.beats.length===BEATS_CAP&&f.beats.includes('is.skipped')&&f.beats.includes('is.loaded'),'derived beats fit inside the cap');
+ const cast={id:'noah',name:'Noah',voice:'v',facts:{},bye:[{t:'Bye.'}],nodes:[{id:'n.o',entry:true,say:[{if:{beat:'is.skipped'},t:'Skipper.'},{t:'Regular.'}]}]};
+ const mem=freshMem(),sk=openConversation(cast,'noah',c,mem,STRICT),rg=openConversation(cast,'noah',talkContext(prog,'noah',{}),mem,STRICT);
+ assert(texts(sk)[0]==='Skipper.'&&texts(rg)[0]==='Regular.','a line can gate on a derived beat');
+ const saved=remember(mem,sk.session);assert(!saved.beats.includes('is.skipped'),'remember never adds a derived beat');
+ assert(!saved.beats.includes('is.loaded'),'derived beats are never saved')}
 // ---- 12. purity: the source has no clock, no chance, no DOM, no three.js (comments excluded)
 {const code=fs.readFileSync(new URL('../dist/talk-engine.js',import.meta.url),'utf8').split('\n').filter(l=>!l.trim().startsWith('//')).join('\n');
  for(const bad of [/Math\.random/,/Date\.now/,/new Date/,/performance\.now/,/\bdocument\b/,/\bwindow\b/,/from 'three'/,/globalThis/,/localStorage/,/\bsetTimeout\b/])assert.equal(bad.test(code),false,'engine code must not use '+bad);

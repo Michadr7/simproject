@@ -410,3 +410,68 @@ body:has(#welcome:not([hidden])) :is(header .brand,.location,#objective,#hotbar,
 /* People app (W-D3) */
 .people-icon{background:var(--honey);color:var(--ink)}#phonePeople h3{margin:4px 0 2px;font-size:16px}#phonePeople .phone-message{margin:0 0 8px}#phonePeople .phone-accept{margin-top:10px}
 
+
+/* C5 talk panel: docked low and centred, never anchored to a head */
+#talk{position:fixed;left:0;right:0;margin:0 auto;bottom:16px;width:min(640px,calc(100vw - 32px));max-height:38vh;display:flex;flex-direction:column;gap:8px;padding:12px 14px;background:#191713f2;color:#f1efdf;border:1px solid #ffffff20;border-radius:14px;box-shadow:0 7px 22px #16141155;z-index:35;overflow:hidden}
+#talk[hidden]{display:none}
+#talk .talk-head{display:flex;align-items:center;gap:10px}#talk .talk-portrait{width:48px;height:48px;border-radius:50%;background:#ffffff10;flex:none}#talk .talk-who{flex:1;min-width:0}#talk .talk-name{margin:0;font-size:18px}#talk .talk-chip{display:inline-block;margin-top:2px;padding:1px 8px;border-radius:10px;background:#facd3822;color:#facd38;font-size:12px}#talk .talk-chip:empty{display:none}#talk .talk-clock{color:#b2ad9d;font-size:12px}
+#talk .talk-log{flex:1 1 auto;min-height:40px;overflow-y:auto;display:flex;flex-direction:column;gap:6px;padding-right:4px}
+#talk .talk-line{max-width:82%;padding:8px 12px;border-radius:14px;font-size:14px;line-height:1.35;white-space:pre-line;overflow-wrap:anywhere;animation:talk-in .12s ease-out}
+#talk .talk-line.them{align-self:flex-start;background:#f1efdf;color:#1e1c17;border-bottom-left-radius:4px}#talk .talk-line.you{align-self:flex-end;background:#facd38;color:#1e1c17;border-bottom-right-radius:4px}#talk .talk-line.system{align-self:center;max-width:100%;background:none;color:#d2cfc6;font-style:italic;text-align:center}
+#talk .talk-line:not(:nth-last-child(-n+4)){opacity:.6}
+#talk .talk-replies{display:flex;flex-direction:column;gap:4px;overflow-y:auto;flex:none;max-height:20vh}
+#talk .talk-reply{display:flex;gap:10px;align-items:baseline;width:100%;margin:0;padding:6px 10px;text-align:left;background:#ffffff0d;color:#f1efdf;border:1px solid #ffffff20;border-radius:8px;font-size:14px;cursor:pointer}#talk .talk-reply.asked{opacity:.55}#talk .talk-num{color:#facd38;font-weight:700;min-width:1ch}
+#talk .talk-reply:hover,#talk .talk-reply.sel{background:#facd3822;border-color:#facd38}#talk .talk-reply:focus-visible{outline:2px solid #facd38;outline-offset:2px}
+#talk .talk-hint{margin:0;color:#b2ad9d;font-size:11px}
+#talk .talk-chevron{position:fixed;left:0;top:0;width:14px;height:14px;background:#facd38;clip-path:polygon(0 0,100% 0,50% 100%);pointer-events:none;z-index:36}#talk .talk-chevron[hidden]{display:none}
+@keyframes talk-in{from{opacity:0}to{opacity:1}}
+@media(prefers-reduced-motion:reduce){#talk .talk-line{animation:none}}
+@media(max-width:600px){#talk{width:calc(100vw - 32px);bottom:8px}}
+/* T-C logging tutorial overlay */
+#logging-tutorial.lt-overlay{position:fixed;inset:0;z-index:410;display:flex;align-items:center;justify-content:center;padding:16px;background:#14120fcc}
+#logging-tutorial .lt-card{width:min(740px,92vw);max-width:92vw;max-height:88vh;overflow-y:auto;padding:20px 22px;background:#191713f2;color:#f1efdf;border:1px solid #ffffff20;border-radius:14px;box-shadow:0 12px 36px #00000088;display:flex;flex-direction:column;gap:14px}
+#logging-tutorial .lt-head{display:flex;align-items:flex-start;justify-content:space-between;gap:12px}
+#logging-tutorial .lt-eyebrow{font-size:11px;letter-spacing:.12em;text-transform:uppercase;color:#b2ad9d;margin-bottom:2px}
+#logging-tutorial .lt-title{margin:0;font-size:22px;line-height:1.15}
+#logging-tutorial .lt-close{flex:none;padding:7px 14px;border-radius:8px;border:1px solid #facd3888;background:#facd3822;color:#facd38;font:600 13px/1 Arial,sans-serif;cursor:pointer}
+#logging-tutorial .lt-close:hover{background:#facd3838}#logging-tutorial .lt-close:focus-visible{outline:2px solid #facd38;outline-offset:2px}
+#logging-tutorial .lt-steps{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}
+#logging-tutorial .lt-step{padding:12px;border-radius:10px;background:#ffffff08;border:1px solid #ffffff16;display:flex;flex-direction:column;gap:8px}
+#logging-tutorial .lt-step-head{display:flex;align-items:center;gap:8px}
+#logging-tutorial .lt-step-num{width:22px;height:22px;border-radius:50%;display:inline-flex;align-items:center;justify-content:center;background:#facd38;color:#191713;font:700 12px/1 Arial,sans-serif}
+#logging-tutorial .lt-step-title{margin:0;font-size:15px}
+#logging-tutorial .lt-diagram{display:flex;flex-wrap:wrap;align-items:center;gap:6px;min-height:36px}
+#logging-tutorial .lt-svg{flex:none;display:block}
+#logging-tutorial .lt-op{color:#b2ad9d;font:700 14px/1 Arial,sans-serif}
+#logging-tutorial .lt-sep{color:#ffffff33;margin:0 2px}
+#logging-tutorial .lt-step-desc{margin:0;font-size:13px;line-height:1.35;color:#d2cfc6}
+#logging-tutorial .lt-carry{display:flex;flex-wrap:wrap;align-items:center;gap:8px;padding:10px 12px;border-radius:10px;background:#ffffff06;border:1px solid #ffffff16;font-size:12px}
+#logging-tutorial .lt-carry-label{font-size:10px;letter-spacing:.1em;text-transform:uppercase;color:#facd38;font-weight:700;margin-right:4px}
+#logging-tutorial .lt-carry-item{padding:3px 8px;border-radius:999px;background:#ffffff0d;color:#f1efdf}
+#logging-tutorial .lt-hint{margin:0;text-align:center;color:#b2ad9d;font-size:11px}
+@media(max-width:640px){#logging-tutorial .lt-steps{grid-template-columns:1fr}#logging-tutorial .lt-card{padding:16px}}
+
+/* HUD restyle (notes/hud-restyle-spec.md): speedometer card + GPS card with street-sign chips */
+.vehicle-panel{border-radius:16px;background:rgba(18,19,22,.72);-webkit-backdrop-filter:blur(22px) saturate(170%);backdrop-filter:blur(22px) saturate(170%);border:1px solid rgba(255,255,255,.11);box-shadow:inset 0 1px 0 rgba(255,255,255,.08),0 18px 40px -18px rgba(0,0,0,.75)}
+.vehicle-panel[data-state=driving] .vp-stats{grid-template-columns:1fr 1fr;gap:12px}
+.vehicle-panel[data-state=driving] #vpSpeed{font-size:32px;font-weight:600;line-height:1;letter-spacing:-.035em}
+.vp-bar,.vp-mini-bar{height:4px;border-radius:4px;background:rgba(255,255,255,.11);overflow:hidden;margin-top:4px}.vp-mini-bar{height:3px}
+.vp-bar>i,.vp-mini-bar>i{display:block;height:100%;width:0%;border-radius:4px;background:#e8eef5;transition:width .12s linear,background-color .15s ease}
+.vp-bar[data-band=amber]>i,.vp-mini-bar[data-band=amber]>i{background:#f2b53a}
+.vp-bar[data-band=red]>i,.vp-mini-bar[data-band=red]>i{background:#ff5a4d}
+.vp-mini-bar[data-band=ok]>i{background:#5fcf80}
+.vp-dmg-bar{margin-top:0}
+.gps-dock{position:fixed;right:34px;top:96px;z-index:5;display:grid;gap:7px;justify-items:end}
+body.creating #minimapDock,body:has(#welcome:not([hidden])) #minimapDock,body:has(#credits:not([hidden])) #minimapDock{display:none}
+.street-chips{display:flex;flex-wrap:wrap;gap:6px;justify-content:flex-end}.street-chips[hidden]{display:none}
+.street-sign{max-width:190px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;padding:6px 10px 5px;font-size:12px;font-weight:700;line-height:1.05;color:#fff;background:linear-gradient(180deg,rgba(255,255,255,.12),rgba(255,255,255,0) 55%),#0b6a46;border-radius:6px;outline:1.5px solid rgba(255,255,255,.92);outline-offset:-4px;box-shadow:0 8px 18px -10px rgba(0,0,0,.8)}
+.street-sign.cross{opacity:.88;font-size:11px}
+.gps-card{position:relative;border-radius:18px;overflow:hidden;background:#0a1118;border:1px solid rgba(255,255,255,.14);box-shadow:0 18px 40px -18px rgba(0,0,0,.8)}
+.gps-card #minimap{position:static;border:none;border-radius:0;box-shadow:none;display:block}
+.gps-card #minimap.large{position:fixed;right:50%;bottom:50%;top:auto;transform:translate(50%,50%);z-index:60;border-radius:14px;border:1px solid #ffffff30;box-shadow:0 20px 70px #000a}
+.gps-card.walk{border-radius:50%}
+.gps-north{position:absolute;top:7px;left:50%;transform:translateX(-50%);width:18px;height:18px;border-radius:50%;display:grid;place-items:center;font-size:9px;font-weight:800;color:#fff;background:rgba(10,12,15,.78);box-shadow:inset 0 0 0 1px rgba(255,255,255,.18);pointer-events:none}
+.gps-key{position:absolute;top:8px;right:8px;width:20px;height:20px;border-radius:6px;display:grid;place-items:center;font-size:9px;font-weight:800;color:#17140a;background:#ffc21a;pointer-events:none}
+.gps-scale{position:absolute;left:10px;bottom:8px;display:flex;align-items:center;gap:5px;padding:2px 6px;border-radius:5px;font-size:9px;font-weight:700;color:rgba(246,245,242,.82);background:rgba(10,12,15,.72);border:1px solid rgba(255,255,255,.12);pointer-events:none}
+.gps-scale[hidden]{display:none}.gps-scale i{display:block;width:24px;height:2px;background:rgba(246,245,242,.85)}
+@media(max-width:600px){.gps-dock{right:12px;top:76px;transform:scale(.8);transform-origin:top right}.gps-card #minimap{transform:none}}

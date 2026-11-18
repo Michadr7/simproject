@@ -30,14 +30,17 @@ export const PLAYER_SHARE_PER_DAY=Math.max(0,TOWN_USE_PER_DAY-TRICKLE_PER_DAY); 
 
 // ---- 3. hands, speeds, distances (MEASURED unless marked)
 export const WALK_M_MIN=WALK_M_PER_GAME_MIN;   // MEASURED 9 m per game minute (gig-pay.js: 4.5 m/s, one game minute = 2 real seconds)
-export const LOG_CARRY_FACTOR=.8,PLANK_CARRY_FACTOR=.85;   // MEASURED carry.js HANDS_SPEED log .8, planks .85
+export const LOG_CARRY_FACTOR=.95,PLANK_CARRY_FACTOR=.85;   // MEASURED carry.js HANDS_SPEED log .95 (timber redesign T-A, was .8), planks .85
 export const LOG_CARRY_M_MIN=WALK_M_MIN*LOG_CARRY_FACTOR,PLANK_CARRY_M_MIN=WALK_M_MIN*PLANK_CARRY_FACTOR;
 export const INTERACT_MIN=.5;                  // PLACEHOLDER: one pick up or put down = 1 real second = half a game minute
 export const TREE_GAP_M=12;                    // PLACEHOLDER: walk from one felled pine to the next marked one
 export const TREE_TO_SAW_M=25;                 // MEASURED-ish: Pine Ridge (82,-266, needs.js PLACE_POINTS) and the landing (129.2,-279.8, forest.js LANDING) both sit 25 to 50 m from the sawmill (104,-278): 25 m is the near side
 export const SAW_SECONDS_PER_LOG=8;            // PLACEHOLDER (real seconds): lever, the Cut clip (log in the blade from frame 14 to 47 at 24 fps, sawmill.js) and the belt carrying the stack out
 export const SAW_MIN_PER_LOG=SAW_SECONDS_PER_LOG*GAME_MIN_PER_REAL_SEC;
-export const BELT_TO_TRUCK_M=8;                // PLACEHOLDER: the truck is parked beside the belt
+// Timber redesign T-A (notes/timber-redesign-design.md, owner answers): a trunk sawn whole gives 2 slabs in 12 s (a log stays 8 s for 4 boards); a trunk is bucked into 2 logs. Pay is in cents, PLACEHOLDER numbers kept apart from PAY so the level-1 wage test is unchanged until the wiring.
+export const SAW_SECONDS_PER_TRUNK=12,SAW_MIN_PER_TRUNK=SAW_SECONDS_PER_TRUNK*GAME_MIN_PER_REAL_SEC,TRUNK_TO_SLABS=2,TRUNK_TO_LOGS=2;
+export const TIMBER_PAY=freeze({buckTrunk:100,trunkToSaw:150,slabOffBelt:40,slabDelivered:1400});
+export const BELT_TO_TRUCK_M=8;               // PLACEHOLDER: the truck is parked beside the belt
 export const DOCK_M=6;                         // PLACEHOLDER: the truck is backed to the warehouse door, to the rack or the order spot
 export const SAWMILL_POS=freeze({x:104,z:-278});           // MEASURED map-definition.js landmark 'sawmill'
 export const WAREHOUSE_POS=freeze({x:166.9,z:31.5});       // MEASURED map-definition.js office 'ridgeline-warehouse' door
@@ -60,7 +63,8 @@ export const planksPerLoad=model=>BED_PLANKS[knownTruck(model)?model:STARTER_TRU
 
 // ---- 4. pay per step, whole cents
 // MEASURED (copied from the live code, the test cross-checks): shift.js PIECE_PAY trees 300 (a marked pine felled on a Ridgeline shift), logs 25 (stacked at the landing), delivered 100 (a plank at the lumberyard), racks 500 (a full rack cell), deliveries 2500 (an order).
-export const OLD_PAY=freeze({fellTree:300,landingLog:25,gatheredLog:25,lumberyardPlank:100,rackCell:500,orderDelivery:2500,orderPick:800});
+export const OLD_PAY=freeze({fellTree:300,landingLog:25,gatheredLog:25,lumberyardPlank:100, // lumberyardPlank: the LEGACY number: the live pay is PAY.plankDelivered 730 since the quest rework (shift.js PIECE_PAY.delivered); wage-rule comparisons below keep the old job as it was
+ rackCell:500,orderDelivery:2500,orderPick:800});
 // The chain's pay. fellTree stays 300 (existing, needs a clocked-in Ridgeline shift and a marked pine). The three new ones are PLACEHOLDERS tuned by tests/plank-economy.mjs to the wage rule:
 export const PAY=freeze({
  fellTree:OLD_PAY.fellTree,        // MEASURED, unchanged

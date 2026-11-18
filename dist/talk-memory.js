@@ -76,8 +76,8 @@ export function migrateTalkMem(npc,progress,who){
  if(npc&&npc.metDay>=0&&!seenCount(m,who+'.first'))m=recordNode(m,who+'.first');
  if(who==='lincoln'&&npc?.talks)for(const t of HUNTING_TOPICS){const c=int(npc.talks[t],0,1e6,0);for(let i=seenCount(m,'lincoln.hunt.'+t);i<c&&i<1e3;i++)m=recordNode(m,'lincoln.hunt.'+t)}
  const st=progress?.starter,step=st&&!st.skipped?int(st.step,0,10,0):0;
- if(who==='sophie'&&step>=2)m=recordBeat(m,'sophie.groceries-delivered');
- if(who==='hal'&&step>=3)m=recordBeat(m,'hal.met');
+ if(who==='sophie'&&step>=2&&st?.skipped!==true)m=recordBeat(m,'sophie.groceries-delivered');
+ if(who==='hal'&&step>=3&&st?.skipped!==true)m=recordBeat(m,'hal.met');
  if(who==='walt'&&st?.noteGiven===true)m=recordBeat(m,'walt.note');
  if(who==='walt'&&progress?.careers?.ridgeline?.hired===true)m=recordBeat(m,'walt.hired');
  return m;

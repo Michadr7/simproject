@@ -8,6 +8,12 @@ import {WALK_SPEED,placePoint} from './population.js';
 import {personPose,findRoute,freeReach,PACE_STEP} from './npc-walk.js';
 import {crowdWarm} from './npc-routes.js';
 import {crowdPool} from './busyness.js';
+import {chopPose,CARRY,CARRY_DIR,CARRY_POLE,GRIP} from './chop-path.js';
+import {LOG_HAND,LOG_POLE,PLANK_HANDS,PLANK_POLES,PLANK_STACK} from './carry.js';
+import {BUCK_CUT_END} from './workforce-pose.js'; // W4: a feller bucks the trunk after the chop: two downward cuts, then a pause
+// W3 (notes/workforce-design.md): the two Ridgeline fellers and the sawyer are pool characters like everyone else (no new SkinnedMesh); npc-walk.js gives them workforce-pose.js's pose
+// (phase chop/carry/bend/walk/saw, prop axe/log/planks). workProps {axe(), log(), planks()} (from game.js) make ONE of each prop, lazily, sharing the game's geometry; each is drawn only while its worker is drawn.
+const BEND_HAND=Object.freeze({x:-.2,y:.5,z:.6}),SAW_HAND=Object.freeze({x:-.25,y:1.1,z:.5}),sawAt={x:0,y:0,z:0};
 
 export const DRAW_RADIUS=120;   // metres: nobody is drawn further from the player than this
 export const DRAW_HYSTERESIS=10; // someone already drawn stays until this much further
@@ -20,7 +26,7 @@ const TURN_RATE=8;               // 1/s: how fast the heading eases to the path 
 const HIDE_Y=-50;
 const wrap=a=>{while(a>Math.PI)a-=2*Math.PI;while(a<-Math.PI)a+=2*Math.PI;return a};
 
-export function createNpcCrowd({scene,createCharacter,outfit,population,schedule,pedestrians=[],blocked,cost=null,groundAt=null,map=MAP,radius=DRAW_RADIUS,pool=POOL,exclude=[],planOf=null}){
+export function createNpcCrowd({scene,createCharacter,outfit,population,schedule,pedestrians=[],blocked,cost=null,groundAt=null,map=MAP,radius=DRAW_RADIUS,pool=POOL,exclude=[],planOf=null,workProps=null,seed=map.seed}){
  const bounds=map.playable,points=new Map(),routes=new Map(),placedX=[],placedZ=[];let budget=ROUTES_PER_FRAME,hidden=false;
  const point=place=>{if(!points.has(place))points.set(place,placePoint(place,map));return points.get(place)};
  const route=(from,to)=>{const key=from+'>'+to;if(routes.has(key))return routes.get(key);
@@ -30,7 +36,25 @@ export function createNpcCrowd({scene,createCharacter,outfit,population,schedule
  const routeNow=(from,to)=>{const key=from+'>'+to;if(routes.has(key))return routes.get(key);const a=point(from),b=point(to);if(!a||!b){routes.set(key,null);return null}const r=findRoute(a,b,{blocked,cost,bounds});routes.set(key,r);return r}; // N2: a search that ignores the per-frame budget (load time, or crowdWarm slices)
  const reaches=new Map();let clock=0; // place -> {t, p, n}: the clear metres for a pace step each way (audit B8), measured at most once per REACH_REFRESH seconds per place
  const paceReach=(place,x,z,dir)=>{let r=reaches.get(place);if(!r){r={t:-1e9,p:0,n:0};reaches.set(place,r)}if(clock-r.t>REACH_REFRESH){r.t=clock;r.p=freeReach(blocked,x,z,1,0,PACE_STEP);r.n=freeReach(blocked,x,z,-1,0,PACE_STEP)}return dir>0?r.p:r.n};
- const ctx={point,route,starved:false,paceReach};
+ const ctx={point,route,starved:false,paceReach,person:null,day:1,seed}; // person/day/seed: W3 workforce poses (a pure function of person, day, minute, seed: the same on every co-op client)
+ const props={},propOf=(kind,role)=>{const k=role+'-'+kind;if(!props[k]){const o=workProps?.[kind]?.();if(!o)return null;o.name='worker-'+k;props[k]=o}return props[k]},chopAt=chopPose(0); // one per role and kind (at most 4: the cutter's axe, the hauler's log, the sawyer's log and planks)
+ // a worker's hands, lean and prop from the pose; anything else (or a slot handed to someone else) is reset once
+ function resetWork(e,avatar){if(!e.work)return;e.work=null;e.align=false;avatar.clearReach();avatar.setLean(0);avatar.setTwoHanded(0);avatar.setCrouch(0);avatar.alignHeld(null);avatar.release();for(const k in props){const o=props[k];if(o.parent===avatar.group||o.parent===avatar.hand)o.removeFromParent()}}
+ function workPose(e,avatar,p){
+  if(!p.phase){resetWork(e,avatar);return}
+  const prop=p.prop||'none';
+  if(e.work!==prop){resetWork(e,avatar);e.work=prop;const o=prop!=='none'&&propOf(prop,p.role);
+   if(o){if(prop==='axe')avatar.hold(o,{axis:'z',grip:GRIP,curl:1});else{avatar.group.add(o);if(prop==='log'){o.position.set(-.2,1.5,.05);o.rotation.set(-.12,0,0)}else{o.position.set(PLANK_STACK.x,PLANK_STACK.y,PLANK_STACK.z);o.rotation.set(0,0,0)}}}}
+  const t=Math.max(0,Math.min(1,p.progress||0)),bend=p.phase==='bend'?Math.sin(Math.PI*t):0,align=prop==='axe'&&p.phase!=='chop'&&p.phase!=='buck';
+  if(e.align!==align){avatar.alignHeld(align?CARRY_DIR:null);e.align=align}
+  avatar.setCrouch(bend*.3);
+  if(prop==='axe'){if(p.phase==='chop'){chopPose(t,chopAt);avatar.reach('R',chopAt.point,1,CARRY_POLE);avatar.setLean(chopAt.lean)}else if(p.phase==='buck'){if(t<BUCK_CUT_END){chopPose((t/.4)%1,chopAt);avatar.reach('R',chopAt.point,1,CARRY_POLE);avatar.setLean(chopAt.lean+.25);avatar.setCrouch(.25)}else{avatar.reach('R',CARRY,1,CARRY_POLE);avatar.setCrouch(0)}}else{avatar.reach('R',CARRY,1,CARRY_POLE);avatar.setLean(bend*.35)}avatar.setTwoHanded(1)}
+  else if(prop==='log'){avatar.reach('R',LOG_HAND,1,LOG_POLE);avatar.setLean(bend*.35)}
+  else if(prop==='planks'){avatar.reach('R',PLANK_HANDS.R,1,PLANK_POLES.R);avatar.reach('L',PLANK_HANDS.L,1,PLANK_POLES.L);avatar.setLean(bend*.35)}
+  else if(p.phase==='saw'){sawAt.x=SAW_HAND.x;sawAt.y=SAW_HAND.y+Math.sin(t*Math.PI*6)*.06;sawAt.z=SAW_HAND.z;avatar.reach('R',sawAt,1);avatar.setLean(.08)} // a hand on the feed lever, nudging it
+  else if(bend>0){avatar.reach('R',BEND_HAND,bend);avatar.setLean(bend*.45)}
+  else{avatar.clearReach();avatar.setLean(0)}
+ }
  const named=new Map(pedestrians.map(p=>[p.name,p]));
  const entries=population.people.filter(p=>!exclude.includes(p.name)).map(person=>({person,named:named.get(person.name)||null,slot:null,shown:false,yaw:0,ox:0,oz:0,pose:{state:'hidden',x:0,z:0,yaw:NaN,moving:false,walked:0}}));
  for(const e of entries)if(e.named)e.named.group.visible=false; // the six start drawn at their old lanes (neighborhood.js); the plan decides when they appear, so nobody stands frozen outside while the schedule has them indoors
@@ -39,7 +63,7 @@ export function createNpcCrowd({scene,createCharacter,outfit,population,schedule
  function show(e,x,z,dt,player){
   const avatar=e.named||e.slot.avatar,g=avatar.group,p=e.pose;
   if(!e.shown){e.shown=true;e.ox=e.oz=0;g.visible=true;if(Number.isFinite(p.yaw))e.yaw=p.yaw;else if(!e.named)e.yaw=(e.person.id.length*1.7)%6.28}
-  if(p.moving&&Number.isFinite(p.yaw))e.yaw+=wrap(p.yaw-e.yaw)*(1-Math.exp(-dt*TURN_RATE));
+  if((p.moving||p.phase)&&Number.isFinite(p.yaw))e.yaw+=wrap(p.yaw-e.yaw)*(1-Math.exp(-dt*TURN_RATE)); // W3: a worker at a station turns to face the trunk, deck or lever
   // step aside from the player (drawing only: the plan does not change)
   const dx=x-player.x,dz=z-player.z,d=Math.hypot(dx,dz),push=d<PERSONAL_SPACE&&d>.01?(PERSONAL_SPACE-d)/d:0,k=1-Math.exp(-dt*6);
   // keep apart from the people already placed this frame (flatmates with the same job and the same minute walk the exact same route and stood on top of each other)
@@ -50,11 +74,12 @@ export function createNpcCrowd({scene,createCharacter,outfit,population,schedule
   e.ox+=(wx-e.ox)*k;e.oz+=(wz-e.oz)*k;
   if(blocked&&(e.ox||e.oz)&&blocked(x+e.ox,z+e.oz)){e.ox=wx;e.oz=wz} // the eased offset can still sit in something: jump to the cleared target
   const px=x+e.ox,pz=z+e.oz;placedX.push(px);placedZ.push(pz);g.position.set(px,groundAt?groundAt(px,pz):.165,pz);g.rotation.y=e.yaw;
-  avatar.setMotion(p.moving?WALK_SPEED:0);avatar.update(dt);
+  if(p.phase||e.work)workPose(e,avatar,p);
+  avatar.setMotion(p.moving?(p.speed||WALK_SPEED):0);avatar.update(dt);
  }
  function hide(e){
   if(e.named){e.named.group.visible=false;e.shown=false;return}
-  if(e.slot){e.slot.avatar.group.visible=false;e.slot.avatar.group.position.y=HIDE_Y;e.slot.owner=null;e.slot=null}e.shown=false;
+  if(e.slot){resetWork(e,e.slot.avatar);e.slot.avatar.group.visible=false;e.slot.avatar.group.position.y=HIDE_Y;e.slot.owner=null;e.slot=null}e.shown=false;
  }
  return {
   entries,slots,get routeCount(){return routes.size},routeNow,
@@ -67,7 +92,7 @@ export function createNpcCrowd({scene,createCharacter,outfit,population,schedule
    const cap=time.busy==null?slots.length:crowdPool(time.busy,slots.length); // N2: time.busy (busyness.js, 0..1) limits how many pool characters may be ADDED; people already drawn stay until they leave
    for(const e of entries){
     const plan=planOf?planOf(e.person.id,time.day):schedule.planOf(e.person.id,time.day);if(!plan)continue;
-    ctx.starved=false;personPose(e.pose,plan,time.minute,ctx);
+    ctx.starved=false;ctx.person=e.person;ctx.day=time.day;personPose(e.pose,plan,time.minute,ctx);
     const p=e.pose;let want=false;
     if(p.state==='hidden'&&ctx.starved&&e.shown){p.state='stand';p.x=e.lx;p.z=e.lz;p.moving=false}
     if(p.state!=='hidden'){const d=Math.hypot(p.x-player.x,p.z-player.z);want=d<(e.shown?radius+DRAW_HYSTERESIS:radius)}
@@ -83,6 +108,6 @@ export function createNpcCrowd({scene,createCharacter,outfit,population,schedule
   talkable(x,z,range,ids){let out=null;for(const e of entries){if(!e.shown||(ids&&!ids.has(e.person.id)))continue; // ids null = everybody drawn (NPC-NAMES: name tags and a generic Talk for people with no roster dialogue)
   const px=e.pose.x+e.ox,pz=e.pose.z+e.oz,d=Math.hypot(px-x,pz-z);if(d<range)(out||(out=[])).push({id:e.person.id,name:e.person.name,x:px,z:pz,group:(e.named||e.slot.avatar).group,d})}return out&&out.sort((a,b)=>a.d-b.d)},
   // Debug: who is drawn now, with names.
-  drawn:()=>entries.filter(e=>e.shown).map(e=>({name:e.person.name,x:e.pose.x,z:e.pose.z,state:e.pose.state,moving:e.pose.moving,pedestrian:!!e.named}))
+  drawn:()=>entries.filter(e=>e.shown).map(e=>({name:e.person.name,x:e.pose.x,z:e.pose.z,state:e.pose.state,moving:e.pose.moving,pedestrian:!!e.named,phase:e.pose.phase||null,prop:e.pose.prop||null,holding:e.slot?Object.values(props).filter(o=>o.parent&&(o.parent===e.slot.avatar.group||o.parent===e.slot.avatar.hand)).map(o=>o.name):[]}))
  };
 }
