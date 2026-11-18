@@ -20,6 +20,10 @@ export const LATE_FILL_PCT=40,MOOD_HIT=-8,MOOD_HIT_PARTIAL=-4,PROSPERITY_HIT=-1;
 export const CHORE_UNIT_CENTS=800;      // value of one unit of work for clear/repair/tend/tow/serve (placeholder)
 export const VEHICLE_QTY=12;             // a need of this many units or more is a vehicle job
 export const KEEPERS=Object.freeze({'shop:market':'noah','shop:cafe':'sophie','property:farm-house':'hal','property:alder-bakery':'baker'}); // UNVERIFIED ids (gig-clients HAL_ID is a guess too); ctx.keeperOf overrides
+// OFF_KINDS: need kinds that must never become a gig yet, because the game has no real obstacle to clear and nothing broken to repair (the card walked you to a marker and paid you for nothing).
+// Kept in KINDS, TEMPLATES and the gig types so old saves load; stage P-F (construction and plank repairs) wires real obstacles and re-enables them by emptying this list.
+export const OFF_KINDS=Object.freeze(['clear','repair']);
+export const isBoardable=kind=>!OFF_KINDS.includes(kind);
 export const EVENT_KINDS=Object.freeze({'tree-down':'clear','road-blocked':'clear','broken-fence':'repair','stranded-car':'tow'}); // ctx.events kind -> need kind
 // Place points (x,z). market/cafe/farm/gas are the gigs.js origins; the warehouse is its door (map-definition.js); the rest are map landmark centres (FIX-R2). ctx.placePoint(place) overrides.
 export const PLACE_POINTS=Object.freeze({
@@ -74,10 +78,12 @@ export function valueCents(n,units,day,before=0){
 function sourceFor(world,good,not){let best=null,bs=0;for(const [id,p] of Object.entries(PLACES)){if(p.kind!=='producer'||id===not||!p.goods[good])continue;const s=world.stock[id][good];if(s>bs){best=id;bs=s}}return best?{place:best,stock:bs}:null}
 const unitCentsFor=(world,place,good)=>good&&PLACES[place]?.goods[good]?priceOf(world,place,good):good&&GOODS[good]?GOODS[good].baseCents:CHORE_UNIT_CENTS;
 
+// Drops open OFF_KINDS needs (no penalty, no expiry): an old save may hold them. keepIds (the active gig's need id) stay, so a walked-there gig still pays out. Returns a NEW list.
+export function retireOffKinds(needs,keepIds=[]){const keep=new Set(Array.isArray(keepIds)?keepIds:[]);return normalizeNeeds(needs).filter(n=>isBoardable(n.kind)||n.status!=='open'||keep.has(n.id))}
 // What the world needs today. ctx: {needs: the current list (open + recently closed), sickNpcs:[{id,home,good?,qty?,origin?}], needSeeds:[{kind,person?,place,good?,qty,origin?,dueIn?}], events: [{id?,kind,at,qty?}] or day=>[...], keeperOf, placePoint}.
 // Returns the NEW full list: open needs are kept (a restock whose shelf has recovered closes as filled), new ones are added in a fixed order up to MAX_OPEN_NEEDS.
 export function needsFrom(world,day,ctx={}){
- const list=normalizeNeeds(ctx.needs).map(clone).filter(n=>n.status==='open'||day-n.closedDay<=PRUNE_DAYS);
+ const list=(ctx.boardOnly?retireOffKinds(ctx.needs,ctx.keepNeedIds):normalizeNeeds(ctx.needs)).map(clone).filter(n=>n.status==='open'||day-n.closedDay<=PRUNE_DAYS);
  for(const n of list){if(n.status!=='open')continue;
   if(n.kind==='restock'&&world.stock[n.place]?.[n.good]>=Math.ceil(PLACES[n.place].goods[n.good].target*REFILL_FRAC)){n.status='filled';n.closedDay=day;n.claims={}}
   if(n.kind==='harvest'&&world.stock[n.place]?.[n.good]<=Math.floor(PLACES[n.place].goods[n.good].max*HARVEST_KEEP_FRAC)){n.status='filled';n.closedDay=day;n.claims={}}}
@@ -98,6 +104,7 @@ export function needsFrom(world,day,ctx={}){
  cands.sort((a,b)=>a.pri-b.pri||(keyOf(a)<keyOf(b)?-1:keyOf(a)>keyOf(b)?1:0));
  let open=list.filter(n=>n.status==='open').length;
  for(const c of cands){if(open>=MAX_OPEN_NEEDS)break;const key=keyOf(c);
+  if(ctx.boardOnly&&!isBoardable(c.kind))continue; // OFF_KINDS: no real mechanic behind them yet
   if(ctx.boardOnly){const sl=needToSlot({id:'',kind:c.kind,place:c.place,good:c.good,qty:c.qty,filled:0,openedDay:day,dueDay:day,origin:c.origin},ctx);if(!sl||(!CHORE.has(c.kind)&&sl.parM<MIN_PAR_M.walk))continue} // FIX-R2 (ctx.boardOnly, which world-tick.js sets): only needs that can become a board slot (a point on the map, a par of 300 m or more, as boardFor filters) take one of the six places
   if(list.some(n=>keyOf(n)===key&&(n.status==='open'||day-n.closedDay<HYSTERESIS_DAYS)))continue; // one open need per kind+place+good; hysteresis
   const due=day+(c.dueIn??(DUE_DAYS[c.kind]+hashOf(world.seed,key,day,'due')%2)),vp=c.kind==='errand'&&c.origin?c.origin:c.place;

@@ -7,7 +7,7 @@ import {dayPlan} from './schedule.js';
 import {ROSTER_ORDER,byId} from './npc-roster.js';
 import {moodTick,isSick,needsFor,normalizeNpcs,MOOD_MIN,MOOD_MAX} from './npc-life.js';
 import {normalizeWorld,catchUp,visitCounts,pumpAvailMgal,pumpSell,TICK_MINUTE,CATCH_UP_MAX} from './world-state.js';
-import {normalizeNeeds,needsFrom,expire,PLACE_POINTS,newsText} from './needs.js';
+import {normalizeNeeds,needsFrom,expire,retireOffKinds,PLACE_POINTS,newsText} from './needs.js';
 import {PALLET_LINK,PLACES,PUMP_PLACE,SOLD_OUT_TEXT} from './world-goods.js';
 import {totalPlanks} from './pallets.js';
 import {strollDemand} from './stroll-visits.js';
@@ -59,7 +59,8 @@ export function runWorldDay(progress,dayNow=tickTargetDay(progress),ctx={}){
  world=setSawmill(world,Math.min(yard.planks,YARD_MAX_PLANKS));
  world=catchUp(world,from,dayNow,{demand:(place,d)=>counts(d)[place]||0,farmHealth:d=>halSick[d]?SICK_FARM_HEALTH:1,events:ctx.events}).world;
  // 3. needs: past-due ones close (a late fill, the keeper's mood), then the new day's needs open
- let needs=normalizeNeeds(P.needs);
+ const keepNeedIds=P.gigs?.active?.needId?[P.gigs.active.needId]:[]; // an old clear/repair need under the active gig stays until that gig ends (OFF_KINDS in needs.js)
+ let needs=retireOffKinds(P.needs,keepNeedIds); // old open clear/repair needs go quietly, before expire() could charge the keeper's mood
  const ex=expire(needs,world,dayNow,{keeperOf:ctx.keeperOf});needs=ex.needs;world=ex.world;
  for(const m of ex.consequences.mood)if(npcs[m.npc])npcs[m.npc]={...npcs[m.npc],mood:clamp(Math.round(npcs[m.npc].mood+m.delta),MOOD_MIN,MOOD_MAX)};
  const sickNpcs=[],needSeeds=[];
@@ -68,7 +69,7 @@ export function runWorldDay(progress,dayNow=tickTargetDay(progress),ctx={}){
    if(s.reason==='sick'&&r.home){sickNpcs.push({id,home:r.home,good:'bread',qty:1,origin:'shop:market'});continue}
    if((s.kind==='restock'||s.kind==='harvest')&&!PLACES[s.place]?.goods[s.good])continue; // needs.js reads the place's target for these kinds: only goods the world really holds
    if(PLACE_POINTS[s.place]||ctx.placePoint?.(s.place))needSeeds.push({kind:s.kind,place:s.place,good:s.good,person:s.person,qty:s.qty,dueIn:Math.max(1,s.dueDay-dayNow)})}} // seeds for places with no point on the map would only fill the board
- needs=needsFrom(world,dayNow,{needs,sickNpcs,needSeeds,boardOnly:true,events:ctx.events,keeperOf:ctx.keeperOf,placePoint:ctx.placePoint});
+ needs=needsFrom(world,dayNow,{needs,sickNpcs,needSeeds,boardOnly:true,keepNeedIds,events:ctx.events,keeperOf:ctx.keeperOf,placePoint:ctx.placePoint});
  yard=normalizeYard({...yard,planks:world.stock[SAWMILL_PLACE].planks}); // what the supply (and any late restock from the sawmill) took leaves the yard: conserved
  return {...P,world,needs,npcs,sawmillYard:yard};
 }

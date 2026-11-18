@@ -1,13 +1,15 @@
 // W-C: named NPC life rules (notes/world-system-design.md): tiers, standing cap, mood, sickness, Oscar/Lincoln/Brentster, visits, namedPlan, needs, determinism.
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
-import {ROSTER,ROSTER_ORDER,byId,HUNTING_TOPICS,MOOD_WORDS} from '../dist/npc-roster.js';
+import {ROSTER,ROSTER_ORDER,ACTIVE_ORDER,byId,HUNTING_TOPICS,MOOD_WORDS} from '../dist/npc-roster.js';
 import * as L from '../dist/npc-life.js';
 import {buildPopulation,personById} from '../dist/population.js';
 import {dayPlan,ACTS} from '../dist/schedule.js';
 
 // roster
-assert.equal(ROSTER.length,10);assert.deepEqual(ROSTER_ORDER,ROSTER.map(n=>n.id));assert.equal(new Set(ROSTER_ORDER).size,10);
+// C3 re-pin (on purpose): Elena joined (11 people); Gus and Ray stay in saves but are dormant (no body in the map yet)
+assert.equal(ROSTER.length,11);assert.deepEqual(ROSTER_ORDER,ROSTER.map(n=>n.id));assert.equal(new Set(ROSTER_ORDER).size,11);
+assert.deepEqual(ROSTER.filter(n=>n.dormant).map(n=>n.id),['foreman','driver']);assert.deepEqual(ACTIVE_ORDER,ROSTER_ORDER.filter(id=>id!=='foreman'&&id!=='driver'));
 assert.equal(byId('hal').name,'Hal Brennan');assert.equal(byId('__proto__'),null);assert.equal(byId('nobody'),null);
 for(const n of ROSTER){assert.ok(n.name&&n.role&&n.needs.length&&n.traits.length,n.id);for(const w of MOOD_WORDS){const l=n.lines[w];assert.ok(l.length>=3&&l.length<=5,n.id+' '+w)}for(const k of n.needs)assert.ok(['restock','errand','tend','clear','repair','haul','tow'].includes(k),n.id+' need '+k)}
 for(const id of ['oscar','lincoln','brentster'])assert.equal(byId(id).home,'dwelling:oak-apartments');
@@ -15,7 +17,8 @@ assert.ok(HUNTING_TOPICS.length>=6);for(const t of byId('lincoln').topics)assert
 
 // real people exist as the roster says (population.js)
 const pop=buildPopulation();
-for(const id of ['hal','noah','sophie','grace']){const r=byId(id),p=personById(pop,r.personId);assert.ok(p,id+' '+r.personId);assert.equal(p.home,r.home,id)}
+for(const id of ['hal','noah','sophie','grace','elena','lincoln','brentster','oscar']){const r=byId(id),p=personById(pop,r.personId);assert.ok(p,id+' '+r.personId);assert.equal(p.home,r.home,id);assert.equal(p.work||null,r.work,id+' works where population says')}
+assert.equal(personById(pop,byId('elena').personId).name,'Elena');assert.equal(personById(pop,byId('lincoln').personId).post,'market-evening');assert.equal(personById(pop,byId('brentster').personId).post,'alder-store');
 assert.equal(personById(pop,byId('noah').personId).name,'Noah');assert.equal(personById(pop,byId('walt').personId)?.name,'Walt Hargrove');
 
 // tiers
@@ -42,6 +45,15 @@ for(const g of [null,undefined,42,'x',[],{hal:null,noah:'x',sophie:{mood:'abc',t
 const gg=L.normalizeNpcs({grace:{mood:500,talks:{deer:3,bad:-2},flags:['a','a',7,'__proto__']}}).grace;
 assert.equal(gg.mood,100);assert.deepEqual(gg.talks,{deer:3});assert.deepEqual(gg.flags,['a']);
 const fresh=L.normalizeNpcs({});assert.equal(fresh.oscar.mood,byId('oscar').baseline);assert.deepEqual(L.normalizeNpcs(JSON.parse(JSON.stringify(fresh))),fresh);
+// C3: mem rides along (capped by talk-memory.js), absent while empty; talks (40) and flags (12) keep their caps; other unknown fields are still dropped
+{assert.ok(ROSTER_ORDER.every(id=>!('mem' in fresh[id])),'no mem on a fresh save');
+ const many=Object.fromEntries([...Array(60).keys()].map(i=>['t'+i,1])),seen=Object.fromEntries([...Array(50).keys()].map(i=>['n.'+i,i+1]));
+ const n=L.normalizeNpcs({noah:{talks:many,flags:[...Array(20).keys()].map(i=>'f'+i),junk:1,mem:{last:['a','b','c','d','e','f','g','h'],seen,beats:[...Array(30).keys()].map(i=>'b'+i),lastMin:99}}}).noah;
+ assert.equal(Object.keys(n.talks).length,40);assert.equal(n.flags.length,12);assert.equal(n.junk,undefined);
+ assert.deepEqual([...n.mem.last],['c','d','e','f','g','h']);assert.equal(Object.keys(n.mem.seen).length,32);assert.equal(n.mem.seen['n.49'],50);assert.equal(n.mem.seen['n.0'],undefined);assert.equal(n.mem.beats.length,16);assert.equal(n.mem.lastMin,99);
+ const rt=L.normalizeNpcs(JSON.parse(JSON.stringify({noah:n})));assert.deepEqual(rt.noah,n,'mem round trip');
+ assert.deepEqual(L.talk(n,'chat',3).mem,n.mem,'talk keeps mem');assert.deepEqual(L.moodTick(n,3,{seed:1}).mem,n.mem,'tick keeps mem');
+ assert.equal('mem' in L.normalizeNpcs({noah:{mem:{last:[7,'__proto__'],seen:{x:-1},beats:'no'}}}).noah,false,'junk mem is dropped')}
 
 // mood tick: drifts 5 toward baseline, deterministic, no mutation
 let a={...fresh.hal,mood:100};const a0=JSON.stringify(a);
@@ -51,12 +63,12 @@ let m=L.normalizeNpcs({}).sophie;m={...m,mood:0};
 let day=0;while(L.sickToday(day,3)===m.id)day++;assert.equal(L.moodTick(m,day,{seed:3}).mood,5);
 let x={...fresh.hal,mood:20};for(let i=0;i<30;i++){x={...L.moodTick(x,100+i,{seed:'nosick'}),sickUntil:-1}}assert.equal(x.mood,byId('hal').baseline);
 
-// sickness: rate band over 2000 NPC-days (200 days x 10), never two NPCs start the same day
+// sickness: rate band over the ACTIVE people's days (dormant people never fall sick: C3 re-pin from 10 to ACTIVE_ORDER.length), never two NPCs start the same day
 {const seed='band';let sick=0,days=4000,starts=0;const perNpc={};
  for(let d=0;d<days;d++){const s=L.sickToday(d,seed);if(s){starts++;perNpc[s]=(perNpc[s]||0)+1}
   let c=0;for(const id of ROSTER_ORDER){const n=L.applySickness({...fresh[id],sickUntil:-1},d,seed);if(n.sickUntil>=d)c++}assert.ok(c<=1,'two NPCs got sick on day '+d)}
- const rate=starts/(days*10);assert.ok(rate>0.025&&rate<0.055,'rate '+rate);
- for(const id of ROSTER_ORDER)assert.ok(perNpc[id]>days/60&&perNpc[id]<days/10,id+' '+perNpc[id]);
+ assert.ok(!perNpc.foreman&&!perNpc.driver,'dormant never sick');const rate=starts/(days*ACTIVE_ORDER.length);assert.ok(rate>0.025&&rate<0.055,'rate '+rate);
+ for(const id of ACTIVE_ORDER)assert.ok(perNpc[id]>days/60&&perNpc[id]<days/10,id+' '+perNpc[id]);
  const n=L.applySickness({...fresh.hal,sickUntil:-1},[...Array(4000).keys()].find(d=>L.sickToday(d,seed)==='hal'),seed);assert.ok(n.sickUntil>=0&&n.sickUntil-[...Array(4000).keys()].find(d=>L.sickToday(d,seed)==='hal')<L.SICK_MAX_DAYS)}
 assert.equal(L.sickToday(77,'q'),L.sickToday(77,'q'));
 const sd=[...Array(500).keys()].find(d=>L.sickToday(d,'q'));assert.notEqual(JSON.stringify(Array.from({length:60},(_,d)=>L.sickToday(d,'q'))),JSON.stringify(Array.from({length:60},(_,d)=>L.sickToday(d,'other'))));assert.ok(sd>=0);
@@ -116,7 +128,7 @@ assert.deepEqual(L.namedPlan(fresh.hal,3,world,[]),[]);assert.deepEqual(L.namedP
 
 // needsFor
 {const seen=new Set();for(const id of ROSTER_ORDER)for(let d=0;d<120;d++){for(const nd of L.needsFor({...fresh[id]},d,{seed:'n',tier:'close'})){assert.equal(nd.person,id);assert.ok(['restock','errand','tend','clear','repair','haul','tow'].includes(nd.kind));assert.ok(nd.qty>=1&&nd.dueDay>d&&nd.place);seen.add(id+':'+nd.kind)}}
- assert.ok(seen.size>=15,seen.size);
+ assert.ok(seen.size>=15,seen.size);for(const id of ['foreman','driver'])for(let d=0;d<200;d++)assert.deepEqual(L.needsFor({...fresh[id],sickUntil:d},d,{seed:'n',tier:'close'}),[],'dormant: no needs');
  const bn=L.needsFor({...fresh.brentster},4,{seed:'n',cat:{hunger:80}});assert.ok(bn.some(x=>x.kind==='tend'&&x.good==='cat-food'));assert.ok(!L.needsFor({...fresh.brentster},4,{seed:'n',cat:{hunger:10}}).some(x=>x.good==='cat-food'));
  const sn=L.needsFor({...fresh.hal,sickUntil:5},4,{seed:'n'});assert.ok(sn.some(x=>x.kind==='errand'&&x.reason==='sick'));assert.ok(L.moodLine({...fresh.hal},3,'s').length>0);
  assert.deepEqual(L.needsFor(fresh.hal,9,{seed:'n'}),L.needsFor(fresh.hal,9,{seed:'n'}))}

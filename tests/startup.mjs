@@ -106,7 +106,7 @@ for(const saved of [false,true]){
  const phoneFrame=()=>{phoneNow+=40;nextFrame(phoneNow)};
  const key=(code,repeat=false)=>{const e=new Event('keydown',{cancelable:true});e.code=code;e.repeat=repeat;win.dispatchEvent(e);return e};
  ids.get('closeDialog').click();
- phoneState.progress.needs=[{id:'clear|shop:market||1',kind:'clear',place:'shop:market',good:'',person:'',qty:1,filled:0,openedDay:0,dueDay:9999,closedDay:-1,unitCents:800,claims:{},status:'open',origin:''}]; // W-D2: the board is the world's open needs (a fresh save has none): post one chore need, as tests/gigs-game.mjs does
+ phoneState.progress.needs=[{id:'tend|shop:market||1',kind:'tend',place:'shop:market',good:'',person:'',qty:1,filled:0,openedDay:0,dueDay:9999,closedDay:-1,unitCents:800,claims:{},status:'open',origin:''}]; // W-D2: the board is the world's open needs (a fresh save has none): post one chore need, as tests/gigs-game.mjs does
  const boardSize=availableContracts(phoneState.progress).length;assert(boardSize>=1,'the need board offers a gig');
  assert(ids.get('phoneOverlay').hidden,'phone starts hidden');
  let releases=0;doc.pointerLockElement=ids.get('world');doc.exitPointerLock=()=>{releases++;doc.pointerLockElement=null;doc.dispatchEvent(new Event('pointerlockchange'))};

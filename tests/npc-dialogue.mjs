@@ -116,7 +116,7 @@ assert.equal(D.openTalk(fresh(),'nobody',1),null);assert.equal(D.talkOutcome(fre
  // people with no flat in town and unknown ids
  assert.equal(K(std('walt','close'),'walt',at(12),[{from:0,to:1440,act:'work',place:'office:ridgeline-office'}]).reason,'no-home-in-town');assert.equal(K(fresh(),'nobody',at(12)),null);
  // flat directory: the named residents of the Oak Street Apartments, by flat number; names only once met
- const ds=D.flatDoors(fresh().npcs);assert.deepEqual(ds.map(d=>d.flat),[2,8,9,10,11]);assert.ok(ds.every(d=>/^Flat \d+$/.test(d.label)),'no names before you have met them');
+ const ds=D.flatDoors(fresh().npcs);assert.deepEqual(ds.map(d=>d.flat),[2,7,8,9,10,11]);/* C3 re-pin: Elena (flat 7) joined the roster */assert.ok(ds.every(d=>/^Flat \d+$/.test(d.label)),'no names before you have met them');
  const met=D.flatDoors(D.openTalk(fresh(),'oscar',1,SEED).state.npcs);assert.equal(met.find(d=>d.id==='oscar').label,'Flat 9 · Oscar');
  const pc=D.pagedChoices(ds.map(d=>({id:d.id})));assert.equal(pc.items.length,2);assert.equal(pc.nextPage,1);
  // every door decision is a pure function (same input, same answer)
@@ -137,6 +137,7 @@ assert.equal(D.openTalk(fresh(),'nobody',1),null);assert.equal(D.talkOutcome(fre
  // places read well for everyone
  const all=ROSTER.map(r=>{let x=fresh();x=D.openTalk(x,r.id,1,SEED).state;return D.peopleRows(x,{day:1})[0]});for(const r of all){assert.ok(!/[:]/.test(r.home+r.work),r.id+' '+r.home+' / '+r.work)}
  assert.equal(all.find(r=>r.id==='hal').home,D.placeLabel('property:farm-house'));assert.equal(all.find(r=>r.id==='walt').home,'Lives out of town');assert.equal(all.find(r=>r.id==='oscar').work,'No regular job');
+ /* C3: the true jobs (population.js posts) */assert.equal(all.find(r=>r.id==='lincoln').work,'Corner Market');assert.equal(all.find(r=>r.id==='brentster').work,'Ironwood Store');assert.equal(all.find(r=>r.id==='elena').work,'Alder Coffee');assert.equal(all.find(r=>r.id==='elena').home,'Oak Street Apartments · Flat 7');assert.match(all.find(r=>r.id==='elena').hint,/eight/);
  assert.equal(D.placeLabel('shop:market'),'Corner Market');assert.equal(D.placeLabel('dwelling:oak-apartments'),'Oak Street Apartments');assert.equal(D.placeLabel('office:ridgeline-warehouse'),'Ridgeline Warehouse');assert.equal(D.placeLabel('zone:forest'),'Pine Ridge');assert.equal(D.placeLabel('nonsense'),'')}
 
 // ---- the roster planner: sick named people stay home, everyone else keeps the schedule's own plan, nothing allocates twice

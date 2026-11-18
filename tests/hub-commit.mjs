@@ -9,7 +9,7 @@ import path from 'node:path';
 import http from 'node:http';
 import {execFileSync} from 'node:child_process';
 import {fileURLToPath} from 'node:url';
-import {FORBIDDEN,parseStatus,forbiddenReason,plainPath,groupOf,buildProposal,suggestMessage,messageProblem,checkSelection,proposalPaths,MAX_MESSAGE,MAX_FILE_BYTES} from '../hub/commit.js';
+import {FORBIDDEN,parseStatus,forbiddenReason,plainPath,groupOf,releaseVersionOf,cmpSemver,activeReleaseVersion,buildProposal,suggestMessage,messageProblem,checkSelection,proposalPaths,MAX_MESSAGE,MAX_FILE_BYTES} from '../hub/commit.js';
 import {findGit,createGit,isAllowed,isReadCommand,pushProblem,safeBranch} from '../hub/git.mjs';
 import {createCommits} from '../hub/commit-ctl.mjs';
 import {createHubServer,resolveRoute} from '../hub/server.js';
@@ -17,7 +17,7 @@ import {buildStatus,changeLines} from '../hub/status.js';
 import {MASTER_RULES,extractCommit,createChat} from '../hub/chat.js';
 import {parseActionLine,withoutActions,chatActionState,chatActionCall,callFor,CHAT_OPS,NAV_OPS} from '../hub/web/run-actions.js';
 import {commitLabel,TREE} from '../hub/web/shell.js';
-import {nextLine,testPill,pickedPaths,commitBlock,mergeTicks,commitButtonText,pushButtonText,PUSH_NOTE} from '../hub/web/commit.js';
+import {nextLine,testPill,pickedPaths,commitBlock,mergeTicks,commitButtonText,COMMIT_PUSH_LABEL,pushButtonText,PUSH_NOTE,releaseRowLabel,groupReleases,summaryCounts,setPathsTicked,canPushAfterCommit,commitAndPushBlock,runCommitAndPush} from '../hub/web/commit.js';
 
 const HERE=path.dirname(fileURLToPath(import.meta.url)),REPO=path.resolve(HERE,'..'),HUB=path.join(REPO,'hub');
 const skipped=[];
@@ -44,7 +44,9 @@ for(const odd of ['','/etc/passwd','C:/x.txt','c:\\x','..','../x','a/../b','a//b
 assert.ok(plainPath('a b/c d.txt')&&!plainPath('../a'));
 
 // ── groups
-for(const [p,g] of [['dist/game.js','Game'],['server.js','Game'],['worker/x.js','Game'],['tests/a.mjs','Tests'],['hub/a.js','Hub'],['scripts/hub-shots.mjs','Hub'],['scripts/build.mjs','Other'],['plans/a.json','Plans'],['README.md','Notes'],['context.md','Notes'],['package.json','Other'],['docs/a.txt','Notes']])assert.equal(groupOf(p),g,p);
+for(const [p,g] of [['dist/game.js','Game'],['server.js','Game'],['worker/x.js','Game'],['dist/releases/0.35.18/game.js','Releases'],['tests/a.mjs','Tests'],['hub/a.js','Hub'],['scripts/hub-shots.mjs','Hub'],['scripts/build.mjs','Other'],['plans/a.json','Plans'],['README.md','Notes'],['context.md','Notes'],['notes/handoff.md','Notes'],['package.json','Other'],['docs/a.txt','Notes'],['dist/assets/tree.glb','Assets'],['assets-register.json','Assets'],['ASSETS.md','Assets']])assert.equal(groupOf(p),g,p);
+assert.equal(releaseVersionOf('dist/releases/0.35.18/game.js'),'0.35.18');assert.equal(releaseVersionOf('dist/game.js'),null);
+assert.equal(cmpSemver('0.35.18','0.35.9'),1);assert.equal(activeReleaseVersion(['0.35.9','0.35.18'],'0.35.17'),'0.35.17');assert.equal(activeReleaseVersion(['0.35.9','0.35.18'],null),'0.35.18');
 
 // ── buildProposal
 const E=(path,o={})=>({path,x:' ',y:'M',kind:'changed',staged:false,size:10,mtime:1000,...o});
@@ -201,6 +203,95 @@ assert.ok(!('soon' in TREE.foot.find(x=>x.key==='commit')),'Commit is a real pag
  assert.equal(commitButtonText(1),'Commit 1 file');assert.equal(commitButtonText(12),'Commit 12 files');assert.equal(pushButtonText(1),'Push 1 commit to GitHub');assert.equal(pushButtonText(3),'Push 3 commits to GitHub');
  assert.equal(PUSH_NOTE,'This sends your commits to GitHub. Nothing in this project deploys by itself on a push; deploying stays a separate step.');
 }
+// release grouping, default-unticked old releases, collapsed rows and top summary counts
+{
+ const relCur=Array.from({length:212},(_,i)=>E(`dist/releases/0.35.18/f${i}.js`));
+ const relOld=[E('dist/releases/0.35.16/a.js'),E('dist/releases/0.35.17/b.js'),E('dist/releases/0.35.17/c.js')];
+ const prop=buildProposal({status:[E('dist/game.js'),...relCur,...relOld],lastTest:{ok:true,endedAt:2000},head:HEAD,currentVersion:'0.35.18'});
+ assert.equal(prop.currentVersion,'0.35.18');
+ assert.deepEqual(prop.files.map(g=>g.group),['Game','Releases']);
+ const relItems=prop.files.find(g=>g.group==='Releases').items;
+ assert.ok(relItems.filter(i=>i.release==='0.35.18').every(i=>i.ticked===true&&i.oldRelease===false));
+ assert.ok(relItems.filter(i=>i.release!=='0.35.18').every(i=>i.ticked===false&&i.oldRelease===true));
+ assert.match(prop.suggestedMessage,/Update 213 files \(game, releases\)/,'old release files excluded from default suggested message');
+ const u=new Set(),k=new Set();mergeTicks(prop,u,k);
+ assert.equal(pickedPaths(prop,u).length,213,'dist/game.js + 212 files of current 0.35.18 release ticked; old releases unticked');
+ assert.ok(!pickedPaths(prop,u).includes('dist/releases/0.35.17/b.js'));
+ const gr=groupReleases(relItems,prop.currentVersion);
+ assert.equal(gr.plain.length,0);assert.equal(gr.releases.length,3);
+ assert.equal(gr.releases[0].label,'Release 0.35.18 · 212 files');
+ assert.equal(gr.releases[1].label,'Old release 0.35.17 · 2 files (unticked)');
+ assert.equal(releaseRowLabel('0.35.18',212,true),'Release 0.35.18 · 212 files');
+ const sum=summaryCounts(prop,u);
+ assert.deepEqual([sum.total,sum.ticked],[216,213]);
+ assert.deepEqual(sum.groups,[{group:'Game',total:1,ticked:1},{group:'Releases',total:215,ticked:212}]);
+ setPathsTicked(u,gr.releases[0].items.map(i=>i.path),false);
+ assert.equal(summaryCounts(prop,u).ticked,1,'unticking the release row drops all 212 files');
+ assert.equal(checkSelection(prop,pickedPaths(prop,u)).paths.length,1);
+ assert.ok(checkSelection(prop,['dist/releases/0.35.18/not-in-proposal.js']).error,'controller check still verifies every path');
+}
+// Owner Decision 1: Commit & push pure rules and orchestration
+{
+ assert.equal(COMMIT_PUSH_LABEL,'Commit & push');
+ const prop={enabled:true,hash:'h1',busy:false,counts:{files:1}};
+ const cleanPush={enabled:true,branch:'main',head:'abc1234',count:0,more:0,canPush:false,busy:false,why:'Everything on this PC is already on GitHub (as far as this PC knows).'};
+ const aheadPush={enabled:true,branch:'main',head:'abc1234',count:1,more:0,canPush:true,busy:false,why:''};
+ const noUpPush={enabled:true,branch:'feat',head:'abc1234',count:0,commits:[],canPush:false,why:'This PC does not know a branch called origin/feat yet. Publish the branch from GitHub Desktop first.'};
+ const detached={enabled:true,branch:'HEAD',canPush:false,count:0,commits:[],why:'No branch is checked out here. Use GitHub Desktop.'};
+ assert.deepEqual(canPushAfterCommit(cleanPush),{ok:true,why:''},'branch with origin upstream allows Commit & push even when 0 ahead right now');
+ assert.deepEqual(canPushAfterCommit(aheadPush),{ok:true,why:''});
+ assert.equal(canPushAfterCommit(noUpPush).ok,false);assert.match(canPushAfterCommit(noUpPush).why,/Publish the branch/);
+ assert.equal(canPushAfterCommit(detached).ok,false);assert.equal(canPushAfterCommit(null).ok,false);
+ assert.equal(canPushAfterCommit({enabled:false}).ok,false);assert.equal(canPushAfterCommit({...aheadPush,busy:true}).ok,false);
+ assert.equal(commitAndPushBlock(prop,cleanPush,1,'msg',false,false),'');
+ assert.equal(commitAndPushBlock(prop,aheadPush,1,'msg',false,false),'');
+ assert.match(commitAndPushBlock(prop,noUpPush,1,'msg',false,false),/origin\/feat/);
+ assert.match(commitAndPushBlock(prop,cleanPush,0,'msg',false,false),/Tick at least one/);
+ assert.match(commitAndPushBlock(prop,cleanPush,1,'   ',false,false),/Write a message/);
+ assert.ok(commitAndPushBlock(prop,cleanPush,1,'msg',true,false));
+ assert.ok(commitAndPushBlock(prop,cleanPush,1,'msg',false,true));
+
+ // guard refusal: never calls commit-do or push-do
+ {const calls=[];
+  const res=await runCommitAndPush({proposal:prop,push:noUpPush,files:['a.js'],message:'m',call:async(op)=>{calls.push(op);return {ok:true}},getPushStatus:async()=>{calls.push('status');return aheadPush}});
+  assert.equal(res.ok,false);assert.equal(res.stage,'guard');assert.deepEqual(calls,[]);}
+
+ // commit failure: stops after commit-do, never calls push-status or push-do, forwards fresh proposal
+ {const calls=[],fresh={...prop,hash:'h2'};
+  const res=await runCommitAndPush({proposal:prop,push:cleanPush,files:['a.js'],message:'m',
+   call:async(op,args)=>{calls.push([op,args]);return {ok:false,status:409,data:{error:'Changed.',proposal:fresh}}},
+   getPushStatus:async()=>{calls.push(['status']);return aheadPush}});
+  assert.equal(res.ok,false);assert.equal(res.stage,'commit');assert.equal(res.error,'Changed.');assert.equal(res.proposal,fresh);assert.equal(calls.length,1);assert.equal(calls[0][0],'commit-do');}
+
+ // commit ok, but pushStatus refuses or head disagrees: stops before push-do
+ for(const badPs of [
+  {enabled:true,branch:'main',head:'c111111',canPush:false,why:'No upstream branch.'},
+  {enabled:true,branch:'main',head:'other99',canPush:true,why:''},
+  null
+ ]){
+  const calls=[];
+  const res=await runCommitAndPush({proposal:prop,push:cleanPush,files:['a.js'],message:'m',
+   call:async(op,args)=>{calls.push([op,args]);return {ok:true,status:200,data:{commit:{id:'c111111',files:1}}}},
+   getPushStatus:async()=>badPs});
+  assert.equal(res.ok,false);assert.equal(res.stage,'push-status');assert.ok(res.error);assert.deepEqual(res.commit,{id:'c111111',files:1});assert.equal(calls.length,1,'push-do was never called');}
+
+ // commit ok + pushStatus canPush for new head + push-do fails: returns push error and leaves commit in place
+ {const calls=[],steps=[];
+  const res=await runCommitAndPush({proposal:prop,push:cleanPush,files:['a.js'],message:'m',
+   onCommitOk:c=>steps.push(['committed',c.id]),onStep:(s,c)=>steps.push([s,c.id]),
+   call:async(op,args)=>{calls.push([op,args]);if(op==='commit-do')return {ok:true,status:200,data:{commit:{id:'c222222',files:1}}};return {ok:false,status:409,data:{error:'GitHub has newer commits.'}}},
+   getPushStatus:async()=>({enabled:true,branch:'main',head:'c222222',count:1,canPush:true})});
+  assert.equal(res.ok,false);assert.equal(res.stage,'push');assert.equal(res.error,'GitHub has newer commits.');assert.deepEqual(res.commit,{id:'c222222',files:1});
+  assert.deepEqual(steps,[['committed','c222222'],['push','c222222']]);assert.deepEqual(calls.map(c=>c[0]),['commit-do','push-do']);assert.deepEqual(calls[1][1],{head:'c222222'});}
+
+ // happy path: commit-do then push-do with the new head
+ {const calls=[];
+  const res=await runCommitAndPush({proposal:prop,push:cleanPush,files:['a.js'],message:'m',
+   call:async(op,args)=>{calls.push([op,args]);if(op==='commit-do')return {ok:true,status:200,data:{commit:{id:'c333333',files:1}}};return {ok:true,status:200,data:{pushed:{count:1,branch:'main'}}}},
+   getPushStatus:async()=>({enabled:true,branch:'main',head:'c333333',count:1,canPush:true})});
+  assert.equal(res.ok,true);assert.equal(res.stage,'done');assert.deepEqual(res.commit,{id:'c333333',files:1});assert.deepEqual(res.pushed,{count:1,branch:'main'});
+  assert.deepEqual(calls,[['commit-do',{files:['a.js'],message:'m',hash:'h1'}],['push-do',{head:'c333333'}]]);}
+}
 // the routes
 {
  const R=(p,host='127.0.0.1:8765')=>resolveRoute(REPO,p,host,8765);
@@ -322,6 +413,28 @@ else{
  assert.ok(fs.existsSync(path.join(work,'keep out.txt')));
  t=await call('POST','/api/commit/undo',{body:{}});assert.equal(t.status,200);assert.equal(count(),n3);
  t=await call('POST','/api/push',{body:{head:git.head().id}});assert.equal(t.status,409,'nothing to push');
+ // Owner Decision 1 over the real hub HTTP routes:
+ const httpRunCall=async(op,args)=>{const c=callFor(op,args);const res=await call('POST',c.url,{body:c.body});return {ok:res.status>=200&&res.status<300,status:res.status,data:res.body}};
+ const httpPushStatus=async()=>(await call('GET','/api/push/status')).body;
+ // Case A: push fails because bare is ahead -> commit stays in place, real error shown, Undo still works
+ G(other,'fetch','origin');G(other,'reset','--hard','origin/main');
+ fs.writeFileSync(path.join(other,'remote2.txt'),'r2\n');G(other,'add','--','remote2.txt');G(other,'commit','-m','remote ahead');G(other,'push','origin','main');assert.equal(bareCount(),4);
+ const propA=(await call('GET','/api/commit/proposal')).body,psA=await httpPushStatus();
+ const failCp=await runCommitAndPush({proposal:propA,push:psA,files:['srv.txt'],message:'Commit then fail push',call:httpRunCall,getPushStatus:httpPushStatus});
+ assert.equal(failCp.ok,false);assert.equal(failCp.stage,'push');assert.match(failCp.error,/GitHub has newer commits/);
+ assert.ok(failCp.commit&&failCp.commit.id);assert.equal(count(),n3+1,'commit stays in place');assert.equal(bareCount(),4,'failed push did not land on bare');
+ assert.deepEqual((await call('GET','/api/commit/proposal')).body.last,{id:failCp.commit.id,canUndo:true,why:''},'Undo stays available');
+ t=await call('POST','/api/commit/undo',{body:{}});assert.equal(t.status,200);assert.equal(count(),n3);
+ // Case B: bare is level -> Commit & push commits then pushes with the new head, and clears Undo
+ G(bare,'update-ref','refs/heads/main',G(work,'rev-parse','HEAD').trim());
+ const propB=(await call('GET','/api/commit/proposal')).body,psB=await httpPushStatus();
+ assert.equal(psB.canPush,false);assert.equal(commitAndPushBlock(propB,psB,1,'Commit & push srv',false,false),'');
+ const okCp=await runCommitAndPush({proposal:propB,push:psB,files:['srv.txt'],message:'Commit & push srv',call:httpRunCall,getPushStatus:httpPushStatus});
+ assert.equal(okCp.ok,true,JSON.stringify(okCp));assert.equal(okCp.stage,'done');
+ assert.deepEqual(okCp.pushed,{count:1,branch:'main'});assert.equal(count(),n3+1);assert.equal(bareCount(),n3+1);
+ assert.equal(execFileSync(gitPath,['--git-dir',bare,'rev-parse','--short','main'],{encoding:'utf8'}).trim(),git.head().id);
+ assert.equal((await call('GET','/api/commit/proposal')).body.last,null,'Undo cleared after successful push');
+ assert.equal((await call('POST','/api/commit/undo',{body:{}})).status,409);
  await srv.close();
  // the other side of the switch: no controller, no commit
  const off=createHubServer({root:work,runs:runsStub}),op=await off.listen();

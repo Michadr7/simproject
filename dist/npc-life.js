@@ -1,5 +1,5 @@
 // npc-life.js: pure rules for the named NPCs (saved mood/sickness/talk state, standing tiers, visit rules, a named person's day wrapped around schedule.js, need seeds); implements notes/world-system-design.md (NPC life, OWNER ANSWERS 6/7/15, NEW NPCS). No DOM, no globals, no Math.random/Date.now: chance is an integer hash of ids, day and an injected seed; every function returns NEW objects.
-import {ROSTER_ORDER,byId,MOOD_WORDS,HUNTING_TOPICS} from './npc-roster.js';
+import {ROSTER_ORDER,ACTIVE_ORDER,byId,MOOD_WORDS,HUNTING_TOPICS} from './npc-roster.js';import {normalizeTalkMem,isEmptyMem} from './talk-memory.js'; // C3: the talk memory (npcs[id].mem) rides along
 export const DAY=1440;
 // ---- numbers (placeholders to tune)
 export const TIERS=Object.freeze(['stranger','acquaintance','friend','close']);
@@ -49,7 +49,7 @@ export function gainStanding(stats,id,amount,day){
  else s.people[id]={points:Math.max(0,e.points+a),gainDay:e.gainDay,gainToday:e.gainToday};
  return s;
 }
-// ---- saved NPC state: npcs[id]={id,mood,sickUntil,lastTalkDay,talks:{topic:count},flags:[],talkDay,talksToday,metDay} (metDay = the day the player first met them, -1 = not met: the People page's met set, W-D3)
+// ---- saved NPC state: npcs[id]={id,mood,sickUntil,lastTalkDay,talks:{topic:count},flags:[],talkDay,talksToday,metDay,mem?} (mem: talk-memory.js, only when not empty) (metDay = the day the player first met them, -1 = not met: the People page's met set, W-D3)
 export const baselineOf=id=>byId(id)?.baseline??50;
 export function newNpc(id){return {id,mood:baselineOf(id),sickUntil:-1,lastTalkDay:-1,talks:{},flags:[],talkDay:-1,talksToday:0,metDay:-1}}
 export function normalizeNpcs(raw){
@@ -61,6 +61,7 @@ export function normalizeNpcs(raw){
   if(e.talks&&typeof e.talks==='object'&&!Array.isArray(e.talks))for(const k of Object.keys(e.talks)){if(n>=40)break;if(!safeKey(k))continue;const c=int(e.talks[k],0,1e6,0);if(c>0){talks[k]=c;n++}}
   const flags=[];if(Array.isArray(e.flags))for(const f of e.flags){if(flags.length>=12)break;if(safeKey(f)&&!flags.includes(f))flags.push(f)}
   out[id]={id,mood:clampMood(Number.isFinite(e.mood)?e.mood:d.mood),sickUntil:int(e.sickUntil,-1,1e9,-1),lastTalkDay:int(e.lastTalkDay,-1,1e9,-1),talks,flags,talkDay:int(e.talkDay,-1,1e9,-1),talksToday:int(e.talksToday,0,1e6,0),metDay:int(e.metDay,-1,1e9,int(e.lastTalkDay,-1,1e9,-1))};
+  const mem=normalizeTalkMem(e.mem);if(!isEmptyMem(mem))out[id].mem=mem; // optional: absent while empty (talk-memory.js)
  }
  return out;
 }
@@ -72,7 +73,7 @@ export const isSick=(npc,day)=>!!npc&&npc.sickUntil>=int(day,0,1e9,0);
 // ---- sickness: the same for everyone, from the seed and the day only. Never two NPCs START the same day (a day with two candidates picks one).
 export function sickToday(day,seed=0){
  const d=int(day,0,1e9,0);let best=null,bh=Infinity;
- for(const id of ROSTER_ORDER){if(hash(seed,id,'sick',d)%SICK_EVERY_DAYS!==0)continue;const k=hash(seed,id,'pick',d);if(k<bh){bh=k;best=id}}
+ for(const id of ACTIVE_ORDER){if(hash(seed,id,'sick',d)%SICK_EVERY_DAYS!==0)continue;const k=hash(seed,id,'pick',d);if(k<bh){bh=k;best=id}}
  return best;
 }
 export const sickLength=(id,day,seed=0)=>1+hash(seed,id,'len',day)%SICK_MAX_DAYS;
@@ -185,7 +186,7 @@ export function namedPlan(npc,day,world,basePlan){
 }
 // ---- need seeds the world system can read (W-B turns them into real needs). -> [{kind,good,place,person,qty,dueDay,reason}]
 export function needsFor(npc,day,world={}){
- const d=int(day,0,1e9,0),r=byId(npc.id),seed=world.seed??0,out=[];if(!r)return out;
+ const d=int(day,0,1e9,0),r=byId(npc?.id),seed=world.seed??0,out=[];if(!r||r.dormant)return out; // dormant people (no body in the map) have no needs
  const mk=(kind,good,reason,qty=1,place=r.home||r.work)=>out.push({kind,good,place,person:npc.id,qty,dueDay:d+NEED_DUE_DAYS,reason});
  if(isSick(npc,d)&&npc.sickUntil-d+1>=1&&r.home)mk('errand','medicine','sick',1,r.home);
  if(r.rule==='catowner'){const hunger=world.cat&&Number.isFinite(world.cat.hunger)?world.cat.hunger:0;if(hunger>=50)mk('tend','cat-food','cat-hungry',1);if(world.cat?.missing)mk('errand','cat-search','cat-missing',1)}

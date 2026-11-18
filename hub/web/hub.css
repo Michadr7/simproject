@@ -340,6 +340,13 @@ html.opening .nav li:nth-child(2){animation-delay:.04s}html.opening .nav li:nth-
 .cm-actions{position:sticky;bottom:calc(var(--bot-h,0px) + 8px);z-index:5;background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:10px 12px}
 .tool-res.warn{color:var(--watch)}
 .view>div>textarea{width:100%;background:var(--panel2);color:var(--ink);border:1px solid var(--line);border-radius:10px;padding:9px 11px;font:14px var(--sans);resize:vertical;margin:6px 0}
+.cm-summary{display:grid;gap:8px}
+.cm-chips{display:flex;flex-wrap:wrap;gap:6px}
+.cm-chip{font:600 11px var(--mono);letter-spacing:.04em;border:1px solid var(--line);background:var(--panel2);border-radius:99px;padding:3px 9px;color:var(--ink)}
+.cm-chip.off{color:var(--dim);opacity:.75}
+.cm-rel-fold{border:1px solid var(--line);background:var(--panel2);border-radius:8px;padding:6px 10px;margin:4px 0}
+.cm-rel-row{display:flex;gap:8px;align-items:center;flex-wrap:wrap;cursor:pointer;font:600 12.5px var(--mono)}
+.cm-rel-meta{margin-left:auto}
 /* Hub v2 V4: the Assets page. Six stage cells (the three you set by hand are marked), the Add asset form, rows with a stage pill, new files, recent changes with Undo. */
 .as-strip{display:grid;grid-template-columns:repeat(auto-fit,minmax(84px,1fr));gap:6px;margin:6px 0 12px}
 .as-cell{border:1px solid var(--line);background:var(--panel);border-radius:10px;padding:8px 10px;display:grid;gap:1px;min-width:0}

@@ -6,7 +6,7 @@ import {dropSpot} from './orders.js';
 import {propertyById} from './properties.js';import {normalizeDrop,PARCEL_FIRST,PARCEL_PICKUP_FIRST,PARCEL_ON_BED} from './gig-parcel.js';
 import {payFor as payGig,parMetres,meetsMinPar,canTakeMore,fatigueFactor,WALK_M_PER_GAME_MIN,FASTEST_M_PER_GAME_MIN,HANDLING_C,MIN_PAR_M} from './gig-pay.js'; // G-B (notes/gig-overhaul-design.md): pay, par, daily fatigue live in gig-pay.js
 // W-D2 (notes/world-system-design.md, Needs -> gigs): the board of normal play is the world's open needs; a need gig claims its need, fills it on completion and is paid by needPay.
-import {needSlots,claim,fill,release,needPay,openNeeds,remainingOf,dayOf} from './needs.js';import {buy,deliver} from './world-state.js';import {CRATE_UNITS,PLACES as WORLD_PLACES,GOODS} from './world-goods.js';import {helped,gainStanding} from './npc-life.js';import {ROSTER} from './npc-roster.js';import {acceptsCrates,takesCrateGigs} from './cargo.js';import {PARCEL_PIECES_ENABLED,removeParcelPieces} from './cargo-items.js';
+import {needSlots,claim,fill,release,needPay,openNeeds,remainingOf,dayOf,isBoardable} from './needs.js';import {buy,deliver} from './world-state.js';import {CRATE_UNITS,PLACES as WORLD_PLACES,GOODS} from './world-goods.js';import {helped,gainStanding} from './npc-life.js';import {ROSTER} from './npc-roster.js';import {acceptsCrates,takesCrateGigs} from './cargo.js';import {PARCEL_PIECES_ENABLED,removeParcelPieces} from './cargo-items.js';
 const T=(id,title,base,o={})=>Object.freeze({id,title,base,stops:1,rep:0,bed:false,limit:0,hard:false,...o});
 export const GIG_TYPES=Object.freeze([
  T('grocery','Grocery run',1200,{limit:60,twist:'Deliver within 60 game minutes'}),
@@ -127,7 +127,7 @@ export const hasCrateBed=p=>(p.vehicles||[]).some(v=>!v.loan&&takesCrateGigs(v.m
 export const needsPickup=a=>!!a?.needId&&a.type==='need-restock'&&!!CRATE_UNITS[a.needGood]&&!(a.haul>0); // the crates are still at the farm
 export const cratesFor=(good,units)=>CRATE_UNITS[good]?Math.ceil(Math.max(0,units)/CRATE_UNITS[good]):0;
 export function needBoard(p,now=gameMinutes(p)){
- const list=openNeeds(p.needs||[]).filter(n=>remainingOf(n)>0&&!n.claims[NEED_PLAYER]&&(n.dueDay+1)*1440>now);
+ const list=openNeeds(p.needs||[]).filter(n=>isBoardable(n.kind)&&remainingOf(n)>0&&!n.claims[NEED_PLAYER]&&(n.dueDay+1)*1440>now);
  // goods that must travel (restock, harvest, errand) need a route of at least the walking minimum par, like every board gig since G-B; a chore (clear, repair, tend, tow, serve) is done where it is. Places with only a placeholder point (sawmill, forest, warehouse: parM 0 to 45 m) therefore stay off the board until W-E gives them real points.
  return needSlots(list,{names:NAMES},12).filter(s=>(CHORE_KINDS.includes(s.kind)||s.parM>=MIN_PAR_M.walk)&&(!NEEDS_PICKUP_KINDS.includes(s.kind)||!!CRATE_UNITS[s.good])).slice(0,BOARD_SLOTS).map((s,i)=>{const crate=s.type==='need-restock'&&!!CRATE_UNITS[s.good];return {...s,slot:i,mode:crate?'vehicle':s.mode,blocked:crate&&!hasCrateBed(p)?NEEDS_TRUCK:'',crates:crate?cratesFor(s.good,s.remaining):0}});
 }

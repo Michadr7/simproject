@@ -1,7 +1,8 @@
-// npc-roster.js: the ten named NPCs with saved state (ids, roles, homes, work, traits, mood lines, need kinds, visit rules, Lincoln's hunting topics); implements notes/world-system-design.md (OWNER ANSWERS 4/7/15, NEW NPCS). Pure data: no DOM, no three.js, no globals, nothing random.
+// npc-roster.js: the named NPCs with saved state (roles, homes, work, mood lines, needs, visit rules; dormant = no body yet); notes/world-system-design.md NEW NPCS. Pure data.
 // VERIFIED in the map data: hal (Hal Brennan, owner of property:farm-house, post 'farm' 390-1050), noah (flat 8 of dwelling:oak-apartments, post 'market-day' Clerk at shop:market 420-870), sophie (flat 2 of oak-apartments, no post),
 //   walt (Walt Hargrove, owner of Ridgeline, post 'ridgeline-owner' at office:ridgeline-office; named but not a resident, so population.js makes him a commuter), grace (Grace Whitfield, owner of property:house-r8, no post).
 // VERIFIED (map-definition.js ~l.375): Oscar Masic, Lincoln Brambly and Brentster Lewis are residents of dwelling:oak-apartments, flats 9, 10, 11.
+// VERIFIED (population.js, C3 2026-11-17): Lincoln holds post 'market-evening' (Clerk, shop:market 870-1320), Brentster 'alder-store' (Shopkeeper, Ironwood Store), Elena (flat 7) 'cafe-manager' (shop:cafe 480-1080).
 // ASSUMED (marked): the foreman and the Eastbank truck driver (no such person exists in the map).
 // personId is the id population.js gives the person (household id + '#1'); id is the short key used in saves and by gig-clients.js (HAL_ID='hal').
 export const MOOD_WORDS=Object.freeze(['miserable','low','okay','good','delighted']);
@@ -23,7 +24,7 @@ const LINCOLN_TOPICS=Object.freeze([
 ]);
 export const HUNTING_TOPICS=Object.freeze(LINCOLN_TOPICS.map(t=>t.id));
 
-const base=(o)=>Object.freeze({rule:null,homebody:false,hash:null,...o});
+const base=(o)=>Object.freeze({rule:null,homebody:false,hash:null,dormant:false,...o}); // dormant: kept in saves, skipped by needs, sickness and talk until the map gives them a post
 export const ROSTER=Object.freeze([
  base({id:'hal',personId:'farm-house#1',name:'Hal Brennan',role:'Farmer (Willow Farm)',home:'property:farm-house',work:'property:farm-house',flat:null,assumed:false,
   traits:['generous','stubborn','early riser'],baseline:65,deliveryDay:2,marketDay:null,
@@ -55,28 +56,34 @@ export const ROSTER=Object.freeze([
   needs:['errand','tow','repair'],needGoods:{errand:'groceries',tow:'black-truck',repair:'black-truck'},
   lines:L(['Go away.','I told you. Leave me alone.','You again. Do not knock twice.'],['What do you want now?','Make it quick.','I did not ask for company.'],['Hm. Oh. It is you.','Keep it short.','The truck is fine. Do not touch it.'],['You are not so bad. Do not tell anyone I said that.','Hm. You listen. Good.','Thanks for the quiet help.'],['Come in. Mind the floor, it is clean.','You are all right, kid.','I should not say it, but I am glad you came.']),
   visit:V('acquaintance','close',[600,720],{friend:null,close:14})}),
- base({id:'lincoln',personId:'oak-apartments/10#1',name:'Lincoln Brambly',role:'Young hunter',home:'dwelling:oak-apartments',work:null,flat:'oak-apartments/10',assumed:true,
+ base({id:'lincoln',personId:'oak-apartments/10#1',name:'Lincoln Brambly',role:'Evening clerk (Corner Market), keen hunter',home:'dwelling:oak-apartments',work:'shop:market',flat:'oak-apartments/10',assumed:true,
   rule:'hunter',traits:['long-winded','enthusiastic','sulks easily'],baseline:55,deliveryDay:null,marketDay:4,topics:LINCOLN_TOPICS,
   needs:['restock','haul','errand'],needGoods:{restock:'ammo',haul:'game-meat',errand:'boots'},
   lines:L(['Nobody wants to hear about hunting anyway.','Fine. Ignore me. Everyone does.','Not in the mood.'],['I had a story, but never mind.','You have not asked about the woods in days.','Hm.'],['Hey. Did I tell you about the deer last week?','Out of ammo again, practically.','Morning. Cold enough for a hunt.'],['Good to see you! Ask me about tracking!','Got a great story for you.','I bagged a nice one yesterday.'],['You will not believe the day I had out there!','Best season ever, I swear!','Sit down, I have six stories.']),
   visit:V('acquaintance','friend',null,{friend:6,close:3})}),
- base({id:'brentster',personId:'oak-apartments/11#1',name:'Brentster Lewis',role:'Young adult (cat owner of Brentster Jr.)',home:'dwelling:oak-apartments',work:null,flat:'oak-apartments/11',assumed:true,
+ base({id:'brentster',personId:'oak-apartments/11#1',name:'Brentster Lewis',role:'Shopkeeper (Ironwood Store), owner of the cat Brentster Jr.',home:'dwelling:oak-apartments',work:'property:alder-store',flat:'oak-apartments/11',assumed:true,
   rule:'catowner',traits:['devoted','distracted','soft-hearted'],baseline:50,deliveryDay:null,marketDay:null,
   needs:['tend','errand','restock'],needGoods:{tend:'cat',errand:'vet',restock:'cat-food'},
   lines:L(['Junior is not okay and nothing else matters.','I cannot talk. Have you seen my cat?','I should be looking for him.'],['Junior has been off his food.','Sorry, distracted. Cat stuff.','Not a good day for Junior.'],['Hey. Junior is on the sofa again.','Can you believe he knocked a glass over?','Oh, hi. Have you met my cat?'],['Junior is purring like an engine today!','Great day. He ate everything.','Good to see you, he likes you.'],['Junior learned a new trick!','Best day. Best cat. Best everything.','You have to see him, come on!']),
   visit:V('acquaintance','friend',null,{friend:7,close:3})}),
- base({id:'foreman',personId:'commuter:ridgeline-foreman',name:'Gus Taggart',role:'Ridgeline foreman (ASSUMED name)',home:null,work:'zone:forest',flat:null,assumed:true,
+ base({id:'foreman',personId:'commuter:ridgeline-foreman',name:'Gus Taggart',role:'Ridgeline foreman (ASSUMED name)',home:null,work:'zone:forest',flat:null,assumed:true,dormant:true,
   traits:['strict','honest','sunburnt'],baseline:55,deliveryDay:null,marketDay:null,
   needs:['clear','repair','haul','restock'],needGoods:{clear:'road',repair:'saw',haul:'lumber',restock:'fuel'},
   lines:L(['The crew is a mess. Do not talk to me.','Another accident report. Brilliant.','Out of my sight.'],['Short crew again.','Behind quota.','Do your job, we will talk later.'],['On time. Good. Gloves.','Trees will not fell themselves.','Keep clear of the blade.'],['You work clean. I like that.','Good shift today.','Tell Walt I said you are alright.'],['Best crew I have had in years.','Take a break, you have earned it.','Ridgeline is lucky to have you.']),
   visit:V(null,null,null,E)}),
- base({id:'driver',personId:'commuter:eastbank-driver',name:'Ray Okonkwo',role:'Eastbank truck driver (ASSUMED name)',home:null,work:'office:ridgeline-warehouse',flat:null,assumed:true,
+ base({id:'driver',personId:'commuter:eastbank-driver',name:'Ray Okonkwo',role:'Eastbank truck driver (ASSUMED name)',home:null,work:'office:ridgeline-warehouse',flat:null,assumed:true,dormant:true,
   traits:['cheerful','always late','road-weary'],baseline:55,deliveryDay:null,marketDay:null,
   needs:['haul','tow','repair','restock'],needGoods:{haul:'crates',tow:'truck',repair:'truck',restock:'fuel'},
   lines:L(['Truck broke down, load is late, everything is late.','Do not start me today.','No.'],['Long haul, short patience.','Running behind again.','Traffic. Always traffic.'],['Morning. Another load to deliver.','Eastbank is busy today.','Gas is cheaper over the hill.'],['Smooth run today!','Good to see a friendly face.','You want a lift to the yard?'],['Perfect delivery, perfect day!','Drinks on me, next time I am in town.','Best route I ever drove.']),
-  visit:V(null,null,null,E)})
+  visit:V(null,null,null,E)}),
+ base({id:'elena',personId:'oak-apartments/7#1',name:'Elena',role:'Manager (Alder Coffee)',home:'dwelling:oak-apartments',work:'shop:cafe',flat:'oak-apartments/7',assumed:false,
+  traits:['brisk','warm','organised','proud of her coffee'],baseline:60,deliveryDay:null,marketDay:null,
+  needs:['restock','errand','haul'],needGoods:{restock:'coffee',errand:'groceries',haul:'milk'},
+  lines:L(['The machine is broken and the rush is coming.','Not now, please. Nothing is going right today.','Two staff short and a line out the door.'],['Long shift. My feet know it.','The milk order came short again.','Busy and tired, but the coffee is still good.'],['The usual rush, nothing I cannot handle.','Coffee is fresh, if you want one.','Tables clean, cups stacked. A fair day.'],['Good to see you. The new beans are lovely.','Full room today and nobody waited long.','The new grinder finally behaves. I could hug it.'],['Best week the cafe has had all year!','Everyone left smiling today. That is the job.','Sit down a minute, you have earned a good cup.']),
+  visit:V('acquaintance','friend',null,{friend:8,close:5})})
 ]);
 export const ROSTER_ORDER=Object.freeze(ROSTER.map(n=>n.id));
+export const ACTIVE_ORDER=Object.freeze(ROSTER.filter(n=>!n.dormant).map(n=>n.id)); // the people with a body in the map (needs, sickness, talk)
 const INDEX=Object.freeze(Object.fromEntries(ROSTER.map(n=>[n.id,n])));
 export const byId=id=>Object.prototype.hasOwnProperty.call(INDEX,id)?INDEX[id]:null;
 
@@ -117,5 +124,6 @@ export const TIPS=Object.freeze({
  lincoln:'Ask me about hunting. Anything else and I lose interest.',
  brentster:'Be kind to my cat and you will be fine with me.',
  foreman:'Be safe and do the work clean.',
- driver:'Be on time and I will give you a lift to the yard.'
+ driver:'Be on time and I will give you a lift to the yard.',
+ elena:'Shifts run from eight. Serve two customers, reset the table, and I pay you the same day.'
 });

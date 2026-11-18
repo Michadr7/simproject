@@ -30,6 +30,7 @@ export function testPill(p,jobs,now=Date.now()){
 // The paths currently ticked, in list order.
 export const pickedPaths=(p,unticked)=>(p&&p.files||[]).flatMap(g=>g.items.map(i=>i.path)).filter(x=>!unticked.has(x));
 export const commitButtonText=n=>`Commit ${plural(n,'file')}`;
+export const COMMIT_PUSH_LABEL='Commit & push';
 export const pushButtonText=n=>`Push ${plural(n,'commit')} to GitHub`;
 // Why the Commit button is off right now, or '' when it can be pressed.
 export function commitBlock(p,picked,message,working){
@@ -40,49 +41,126 @@ export function commitBlock(p,picked,message,working){
  if(!String(message).trim())return 'Write a message first.';
  if(String(message).length>MAX_MESSAGE)return 'The message is too long.';
  return ''}
+export function canPushAfterCommit(push){
+ if(!push||!push.enabled||push.error)return {ok:false,why:push&&push.error||'Push is not available.'};
+ if(push.busy)return {ok:false,why:'Something is working.'};
+ if(push.canPush)return {ok:true,why:''};
+ if(push.branch&&push.head&&('more' in push||/already on GitHub/i.test(push.why||'')))return {ok:true,why:''};
+ return {ok:false,why:push.why||'Push is not available.'}}
+export function commitAndPushBlock(p,push,picked,message,working,pushing=false){
+ const b=commitBlock(p,picked,message,working||pushing);if(b)return b;
+ const c=canPushAfterCommit(push);return c.ok?'':c.why}
+export async function runCommitAndPush({proposal,push,files,message,working=false,pushing=false,call=runCall,getPushStatus=()=>getJson('/api/push/status'),onCommitOk,onStep}={}){
+ const list=Array.isArray(files)?files:[];
+ const block=commitAndPushBlock(proposal,push,list.length,message,working,pushing);
+ if(block)return {ok:false,stage:'guard',error:block,commit:null,pushed:null};
+ const cRes=await call('commit-do',{files:list,message,hash:proposal.hash});
+ if(!cRes||!cRes.ok){
+  return {ok:false,stage:'commit',error:errorText(cRes),proposal:cRes&&cRes.data&&cRes.data.proposal||null,commit:null,pushed:null}}
+ const commit=cRes.data&&cRes.data.commit||null;
+ if(onCommitOk)onCommitOk(commit);
+ if(!commit||!commit.id){
+  return {ok:false,stage:'push-status',error:'Committed, but the hub did not return the new commit id.',commit,pushed:null}}
+ const ps=await getPushStatus();
+ if(!ps||!ps.canPush||ps.head!==commit.id){
+  const why=!ps?'Could not read push status from the hub.':ps.head&&ps.head!==commit.id?'The newest commit changed since this commit was made. Look at the list again, then press Push.':(ps.why||'Push is not available for the new commit.');
+  return {ok:false,stage:'push-status',error:why,commit,pushed:null,pushStatus:ps||null}}
+ if(onStep)onStep('push',commit,ps);
+ const pRes=await call('push-do',{head:commit.id});
+ if(!pRes||!pRes.ok){
+  return {ok:false,stage:'push',error:errorText(pRes),commit,pushed:null,pushStatus:ps}}
+ const pushed=pRes.data&&pRes.data.pushed||null;
+ return {ok:true,stage:'done',error:'',commit,pushed,pushStatus:ps}}
 // New proposal in, ticks kept: files you unticked stay unticked, new files follow the proposal (a file from an unfinished run starts unticked), files that left the list are forgotten.
 export function mergeTicks(p,unticked,known){
  const now=new Set();
  for(const g of (p&&p.files)||[])for(const i of g.items){now.add(i.path);if(!known.has(i.path)){known.add(i.path);if(!i.ticked)unticked.add(i.path)}}
  for(const x of [...known])if(!now.has(x)){known.delete(x);unticked.delete(x)}}
 
+const semverCmp=(a,b)=>{const x=/^(\d+)\.(\d+)\.(\d+)$/.exec(String(a||'')),y=/^(\d+)\.(\d+)\.(\d+)$/.exec(String(b||''));if(!x||!y)return String(a||'').localeCompare(String(b||''));for(let i=1;i<=3;i++){const d=Number(x[i])-Number(y[i]);if(d)return d<0?-1:1}return 0};
+export const releaseOfItem=i=>{if(i&&typeof i.release==='string')return i.release;const m=/^dist\/releases\/([^/]+)\//.exec(i&&i.path||'');return m?m[1]:null};
+export function releaseRowLabel(version,count,current=true){return current?`Release ${version} · ${plural(count,'file')}`:`Old release ${version} · ${plural(count,'file')} (unticked)`}
+export function setPathsTicked(unticked,paths,checked){for(const x of paths||[])if(checked)unticked.delete(x);else unticked.add(x)}
+export function groupReleases(items=[],currentVersion=null){
+ const byRel=new Map(),plain=[];
+ for(const it of items||[]){const ver=releaseOfItem(it);if(!ver){plain.push(it);continue}let list=byRel.get(ver);if(!list){list=[];byRel.set(ver,list)}list.push(it)}
+ const vers=[...byRel.keys()].sort((a,b)=>semverCmp(b,a));
+ const cur=currentVersion||(items||[]).find(i=>i&&i.release&&i.oldRelease===false)?.release||(!((items||[]).some(i=>i&&'oldRelease'in i))?vers[0]||null:null);
+ const releases=vers.map(version=>{const list=byRel.get(version),isCur=cur?version===cur:list.some(i=>i.oldRelease===false);return {version,current:isCur,label:releaseRowLabel(version,list.length,isCur),items:list}}).sort((a,b)=>(b.current-a.current)||semverCmp(b.version,a.version));
+ return {releases,plain}}
+export function summaryCounts(p,unticked=new Set()){
+ const groups=[];let total=0,ticked=0;const relItems=[];
+ for(const g of (p&&p.files)||[]){
+  const t=g.items.length,k=g.items.filter(i=>!unticked.has(i.path)).length;
+  groups.push({group:g.group,total:t,ticked:k});total+=t;ticked+=k;
+  for(const i of g.items)if(releaseOfItem(i))relItems.push(i)}
+ const releases=groupReleases(relItems,p&&p.currentVersion).releases.map(r=>({version:r.version,current:r.current,total:r.items.length,ticked:r.items.filter(i=>!unticked.has(i.path)).length,label:r.label}));
+ return {total,ticked,groups,releases}}
+
 const h=(tag,props,...kids)=>{const e=document.createElement(tag);for(const [k,v] of Object.entries(props||{})){if(k==='class')e.className=v;else if(k.startsWith('on'))e.addEventListener(k.slice(2),v);else if(v!==false&&v!=null)e.setAttribute(k,v===true?'':v)}for(const c of kids.flat())if(c!=null)e.append(c);return e};
 async function getJson(url){try{const r=await fetch(url,{cache:'no-store'});if(!r.ok)return null;return await r.json()}catch{return null}}
 const KIND={added:'new',changed:'changed',deleted:'deleted',renamed:'renamed',untracked:'new'};
 
-export function mountCommit(view,{onChange}={}){
- let alive=true,timer=null,sig=null,p=null,push=null,jobs=null,working=false,pushing=false,dirty=false,pushedNote='';
- const unticked=new Set(),known=new Set(),draft=draftStore(MESSAGE_KEY),suggested=draftStore(SUGGESTED_KEY);
- let message='';
- const fromMaster=suggested.get();if(fromMaster){message=fromMaster.slice(0,MAX_MESSAGE);dirty=true;draft.set(message);suggested.set('')} // the master's suggestion waits in the box; you edit it
- else{const kept=draft.get();if(kept){message=kept;dirty=true}}
- const stop=()=>{alive=false;clearTimeout(timer)};
+ export function mountCommit(view,{onChange}={}){
+  let alive=true,timer=null,sig=null,p=null,push=null,jobs=null,working=false,pushing=false,dirty=false,pushedNote='';
+  const unticked=new Set(),known=new Set(),openReleases=new Set(),draft=draftStore(MESSAGE_KEY),suggested=draftStore(SUGGESTED_KEY);
+  let message='';
+  const fromMaster=suggested.get();if(fromMaster){message=fromMaster.slice(0,MAX_MESSAGE);dirty=true;draft.set(message);suggested.set('')} // the master's suggestion waits in the box; you edit it
+  else{const kept=draft.get();if(kept){message=kept;dirty=true}}
+  const stop=()=>{alive=false;clearTimeout(timer)};
 
- const top=h('p',{class:'next'}),note=h('p',{class:'msg err',role:'alert',hidden:true}),ok=h('p',{class:'msg approved',role:'status',hidden:true});
- const say=t=>{note.textContent=t;note.hidden=!t;if(t)ok.hidden=true},good=t=>{ok.textContent=t;ok.hidden=!t;if(t)note.hidden=true};
- const testBox=h('div',{class:'box'}),banner=h('div',{}),listBox=h('div',{}),actions=h('div',{class:'cm-actions'}),pushBox=h('div',{class:'box'});
- // the message box is built once and never rebuilt, so typing is never interrupted by a redraw
- const ta=h('textarea',{rows:'6',maxlength:String(MAX_MESSAGE),'aria-label':'Commit message',placeholder:'One short line, then (optional) detail.'}),count=h('span',{class:'small dim'});
- ta.value=message;
- ta.addEventListener('input',()=>{message=ta.value;dirty=true;draft.set(message);updateActions()});
- const msgBox=h('div',{class:'box'},h('div',{class:'label'},'Commit message'),ta,count);
- view.append(top,note,ok,testBox,banner,msgBox,listBox,actions,h('h2',{class:'sect'},'Push to GitHub'),pushBox);
+  const top=h('p',{class:'next'}),note=h('p',{class:'msg err',role:'alert',hidden:true}),ok=h('p',{class:'msg approved',role:'status',hidden:true});
+  const say=t=>{note.textContent=t;note.hidden=!t;if(t)ok.hidden=true},good=t=>{ok.textContent=t;ok.hidden=!t;if(t)note.hidden=true};
+  const testBox=h('div',{class:'box'}),banner=h('div',{}),summaryBox=h('div',{class:'box cm-summary'}),listBox=h('div',{}),actions=h('div',{class:'cm-actions'}),pushBox=h('div',{class:'box'});
+  // the message box is built once and never rebuilt, so typing is never interrupted by a redraw
+  const ta=h('textarea',{rows:'6',maxlength:String(MAX_MESSAGE),'aria-label':'Commit message',placeholder:'One short line, then (optional) detail.'}),count=h('span',{class:'small dim'});
+  ta.value=message;
+  ta.addEventListener('input',()=>{message=ta.value;dirty=true;draft.set(message);updateActions()});
+  const msgBox=h('div',{class:'box'},h('div',{class:'label'},'Commit message'),ta,count);
+  view.append(top,note,ok,testBox,banner,summaryBox,msgBox,actions,listBox,h('h2',{class:'sect'},'Push to GitHub'),pushBox);
 
- const commitBtn=h('button',{class:'btn pri',type:'button',onclick:()=>doCommit()},'Commit'),cancelBtn=h('button',{class:'btn',type:'button',onclick:()=>{draft.set('');location.hash='#work'}},'Cancel'),why=h('span',{class:'small dim'});
- actions.append(commitBtn,cancelBtn,why);
+  const commitBtn=h('button',{class:'btn pri',type:'button',onclick:()=>doCommit()},'Commit'),commitPushBtn=h('button',{class:'btn',type:'button',onclick:()=>doCommitAndPush()},COMMIT_PUSH_LABEL),cancelBtn=h('button',{class:'btn',type:'button',onclick:()=>{draft.set('');location.hash='#work'}},'Cancel'),why=h('span',{class:'small dim'});
+  actions.append(commitBtn,commitPushBtn,cancelBtn,why);
 
- function updateActions(){
-  const picked=pickedPaths(p,unticked),block=commitBlock(p,picked.length,message,working);
-  commitBtn.textContent=commitButtonText(picked.length);commitBtn.disabled=!!block;why.textContent=block&&!working?block:'';
-  count.textContent=`${message.length.toLocaleString('en-US')} of ${MAX_MESSAGE.toLocaleString('en-US')} characters`;
-  actions.hidden=!(p&&p.enabled&&!p.error&&p.counts&&p.counts.files>0)}
+  function drawSummary(){
+   summaryBox.textContent='';
+   const show=!!(p&&p.enabled&&!p.error&&p.counts&&p.counts.files>0);summaryBox.hidden=!show;if(!show)return;
+   const sum=summaryCounts(p,unticked);
+   summaryBox.append(h('div',{class:'label'},`Summary · ${sum.ticked} of ${plural(sum.total,'file')} ticked`),
+    h('div',{class:'cm-chips'},sum.groups.map(g=>h('span',{class:'cm-chip'+(g.ticked?'':' off')},`${g.group} · ${g.ticked}/${g.total}`))));
+   if(sum.releases.length)summaryBox.append(h('p',{class:'small dim'},sum.releases.map(r=>`${r.label} (${r.ticked}/${r.total} ticked)`).join(' · ')))}
+
+  function updateActions(){
+   const picked=pickedPaths(p,unticked),block=commitBlock(p,picked.length,message,working||pushing),cpBlock=commitAndPushBlock(p,push,picked.length,message,working,pushing);
+   commitBtn.textContent=commitButtonText(picked.length);commitBtn.disabled=!!block;
+   commitPushBtn.textContent=pushing?'Pushing…':COMMIT_PUSH_LABEL;commitPushBtn.disabled=!!cpBlock;
+   commitPushBtn.title=cpBlock&&!block?cpBlock:'';
+   why.textContent=block&&!working&&!pushing?block:(!block&&cpBlock&&!working&&!pushing?`Commit & push is off: ${cpBlock}`:'');
+   count.textContent=`${message.length.toLocaleString('en-US')} of ${MAX_MESSAGE.toLocaleString('en-US')} characters`;
+   actions.hidden=!(p&&p.enabled&&!p.error&&p.counts&&p.counts.files>0);drawSummary()}
 
  async function doCommit(){
-  const picked=pickedPaths(p,unticked);if(commitBlock(p,picked.length,message,working))return;
+  const picked=pickedPaths(p,unticked);if(commitBlock(p,picked.length,message,working||pushing))return;
   working=true;say('');good('');updateActions();
   const res=await runCall('commit-do',{files:picked,message,hash:p.hash});working=false;if(!alive)return;
   if(res.ok){draft.set('');dirty=false;message='';ta.value='';good(`Committed as ${res.data.commit.id} (${plural(res.data.commit.files,'file')}). It is not on GitHub yet: Push is a separate button below.`)}
   else{say(errorText(res));if(res.data&&res.data.proposal){applyProposal(res.data.proposal)}} // a changed tree comes back as the fresh list; nothing was committed
+  await load(true);if(onChange)onChange()}
+ async function doCommitAndPush(){
+  const picked=pickedPaths(p,unticked);if(commitAndPushBlock(p,push,picked.length,message,working,pushing))return;
+  working=true;pushedNote='';say('');good('');updateActions();
+  const r=await runCommitAndPush({
+   proposal:p,push,files:picked,message,
+   onCommitOk:()=>{draft.set('');dirty=false;message='';ta.value=''},
+   onStep:(_step,_commit,ps)=>{if(!alive)return;push=ps;working=false;pushing=true;drawPush();updateActions()}
+  });
+  working=false;pushing=false;if(!alive)return;
+  if(r.ok){
+   pushedNote=`Sent ${plural(r.pushed.count,'commit')} to GitHub (${r.pushed.branch}).`;
+   good(`Committed as ${r.commit.id} (${plural(r.commit.files,'file')}) and sent ${plural(r.pushed.count,'commit')} to GitHub (${r.pushed.branch}).`)}
+  else{
+   say(r.error);
+   if(r.proposal)applyProposal(r.proposal)}
   await load(true);if(onChange)onChange()}
  async function doUndo(){
   if(working)return;working=true;say('');good('');
@@ -126,12 +204,22 @@ export function mountCommit(view,{onChange}={}){
   if(!p.files.length)box.append(h('p',{class:'small dim'},'Nothing has changed.'));
   for(const g of p.files){
    box.append(h('h3',{class:'cm-group'},`${g.group} · ${g.items.length}`));
-   const ul=h('ul',{class:'cm-files'});
-   for(const i of g.items){
+   const {releases,plain}=groupReleases(g.items,p.currentVersion);
+   const fileLi=i=>{
     const cb=h('input',{type:'checkbox',checked:!unticked.has(i.path),id:'cm-'+i.path});
-    cb.addEventListener('change',()=>{if(cb.checked)unticked.delete(i.path);else unticked.add(i.path);updateActions()});
-    ul.append(h('li',{},h('label',{},cb,h('span',{class:'cm-kind k-'+i.kind},KIND[i.kind]||i.kind),h('code',{class:'cm-path'},i.path),i.from?h('span',{class:'small dim'},` (was ${i.from})`):null),...i.warn.map(w=>h('span',{class:'small warn cm-warn'},w))))}
-   box.append(ul)}
+    cb.addEventListener('change',()=>{if(cb.checked)unticked.delete(i.path);else unticked.add(i.path);drawList();updateActions()});
+    return h('li',{},h('label',{},cb,h('span',{class:'cm-kind k-'+i.kind},KIND[i.kind]||i.kind),h('code',{class:'cm-path'},i.path),i.from?h('span',{class:'small dim'},` (was ${i.from})`):null),...i.warn.map(w=>h('span',{class:'small warn cm-warn'},w)))};
+   for(const rel of releases){
+    const relPaths=rel.items.map(i=>i.path),tickedN=relPaths.filter(x=>!unticked.has(x)).length;
+    const rcb=h('input',{type:'checkbox',checked:tickedN===rel.items.length});
+    rcb.indeterminate=tickedN>0&&tickedN<rel.items.length;
+    rcb.addEventListener('click',e=>e.stopPropagation());
+    rcb.addEventListener('change',()=>{setPathsTicked(unticked,relPaths,rcb.checked);drawList();updateActions()});
+    const det=h('details',{class:'fold cm-rel-fold',open:openReleases.has(rel.version)||undefined});
+    det.addEventListener('toggle',()=>{if(det.open)openReleases.add(rel.version);else openReleases.delete(rel.version)});
+    det.append(h('summary',{class:'cm-rel-row'},rcb,h('span',{class:'cm-rel-title'},rel.label),h('span',{class:'small dim cm-rel-meta'},`${tickedN} of ${rel.items.length} ticked`)),h('ul',{class:'cm-files'},rel.items.map(fileLi)));
+    box.append(det)}
+   if(plain.length)box.append(h('ul',{class:'cm-files'},plain.map(fileLi)))}
   listBox.append(box);
   if(p.leftOut.length){
    listBox.append(h('div',{class:'box'},h('div',{class:'label'},`Left out, never committed (${p.leftOut.length})`),
