@@ -41,7 +41,7 @@ import {createAudio,engineVoice} from './audio.js';
 import {createSmoke,exhaustRate,START_PUFFS} from './smoke.js';
 import {LOG_HOME,LOG_GROUND,LOG_HAND,LOG_POLE,carryEffects,bendLean,bendDrop,bendAmount,BEND_TIME,BEND_RELEASE,PLANK_HANDS,PLANK_STACK,PLANK_POLES,poseBlend,plankBox,quarterOf,shoulderLog,putDownLog,feedLog,takePlanks,putDownPlanks,pickUpPlanks,putDownCrate,pickUpCrate,CRATE_SIZE,MAX_CRATE_DROPS,putDownSlab,pickUpSlab,MAX_SLAB_DROPS} from './carry.js';
 import {chopTree,felledTrees,plotAt,expireLogs,regrowTrees,felledStages,CHOP_RANGE,clearStump,plantSapling,buckTrunk,buckTool,BUCK_RANGE,MAX_LOGS} from './grid.js';
-import {levelOf,swingTime,perkText} from './skills.js';
+import {levelOf,swingTime,perkText as perkTextBase} from './skills.js';const perkText=lv=>{audio.sweep('level-up');return perkTextBase(lv)}; // SND-hooks: perkText is only asked for when a level-up message is built
 import {isAxe,isSaw,hitsFor,bestAxe,buckHitsFor,buckTimeSec} from './tools.js';import {GLTFLoader} from './vendor/GLTFLoader.js';import {setTimberParts} from './cargo-view.js';// T-E: bucking and the timber models (trunk, two logs, slab); quest rework: slabs are delivered (forest.js deliverSlabs), there is no cash sale
 import {createMinimap} from './minimap.js';
 import {createHeldItem,disposeHeldItem} from './item-models.js';
@@ -372,7 +372,7 @@ function zoneNote(){
 }
 function loadAtZone(){
  const co=GameState.progress.companies?.ridgeline,held=palletsOf(co).find(q=>q.at.fork&&q.order),k=held&&ridgelineTickets().find(t=>t.id===held.order);if(!k)return;
- if(k.kind==='pickup'){const r=applyCompany({type:'ship',id:k.id,zone:true});if(r.error){toast(r.error);return}dockGoing=k.planks;notifyPhone('jobs',r.message+' Paid '+money(PIECE_PAY.orders)+'.')}
+ if(k.kind==='pickup'){const r=applyCompany({type:'ship',id:k.id,zone:true});if(r.error){toast(r.error);return}dockGoing=k.planks;audio.sweep('coins-pay');notifyPhone('jobs',r.message+' Paid '+money(PIECE_PAY.orders)+'.')}
  else loadDelivery(k.id);
  syncWarehouse();updateFork();persist();
 }
@@ -385,7 +385,7 @@ function deliverOrder(id){const k=ridgelineTickets().find(t=>t.id===id),d=k&&dro
  const bed=driving.cargoOf(k.vehicle),tagged=removeOrderPlanks(bed,k.id),off=tagged.count>=k.planks?{cargo:tagged.cargo}:removePlanks(bed,k.planks); // a save from before the tag has planks without it
  if(off.error){toast(off.error);return}
  const moved=Math.max(0,Math.min(k.planks,countOf(bed,'planks')-countOf(off.cargo,'planks'))),pay=plankPay(GameState.progress,moved); // P-D: pay only for the planks that really came off the bed
- const r=applyCompany({type:'deliver',id,dest:k.dest,payCents:pay.payCents});if(r.error){toast(r.error);return}driving.setCargo(k.vehicle,off.cargo);persist();notifyPhone('jobs',r.message+' Paid '+money(pay.payCents)+' ('+moved+' planks at '+money(pay.unitPayCents)+').')}
+ const r=applyCompany({type:'deliver',id,dest:k.dest,payCents:pay.payCents});if(r.error){toast(r.error);return}driving.setCargo(k.vehicle,off.cargo);persist();audio.sweep('coins-pay');notifyPhone('jobs',r.message+' Paid '+money(pay.payCents)+' ('+moved+' planks at '+money(pay.unitPayCents)+').')}
 function stackAtRack(slot){const r=stackPlanks(GameState.progress,slot);if(r.error){toast(r.error);return}GameState.progress=r.state;persist();syncWarehouse();toast(r.message)}
 function takeFromPile(){const r=takeLogFromPile(GameState.progress,me.position);if(r.error){toast(r.error);return}GameState.progress=r.state;stowTool();persist();syncMarks();toast(r.message)}
 function deliverByHand(){const c=GameState.progress.carry;if(c?.kind!=='planks')return;const r=deliverPlanks({...GameState.progress,carry:null},c.count);if(r.error){toast(r.error);return}GameState.progress=r.state;persist();syncMarks();toast(r.message)}
@@ -544,7 +544,7 @@ function talkCtx(t){return talkContext(GameState.progress,t.who,{day:Math.floor(
 function talkChip(who){const p=GameState.progress,n=p.npcs?.[who];let tier='stranger';try{tier=tierFor(p.standing,who)}catch(_){}return tier[0].toUpperCase()+tier.slice(1)+(n?' · '+moodWord(n.mood):'')}
 function talkEffects(who,effects){const p=GameState.progress,d=npcDay(),npcs={...(p.npcs||{})};let npc=npcs[who],standing=p.standing;if(!npc)return;for(const e of effects){if(e.kind==='meet')npc=npcMeet(npc,d);else if(e.kind==='standing')standing=gainStanding(standing,who,e.amount,d);else if(e.kind==='mood')npc={...npc,mood:Math.max(0,Math.min(100,npc.mood+e.amount))};else if(e.kind==='topic')npc=npcTalk(npc,e.id,d)}npcs[who]=npc;GameState.progress={...p,npcs,standing}}
 // The acts: a cast act name -> the game's transaction. Each does the transaction plus persist() and returns {text} | {error} | {handoff}; none touches #dialog, modal, clearWorldPanel or look.capture (review B1).
-function collectAct(id){const r=collectOwed(GameState.progress,id);if(r.error)return {error:r.error};GameState.progress=r.state;persist();return {text:'Here you go: '+r.handed.map(t=>itemById(t)?.name||t).join(', ')+'.'}}
+function collectAct(id){const r=collectOwed(GameState.progress,id);if(r.error)return {error:r.error};GameState.progress=r.state;persist();audio.sweep('coins-pay');return {text:'Here you go: '+r.handed.map(t=>itemById(t)?.name||t).join(', ')+'.'}}
 function skipAct(){const s=GameState.progress.starter;if(!(s&&!s.done&&s.step<=1))return {error:'The introduction has already moved on.'};GameState.progress={...GameState.progress,starter:skipStarter()};persist();return {text:'Introduction skipped.'}}
 const TALK_ACTS={openStore:()=>atMarketCounter()?{handoff:()=>openStore()}:{error:'The market is closed. Return between 7 AM and 10 PM.'},gigBoard:()=>({handoff:()=>marketWork()}),shelves:()=>{const l=shelfLines();return {text:l.length?l:['The shelves are being restocked.']}},
  'hal.groceries':()=>halAct('groceries'),'hal.buy':()=>halAct('buy'),'walt.hire':t=>t.office?hireAct(t.office):{error:'Walt hires at the Ridgeline office.'},'walt.promote':t=>t.office?promoteAct(t.office):{error:'Ask Walt at the Ridgeline office.'},'walt.collect':t=>t.office?collectAct(t.office.employer):{error:'Ask Walt at the Ridgeline office.'},
@@ -604,7 +604,7 @@ function needDrop(){const a=GameState.progress.gigs?.active,M=needDest(a),f=a?.t
  if(!shopOpen(destShopId(a),GameState.progress.routine)){toast(destShopId(a)==='market'?'The market has closed for today.':'The '+destShopId(a)+' has closed for today.');return}
  if(!f||Math.hypot(f.state.x-M.x,f.state.z-M.z)>=MARKET_REACH){toast('Bring the truck to '+(destShopId(a)==='market'?'the market':'the '+destShopId(a))+' first.');return}
  const r=deliverNeedCrates(GameState.progress,{});if(r.error){toast(r.error);return}const label=(WORLD_GOODS[a.needGood]?.label||'goods').toLowerCase();GameState.progress=r.state;syncNeedCargo();persist();flashDone();if(a.needGood==='eggs')pushRecent('egg-run');
- toast(`Delivered ${r.units} ${WORLD_GOODS[a.needGood]?.unit||'unit'} of ${label} · ${money(r.paid)} earned`+(r.tooFast?' (handling only: too fast)':''));notifyPhone('gigs',r.needFilled?`${keeperName(a)}: the ${label} shelf is stocked again. Thank you.`:`${keeperName(a)}: thanks for the ${label}.`)}function storyCandidates(add){const p=GameState.progress,s=p.starter;if(!s||inside||shop)return;needCandidates(add,p,s);
+ audio.sweep('coins-pay');toast(`Delivered ${r.units} ${WORLD_GOODS[a.needGood]?.unit||'unit'} of ${label} · ${money(r.paid)} earned`+(r.tooFast?' (handling only: too fast)':''));notifyPhone('gigs',r.needFilled?`${keeperName(a)}: the ${label} shelf is stocked again. Thank you.`:`${keeperName(a)}: thanks for the ${label}.`)}function storyCandidates(add){const p=GameState.progress,s=p.starter;if(!s||inside||shop)return;needCandidates(add,p,s);
  if(hal.visible&&halHere(p))add('hal',{x:hal.x,z:hal.z},()=>entityPoint(hal.group),'Talk to Hal',()=>{if(!talkWith('hal',hal.group,'farm'))talkHal()},2.4);
  if(s.done||s.step!==4)return;const C=STORY_PLACES.crates,M=STORY_PLACES.market;
  if(!s.loaded)add('story-load',C,()=>new THREE.Vector3(C.x,1.3,C.z),'Load the egg crates onto the truck',()=>{if(!loanNear(C,CRATE_REACH)){toast('Park the truck beside the crates first.');return}{const lu=GameState.progress.starter?.loanUid,bed=lu?driving.cargoOf(lu):null;if(!needCratesFit(bed)){toast(NEED_BED_BUSY);return}}storyKnocks=0;storyEvent('loaded')},2.6);
@@ -623,16 +623,16 @@ function showDialog(kicker,title,text,tag,action,label){
  $('extraAction').hidden=true;modal=true;look.release();keys.clear();$('dialog').hidden=false;$('dialogKicker').textContent=kicker;$('dialogTitle').textContent=title;$('dialogText').textContent=text;$('dialogTag').textContent=tag;
  $('jobAction').hidden=!action;$('jobAction').textContent=label||'';$('jobAction').onclick=action||null;$('closeDialog').textContent=action?'Not now':'Keep exploring';
 }
-function jobAct(action){if(action==='pickup'&&!shopOpen('market',GameState.progress.routine))return {error:'The market has closed for today.'};const result=transactJob(GameState.progress,action,me.position,{shop});if(result.error)return {error:result.error};GameState.progress=result.state;persist();if(action==='deliver'){if(storyEvent('delivered'))pushRecent('delivered:sophie');flashDone()}return {result,text:result.paid?money(result.paid)+' earned · delivery completed':'Order collected. Follow the marker to your customer.'}}
+function jobAct(action){if(action==='pickup'&&!shopOpen('market',GameState.progress.routine))return {error:'The market has closed for today.'};const result=transactJob(GameState.progress,action,me.position,{shop});if(result.error)return {error:result.error};GameState.progress=result.state;persist();if(action==='deliver'){if(storyEvent('delivered'))pushRecent('delivered:sophie');flashDone();if(result.paid)audio.sweep('coins-pay')}return {result,text:result.paid?money(result.paid)+' earned · delivery completed':'Order collected. Follow the marker to your customer.'}}
 function finishJob(action){
  const r=jobAct(action);if(r.error){toast(r.error);return}const result=r.result;
  $('dialog').hidden=true;clearWorldPanel();modal=false;keys.clear();
  // C6: the transaction, the story beat and flashDone are in jobAct (shared with the talk acts)
  toast(result.paid?`${money(result.paid)} earned · delivery completed`:'Order collected. Follow the marker to your customer.');
 }
-function enterHome(target=studioHome){target.room.frontDoor?.snap(false);  if(target.kind==='studio'&&!GameState.progress.housing.rented)return;persist();home=target;home.room.setFloor?.(0);inside=true;if(home.kind==='house')zoom=zoomTarget=9;home.room.scene.add(player);setMePosition(home.ENTRY.x,.02,home.ENTRY.z);yaw=0;pitch=home.kind==='house'?.85:.4;camera.position.set(home.ENTRY.x,3,home.ENTRY.z+5.5);$('dialog').hidden=true;clearWorldPanel();modal=false;keys.clear();
+function enterHome(target=studioHome){target.room.frontDoor?.snap(false);  if(target.kind==='studio'&&!GameState.progress.housing.rented)return;persist();audio.sweep('door-close');home=target;home.room.setFloor?.(0);inside=true;if(home.kind==='house')zoom=zoomTarget=9;home.room.scene.add(player);setMePosition(home.ENTRY.x,.02,home.ENTRY.z);yaw=0;pitch=home.kind==='house'?.85:.4;camera.position.set(home.ENTRY.x,3,home.ENTRY.z+5.5);$('dialog').hidden=true;clearWorldPanel();modal=false;keys.clear();
 }
-let leaveAfter=0;function leaveHomeSwing(){const d=home.room.frontDoor;if(!d||leaveAfter>0){if(!d)leaveHome();return}d.setOpen(true);leaveAfter=.5} // the door swings open, then you step outside (updateDoors)
+let leaveAfter=0;function leaveHomeSwing(){const d=home.room.frontDoor;if(!d||leaveAfter>0){if(!d)leaveHome();return}d.setOpen(true);leaveAfter=.5;audio.sweep('door-open')} // the door swings open, then you step outside (updateDoors)
 function leaveHome(){home.room.frontDoor?.snap(false);leaveAfter=0;doorCooldown=2;look.resetMotion();inside=false;scene.add(player);const out=home.kind==='studio'?{x:STUDIO.x,z:STUDIO.z,yaw:0,y:.165}:{...home.outside,y:standHeight(home.outside.x,home.outside.z)};setMePosition(out.x,out.y,out.z);yaw=out.yaw;camera.position.set(out.x+Math.sin(out.yaw)*5,3,out.z+Math.cos(out.yaw)*5);home.room.setFloor?.(0);if(home.kind==='house')zoom=zoomTarget=7;home=studioHome;persist();keys.clear()}
  function enterHouse(id){enterHome(houseHome(id))}
  function changeFloor(n){const st=home.STAIRS;if(!st)return;home.room.setFloor(n);setMePosition(st.x,n*home.room.FLOOR_HEIGHT+.02,n?st.topZ+.1:st.footZ);look.resetMotion();keys.clear()}
@@ -640,8 +640,8 @@ function changeHousing(action){
  if(action==='rest'){startSleep();return}
  const result=housingTransaction(GameState.progress,action,{atEntrance:!inside&&!shop&&nearby(me.position,STUDIO),atBed:inside&&!shop&&Math.hypot(me.position.x-home.BED.x,me.position.z-home.BED.z)<1.4});
  if(result.error){toast(result.error);return}GameState.progress=result.state;persist();$('dialog').hidden=true;clearWorldPanel();modal=false;keys.clear();
- if(action==='rent'){toast('Keys received · Studio 2B is yours to rent.');enterHome();storyEvent('rented')}
- else toast('Bills paid.');
+ if(action==='rent'){audio.sweep('cash-register');toast('Keys received · Studio 2B is yours to rent.');enterHome();storyEvent('rented')}
+ else{audio.sweep('cash-register');toast('Bills paid.')}
 }
 function showBills(){const h=GameState.progress.housing,due=totalDue(h);showDialog('HOME / WEEK '+weekNumber(h.day),'Your weekly bills.',h.rented?'Unpaid rent: '+money(h.rentDue)+'. Unpaid utilities: '+money(h.utilitiesDue)+'. Next bill: '+weekday(h.nextBillDay)+' (Week '+weekNumber(h.nextBillDay)+'), in '+dueIn(h)+' days. Weekly rent is $60; estimated utilities are '+money(estimatedUtilities(h))+' ($7 base for the older studio, plus $0.15 per home-cooked meal). No offline charges.':'Visit 18 Oak Street. Move-in is $90: a $30 deposit and $60 for your first week. Utilities start at $7 per week.','Total due '+money(due)+' · cash after payment '+money(GameState.progress.cash-due),due?()=>changeHousing('pay'):null,due?'Pay bills · '+money(due):'')}
 $('billsButton').onclick=()=>{if(active&&!creatorOpen){phone?.close();showBills()}}; // Home & bills lives on the phone's Bank screen
@@ -651,12 +651,12 @@ function enterShop(kind,entry=SHOP_ENTRY){if(!shopOpen(kind,GameState.progress.r
 function enterOffice(o){persist();shop=o.key;if(o.kind==='warehouse'){syncWarehouse();loadForklift(o.room);updateFork()}o.room.exitDoor.manual&&o.room.exitDoor.snap(false);o.room.scene.visible=true;o.room.scene.add(player);{const en=o.interior.entry||SHOP_ENTRY;setMePosition(en.x,.02,en.z);yaw=0;pitch=.4;camera.position.set(o.interior.origin.x,3,o.interior.origin.z+en.z+5.1)}$('dialog').hidden=true;clearWorldPanel();keys.clear()}
 function leaveOffice(){const o=officeByKey(shop);doorCooldown=2;look.resetMotion();busy=null;for(const mesh of o.room.occluders){mesh.material.opacity=1;mesh.material.depthWrite=true}o.room.scene.visible=false;shop=null;scene.add(player);setMePosition(o.door.out.x,standHeight(o.door.out.x,o.door.out.z),o.door.out.z);me.rotation.y=o.door.yaw;yaw=0;pitch=.4;camera.position.set(o.door.out.x+1,3,o.door.out.z+7);persist();keys.clear()}
 function leaveShop(exitX=0){if(officeByKey(shop)){leaveOffice();return}doorCooldown=2;look.resetMotion();busy=null;const room=shops[shop];roomDoorShown(room,false);for(const mesh of [...room.occluders,...shopShells[shop]]){mesh.material.opacity=1;mesh.material.depthWrite=true}const door=SHOPS[shop],dw=MAP.shops[shop].doorway;shop=null;scene.add(player);setMePosition(door.x+Math.max(-dw.exit.clamp,Math.min(dw.exit.clamp,exitX)),.165,dw.exit.z);camera.position.set(door.x,3,door.z+6);persist();keys.clear()}
-function lifeAct(action){const place=shop||(inside?'home':null);const atCounter=shop&&Math.hypot(me.position.x-COUNTER.x,me.position.z-COUNTER.z)<1.6;const atKitchen=inside&&(home.room.floor||0)===0&&Math.hypot(me.position.x-home.KITCHEN.x,me.position.z-home.KITCHEN.z)<1.5;if(shop&&!shopOpen(shop,GameState.progress.routine))return {error:'The shop has closed. Please return tomorrow.'};if(!atCounter&&!atKitchen)return {error:'Move closer to the counter.'};const r=lifeTransaction(GameState.progress,action,place);if(r.error)return {error:r.error};GameState.progress=r.state;if(action==='cook'&&home.kind==='studio'&&GameState.progress.housing.rented)GameState.progress.housing.utilityUsage+=15;persist();if(action==='meal')storyEvent('ate');return {text:r.message}}
+function lifeAct(action){const place=shop||(inside?'home':null);const atCounter=shop&&Math.hypot(me.position.x-COUNTER.x,me.position.z-COUNTER.z)<1.6;const atKitchen=inside&&(home.room.floor||0)===0&&Math.hypot(me.position.x-home.KITCHEN.x,me.position.z-home.KITCHEN.z)<1.5;if(shop&&!shopOpen(shop,GameState.progress.routine))return {error:'The shop has closed. Please return tomorrow.'};if(!atCounter&&!atKitchen)return {error:'Move closer to the counter.'};const r=lifeTransaction(GameState.progress,action,place);if(r.error)return {error:r.error};GameState.progress=r.state;if(action==='cook'&&home.kind==='studio'&&GameState.progress.housing.rented)GameState.progress.housing.utilityUsage+=15;persist();if(action==='meal'){storyEvent('ate');audio.sweep('eat-bite');audio.sweep('cash-register')}return {text:r.message}}
 function useLife(action){const r=lifeAct(action);if(r.error){toast(r.error);return}$('dialog').hidden=true;clearWorldPanel();modal=false;keys.clear();toast(r.text)}
 
 function nearestPerson(){return pedestrians.people.find(p=>p.group.visible&&Math.hypot(me.position.x-p.group.position.x,me.position.z-p.group.position.z)<1.5)}
 function cafeAct(action,drink){const r=cafeTransaction(GameState.progress,action,me.position,shop,drink);if(r.error)return {error:r.error};GameState.progress=r.state;persist();if(action==='clockout')pushRecent('cafe-shift');return {text:r.message}}
-function commitCafe(action,drink){const r=cafeAct(action,drink);if(r.error){toast(r.error);return false}$('dialog').hidden=true;clearWorldPanel();modal=false;keys.clear();toast(r.text);if(['hire','clockin','order','clockout'].includes(action))look.capture();return true}
+function commitCafe(action,drink){const r=cafeAct(action,drink);if(r.error){toast(r.error);return false}$('dialog').hidden=true;clearWorldPanel();modal=false;keys.clear();toast(r.text);if(action==='order')audio.sweep('cash-register');if(action==='clockout')audio.sweep('coins-pay');if(['hire','clockin','order','clockout'].includes(action))look.capture();return true}
 function beginCafe(action,drink){if(['brew','serve','clean'].includes(action)&&!canAct('work')){toast(refusal());return}const r=cafeTransaction(GameState.progress,action,me.position,shop,drink);if(r.error){toast(r.error);return}if(['brew','serve','clean'].includes(action)){busy={action,drink,elapsed:0,duration:action==='brew'?3:action==='clean'?2.5:1.2};$('dialog').hidden=true;clearWorldPanel();modal=false;keys.clear();look.capture()}else commitCafe(action,drink)}
 function worldPoint(point,parent=player.parent){return parent.localToWorld(new THREE.Vector3(point.x,point.y??1.2,point.z))}
 function entityPoint(actor){const p=actor.getWorldPosition(new THREE.Vector3());p.y+=1.9;return p}
@@ -680,7 +680,7 @@ function interview(o){const r=hireAct(o);if(r.error){toast(r.error);return}speak
 function promoteAct(o){const id=o.employer,p=GameState.progress,n=nextRank(p,id);
  if(!n||n.top)return {text:'You’re as high as I can put you.'};
  if(!n.ready){const need=[];if(!n.met.level)need.push('level '+n.needs.level+' (you’re '+n.have.level+')');if(!n.met.shifts)need.push(n.needs.shifts+' shifts worked (you’ve done '+n.have.shifts+')');if(!n.met.rep)need.push('a reputation of '+n.needs.rep+' (yours is '+n.have.rep+')');return {text:'Not yet. To be a '+n.rank.name+' I want '+need.join(', ')+'.'}}
- const r=promote(GameState.progress,id);if(r.error)return {error:r.error};GameState.progress=r.state;persist();toast('Promoted · '+r.rank.name);pushRecent('promoted');
+ const r=promote(GameState.progress,id);if(r.error)return {error:r.error};GameState.progress=r.state;persist();audio.sweep('level-up');toast('Promoted · '+r.rank.name);pushRecent('promoted');
  return {text:'You’ve earned it. You’re a '+r.rank.name+' now: '+money(r.rank.wage)+' an hour'+(r.handed.length?', and this is for you: '+r.handed.map(t=>itemById(t)?.name||t).join(', ')+'.':'.')+(r.owed.length?' Your bag is full, so come back for the '+r.owed.map(t=>itemById(t)?.name||t).join(', ')+'.':'')}}
 function promotionTalk(o){const r=promoteAct(o);if(r.error){toast(r.error);return}speak(o.room.clerk.group,ownerOf(GameState.progress,o.employer).name,r.text)}
 // The company store (shelf at the back right): what only the company sells, with the price and who it is sold to. Up to three things on offer at once (the dialog's three buttons).
@@ -716,7 +716,7 @@ function showCafe(){const c=GameState.progress.cafe,o=ORDERS[c.customer];if(c.st
  if(c.stage==='brew'){station({x:-1.25,y:1.5,z:-3.2},'Coffee machine','Ticket: '+o.drink,[{label:'Make espresso',run:()=>beginCafe('brew','Espresso')},{label:'Make latte',run:()=>beginCafe('brew','Latte')}]);return}beginCafe(c.stage);
 }
 // Hinged and double exit doors are worked by hand: E opens or shuts them, and you walk through while they are open (the sliding market door opens by itself).
-function exitDoorOffer(add){const d=shops[shop]?.exitDoor;if(!d?.manual)return;const spec=(MAP.shops[shop]||officeByKey(shop)).interior.exitDoor;add('exit-door',{x:0,z:spec.z-1.1},()=>worldPoint({x:0,y:1.7,z:spec.z-.4}),d.isOpen?'Close the doors':'Open the doors',()=>{d.toggle();audio.click(listenerAt(),listenerAt())},1.9)}
+function exitDoorOffer(add){const d=shops[shop]?.exitDoor;if(!d?.manual)return;const spec=(MAP.shops[shop]||officeByKey(shop)).interior.exitDoor;add('exit-door',{x:0,z:spec.z-1.1},()=>worldPoint({x:0,y:1.7,z:spec.z-.4}),d.isOpen?'Close the doors':'Open the doors',()=>{audio.sweep(d.toggle()?'door-open':'door-close')},1.9)}
 function candidates(){const all=[],add=(id,point,anchor,label,run,range=1.5,key)=>all.push({id,point,anchor,label,run,range,key}); // key: the key shown on the prompt (E when missing; '' shows none)
  if(driving.active){add('exit-vehicle',{x:me.position.x,z:me.position.z},()=>new THREE.Vector3(me.position.x,me.position.y+2.4,me.position.z),driving.speed<1?'Get out':'Stop to get out',exitVehicle,9);return all} // driving: E gets you out (and nothing else is on offer)
  if(!shop&&fork.where==='outside'){if(fork.on){forkOffers(add);return all}if(forkView)add('wh-fork-out',{x:fork.state.x,z:fork.state.z},()=>worldPoint({x:fork.state.x,y:1.9,z:fork.state.z}),'Drive the forklift',getOnFork,2.7)} // the forklift left outside is driven from there
@@ -747,10 +747,10 @@ function candidates(){const all=[],add=(id,point,anchor,label,run,range=1.5,key)
  const gig=GameState.progress.activeJob;{const dr=GameState.progress.gigs?.active?.drop;if(dr&&Math.hypot(dr.x-me.position.x,dr.z-me.position.z)<2.6)add('parcel-pick',{x:dr.x,z:dr.z},()=>new THREE.Vector3(dr.x,.6+heightAt(dr.x,dr.z)+(world.floorAt(dr.x,dr.z)??0),dr.z),'Pick up the parcel',pickUpParcel,1.8)}
  {const ga=GameState.progress.gigs?.active;if(ga&&gigPickupHere(GameState.progress,me.position,currentRoom()))add('gig-pickup',{x:ga.origin.x,z:ga.origin.z},()=>new THREE.Vector3(ga.origin.x,.6+heightAt(ga.origin.x,ga.origin.z)+(world.floorAt(ga.origin.x,ga.origin.z)??0),ga.origin.z),'Pick up the parcel',pickUpGigAtOrigin,2)} // G-D: the box waits at the pickup point until E
  if(gig?.stage==='return'&&gig.dropped)add('phone-gig-wait',gig.returnLocation,()=>new THREE.Vector3(gig.returnLocation.x,1.4,gig.returnLocation.z),'Pick up the parcel first',()=>toast('Your parcel is on the ground. Pick it up first.'));else if(gig?.stage==='return')add('phone-gig',gig.returnLocation,()=>new THREE.Vector3(gig.returnLocation.x,1.4,gig.returnLocation.z),'Report back · collect '+money(gig.reward),()=>{
-   if(parcelAwayNow()){toast(PARCEL_ON_BED);return}const dd=gigDoor(GameState.progress);if(dd){showWorld(()=>new THREE.Vector3(gig.returnLocation.x,1.4,gig.returnLocation.z),dd.name,dd.text,dd.choices.map(c=>({label:c.label,run:()=>{closeWorldDialog();const r=completeContract(GameState.progress,me.position,'street',c.tip);if(r.error){toast(r.error);return}GameState.progress=r.state;settleParcel();persist();storyEvent('gig-done');flashDone();toast('Gig complete, '+money(r.paid)+' earned'+(c.tip?' (tip '+money(c.tip)+')':''))}})));return}const result=completeContract(GameState.progress,me.position);
+   if(parcelAwayNow()){toast(PARCEL_ON_BED);return}const dd=gigDoor(GameState.progress);if(dd){showWorld(()=>new THREE.Vector3(gig.returnLocation.x,1.4,gig.returnLocation.z),dd.name,dd.text,dd.choices.map(c=>({label:c.label,run:()=>{closeWorldDialog();const r=completeContract(GameState.progress,me.position,'street',c.tip);if(r.error){toast(r.error);return}GameState.progress=r.state;settleParcel();persist();storyEvent('gig-done');flashDone();audio.sweep('coins-pay');toast('Gig complete, '+money(r.paid)+' earned'+(c.tip?' (tip '+money(c.tip)+')':''))}})));return}const result=completeContract(GameState.progress,me.position);
    if(result.error){toast(result.error);return}
    if(result.failed){GameState.progress=result.state;settleParcel();persist();toast(result.closed?'That job was already taken care of.':'The gig could not be completed.');return}
-    GameState.progress=result.state;settleParcel();persist();storyEvent('gig-done');flashDone();toast('Gig complete · '+money(result.paid)+' earned');
+    GameState.progress=result.state;settleParcel();persist();storyEvent('gig-done');flashDone();audio.sweep('coins-pay');toast('Gig complete · '+money(result.paid)+' earned');
  },1.35);
 
  add('home',{x:STUDIO.x,z:-8.1},()=>new THREE.Vector3(1,1.5,-8.15),GameState.progress.housing.rented?'Enter your studio':'View studio listing',()=>{if(GameState.progress.housing.rented)enterHome();else showWorld(()=>new THREE.Vector3(1,1.6,-8.15),'Studio 2B · To let','Furnished studio. $90 move-in includes a $30 deposit and the first week’s $60 rent. Utilities start at $7 per week.',[{label:'Rent studio · $90',run:()=>changeHousing('rent')}])},2.8);
@@ -872,10 +872,10 @@ function takeNozzle(pump){
  if(inside||shop||driving.active||actionBusy()||putting)return;
  if(GameState.progress.carry||parcelHeld(GameState.progress)){toast(GameState.progress.carry?'Your hands are full. Put it down first (X).':PARCEL_HANDS);return}
  if(fuel.held){toast('You already have a nozzle out.');return}
- stowTool();fuel.take(pump);fillBlocked=false;fillSale={mgal:0,cents:0};fuel.setReadout(pump,fillSale);audio.click(pump.use,listenerAt());
+ stowTool();fuel.take(pump);fillBlocked=false;fillSale={mgal:0,cents:0};fuel.setReadout(pump,fillSale);audio.sweep('fuel-nozzle',pump.use,me.position);
  toast(`${fuelTitle(pump.fuel)} nozzle in your hand. Go to the glowing tank cap and hold F to fill.`);
 }
-function hangNozzle(quiet=false){const p=fuel.putBack();fillAcc=0;fillSale=null;if(p){audio.click(p.use,listenerAt());if(!quiet){toast('Nozzle back in its holster.');persist()}}return p}
+function hangNozzle(quiet=false){const p=fuel.putBack();fillAcc=0;fillSale=null;if(p){audio.sweep('fuel-nozzle',p.use,me.position);if(!quiet){toast('Nozzle back in its holster.');persist()}}return p}
 // The hose is at most HOSE_MAX_M long: past that the nozzle goes back by itself. Inside a building or in a vehicle it always does. The tank caps glow while a nozzle is in your hand.
 function fuelHose(){
  driving.showFillers(!!fuel.held&&!inside&&!shop&&!driving.active,fuel.held?fuel.held.fuel:null);
@@ -948,7 +948,7 @@ function enterVehicle(id,seat='driver',go=false){
  if(driving.active||inside||shop||consuming||putting||actionBusy())return;
  {const why=mountError(GameState.progress,driving.byId.get(id)?.spec.model,driving.cargoOf(id));if(why){toast(why);return}}let stowParcel=null;{const pc=GameState.progress.carry,model=driving.byId.get(id)?.spec.model;if(pc?.kind==='parcel'&&hasBed(model)){const r=loadCarry(pc,driving.cargoOf(id),model);if(r.error){toast(RACK_BUSY);return}stowParcel=r.cargo}} // ATV-STOW: a held parcel is stowed on the ATV's rack (no other vehicle has one yet)
  if(driving.byId.get(id)?.display){toast('It is not yours. Buy it at the dealership lot or order it on your phone.');return}
- if(!go&&driving.doorThen(id,seat,()=>enterVehicle(id,seat,true)))return;const stowKg=stowKgFor(driving.byId.get(id)?.spec.model);if(!driving.enter(id,seat,stowKg))return;if(stowParcel){driving.setCargo(id,stowParcel);GameState.progress={...GameState.progress,carry:null};parcelStowedOn=id}audio.prepare(driving.active.cls.id);fuel.putBack();if((driving.active.fuelMgal>0||!driving.active.spec.fuel)&&driving.active.cond>0){audio.ignition(me.position,listenerAt(),{tier:driving.active.cls.tier,seconds:driving.damageOf().crank});const tip=driving.exhaust();if(tip)smoke.burst(tip,START_PUFFS[driving.active.cls.tier]??6)}
+ if(!go)audio.sweep('car-door-open',driving.byId.get(id)?.state,me.position);if(!go&&driving.doorThen(id,seat,()=>enterVehicle(id,seat,true)))return;const stowKg=stowKgFor(driving.byId.get(id)?.spec.model);if(!driving.enter(id,seat,stowKg))return;if(stowParcel){driving.setCargo(id,stowParcel);GameState.progress={...GameState.progress,carry:null};parcelStowedOn=id}audio.prepare(driving.active.cls.id);audio.sweep('car-door-close',driving.active.state,me.position);fuel.putBack();if((driving.active.fuelMgal>0||!driving.active.spec.fuel)&&driving.active.cond>0){audio.ignition(me.position,listenerAt(),{tier:driving.active.cls.tier,seconds:driving.damageOf().crank});const tip=driving.exhaust();if(tip)smoke.burst(tip,START_PUFFS[driving.active.cls.tier]??6)}
  const at=driving.seat();me.position.x=at.x;me.position.z=at.z;me.rotation.y=driving.yaw;keys.clear();look.resetMotion();
  yaw=driving.yaw+Math.PI;pitch=driving.cameraPitch();zoom=zoomTarget=driving.cameraZoom();driveIdle=9;persist();
  let more='';if(stowKg>0||stowParcel)more=' · '+STOW_TOAST;if(!heavyTold&&usesLoadDrag(driving.active.spec.model)&&isHeavy(stowKg+cargoMassKg(driving.cargoOf(id)))){heavyTold=true;more+=' · '+HEAVY_TEXT} // ATV-STOW: load drag toast, once per session
@@ -991,7 +991,7 @@ function drinkCooler(key){const r=useCooler(GameState.progress,key);if(r.error){
 function exitVehicle(now){
  if(!driving.active)return;
  if(driving.speed>=1){toast('Stop first.');return}if(now!==true&&driving.doorThen(null,driving.seatSide,()=>exitVehicle(true)))return; // the door opens first, then you step out (shortbed)
- const f=driving.active,seatWas=driving.seatSide,door=driving.door(),p=driving.leave((x,z)=>!blocked(x,z));
+ const f=driving.active,seatWas=driving.seatSide,door=driving.door(),p=driving.leave((x,z)=>!blocked(x,z));audio.sweep('car-door-close',f.state,me.position);
  if(p){me.position.x=p.x;me.position.z=p.z}else placeSafely(door.x,me.position.y,door.z);
  me.rotation.y=f.state.yaw+(driving.seatSide==='passenger'||seatWas==='passenger'?-Math.PI/2:Math.PI/2);keys.clear();look.resetMotion();pitch=.38;zoom=zoomTarget=7;persist();
  const unst=unstowParcel(f);
@@ -1113,7 +1113,7 @@ window.addEventListener('keydown',e=>{
   return;
  }
  if((e.code==='KeyI'||e.code==='KeyQ')&&!e.ctrlKey&&!e.metaKey&&!e.altKey&&active){e.preventDefault();if(!e.repeat)inventoryUI.open(e.code==='KeyI'?'grid':'wheel');return}
-if(['ArrowUp','ArrowDown','ArrowLeft','ArrowRight','Space'].includes(e.code))e.preventDefault();if(e.code==='Escape'&&active){if(!$('dialog').hidden){$('dialog').hidden=true;clearWorldPanel();modal=false;keys.clear();look.capture()}else if(modal&&!$('credits').hidden)$('closeCredits').onclick();else if(modal&&!$('settings').hidden)showSettings(false);else {pause(!modal);if(!modal)look.capture()}}if(e.code==='KeyE'&&!e.repeat){eHeld=!modal;interact()}if(e.code==='KeyF'&&!e.repeat)fHeld=!modal;if(e.code==='KeyH'&&!e.repeat&&!modal)interact('H');if(e.code==='KeyC'&&!e.repeat&&!modal)interact('C');});
+if(['ArrowUp','ArrowDown','ArrowLeft','ArrowRight','Space'].includes(e.code))e.preventDefault();if(e.code==='Escape'&&active){if(!$('dialog').hidden){$('dialog').hidden=true;clearWorldPanel();modal=false;keys.clear();look.capture()}else if(modal&&!$('credits').hidden)$('closeCredits').onclick();else if(modal&&!$('settings').hidden)showSettings(false);else {pause(!modal);if(!modal)look.capture()}}if(e.code==='KeyE'&&!e.repeat){eHeld=!modal;interact()}if(e.code==='KeyF'&&!e.repeat)fHeld=!modal;if(e.code==='KeyH'&&!e.repeat&&!modal)interact('H');if(e.code==='KeyN'&&!e.repeat&&!modal&&driving.active&&driving.driving)hornSound();if(e.code==='KeyC'&&!e.repeat&&!modal)interact('C');});
 window.addEventListener('blur',()=>{eHeld=false;fHeld=false;if(active&&!modal&&!creatorOpen&&!editorHook)pause(true)});
 window.addEventListener('keyup',e=>{if(e.code==='KeyE')eHeld=false;if(e.code==='KeyF')fHeld=false});
 // Left click acts like E once the mouse is captured (the click that captures it only captures); hold to keep chopping.
@@ -1210,14 +1210,14 @@ function doClockOut(){const r=clockOut(GameState.progress);if(r.error)return {er
 const onRidgeline=()=>GameState.progress.shift?.employer==='ridgeline'; // Pine Ridge and the sawmill are the company's: they open on shift only
 const CLOSED_FOREST='Pine Ridge belongs to Ridgeline Timber. Clock in to work it: your phone (Jobs) or the time clock at their Eastbank office.';
 function shiftOnSite(id){return onSiteAt(id,{x:me.position.x,z:me.position.z,room:currentRoom(),inCompanyVehicle:false})}
-function shiftEnded(r){const why=r.stub.reason==='end-of-day'?'The shift is over for the day.':r.stub.reason==='off-site'?'You left the site: clocked out.':'Clocked out.';toast(why+' Paid '+money(r.stub.total)+(r.repDelta?' · reputation '+(r.repDelta>0?'+':'')+r.repDelta:''))}
+function shiftEnded(r){if(r.stub?.total>0)audio.sweep('coins-pay');const why=r.stub.reason==='end-of-day'?'The shift is over for the day.':r.stub.reason==='off-site'?'You left the site: clocked out.':'Clocked out.';toast(why+' Paid '+money(r.stub.total)+(r.repDelta?' · reputation '+(r.repDelta>0?'+':'')+r.repDelta:''))}
 let shiftClock=0;function tickShifts(dt){shiftClock+=dt;if(shiftClock<.5)return;shiftClock=0;for(const o of offices){const name=employerName(GameState.progress,o.employer);o.sign.setName(name);o.room.board.setName(name)}tickCompany();syncMarks();if(shop&&officeByKey(shop)?.kind==='warehouse')syncWarehouse();const p=GameState.progress;if(!p.shift)return;const r=tickShift(p,{onSite:shiftOnSite(p.shift.employer)});if(r.state!==p){GameState.progress=r.state;if(r.stub){persist();shiftEnded(r)}}phone?.showJobs()}
 let lastDue=null;function tickOrders(dt){orderClock+=dt;if(orderClock<.5)return;orderClock=0;{const h=GameState.progress.housing,due=h?totalDue(h):0;if(lastDue!==null&&due>lastDue)notifyPhone('bank','Rent and bills are due: '+money(due)+'. Pay them on the phone (Bank).');lastDue=due} const had=driving.fleet.length,before=new Set(waitingHomes(GameState.progress)),next=deliverDue(GameState.progress);
  if(next!==GameState.progress){GameState.progress=next;driving.sync(next.vehicles||[]);persist();const fresh=waitingHomes(next).filter(h=>!before.has(h))[0];if(fresh)notifyPhone('store','Your order has arrived: collect it from the '+(fresh===STUDIO_ID?'parcel locker by the studio door.':'parcel box in front of the door.'))}
  // vehicles: owned ones come into the world (a delivery just made one), the lot's display vehicles show a colour that is in stock, and a bought vehicle takes its place on the lot
  {driving.sync(GameState.progress.vehicles||[]);if(driving.fleet.length>had){const v=driving.fleet[driving.fleet.length-1];notifyPhone('store','Your '+vehicleLabel(v.spec.model,v.colour)+' has been delivered: it is parked on your driveway.')}
   for(const f of driving.fleet)if(f.display){const standing=driving.fleet.some(o=>!o.display&&o.present&&Math.hypot(o.state.x-f.spec.home.x,o.state.z-f.spec.home.z)<8);driving.setDisplay(f.spec.id,standing?null:displayColour(GameState.progress,f.spec.model))}} parcels.update(GameState.progress)}
-function buyAtLot(id){const f=driving.byId.get(id);if(!f?.display||!f.colour)return;const r=buyVehicle(GameState.progress,f.spec.model,f.colour);if(r.error){toast(r.error);return}GameState.progress=r.state;driving.sync(r.state.vehicles);persist();toast(r.message)}
+function buyAtLot(id){const f=driving.byId.get(id);if(!f?.display||!f.colour)return;const r=buyVehicle(GameState.progress,f.spec.model,f.colour);if(r.error){toast(r.error);return}GameState.progress=r.state;driving.sync(r.state.vehicles);persist();audio.sweep('cash-register');toast(r.message)}
 function collectOrder(home){const r=takeDelivery(GameState.progress,home);if(r.error){toast(r.error);return}GameState.progress=r.state;persist();toast(r.message)}
 function commitInventory(result){
  if(result.error)return result;
@@ -1424,7 +1424,7 @@ function updateConsumption(dt){
  if(armRecovery&&armRecovery.update(dt)==='done')armRecovery=null;
  if(!consuming||modal)return;
  if(consuming.animation.update(dt)!=='used')return;
- const action=consuming;consuming=null;armRecovery=action.animation;if(itemById(action.id)?.type==='food')storyEvent('ate');$('consumeStatus').hidden=true;
+ const action=consuming;consuming=null;armRecovery=action.animation;if(itemById(action.id)?.type==='food'){storyEvent('ate');audio.sweep('eat-bite')}$('consumeStatus').hidden=true;
  // Resolve against current state so clock, survival and job updates are preserved.
  const index=GameState.progress.inventory.slots[action.index]?.id===action.id?action.index:GameState.progress.inventory.slots.findIndex(slot=>slot.id===action.id);
  const result=commitInventory(useItem(GameState.progress,index));
@@ -1441,7 +1441,7 @@ storeUI=createStoreUI({document,getState:()=>GameState,
  canOpen:()=>active&&!modal&&!creatorOpen&&!actionBusy()&&atMarketCounter(),
  onOpen:()=>{clearWorldPanel();modal=true;keys.clear();look.release()},
  onClose:()=>{modal=false;keys.clear();look.resetMotion()},
- onBuy:id=>atMarketCounter()?commitInventory(addItem(GameState.progress,id,{purchase:true})):{error:'Visit the open market counter to shop.'},
+ onBuy:id=>{if(!atMarketCounter())return {error:'Visit the open market counter to shop.'};const r=commitInventory(addItem(GameState.progress,id,{purchase:true}));if(!r.error)audio.sweep('cash-register');return r},
  onSell:()=>({error:'The Corner Market no longer buys timber. Ridgeline Timber, at Eastbank, takes logs and planks.'}),
  onGroceries:()=>atMarketCounter()?commitInventory(lifeTransaction(GameState.progress,'groceries','market')):{error:'Visit the open market counter to shop.'},
  onWork:marketWork
@@ -1633,7 +1633,7 @@ function updateSleep(dt){
  $('sleepFade').style.opacity=String(sleepElapsed<.25?sleepElapsed/.25:sleepElapsed<1.25?1:Math.max(0,(1.5-sleepElapsed)/.25));
  if(sleepElapsed>=1.5){
    const slept=sleepThrough(GameState.progress,{online:multiplayer.online,drainMultiplier:GameState.progress.settings?.statDrainMultiplier});GameState.progress=expireCafe(slept.state);
-   sleepElapsed=null;$('sleepFade').hidden=true;modal=false;keys.clear();look.resetMotion();persist();toast(slept.message);storyEvent('slept');
+   sleepElapsed=null;$('sleepFade').hidden=true;modal=false;keys.clear();look.resetMotion();persist();toast(slept.message);storyEvent('slept');audio.sweep('sleep-chime');
  }
 }
 
@@ -1736,21 +1736,27 @@ const menuLive=createMenuLive({build:()=>{const s=createMenuScene({createCharact
 // Returns whether a movement key was pressed during the slice.
 // Carrying and the needs (DESIGN 4.18) together decide how fast you walk and whether Shift runs.
 function moveFx(){const fx=carryEffects(GameState.progress.carry),n=needsEffects(GameState.progress.life);return {...fx,speed:fx.speed*n.speed,sprint:fx.sprint&&n.canRun}}
+// SND-hooks: small sound helpers (cooldowns by wall clock; the forklift call reuses one object, so nothing is allocated per frame).
+let sndBrakeAt=-1e9,sndBreathAt=-1e9,forkSndOn=false;const forkSnd={on:false,speed:0,raise:0,at:null,listener:null};
+function brakeSqueal(){const t=performance.now();if(t-sndBrakeAt<1500)return;sndBrakeAt=t;audio.sweep('brake-squeal',driving.active?.state,me.position)}
+function breathTired(){const t=performance.now();if(t-sndBreathAt<8000)return;sndBreathAt=t;audio.sweep('breath-tired')}
+function hornSound(){audio.sweep('car-horn',driving.active?.state,me.position)}
+function forkSound(){const on=fork.on;if(!on&&!forkSndOn)return;forkSnd.on=on;forkSnd.speed=fork.state.speed;forkSnd.raise=on&&active&&!modal?Number(keys.has('KeyR'))-Number(keys.has('KeyF')):0;forkSnd.at=fork.state;forkSnd.listener=me.position;audio.forklift(forkSnd);forkSndOn=on}
 function stepWorld(step){
  let startX=me.position.x,startZ=me.position.z;
  let pressed=false;
  if(fork.on){if(active&&!modal&&!document.hidden){const k=c=>keys.has(c),ctx=forkCtx();fork.state=forklift.step(fork.state,{throttle:Number(k('KeyW')||k('ArrowUp'))-Number(k('KeyS')||k('ArrowDown')),steer:Number(k('KeyA')||k('ArrowLeft'))-Number(k('KeyD')||k('ArrowRight')),raise:Number(k('KeyR'))-Number(k('KeyF')),boost:k('ShiftLeft')||k('ShiftRight')},step,forkBlockedFn,{forksClear:s=>fp.forksClear(s,ctx),liftRange:s=>fp.liftRange(s,ctx)});{const c2=forkCtx(),held=k('KeyR')||k('KeyF'),a=fp.assist(fork.state,c2,step,{forksHeld:held});if(a!==fork.state&&forklift.clear(a,forkBlockedFn,{forksClear:s=>fp.forksClear(s,c2)}))fork.state=a;forkTick(c2,Number(k('KeyR'))-Number(k('KeyF')));forkCrossCheck()}const seat=forklift.seatOf(fork.state);me.position.x=seat.x;me.position.z=seat.z;me.rotation.y=fork.state.yaw;startX=seat.x;startZ=seat.z}}else if(driving.active){ // driving: the keys steer the vehicle and you ride at its seat (nothing paused is simulated: a paused game leaves the vehicle where it is)
-  if(active&&!modal&&!document.hidden){const hs=stopSlice(hitStop,step);hitStop=hs.left;if(hs.dt>0)driving.step(hs.dt,{throttle:Number(keys.has('KeyW')||keys.has('ArrowUp'))-Number(keys.has('KeyS')||keys.has('ArrowDown')),steer:Number(keys.has('KeyA')||keys.has('ArrowLeft'))-Number(keys.has('KeyD')||keys.has('ArrowRight')),brake:keys.has('Space')},pedObstacles()); if(driving.driving&&driving.hit)edgeNote();
+  if(active&&!modal&&!document.hidden){const hs=stopSlice(hitStop,step);hitStop=hs.left;if(hs.dt>0)driving.step(hs.dt,{throttle:Number(keys.has('KeyW')||keys.has('ArrowUp'))-Number(keys.has('KeyS')||keys.has('ArrowDown')),steer:Number(keys.has('KeyA')||keys.has('ArrowLeft'))-Number(keys.has('KeyD')||keys.has('ArrowRight')),brake:keys.has('Space')},pedObstacles()); if(driving.driving&&driving.hit)edgeNote();if(keys.has('Space')&&Math.abs(driving.speed)>6)brakeSqueal();
    for(const e of driving.takeEvents())driveEvent(e);const seat=driving.seat();me.position.x=seat.x;me.position.z=seat.z;me.rotation.y=driving.yaw;startX=seat.x;startZ=seat.z; // riding is not walking: no walked distance, no stuck check
    driveSave+=step;if(driveSave>=5){driveSave=0;persist()}}
  }else if(active&&!modal&&!talking()&&!actionBusy()&&!putting){let f=Number(keys.has('KeyW')||keys.has('ArrowUp'))-Number(keys.has('KeyS')||keys.has('ArrowDown')),s=Number(keys.has('KeyD')||keys.has('ArrowRight'))-Number(keys.has('KeyA')||keys.has('ArrowLeft'));let len=Math.hypot(f,s);if(len){f/=len;s/=len;const fx=moveFx(),speed=(fx.sprint&&(keys.has('ShiftLeft')||keys.has('ShiftRight'))?8.2:4.5)*fx.speed,dx=(-Math.sin(yaw)*f+Math.cos(yaw)*s)*speed*step,dz=(-Math.cos(yaw)*f-Math.sin(yaw)*s)*speed*step;if(!blocked(me.position.x+dx,me.position.z))me.position.x+=dx;if(!blocked(me.position.x,me.position.z+dz))me.position.z+=dz;const angle=Math.atan2(dx,dz);me.rotation.y+=Math.atan2(Math.sin(angle-me.rotation.y),Math.cos(angle-me.rotation.y))*(1-Math.exp(-step*24));{const pb=Math.floor(phase/Math.PI);phase+=step*speed*2.0;if(Math.floor(phase/Math.PI)!==pb)footstep(speed>5)}pressed=true}}
- const movedStep=Math.hypot(me.position.x-startX,me.position.z-startZ),moving=pressed&&movedStep>.000001,running=moving&&moveFx().sprint&&(keys.has('ShiftLeft')||keys.has('ShiftRight'));
+ const movedStep=Math.hypot(me.position.x-startX,me.position.z-startZ),moving=pressed&&movedStep>.000001,running=moving&&moveFx().sprint&&(keys.has('ShiftLeft')||keys.has('ShiftRight'));if(moving&&!running&&(keys.has('ShiftLeft')||keys.has('ShiftRight'))&&!needsEffects(GameState.progress.life).canRun)breathTired();
  if(active&&!modal&&!document.hidden){GameState.progress=expireCafe(sessionStep(step));if(worldDue(GameState.progress,!multiplayer.online||multiplayer.isHost))worldDayPassed();const oldStage=GameState.progress.activeJob?.stage;
 const load=Math.max(1,carryEffects(GameState.progress.carry).load);
 tickLife(step,moving,running,load);if(passT===null&&sleepElapsed===null&&needsEffects(GameState.progress.life).passOut)startPassOut();
 GameState.progress=tickContract(GameState.progress,{position:parcelAwayNow()?null:me.position,room:currentRoom(),dt:step,moving,paused:!!consuming,running,distance:movedStep});
 if(oldStage&&!GameState.progress.activeJob)notifyPhone('gigs','Gig failed: the time ran out.');storyTick();garageTick();if(oldStage!==GameState.progress.activeJob?.stage){settleParcel();persist()}if(!inside&&!shop){{const day=GameState.progress.housing?.day||1,minute=GameState.progress.routine?.minutes||0;npcCrowd.update(step,me.position,{day,minute,busy:busyness({weather:npcWeather(day),minute,weekday:day})})}hal.update(step,me.position,halHere(GameState.progress))}else npcCrowd.hideAll();regrowClock+=step;if(regrowClock>=5){regrowClock=0;tickRegrowth()}if(inside||shop){saveElapsed+=step;if(saveElapsed>=4){saveElapsed=0;persist()}}}
- if(active&&!modal&&!document.hidden)updateCafeVisuals(step);updateConsumption(step);updateDoors(step);updateChop(step);updatePutting(step);fuelTick(step);
+ if(active&&!modal&&!document.hidden)updateCafeVisuals(step);updateConsumption(step);updateDoors(step);updateChop(step);updatePutting(step);fuelTick(step);forkSound();
  return pressed;
 }
 function frame(now){

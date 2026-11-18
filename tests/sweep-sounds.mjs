@@ -14,6 +14,8 @@ const a=createAudio({AudioContextClass:null,storage:{getItem:()=>null,setItem(){
 for(const m of ['sweep','step','ambience','forklift'])assert.equal(typeof a[m],'function',m);
 assert.equal(a.sweep('cash-register'),false);assert.equal(a.sweep('nope'),false);assert.equal(a.step(SURFACE.GRASS,{x:0,z:0},{x:0,z:0},true),false);a.ambience({outdoors:true});a.forklift({on:true,speed:-1});
 assert.ok(Object.keys(SWEEP_LOOPS).length===7);
+// SND-hooks: every name game.js passes to audio.sweep exists in SWEEP_SHOTS, and each wired event is called at least once.
+{const src=fs.readFileSync(new URL('../dist/game.js',import.meta.url),'utf8'),used=new Set([...src.matchAll(/audio\.sweep\('([a-z-]+)'/g)].map(m=>m[1]));for(const n of used)assert.ok(SWEEP_SHOTS[n],'game.js plays a known sweep sound: '+n);for(const n of ['door-open','door-close','cash-register','coins-pay','level-up','eat-bite','sleep-chime','breath-tired','fuel-nozzle','car-door-open','car-door-close','car-horn','brake-squeal','ui-click','ui-toast','shop-bell'])assert.ok(used.has(n),'game.js hooks '+n);assert.ok(/audio\.forklift\(/.test(src),'game.js drives audio.forklift')}
 // SND2 (lumber): every registry clip exists and is small, the shot table is sane, timber() and chainsaw() are safe without a sound card.
 for(const f of [...TIMBER_FILES,CONVEYOR_CLIP]){const u=new URL('../dist/assets/sounds/'+f+'.ogg',import.meta.url);assert.ok(fs.existsSync(u),f+' is in dist/assets/sounds');assert.ok(fs.statSync(u).size<120*1024,f+' under 120 KB')}
 assert.equal(TIMBER_FILES.length,new Set(TIMBER_FILES).size);assert.equal(TIMBER_FILES.length,20,'20 wired lumber clips (the conveyor is optional)');
