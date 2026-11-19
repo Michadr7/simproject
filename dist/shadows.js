@@ -5,6 +5,7 @@
 import * as THREE from './vendor/three.module.js';
 import {MAP} from './map-definition.js';import {propInfo} from './props.js';
 import {SHADOW_BOX,SHADOW_FAR,SHADOW_MAP,FADE_GLSL,BLOB,snapShadow,shadowPlan,blobOpacity,blobsShown,blobList} from './shadow-rules.js';
+import {tslKit} from './render-backend.js';import {createBlobMeshTSL} from './tsl-shadows.js'; // WebGPU T5: the patches' TSL twin behind ?webgpu=1
 
 // Puts the fade into three.js's shadow lookup (the same kind of edit as sky.js's grade). Call before the first frame; calling again changes nothing.
 // False if this three.js has no getShadow to edit: then shadows simply never fade.
@@ -34,13 +35,18 @@ export function createShadows({scene,renderer,sun,footing=()=>0,people=()=>[],ve
  Object.assign(sun.shadow.camera,{left:-half,right:half,top:half,bottom:-half,far:SHADOW_FAR});sun.shadow.camera.updateProjectionMatrix();sun.shadow.mapSize.set(SHADOW_MAP,SHADOW_MAP);
 
  // ── The patches (Low) ──
- const geometry=new THREE.InstancedBufferGeometry();
+ const K=tslKit('shadows'),T=K?createBlobMeshTSL({THREE,TSL:K.TSL,NodeMaterial:K.NodeMaterial,fog:scene.fog,capacity:BLOB.capacity}):null;
+ let geometry,box,aBox,material,blobs,uOpacity;
+ if(T){({geometry,box,aBox,material,blobs}=T);uOpacity=T.uniforms.uOpacity}
+ else{
+ geometry=new THREE.InstancedBufferGeometry();
  geometry.setAttribute('position',new THREE.BufferAttribute(new Float32Array([-.5,0,-.5,.5,0,-.5,.5,0,.5,-.5,0,.5]),3));geometry.setIndex([0,2,1,0,3,2]);
- const box=new Float32Array(BLOB.capacity),aBox=new THREE.InstancedBufferAttribute(box,1);aBox.setUsage(THREE.DynamicDrawUsage);geometry.setAttribute('aBox',aBox);
- const material=new THREE.ShaderMaterial({name:'blob-shadows',vertexShader:BLOB_VERTEX,fragmentShader:BLOB_FRAGMENT,transparent:true,depthWrite:false,fog:true,toneMapped:false,
+ box=new Float32Array(BLOB.capacity);aBox=new THREE.InstancedBufferAttribute(box,1);aBox.setUsage(THREE.DynamicDrawUsage);geometry.setAttribute('aBox',aBox);
+ material=new THREE.ShaderMaterial({name:'blob-shadows',vertexShader:BLOB_VERTEX,fragmentShader:BLOB_FRAGMENT,transparent:true,depthWrite:false,fog:true,toneMapped:false,
   polygonOffset:true,polygonOffsetFactor:-1,polygonOffsetUnits:-2,uniforms:{...THREE.UniformsUtils.clone(THREE.UniformsLib.fog),uOpacity:{value:0}}});
- const blobs=new THREE.InstancedMesh(geometry,material,BLOB.capacity);
+ blobs=new THREE.InstancedMesh(geometry,material,BLOB.capacity);uOpacity=material.uniforms.uOpacity;
  blobs.name='blob-shadows';blobs.count=0;blobs.visible=false;blobs.frustumCulled=false;blobs.renderOrder=4;blobs.castShadow=blobs.receiveShadow=false;blobs.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
+ }
  scene.add(blobs);
  const still=parked.map(c=>({x:c.x,y:footing(c.x,c.z),z:c.z,hx:c.hx,hz:c.hz,yaw:c.yaw}));
  const m4=new THREE.Matrix4(),pos=new THREE.Vector3(),quat=new THREE.Quaternion(),scale=new THREE.Vector3(),ax=new THREE.Vector3(),ay=new THREE.Vector3(),az=new THREE.Vector3(),UP=new THREE.Vector3(0,1,0);
@@ -74,7 +80,7 @@ export function createShadows({scene,renderer,sun,footing=()=>0,people=()=>[],ve
   sun.shadow.intensity=faded?plan.strength:1;update.run=!faded||plan.strength>0;update.n=(update.n|0)+1;sun.shadow.autoUpdate=update.run&&(update.n&1)===1; // option 2: the map is redrawn every second frame
   // the patches
   opacity=blobOpacity(sky);const show=blobsShown({low,outdoors,opacity});
-  shown=show?writeBlobs(centre||sun.target.position):0;blobs.visible=show&&shown>0;material.uniforms.uOpacity.value=opacity;
+  shown=show?writeBlobs(centre||sun.target.position):0;blobs.visible=show&&shown>0;uOpacity.value=opacity;
   return state();
  }
  const state=()=>({strength:plan.strength,pass:plan.draw&&update.run!==false,cell,blobs:blobs.visible?shown:0,opacity,drawCalls:blobs.visible?1:0,faded});

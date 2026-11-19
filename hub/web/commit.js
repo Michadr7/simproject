@@ -209,6 +209,9 @@ const KIND={added:'new',changed:'changed',deleted:'deleted',renamed:'renamed',un
     const cb=h('input',{type:'checkbox',checked:!unticked.has(i.path),id:'cm-'+i.path});
     cb.addEventListener('change',()=>{if(cb.checked)unticked.delete(i.path);else unticked.add(i.path);drawList();updateActions()});
     return h('li',{},h('label',{},cb,h('span',{class:'cm-kind k-'+i.kind},KIND[i.kind]||i.kind),h('code',{class:'cm-path'},i.path),i.from?h('span',{class:'small dim'},` (was ${i.from})`):null),...i.warn.map(w=>h('span',{class:'small warn cm-warn'},w)))};
+   {const oldPaths=releases.filter(r=>!r.current).flatMap(r=>r.items.map(i=>i.path));
+    if(oldPaths.length){const allOn=oldPaths.every(x=>!unticked.has(x));
+     box.append(h('p',{class:'cm-old-all'},h('button',{class:'btn',type:'button',onclick:()=>{setPathsTicked(unticked,oldPaths,!allOn);drawList();updateActions()}},allOn?`Untick all old releases (${oldPaths.length})`:`Tick all old releases (${oldPaths.length})`),h('span',{class:'small dim'},' Old release folders start unticked. Tick them once to commit them with the rest.')))}}
    for(const rel of releases){
     const relPaths=rel.items.map(i=>i.path),tickedN=relPaths.filter(x=>!unticked.has(x)).length;
     const rcb=h('input',{type:'checkbox',checked:tickedN===rel.items.length});

@@ -21,14 +21,14 @@ try{
  {const m0=p().routine.minutes,x0=me().x,z0=me().z;send('keydown','KeyW');pump(3);send('keyup','KeyW');
   assert(p().routine.minutes>m0,'game time keeps running during a talk: '+m0+' -> '+p().routine.minutes);assert(me().x===x0&&me().z===z0,'walking is locked while the panel is open');assert(talkOpen(ids))}
  reply(ids,/^Any work going/);assert(/Sophie in Flat two/.test(talkText(ids)),talkText(ids));
- reply(ids,/Take Sophie/);assert.equal(p().phase,'carrying','the pickup act ran');assert(/Order collected/.test(talkText(ids))&&/Take the bag straight along/.test(talkText(ids)),talkText(ids));
+ reply(ids,/Take Sophie/);assert.equal(p().phase,'carrying','the pickup act ran');assert(/Order collected/.test(talkText(ids))&&/Take the bag straight to the awning/.test(talkText(ids)),talkText(ids));
  assert.deepEqual(talkReplies(ids),['Continue'],'an ended talk offers Continue');
  key('Escape');assert(!talkOpen(ids),'Esc closes an ended talk');{const m=p().routine.minutes;pump(2);assert(p().routine.minutes>m,'and does not pause the game')}
  {const n=p().npcs.noah;assert(n.metDay>=0&&n.mem?.seen?.['noah.counter']>=1&&n.mem.seen['noah.first']>=1,'Noah remembers the talk: '+JSON.stringify(n.mem));assert(noIsBeats('noah'))}
  // B1: a failed act (a second pickup while carrying) shows the error and keeps the old replies; its line is never said
  press();reply(ids,/^Any work going/);const before=talkLines(ids).length;reply(ids,/Take Sophie/);
  assert.equal(talkLines(ids).length,Math.min(6,before+2),'the echo and the error only');assert(/Speak to the market clerk|marked delivery point/.test(talkLines(ids).at(-1)),'the error: '+talkLines(ids).at(-1));
- assert(!/Take the bag straight along/.test(talkText(ids)),'the success line is not said');assert(talkReplies(ids).some(l=>/Take Sophie/.test(l)),'the old replies stay: '+talkReplies(ids).join(' | '));
+ assert(!/Take the bag straight to the awning/.test(talkText(ids)),'the success line is not said');assert(talkReplies(ids).some(l=>/Take Sophie/.test(l)),'the old replies stay: '+talkReplies(ids).join(' | '));
  key('Escape');assert(talkOpen(ids)&&/See you/.test(talkText(ids)),'Esc says see you');{const m=p().routine.minutes;pump(1);assert(p().routine.minutes>m,'not the pause menu: time runs')}assert(closeTalk(ids,key));
  leave();assert.equal(ids.get('locationName').textContent,'WESTSIDE');
  // ---- Elena: clock out through the talk, then the recent-events ring changes her greeting

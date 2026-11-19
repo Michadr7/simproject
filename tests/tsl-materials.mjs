@@ -450,7 +450,7 @@ function makeCpuTSLOrdered(st) {
  assert.deepEqual(tslFade.uniforms.uFadeCamera.value.toArray(), [1, 2, 3]);
  assert.deepEqual(tslFade.uniforms.uFadeTarget.value.toArray(), [4, 5, 6]);
 
- const st = { _ifs: [], posWorld: [0, 0, 0], screenCoord: [0.5, 0.5] };
+ const st = { _ifs: [], posWorld: [0, 0, 0], screenCoord: [0.5, 0.5], screenSize: [1400, 900] }; // T6: TSL screenCoordinate counts y from the top (900 - glY)
  const cpu = createSightlineFadeTSL({ THREE, TSL: makeCpuTSLOrdered(st) });
  cpu.update({ position: new THREE.Vector3(0, 2, 10) }, new THREE.Vector3(0, 1, 0));
  const evalGlslKeep = (wp, cam, tgt, radius, enabled, px, py) => {
@@ -465,7 +465,7 @@ function makeCpuTSLOrdered(st) {
  let checked = 0;
  for (const wp of [[0, 1.5, 5], [1.2, 1.5, 5], [3, 1.5, 5], [0, 1, 0], [0, 2, 10]]) {
   for (let py = 0; py < 4; py++) for (let px = 0; px < 4; px++) {
-   st.posWorld = wp; st.screenCoord = [px + 0.5, py + 0.5];
+   st.posWorld = wp; st.screenCoord = [px + 0.5, 900 - (py + 0.5)];
    const got = cpu.keepNode()._raw;
    const exp = evalGlslKeep(wp, [0, 2, 10], [0, 1, 0], SIGHTLINE_FADE.radius, 1, px + 0.5, py + 0.5);
    assert.equal(got, exp, `sightline mismatch wp=${wp} px=${px},${py}`);

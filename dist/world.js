@@ -1,6 +1,6 @@
 import * as THREE from './vendor/three.module.js';
 import {junctionPatches} from './junctions.js';
-import {patchGround,setGroundQuality} from './ground-shader.js';import {GROUND_KINDS} from './ground-rules.js';export {setGroundQuality}; // GD1: the ground shader patch (ground-shader.js); setGroundQuality is re-exported for game.js applyQuality
+import {patchGround,setGroundQuality} from './ground-shader.js';import {GROUND_KINDS} from './ground-rules.js';export {setGroundQuality};import {tslKit} from './render-backend.js';import {createSightlineFadeTSL} from './tsl-sightline.js';import {createGroundUniformsTSL,makeGroundMaterialTSL} from './tsl-ground.js'; // GD1: the ground shader patch (ground-shader.js); setGroundQuality is re-exported for game.js applyQuality
 import {heightAt,valleyAt,deckAt,bridgeRise,RIVER_PATHS,RIVER_WATER_Y} from './height.js';
 import {MAP,zoneById,zoneAtPoint,roadRects,riverPath,riverDistance,riverIsLegacy,nearestOnRiver} from './map-definition.js';
 import {PINES,BROADLEAVES,modelInfo,modelGeometry,createNatureMaterials} from './nature.js';
@@ -214,7 +214,8 @@ float fadeBayer(vec2 p){ivec2 i=ivec2(mod(p,4.0));int n=i.x+i.y*4;
 async function paintSignPictures(mesh){try{const {SIGN_PICTURES}=await import('./sign-pictures.js'),c=mesh.material.map.image,ctx=c.getContext('2d'),imgs=(await Promise.all(SIGN_PICTURES.map(src=>new Promise(r=>{const i=new Image();i.onload=()=>r(i);i.onerror=()=>r(null);i.src=src})))).filter(Boolean),h=c.height*.94,w=h*1.6,gap=c.width*.04,x0=(c.width-imgs.length*w-(imgs.length-1)*gap)/2;imgs.forEach((i,k)=>ctx.drawImage(i,x0+k*(w+gap),(c.height-h)/2,w,h));mesh.material.map.needsUpdate=true}catch(e){console.warn('sign pictures',e)}}
 export function createWorld(scene,{label,cullRadius,streaming=false}={}){
  let fountainParts=null,townTime=0;
- const layout=worldLayout(),colliders=createColliders(),fade=createSightlineFade();
+ const K=tslKit('world'),layout=worldLayout(),colliders=createColliders(),fade=K?createSightlineFadeTSL({THREE,TSL:K.TSL}):createSightlineFade(); // WebGPU T5: behind ?webgpu=1 the sightline fade and the ground are TSL twins (tsl-sightline.js, tsl-ground.js)
+ const gdShared=K?createGroundUniformsTSL({TSL:K.TSL}):null,groundPatch=(m,kind)=>{if(!K)return patchGround(m,kind);const t=makeGroundMaterialTSL(kind,{THREE,TSL:K.TSL,MeshStandardNodeMaterial:K.MeshStandardNodeMaterial,base:m,shared:gdShared});if(m.name)t.name=m.name;return t}; // the TSL ground is a NEW material: every caller below uses the one returned
  const group=new THREE.Group();group.name='world-zones';scene.add(group);
 
 
@@ -225,7 +226,7 @@ export function createWorld(scene,{label,cullRadius,streaming=false}={}){
   // 3 mm) flickered pale and dark when you looked down. Every flat ground mesh gets a depth bias by its rank in this list (a clone of its material), so the order of the layers
   // never depends on how far away they are. The gaps in the list are also real centimetres now.
   const GROUND_LAYERS=[-.09,-.082,-.074,-.069,-.068,-.066,-.058,-.05,-.049,-.045];
-  function groundLayer(material,y){const rank=GROUND_LAYERS.filter(l=>l<y-1e-9).length,m=material.clone();if(m.userData.groundKind)patchGround(m,m.userData.groundKind);m.polygonOffset=true;m.polygonOffsetFactor=-rank;m.polygonOffsetUnits=-rank*2;return m}
+  function groundLayer(material,y){const rank=GROUND_LAYERS.filter(l=>l<y-1e-9).length;let m=material.clone();if(m.userData.groundKind)m=groundPatch(m,m.userData.groundKind);m.polygonOffset=true;m.polygonOffsetFactor=-rank;m.polygonOffsetUnits=-rank*2;return m}
   function plane(x0,x1,z0,z1,y,material,name){
   const mesh=new THREE.Mesh(new THREE.PlaneGeometry(x1-x0,z1-z0),groundLayer(material,y));mesh.rotation.x=-Math.PI/2;
   mesh.position.set((x0+x1)/2,y,(z0+z1)/2);mesh.receiveShadow=true;mesh.name=name;group.add(mesh);return mesh;
@@ -318,9 +319,10 @@ export function createWorld(scene,{label,cullRadius,streaming=false}={}){
   const mesh=new THREE.Mesh(geometry,groundLayer(material,y));mesh.name=name;mesh.receiveShadow=true;group.add(mesh);return mesh;
  }
  // dirt tracks up the hills (0.34): a ribbon laid on the ground (every edge point lifted by heightAt), the dirt layer, one draw call each
- {const dirtTrack=patchGround(new THREE.MeshStandardMaterial({color:'#8a7152',roughness:1}),'dirt');for(const t of MAP.relief?.tracks||[])ribbon(toPath(densify(t.points,2)),t.half,-.066,dirtTrack,'track-'+t.id,true)
+ {const groundMark=(m,kind)=>{if(!K)return patchGround(m,kind);m.userData.groundKind=kind;return m}; // T5: ribbons go through groundLayer, which clones and then patches: a TSL material is made there, from a plain clone
+  const dirtTrack=groundMark(new THREE.MeshStandardMaterial({color:'#8a7152',roughness:1}),'dirt');for(const t of MAP.relief?.tracks||[])ribbon(toPath(densify(t.points,2)),t.half,-.066,dirtTrack,'track-'+t.id,true)
   // R3a: gravel roads (surface 'gravel') are laid like the tracks: a ribbon along the centreline lifted by heightAt, the dirt ground kind (no new program), a paler colour, one draw call each.
-  const gravel=patchGround(new THREE.MeshStandardMaterial({color:'#a39d8c',roughness:1}),'dirt');gravel.userData.groundGravel=true;for(const e of MAP.roads.edges)if(e.surface==='gravel')splitAtBridges(withBridgePoints(densify(roadCenterline(e),2))).forEach((piece,k)=>ribbon(toPath(piece.line),e.width/2,-.066,gravel,'gravel-road-'+e.id+(k?'-'+k:''),true))}
+  const gravel=groundMark(Object.assign(new THREE.MeshStandardMaterial({color:'#a39d8c',roughness:1}),{userData:{groundGravel:true}}),'dirt');gravel.userData.groundGravel=true;for(const e of MAP.roads.edges)if(e.surface==='gravel')splitAtBridges(withBridgePoints(densify(roadCenterline(e),2))).forEach((piece,k)=>ribbon(toPath(piece.line),e.width/2,-.066,gravel,'gravel-road-'+e.id+(k?'-'+k:''),true))}
  for(const r of MAP.water.rivers){if(!riverIsLegacy(r))continue;const path=riverPath(r,3);ribbon(path,r.width/2+r.bank,RIVER_WATER_Y,water,'river')}
  const stone=new THREE.MeshStandardMaterial({color:'#8b8f8c',roughness:1}),timber=new THREE.MeshStandardMaterial({color:'#6f5b43',roughness:1});
  // Bridges (0.34): the deck is an arch, rising BRIDGE_RISE m above the ground at its crown and level where it meets the road (bridgeRise, height.js). Each part is one extrusion along the deck
@@ -480,7 +482,7 @@ export function createWorld(scene,{label,cullRadius,streaming=false}={}){
   const T=terrain(),m4=new THREE.Matrix4(),quat=new THREE.Quaternion(),yAxis=new THREE.Vector3(0,1,0),at=new THREE.Vector3(),one=new THREE.Vector3(1,1,1),flat=new THREE.Vector3();
   const lit=(c,r=.85,extra={})=>new THREE.MeshStandardMaterial({color:c,roughness:r,...extra}),PAVED=.165;
   // pavements that world.js draws (the city's own are built in game.js): slabs 0.3 m thick whose top is the pavement's footing height
-  for(const p of MAP.pavements)if(p.draw){const w=p.x1-p.x0,d=p.z1-p.z0,slab=new THREE.Mesh(new THREE.BoxGeometry(w,.3,d),textured(textures[p.plaza?'plaza':'paving'],w,d,4,'#ffffff','paving'));patchGround(slab.material,'paving');slab.position.set((p.x0+p.x1)/2,PAVED-.15,(p.z0+p.z1)/2);slab.receiveShadow=true;slab.name=p.plaza?'town-square':'pavement';group.add(slab)}
+  for(const p of MAP.pavements)if(p.draw){const w=p.x1-p.x0,d=p.z1-p.z0,slab=new THREE.Mesh(new THREE.BoxGeometry(w,.3,d),textured(textures[p.plaza?'plaza':'paving'],w,d,4,'#ffffff','paving'));slab.material=groundPatch(slab.material,'paving');slab.position.set((p.x0+p.x1)/2,PAVED-.15,(p.z0+p.z1)/2);slab.receiveShadow=true;slab.name=p.plaza?'town-square':'pavement';group.add(slab)}
   for(const lot of MAP.lots)streaming?quadInto('asphalt',lot.x0,lot.x1,lot.z0,lot.z1):plane(lot.x0,lot.x1,lot.z0,lot.z1,-.045,asphalt,'lot-'+lot.id);
   // painted markings: one instanced mesh of thin white bars (on the city's raised street they sit a little higher)
   {const bars=markingBars(),paint=new THREE.InstancedMesh(new THREE.BoxGeometry(1,.012,1),lit('#ecebe0',.9),bars.length);

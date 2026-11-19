@@ -26,7 +26,7 @@ export function makeGroundMaterialTSL(kind, opts = {}) {
  const {
   Fn, uniform, vec2, vec3, vec4, mat2, float, int,
   max, min, mix, smoothstep, clamp, dot, cross, normalize, length, pow, abs, floor, mod, step, select,
-  positionWorld, positionView, cameraPosition, normalView, cameraViewMatrix, screenCoordinate, faceDirection, dFdx, dFdy,
+  positionWorld, positionView, cameraPosition, normalView, cameraViewMatrix, screenCoordinate, screenSize, faceDirection, dFdx, dFdy,
   uv, texture, vertexColor, array, Discard, If
  } = TSL;
 
@@ -43,7 +43,7 @@ export function makeGroundMaterialTSL(kind, opts = {}) {
  mat.userData.groundGravel = !!gravel;
  mat.userData.groundVertexColors = !!vertexColors;
  mat.userData.groundUniforms = { uGdAmount, uGdWet, uSkyHorizon, uGdGravel, uGdBox, uGdEdge };
- mat.customProgramCacheKey = () => groundProgramKey(kind, isHigh, edge);
+ mat.userData.groundProgramKey = groundProgramKey(kind, isHigh, edge); // T5: NOT customProgramCacheKey: WebGPURenderer shares one node build per key, so every grass plane would draw with the first one's texture and tint
 
  const noise = createGroundNoiseTSL(TSL);
  const detail = buildGroundDetailTSL(kind, { TSL, noise, isHigh, uGdGravel, uGdWet });
@@ -73,7 +73,7 @@ export function makeGroundMaterialTSL(kind, opts = {}) {
    const a = edgeM.add(noise.gdNoise(worldXZ.mul(R.GD_EDGE_CLOD_SCALE).add(seedClod)));
    const b = float(1.0).sub(edgeM).add(R.GD_EDGE_LOW_H), top = max(a, b).sub(R.GD_BLEND_DEPTH);
    const wu = max(a.sub(top), 0.0), wl = max(b.sub(top), 0.0);
-   const bx = floor(mod(screenCoordinate.x, 4.0)), by = floor(mod(screenCoordinate.y, 4.0));
+   const bx = floor(mod(screenCoordinate.x, 4.0)), by = floor(mod(screenSize.y.sub(screenCoordinate.y), 4.0)); // T6: flipped to gl_FragCoord rows (TSL counts y from the top)
    const bayer = bayerArr.element(int(by.mul(4.0).add(bx))).add(0.5).div(16.0);
    If(uGdAmount.greaterThan(0.5).and(wu.div(wu.add(wl)).lessThan(bayer)), () => { Discard(); });
   }

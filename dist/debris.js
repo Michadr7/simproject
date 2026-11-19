@@ -5,7 +5,7 @@
 import * as THREE from './vendor/three.module.js';
 import {createParticles,spawn,PARKED} from './sawdust.js';
 import {debrisOf} from './damage.js';
-import {SURFACE} from './terrain.js';
+import {SURFACE} from './terrain.js';import {tslKit} from './render-backend.js';import {createDebrisMeshTSL} from './tsl-debris.js';
 
 export const DEBRIS_MAX=220,GRAVITY=-9,DRAG=.8,BOUNCE=.35; // TR6: 150 for crashes + 70 for the wheel spray (one pool, one Points object, one draw call)
 const KIND={chip:0,glass:1,spark:2,dust:3,mud:4,drop:5};
@@ -40,10 +40,12 @@ export function stepDebris(p,dt,floorY=0){
 }
 // parent: where the points live (world coordinates).
 export function createDebris(parent,{max=DEBRIS_MAX,random=Math.random}={}){
- const P=createParticles(max);P.g=new Float32Array(max).fill(1);P.dr=new Float32Array(max).fill(1);P.bn=new Float32Array(max).fill(1);const geometry=new THREE.BufferGeometry(),position=new THREE.BufferAttribute(P.pos,3);position.setUsage(THREE.DynamicDrawUsage);geometry.setAttribute('position',position);
- const col=new Float32Array(max*3).fill(.5),colour=new THREE.BufferAttribute(col,3);colour.setUsage(THREE.DynamicDrawUsage);geometry.setAttribute('color',colour);
- const vel=new THREE.BufferAttribute(P.vel,3),kinds=new Float32Array(max),kind=new THREE.BufferAttribute(kinds,1),frac=new Float32Array(max),fracAttr=new THREE.BufferAttribute(frac,1);vel.setUsage(THREE.DynamicDrawUsage);fracAttr.setUsage(THREE.DynamicDrawUsage);geometry.setAttribute('aVel',vel);geometry.setAttribute('aKind',kind);geometry.setAttribute('aT',fracAttr);
- const material=new THREE.PointsMaterial({color:'#ffffff',vertexColors:true,size:.16,sizeAttenuation:true,transparent:true,opacity:1,depthWrite:false,blending:THREE.CustomBlending,blendEquation:THREE.AddEquation,blendSrc:THREE.OneFactor,blendDst:THREE.OneMinusSrcAlphaFactor});
+ const K=tslKit('debris'),D=K?createDebrisMeshTSL({THREE,TSL:K.TSL,MeshBasicNodeMaterial:K.MeshBasicNodeMaterial,max}):null;let P,geometry,position,col,colour,vel,kinds,kind,frac,fracAttr,material,points; // WebGPU T5: behind ?webgpu=1 the pieces are tsl-debris.js billboards (the same arrays, the same API below)
+ if(D){({particles:P,geometry,aPos:position,col,aColor:colour,aVel:vel,kinds,aKind:kind,frac,aT:fracAttr,material,mesh:points}=D);parent.add(points)}else{
+ P=createParticles(max);P.g=new Float32Array(max).fill(1);P.dr=new Float32Array(max).fill(1);P.bn=new Float32Array(max).fill(1);geometry=new THREE.BufferGeometry();position=new THREE.BufferAttribute(P.pos,3);position.setUsage(THREE.DynamicDrawUsage);geometry.setAttribute('position',position);
+ col=new Float32Array(max*3).fill(.5);colour=new THREE.BufferAttribute(col,3);colour.setUsage(THREE.DynamicDrawUsage);geometry.setAttribute('color',colour);
+ vel=new THREE.BufferAttribute(P.vel,3);kinds=new Float32Array(max);kind=new THREE.BufferAttribute(kinds,1);frac=new Float32Array(max);fracAttr=new THREE.BufferAttribute(frac,1);vel.setUsage(THREE.DynamicDrawUsage);fracAttr.setUsage(THREE.DynamicDrawUsage);geometry.setAttribute('aVel',vel);geometry.setAttribute('aKind',kind);geometry.setAttribute('aT',fracAttr);
+ material=new THREE.PointsMaterial({color:'#ffffff',vertexColors:true,size:.16,sizeAttenuation:true,transparent:true,opacity:1,depthWrite:false,blending:THREE.CustomBlending,blendEquation:THREE.AddEquation,blendSrc:THREE.OneFactor,blendDst:THREE.OneMinusSrcAlphaFactor});
  material.onBeforeCompile=sh=>{sh.vertexShader=sh.vertexShader.replace('#include <common>','#include <common>\nattribute vec3 aVel;attribute float aKind;attribute float aT;varying float vKind;varying float vSeed;varying float vT;varying vec2 vDir;varying float vStreak;')
   .replace('#include <fog_vertex>',`#include <fog_vertex>
  float k=floor(aKind);vKind=k;vSeed=fract(aKind);vT=aT;vec4 pa=projectionMatrix*(modelViewMatrix*vec4(position+aVel*.04,1.));vec2 dd=pa.xy/pa.w-gl_Position.xy/gl_Position.w;dd.x*=projectionMatrix[1][1]/projectionMatrix[0][0];float dl=length(dd);vDir=dl>1e-5?dd/dl:vec2(1.,0.);
@@ -59,8 +61,8 @@ export function createDebris(parent,{max=DEBRIS_MAX,random=Math.random}={}){
   else{float r=length(p*vec2(1.,.82))+.1*sin(atan(p.y,p.x)*3.+vSeed*20.);a=1.-smoothstep(.55,.8,r);col*=.8;}
   a*=1.-smoothstep(.75,1.,vT);if(a<.02)discard;gl_FragColor=vec4(col*a,a);}`)};
  material.customProgramCacheKey=()=>'crash-debris';
- const points=new THREE.Points(geometry,material);
- points.name='crash-debris';points.frustumCulled=false;points.visible=false;points.castShadow=false;parent.add(points);
+ points=new THREE.Points(geometry,material);
+ points.name='crash-debris';points.frustumCulled=false;points.visible=false;points.castShadow=false;parent.add(points);}
  let floor=0;const tmp=new THREE.Color(),pick=a=>a[Math.floor(random()*a.length)%a.length];
  const piece=(x,y,z,dx,dz,kind,speed,life)=>{P.g[P.next]=1;P.dr[P.next]=1;P.bn[P.next]=1;tmp.set(pick(DEBRIS_COLOURS[kind]));tmp.toArray(col,P.next*3);kinds[P.next]=KIND[kind]+random()*.9;frac[P.next]=0;spawn(P,x+(random()-.5)*.5,y+random()*.3,z+(random()-.5)*.5,dx*speed*.35+(random()-.5)*speed,1.5+random()*speed*.6,dz*speed*.35+(random()-.5)*speed,life*(.7+random()*.6))};
  const owedMap=new Map(); // TR6: pieces owed to each wheel

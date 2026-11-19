@@ -1,9 +1,10 @@
 // npc-routes.js: the real walking length of every place pair, used to size the schedule's travel blocks, and crowdWarm, which fills the table over a few frames (notes/npc-movement-design.md stage N2; measured in notes/eval/outbox/N1.md). Pure: no DOM, no three.js, no clock of its own (the clock is injected).
 // The table is DATA both the schedule and the crowd read, so a plan is a function of (person, day, table). Build it from STATIC obstacles only (terrain, buildings, world colliders): never from parked vehicles or planks, or two co-op machines would size the same block differently. Compare machines with signature().
 // A block is sized as length / WALK_SPEED, so nobody has to hurry; a pair that is not in the table falls back to the old straight line x DETOUR estimate (population.js tripOf).
-import {WALK_SPEED,GAME_MINUTES_PER_SECOND,tripOf,hashOf} from './population.js';
+import {WALK_SPEED,GAME_MINUTES_PER_SECOND,DRIVE_OVER,isAway,tripOf,hashOf} from './population.js';
 
 export const HURRY_LIMIT=1.15; // the most a person may need to speed up over WALK_SPEED to arrive on time (the test checks every real block against it)
+export const walkLegMinutes=metres=>Math.max(2,Math.ceil(metres/WALK_SPEED*GAME_MINUTES_PER_SECOND));
 const key=(from,to)=>from+'>'+to;
 
 // A table of walking lengths in metres by (from,to). get() tries the reverse pair when the pair itself is missing (a route and its way back are about the same length).
@@ -26,9 +27,11 @@ export function createRouteTable(){
 export function tripWithTable(table,map,fallback=null){
  return (from,to,person)=>{
   const base=fallback?fallback(from,to,person):tripOf(from,to,person,map);
-  if(base.mode!=='walk'||base.metres===0)return base;
-  const metres=table&&table.get(from,to);if(metres===null||metres===undefined)return base;
-  return {metres,mode:'walk',minutes:Math.max(2,Math.ceil(metres/WALK_SPEED*GAME_MINUTES_PER_SECOND))};
+  if(base.metres===0)return base;
+  const metres=table&&table.get(from,to);
+  if(metres===null||metres===undefined)return base;
+  if(base.mode!=='walk'){if(!Number.isFinite(base.metres)&&!isAway(from)&&!isAway(to)&&!(person?.drives&&metres>DRIVE_OVER))return {metres,mode:'walk',minutes:walkLegMinutes(metres)};return base}
+  return {metres,mode:'walk',minutes:walkLegMinutes(metres)};
  };
 }
 

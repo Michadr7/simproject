@@ -41,7 +41,9 @@ export function findRoute(a,b,opts){
   const ix=k%w,iz=(k-ix)/w;
   for(let dz=-1;dz<=1;dz++)for(let dx=-1;dx<=1;dx++){if(!dx&&!dz)continue;const nx=ix+dx,nz=iz+dz;if(!free(nx,nz))continue;
    if(dx&&dz&&(!free(ix+dx,iz)||!free(ix,iz+dz)))continue; // no cutting a corner
-   if(isBlocked((cx(ix)+cx(nx))/2,(cz(iz)+cz(nz))/2))continue; // the middle of the step must be clear too
+   const mx=(cx(ix)+cx(nx))/2,mz=(cz(iz)+cz(nz))/2;
+   if(isBlocked(mx,mz))continue; // the middle of the step must be clear too
+   if(dx&&dz&&(isBlocked((cx(ix)+mx)/2,(cz(iz)+mz)/2)||isBlocked((mx+cx(nx))/2,(mz+cz(nz))/2)))continue;
    const n=nz*w+nx;if(done[n])continue;const step=cell*(dx&&dz?Math.SQRT2:1)*(price[n]+price[k])/2,t=gs[k]+step;
    if(t<gs[n]){gs[n]=t;from[n]=k;fs[n]=t+hOf(nx,nz);push(n)}}}
  if(!found)return straight();
@@ -49,7 +51,7 @@ export function findRoute(a,b,opts){
  const pts=[{x:a.x,z:a.z}];for(const k of cells){const ix=k%w;pts.push({x:cx(ix),z:cz((k-ix)/w)})}pts.push({x:b.x,z:b.z});
  // shorten: from each point jump to the furthest later point that can be reached along a clear line that is not dearer than the cells it replaces
  const px=pts.map(p=>p.x),pz=pts.map(p=>p.z),pc=pts.map((p,i)=>i&&i<pts.length-1?price[cells[i-1]]:1);
- const clear=(i,j)=>{const dx=px[j]-px[i],dz=pz[j]-pz[i],len=Math.hypot(dx,dz),n=Math.max(1,Math.ceil(len/.5));let sum=0;
+ const clear=(i,j)=>{const dx=px[j]-px[i],dz=pz[j]-pz[i],len=Math.hypot(dx,dz),n=Math.max(1,Math.ceil(len/.1));let sum=0;
   for(let q=0;q<=n;q++){const x=px[i]+dx*q/n,z=pz[i]+dz*q/n;if(isBlocked(x,z))return false;if(cost)sum+=Math.max(1,cost(x,z))}
   if(!cost)return true;let around=0;for(let q=i;q<=j;q++)around+=pc[q];return sum/(n+1)<=1.1*around/(j-i+1)};
  const keep=[0];let i=0;
@@ -79,7 +81,7 @@ export const INDOOR_KINDS=['shop','office','property','dwelling']; // acts at th
 // 'walk' (on foot: walking until they arrive), 'stand' (outdoors at their place), 'hidden' (indoors, in a car, or off the map)
 export function presenceOf(block){
  if(block.act==='travel')return block.mode==='drive'?'hidden':'walk';
- if(block.act==='outside')return 'stand'; // out in the open (schedule.js 'outside'), even at a shop or a front door
+ if(block.act==='outside'||block.act==='pause')return 'stand'; // out in the open (schedule.js 'outside' or walk-legs.js 'pause'), even at a shop or a front door
  if(block.act==='sleep'||block.act==='home'||block.act==='away')return 'hidden';
  return INDOOR_KINDS.includes(placeKind(block.place))&&!isOutdoorWork(block)?'hidden':'stand'; // W3: work at the sawmill (an open-sided yard) is outdoors
 }
@@ -103,6 +105,12 @@ function pace(out,b,minute,ctx){
 }
 // How far (metres, at most max) a person can walk from (x,z) along (dx,dz) (a unit vector) before the first blocked sample (every step m). 0 when the start itself is blocked. Pure, no allocation.
 export function freeReach(blocked,x,z,dx,dz,max,step=.4){if(!blocked)return max;if(blocked(x,z))return 0;let d=0;while(d<max){const n=Math.min(max,d+step);if(blocked(x+dx*n,z+dz*n))return d;d=n}return max}
+// True when (x,z) lies on any crosswalk in `crossings` (with `margin` m kerb overlap so 2 m A* cells step cleanly from pavement to crossing). Pure, zero allocation.
+export function isCrossing(x,z,crossings,margin=1){
+ if(!crossings)return false;
+ for(let i=0;i<crossings.length;i++){const c=crossings[i],hw=(c.road==='z'?c.span/2:1.5)+margin,hd=(c.road==='z'?1.5:c.span/2)+margin;if(Math.abs(x-c.x)<=hw&&Math.abs(z-c.z)<=hd)return true}
+ return false;
+}
 // Where a person is: fills out {state, x, z, yaw, moving, walked}. ctx: point(place)->{x,z}|null, route(from,to)->route|null (null: not worked out yet, or no such trip), both injected.
 // yaw is NaN when they stand (keep the last heading). state 'hidden' leaves x and z alone.
 // W3: with ctx.person (and ctx.day, ctx.seed) a Ridgeline feller or sawyer at work gets workforce-pose.js's pose instead (phase chop/carry/bend/walk/saw, prop axe/log/planks, speed):

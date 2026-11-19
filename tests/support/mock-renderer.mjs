@@ -1,12 +1,14 @@
 // Shared WebGL + WebGPU renderer mock for Node boot tests (notes/webgpu-spike.md T1).
+// T5 (tests/webgpu-flag.mjs): backend 'auto' picks the WebGPU backend only when navigator.gpu exists (as the library does); webgpuModule: the URL of a REAL three.webgpu.js
+// to re-export (real NodeMaterials; only WebGPURenderer is the mock). Loading the mock three.webgpu.js counts in globalThis.__webgpuModuleLoads.
 import { writeFile } from 'node:fs/promises';
 import { join, resolve } from 'node:path';
 import { pathToFileURL } from 'node:url';
 
 const defaultThreeURL = pathToFileURL(resolve('dist/vendor/three.module.js')).href;
 
-export async function writeMockRenderer(dir, vendorThreeURL = defaultThreeURL, { backend = 'webgl' } = {}) {
- const useWebGPU = backend === 'webgpu';
+export async function writeMockRenderer(dir, vendorThreeURL = defaultThreeURL, { backend = 'webgl', webgpuModule = null } = {}) {
+ const gpuExpr = backend === 'auto' ? '!!globalThis.navigator?.gpu' : String(backend === 'webgpu');
  const rendererBody = `
   constructor(opts = {}) {
    this.domElement = opts.canvas || { width: 1400, height: 900 };
@@ -18,7 +20,9 @@ export async function writeMockRenderer(dir, vendorThreeURL = defaultThreeURL, {
    this._toneMappings = new Map();
    this.library = { addToneMapping: (fn, key) => { this._toneMappings.set(key, fn); } };
    const forceGL = !!opts.forceWebGL;
-   this.backend = { isWebGPUBackend: !forceGL && ${useWebGPU}, isWebGLBackend: forceGL || ${!useWebGPU} };
+   const gpu = ${gpuExpr};
+   this.options = opts;
+   this.backend = { isWebGPUBackend: !forceGL && gpu, isWebGLBackend: forceGL || !gpu };
    this.initialized = false;
   }
   async init() { await Promise.resolve(); this.initialized = true; return this; }
@@ -46,20 +50,7 @@ export class WebGLRenderer {
 }
 `, 'utf8');
 
- await writeFile(join(dir, 'vendor/three.webgpu.js'),
-  `export * from '${vendorThreeURL}';
-export class WebGPURenderer {
- ${rendererBody}
- render(scene, camera) {
-  if (!this.initialized) throw new Error('WebGPURenderer: init() must be awaited before render()');
-  if (scene.name !== 'menu-scene') globalThis.__renders = (globalThis.__renders || 0) + 1;
-  if (scene.name === 'menu-scene') globalThis.__menuScene = scene;
-  else { globalThis.__renderScene = scene; globalThis.__renderCamera = camera; }
- }
- compute() {
-  if (!this.initialized) throw new Error('WebGPURenderer: init() must be awaited before compute()');
- }
-}
+ const nodeClasses = webgpuModule ? `export * from '${webgpuModule}';` : `export * from '${vendorThreeURL}';
 class BaseNodeMat { constructor(p = {}) { Object.assign(this, p); } }
 export class NodeMaterial extends BaseNodeMat {}
 export class MeshBasicNodeMaterial extends BaseNodeMat {}
@@ -71,6 +62,24 @@ export class RenderPipeline {
  constructor(r) { this.r = r; }
  render() { if (!this.r.initialized) throw new Error('WebGPURenderer: init() must be awaited before RenderPipeline.render()'); }
  dispose() {}
+}`;
+ await writeFile(join(dir, 'vendor/three.webgpu.js'),
+  `${nodeClasses}
+globalThis.__webgpuModuleLoads = (globalThis.__webgpuModuleLoads || 0) + 1;
+export class WebGPURenderer {
+ ${rendererBody}
+ render(scene, camera) {
+  if (!this.initialized) throw new Error('WebGPURenderer: init() must be awaited before render()');
+  globalThis.__webgpuRenderer = this;
+  if (scene.name !== 'menu-scene') globalThis.__renders = (globalThis.__renders || 0) + 1;
+  if (scene.name === 'menu-scene') globalThis.__menuScene = scene;
+  else { globalThis.__renderScene = scene; globalThis.__renderCamera = camera; }
+ }
+ compute() {
+  if (!this.initialized) throw new Error('WebGPURenderer: init() must be awaited before compute()');
+ }
+ get compile() { return undefined; } // the real WebGPURenderer has only compileAsync
+ async compileAsync() { if (!this.initialized) throw new Error('WebGPURenderer: init() must be awaited before compileAsync()'); }
 }
 `, 'utf8');
 }

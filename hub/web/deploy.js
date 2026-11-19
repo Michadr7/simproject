@@ -2,16 +2,23 @@
 // and shows each in plain words (ok, warning, or blocking). It publishes nothing. The judging is in hub/deploy.js; the work is done by scripts/deploy-check.mjs, started as a job (a script, no model, no tokens).
 // Text only (textContent). Polls GET /api/jobs every 2 s while the check runs and every 8 s otherwise.
 import {runCall,errorText} from './runs-api.js';
-import {canPublish,confirmText,bumpPlan,bumpConfirmText,LEVELS,shipButtonText} from './deploy-rules.js';
+import {canPublish,confirmText,bumpPlan,bumpConfirmText,cmpVersion,LEVELS,shipButtonText} from './deploy-rules.js';
 export {shipButtonText};
 
-export async function runShip({busy=false,call=runCall,waitForCheck,confirmFn=t=>globalThis.confirm(t),now=Date.now,lastPublished=null}={}){
+export async function runShip({busy=false,call=runCall,waitForCheck,confirmFn=t=>globalThis.confirm(t),now=Date.now,lastPublished=null,level='patch'}={}){
  if(busy)return {ok:false,stage:'guard',error:'Something is working.',check:null,job:null};
  const cRes=await call('job-start',{job:'deploy-check'});
  if(!cRes||!cRes.ok)return {ok:false,stage:'check-start',error:errorText(cRes),check:null,job:null};
  const checkId=cRes.data&&cRes.data.job&&cRes.data.job.id||null;
  const checkRec=waitForCheck?await waitForCheck(checkId):null;
  const pub=typeof lastPublished==='function'?lastPublished():lastPublished;
+ // Owner 2026-11-18: if the version is already live, Ship raises it itself (one confirm), then the release and tests run; press Ship again when they pass.
+ const sum=checkRec&&checkRec.summary,plan=sum&&sum.version&&sum.live&&cmpVersion(sum.version,sum.live)===0?bumpPlan(checkRec,level,null):null;
+ if(plan&&plan.ok){
+  if(!confirmFn(`${sum.version} is already live and a live version can never be reused.\n\n${bumpConfirmText(plan.from,plan.to)}\n\nPress Ship again when the tests have passed.`))return {ok:false,stage:'cancelled',error:'',check:checkRec,job:null};
+  const bRes=await call('job-start',{job:'bump',level,confirm:plan.to});
+  if(!bRes||!bRes.ok)return {ok:false,stage:'bump-start',error:errorText(bRes),check:checkRec,job:null};
+  return {ok:false,stage:'bumped',error:'',note:`Raising ${plan.from} to ${plan.to}, making the release and running the tests. Press Ship ${plan.to} when they pass.`,check:checkRec,job:bRes.data&&bRes.data.job||null}}
  const gate=canPublish(checkRec,now(),pub);
  if(!gate.ok)return {ok:false,stage:'check-gate',error:gate.why,check:checkRec,job:null};
  if(!confirmFn(confirmText(checkRec.summary)))return {ok:false,stage:'cancelled',error:'',check:checkRec,job:null};
@@ -76,7 +83,7 @@ export function mountDeploy(view,{onChange}={}){
   if(busy)return;busy=true;say('');if(lastD)draw(lastD,true);
   const res=await runShip({busy:false,call:runCall,waitForCheck,lastPublished:()=>latestPub});
   busy=false;if(!alive)return;
-  if(res.error)say(res.error);
+  if(res.error)say(res.error);else if(res.note)say(res.note);
   await load(true);if(onChange)onChange()}
  function draw(d,force){
   const job=d&&d.jobs?d.jobs.find(j=>j.key==='deploy-check'):null,pub=d&&d.jobs?d.jobs.find(j=>j.key==='deploy'):null,bmp=d&&d.jobs?d.jobs.find(j=>j.key==='bump'):null,s=JSON.stringify([d&&d.enabled,d&&d.busy,job,pub,bmp,level,busy]);lastD=d;latestPub=pub&&pub.last?pub.last:null;if(!force&&s===sig)return;sig=s;
@@ -91,7 +98,7 @@ export function mountDeploy(view,{onChange}={}){
    body.append(h('h2',{class:'sect'},'Results'),h('div',{class:'box'},h('ul',{class:'dchecks'},sum.checks.map(c=>h('li',{class:'dc dc-'+c.state},
     h('span',{class:'dg','aria-hidden':'true'},STATE_GLYPH[c.state]||'?'),h('span',{},h('b',{},c.label),h('span',{class:'dw'},' · '+(STATE_WORD[c.state]||c.state)),h('br'),h('span',{class:'small dim'},c.text),...(c.href==='#commit'||(c.key==='changed'&&c.state==='warn')?[' ',h('a',{class:'dlink',href:'#commit'},'Open Commit (#commit)')]:[])))))))}
   // Raise the version: only once the current version is live, so no number is skipped. The browser asks once; the hub and the script check it again; then the release and the tests follow.
-  const bl=bmp&&bmp.last,br=!!(bmp&&bmp.running),plan=bumpPlan(job&&job.last,level,bl),sel=h('select',{class:'sel','aria-label':'How big a change','disabled':br||undefined},LEVELS.map(x=>h('option',{value:x,selected:x===level},x==='patch'?'patch (a small change)':x==='minor'?'minor (a new feature)':'major (a new era)')));
+  const bl0=bmp&&bmp.last,bl=bl0&&bl0.summary&&sum&&cmpVersion(bl0.summary.version,sum.version)===-1?null:bl0,br=!!(bmp&&bmp.running),plan=bumpPlan(job&&job.last,level,bl),sel=h('select',{class:'sel','aria-label':'How big a change','disabled':br||undefined},LEVELS.map(x=>h('option',{value:x,selected:x===level},x==='patch'?'patch (a small change)':x==='minor'?'minor (a new feature)':'major (a new era)')));
   sel.addEventListener('change',()=>{level=sel.value;if(lastD)draw(lastD,true)});
   body.append(h('h2',{class:'sect'},'Next version'),h('div',{class:'box tool'+(br?' on':'')},h('div',{class:'tool-head'},
    h('span',{class:'plan-main'},h('span',{class:'plan-title'},'Raise the version number'),

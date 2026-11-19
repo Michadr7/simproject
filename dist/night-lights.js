@@ -9,7 +9,7 @@
 import * as THREE from './vendor/three.module.js';
 import {MAP} from './map-definition.js';
 import {propInfo} from './props.js';
-import {CLASSES} from './vehicle.js';
+import {CLASSES} from './vehicle.js';import {tslKit} from './render-backend.js';import {createNightLightsMaterialsTSL} from './tsl-lights.js';
 import {LAMP,WINDOW,BEAM,BEAM_VERTICES,BEAM_INDICES,SPOT,LAMP_SPRITE,SHOW_FROM,MOVING_HOLD,MOVING_SPEED,lightLevel,isDark,glowScale,lampHeadGlow,poolShape,beamShape,lampPoints,windowsLit,windowBucket,buildingKind,GLASS_PROPS,glassMaskBytes,headlightsOn,vehicleGlow,spotlightPlan} from './night-lights-rules.js';
 
 const sizeOf=model=>{const c=CLASSES[model];return c?{hx:c.hx,hz:c.hz}:{}};
@@ -61,7 +61,8 @@ export function createNightLights({scene,footing=()=>0,cityWindows=[],cityLampHe
  const aCentre=new THREE.InstancedBufferAttribute(centre,3),aTint=new THREE.InstancedBufferAttribute(tint,3),aSize=new THREE.InstancedBufferAttribute(size,1);
  for(const a of [aCentre,aTint,aSize])a.setUsage(THREE.DynamicDrawUsage);
  spriteGeometry.setAttribute('aCentre',aCentre);spriteGeometry.setAttribute('aTint',aTint);spriteGeometry.setAttribute('aSize',aSize);spriteGeometry.setAttribute('aLamp',new THREE.InstancedBufferAttribute(isLamp,1));spriteGeometry.instanceCount=lamps.length;
- const sprites=new THREE.Mesh(spriteGeometry,additive('night-sprites',SPRITE_VERTEX,SPRITE_FRAGMENT));
+ const K=tslKit('lights'),L=K?createNightLightsMaterialsTSL({THREE,TSL:K.TSL,MeshBasicNodeMaterial:K.MeshBasicNodeMaterial}):null; // WebGPU T5: the two glow materials' TSL twins behind ?webgpu=1 (one shared uniform set)
+ const sprites=new THREE.Mesh(spriteGeometry,L?L.spriteMat:additive('night-sprites',SPRITE_VERTEX,SPRITE_FRAGMENT));
  sprites.name='night-sprites';sprites.frustumCulled=false;sprites.renderOrder=6;sprites.visible=false;sprites.castShadow=sprites.receiveShadow=false;
 
  // ── Ground patches: a round pool under every lamp (built once, laid on the ground's height), then one beam per lit vehicle (rewritten each frame) ──
@@ -72,7 +73,7 @@ export function createNightLights({scene,footing=()=>0,cityWindows=[],cityLampHe
  for(let b=0;b<MAX_VEHICLES;b++)beam.indices.forEach((n,k)=>{gIndex[beamIndexBase+b*BEAM_INDICES+k]=beamBase+b*BEAM_VERTICES+n});
  const groundGeometry=new THREE.BufferGeometry(),gPosA=new THREE.BufferAttribute(gPos,3),gTintA=new THREE.BufferAttribute(gTint,3);gPosA.setUsage(THREE.DynamicDrawUsage);gTintA.setUsage(THREE.DynamicDrawUsage);
  groundGeometry.setAttribute('position',gPosA);groundGeometry.setAttribute('aTint',gTintA);groundGeometry.setAttribute('aLamp',new THREE.BufferAttribute(gLamp,1));groundGeometry.setIndex(new THREE.BufferAttribute(gIndex,1));groundGeometry.setDrawRange(0,beamIndexBase);
- const ground=new THREE.Mesh(groundGeometry,additive('night-ground',GROUND_VERTEX,GROUND_FRAGMENT));
+ const ground=new THREE.Mesh(groundGeometry,L?L.groundMat:additive('night-ground',GROUND_VERTEX,GROUND_FRAGMENT)),lightU=L?[L.uniforms]:[sprites.material.uniforms,ground.material?.uniforms];
  ground.material.polygonOffset=true;ground.material.polygonOffsetFactor=-1;ground.material.polygonOffsetUnits=-2;
  ground.name='night-ground';ground.frustumCulled=false;ground.renderOrder=5;ground.visible=false;ground.castShadow=ground.receiveShadow=false;
  scene.add(ground,sprites);
@@ -148,7 +149,7 @@ export function createNightLights({scene,footing=()=>0,cityWindows=[],cityLampHe
   spriteGeometry.instanceCount=lamps.length+vehicleSprites;groundGeometry.setDrawRange(0,beamIndexBase+n*BEAM_INDICES);
   if(n){aCentre.needsUpdate=aTint.needsUpdate=aSize.needsUpdate=true;gPosA.needsUpdate=gTintA.needsUpdate=true}
   sprites.visible=ground.visible=shown||n>0;
-  for(const m of [sprites.material,ground.material]){m.uniforms.uLevel.value=shown?level*scale:0;if(fog){m.uniforms.uFogNear.value=fog.near;m.uniforms.uFogFar.value=fog.far}}
+  for(const u of lightU){u.uLevel.value=shown?level*scale:0;if(fog){u.uFogNear.value=fog.near;u.uFogFar.value=fog.far}}
   return state();
  }
  // What is on now (the dev panel's line and the tests). drawCalls: what the night lights add to the frame.

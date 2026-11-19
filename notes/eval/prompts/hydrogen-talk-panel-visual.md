@@ -1,0 +1,18 @@
+# Hydrogen prompt: conversation panel visual pass (CSS/markup/talk-panel.js only; no game.js)
+
+Read AGENTS.md rules first (context.md 1-45, notes/handoff.md 1-16; search PROJECT-INDEX.md, never read big files whole). You may NOT edit dist/game.js, world.js, map-definition.js, driving.js, vehicle.js, terrain.js, props-assets.js, audio.js, dist/phone*.js. Another agent (Opus, WebGPU T5) is editing game.js right now: only read it by line range, never `npm test` the whole suite (flaky while it edits); run your own tests with `node tests/<name>.mjs`.
+
+Source: notes/owner-feedback-2026-11-18.md item 5 and the "Thoughts on the conversation panel" block. The panel is docked, never pauses time (owner decision, see memory talking-never-pauses-time: do not add any pause or modal). Files you may edit: dist/talk-panel.js, dist/style.css, dist/index.html (talk section only, it must stay at body level, not nested in #settings: tests/talk-stuck.mjs guards that), and new files. Find the code with Grep (talk-panel, #talk, .talk-).
+
+Do these, in order; each must keep every existing talk test green (tests/talk-*.mjs, talk-stuck, talk-memory, conversation tests: find them with Glob tests/*talk*.mjs and tests/*conversation*.mjs):
+1. Portrait badge: the empty grey avatar circle gets an initial badge (first letter of the NPC name) with a colour picked deterministically from the name (pure helper in a new dist/talk-badge.js + tests/talk-badge.mjs; no Math.random).
+2. Relationship chip: replace wording like "Stranger - good" with friendlier text and a small mood dot (e.g. "New face", "Getting to know you", "Friend"; map from the existing relationship values, keep the data values untouched, change display text only). Put the mapping in the same pure file with a test.
+3. Line bubbles: tighter spacing, softer fade of older lines, each new line eases in (fade + rise, 120 ms, CSS only, `prefers-reduced-motion` turns it off). A short typing beat (three dots, about 350 ms) before an NPC line: implement in talk-panel.js with an injected timer so tests can run it without real time; it must never block input or hold back the options for more than that beat, and it must not touch game time.
+4. Options: group by purpose (shop, work, chat) with small headings only if the option data already carries a purpose or kind; if it does not, say so in the report and skip grouping. Highlight the selected row with the amber bar only; number keys keep working exactly as today.
+5. Keep the speaker's face and hands visible: the panel must not hide the NPC's lower body. Only the CSS side: dock the panel lower or narrower so at 1280x720 and 1920x1080 it covers no more than the bottom 30% of the screen, and at 360x780 (phone) no more than 45%. Camera target changes belong to game.js: write them as an exact edit request in the report (file, line, old text, new text), do not make them.
+
+Check the result visually if you can: you used a headless Edge CDP harness before (C:\Users\Michael\AppData\Local\Temp\eden-webgpu if it still exists, else the notes in outbox/tutorial-polish2.md). Save screenshots at 1920x1080, 1280x720 and 360x780 into notes/eval/outbox/ (name them talk-visual-*.png). If you cannot render, say so and do not claim it looks right.
+
+Not in scope: rewriting the option or NPC line texts (that is a later Gemini content pass), any change to game rules, saves or multiplayer.
+
+Report: notes/eval/outbox/talk-visual.md, first line "michadr.". Files created or changed with line counts, pasted real test output, what you could NOT verify, exact edit requests for forbidden files, QUESTIONS FOR THE OWNER as a short list (the main chat turns them into dialog options), and honest confidence per item.

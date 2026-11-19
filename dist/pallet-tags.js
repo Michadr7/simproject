@@ -3,6 +3,7 @@
 // player are drawn, turned to face the camera. `update(list, camera, near)` is called every frame the warehouse is shown; `list` is [{x, y, z, count, product}] in room metres.
 import * as T from './vendor/three.module.js';
 import {PALLET_CAP} from './pallets.js';
+import {tslKit} from './render-backend.js';import {createPalletTagMaterialTSL} from './tsl-tags.js'; // WebGPU T5: the atlas lookup's TSL twin behind ?webgpu=1
 
 export const TAG_MAX=24,TAG_RANGE=10,TAG_SIZE={w:.8,h:.4};
 const COLS=8,PLAIN_ROWS=5,ROWS=12,CELL={w:64,h:32}; // 512 wide: rows 0..4 the 40 stock plates, rows 5..9 the 40 order plates (green edge), rows 10 and 11 the 11 glyphs of an order's number
@@ -35,9 +36,9 @@ export const glyphCell=ch=>{const i=GLYPHS.indexOf(ch);if(i<0)return null;return
 export function createPalletTags({max=TAG_MAX,range=TAG_RANGE,makeCanvasFn=makeCanvas}={}){
  const canvas=makeCanvasFn(),drawn=drawAtlas(canvas),texture=new T.CanvasTexture(canvas);texture.colorSpace=T.SRGBColorSpace;texture.minFilter=T.LinearFilter;texture.generateMipmaps=false;
  const geometry=new T.PlaneGeometry(TAG_SIZE.w,TAG_SIZE.h),cells=new Float32Array(max*6*2),attr=new T.InstancedBufferAttribute(cells,2);geometry.setAttribute('tagCell',attr);
- const material=new T.MeshBasicMaterial({map:texture,transparent:true,toneMapped:false,fog:false});
+ const K=tslKit('tags'),material=K?createPalletTagMaterialTSL({THREE:T,TSL:K.TSL,NodeMaterial:K.MeshBasicNodeMaterial,map:texture,cols:COLS,rows:ROWS}).material:new T.MeshBasicMaterial({map:texture,transparent:true,toneMapped:false,fog:false});
  // each instance reads its own plate of the atlas
- material.onBeforeCompile=shader=>{shader.vertexShader=shader.vertexShader.replace('#include <common>','#include <common>\nattribute vec2 tagCell;').replace('#include <uv_vertex>','#include <uv_vertex>\n#ifdef USE_MAP\n vMapUv=(uv+tagCell)*vec2(1.0/'+COLS+'.0,1.0/'+ROWS+'.0);\n#endif')};
+ if(!K)material.onBeforeCompile=shader=>{shader.vertexShader=shader.vertexShader.replace('#include <common>','#include <common>\nattribute vec2 tagCell;').replace('#include <uv_vertex>','#include <uv_vertex>\n#ifdef USE_MAP\n vMapUv=(uv+tagCell)*vec2(1.0/'+COLS+'.0,1.0/'+ROWS+'.0);\n#endif')};
  const mesh=new T.InstancedMesh(geometry,material,max*6);mesh.name='pallet-tags';mesh.count=0;mesh.frustumCulled=false;mesh.renderOrder=5;mesh.castShadow=mesh.receiveShadow=false;
  const m4=new T.Matrix4(),pos=new T.Vector3(),one=new T.Vector3(1,1,1);let shown=[];
  // list: [{x,y,z,count,product}]; camera: the room's camera; near: {x, z} the player. Returns how many tags are drawn.

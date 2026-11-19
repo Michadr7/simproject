@@ -177,6 +177,13 @@ assert.ok(page.includes('shipButtonText')&&page.includes('runShip'),'deploy page
  assert.equal(rCancel.ok,false);assert.equal(rCancel.stage,'cancelled');assert.equal(confirmed,1);assert.match(confirmPrompt,/Publish 0\.36\.0\?/);assert.equal(calls.length,1,'cancel never starts deploy');
  calls=[];confirmed=0;
  const rGo=await runShip({call:async(op,a)=>{calls.push([op,a]);return {ok:true,data:{job:{id:op==='deploy-check'?'job-3':'job-4'}}}},waitForCheck:async()=>warnChk,confirmFn:txt=>{confirmed++;return true},now:()=>2000});
+ // Ship on a version that is already live raises it (one confirm, bump job) and never starts a deploy.
+ calls=[];confirmed=0;confirmPrompt='';const liveChk={summary:{ok:false,version:'0.36.0',live:'0.36.0',checks:[]},endedAt:1000};
+ const rBump=await runShip({call:async(op,a)=>{calls.push([op,a]);return {ok:true,data:{job:{id:'j'}}}},waitForCheck:async()=>liveChk,confirmFn:txt=>{confirmed++;confirmPrompt=txt;return true},now:()=>2000});
+ assert.equal(rBump.stage,'bumped');assert.equal(confirmed,1);assert.match(confirmPrompt,/0\.36\.0 is already live/);assert.match(rBump.note,/0\.36\.1/);assert.deepEqual(calls,[['job-start',{job:'deploy-check'}],['job-start',{job:'bump',level:'patch',confirm:'0.36.1'}]]);
+ const calls2=[];const rBumpNo=await runShip({call:async(op,a)=>{calls2.push(op);return {ok:true,data:{job:{id:'j'}}}},waitForCheck:async()=>liveChk,confirmFn:()=>false,now:()=>2000});
+ assert.equal(rBumpNo.stage,'cancelled');assert.deepEqual(calls2,['job-start'],'cancel starts only the check');
+ calls=[];confirmed=0;await runShip({call:async(op,a)=>{calls.push([op,a]);return {ok:true,data:{job:{id:op==='deploy-check'?'job-3':'job-4'}}}},waitForCheck:async()=>warnChk,confirmFn:txt=>{confirmed++;return true},now:()=>2000}).then(r=>Object.assign(rGo,r));
  assert.equal(rGo.ok,true);assert.equal(rGo.stage,'done');assert.equal(confirmed,1);assert.deepEqual(calls,[['job-start',{job:'deploy-check'}],['job-start',{job:'deploy',confirm:'0.36.0'}]]);
 }
 // Live hub server test for runShip: Check -> confirm -> Publish (deploy-confirm written only when confirmed)

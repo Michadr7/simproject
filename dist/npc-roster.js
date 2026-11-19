@@ -49,7 +49,7 @@ export const ROSTER=Object.freeze([
  base({id:'grace',personId:'house-r8#1',name:'Grace Whitfield',role:'Resident (8 Cedar Loop)',home:'property:house-r8',work:null,flat:null,assumed:false,
   traits:['gentle','gardener','observant'],baseline:62,deliveryDay:null,marketDay:5,
   needs:['errand','tend','restock'],needGoods:{errand:'groceries',tend:'garden',restock:'seeds'},
-  lines:L(['The garden is dying and so am I, almost.','I would rather be alone today.','Nothing blooms this year.'],['A quiet, heavy sort of day.','I could use some help in the garden.','Not my best week.'],['Hello, dear. Lovely day for the garden.','The tomatoes are coming along.','Cedar Loop is quiet.'],['Good to see you. Tea?','The roses are doing well, thank goodness.','You have a kind face.'],['What a wonderful surprise!','The garden has never looked better.','Come in, come in, stay for supper.']),
+  lines:L(['The garden is dying and so am I, almost.','I would rather be alone today.','Nothing blooms this year.'],['A quiet, heavy sort of day.','I could use some help in the garden.','Not my best week.'],['Hello, dear. Lovely day for the garden.','The tomatoes are coming along.','Cedar Loop is quiet.'],['Good to see you. Tea?','The roses are doing well, thank goodness.','You have a kind face.'],['What a wonderful surprise!','The garden has never looked better.','Lovely to see you, dear. Pull up a chair on the porch a minute.']),
   visit:V('acquaintance','friend',null,{friend:7,close:4})}),
  base({id:'oscar',personId:'oak-apartments/9#1',name:'Oscar Masic',role:'Retired recluse (owns an old black work truck)',home:'dwelling:oak-apartments',work:null,flat:'oak-apartments/9',assumed:false,
   rule:'recluse',homebody:true,traits:['grumpy','private','proud','handy'],baseline:35,deliveryDay:null,marketDay:null,
@@ -74,7 +74,7 @@ export const ROSTER=Object.freeze([
  base({id:'driver',personId:'commuter:eastbank-driver',name:'Ray Okonkwo',role:'Eastbank truck driver (ASSUMED name)',home:null,work:'office:ridgeline-warehouse',flat:null,assumed:true,dormant:true,
   traits:['cheerful','always late','road-weary'],baseline:55,deliveryDay:null,marketDay:null,
   needs:['haul','tow','repair','restock'],needGoods:{haul:'crates',tow:'truck',repair:'truck',restock:'fuel'},
-  lines:L(['Truck broke down, load is late, everything is late.','Do not start me today.','No.'],['Long haul, short patience.','Running behind again.','Traffic. Always traffic.'],['Morning. Another load to deliver.','Eastbank is busy today.','Gas is cheaper over the hill.'],['Smooth run today!','Good to see a friendly face.','You want a lift to the yard?'],['Perfect delivery, perfect day!','Drinks on me, next time I am in town.','Best route I ever drove.']),
+  lines:L(['Truck broke down, load is late, everything is late.','Do not start me today.','No.'],['Long haul, short patience.','Running behind again.','Traffic. Always traffic.'],['Morning. Another load to deliver.','Eastbank is busy today.','Gas is cheaper over the hill.'],['Smooth run today!','Good to see a friendly face on the road.','The bridge looked clear this morning.'],['Perfect delivery, perfect day!','Drinks on me, next time I am in town.','Best route I ever drove.']),
   visit:V(null,null,null,E)}),
  base({id:'elena',personId:'oak-apartments/7#1',name:'Elena',role:'Manager (Alder Coffee)',home:'dwelling:oak-apartments',work:'shop:cafe',flat:'oak-apartments/7',assumed:false,
   traits:['brisk','warm','organised','proud of her coffee'],baseline:60,deliveryDay:null,marketDay:null,
@@ -124,6 +124,6 @@ export const TIPS=Object.freeze({
  lincoln:'Ask me about hunting. Anything else and I lose interest.',
  brentster:'Be kind to my cat and you will be fine with me.',
  foreman:'Be safe and do the work clean.',
- driver:'Be on time and I will give you a lift to the yard.',
- elena:'Shifts run from eight. Serve two customers, reset the table, and I pay you the same day.'
+ driver:'Keep your rig fuelled and your headlights clean.',
+ elena:'Shifts run eight to five: eight bucks an hour plus tips, and a bonus when you clear the tasks.'
 });

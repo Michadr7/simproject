@@ -1,6 +1,6 @@
 // Sawdust: a small pool of short-lived points thrown up where the blade bites the log. The simulation is plain arrays (createParticles/spawn/step, tested without a renderer);
 // createSawdust adds one THREE.Points object (one draw call, no shadows) that is only drawn while a particle is alive.
-import * as THREE from './vendor/three.module.js';
+import * as THREE from './vendor/three.module.js';import {tslKit} from './render-backend.js';import {createPointsSpriteTSL} from './tsl-points.js';
 
 export const SAWDUST_MAX=300,GRAVITY=-6,DRAG=1.6,PARKED=-100;
 export const createParticles=max=>({max,pos:new Float32Array(max*3).fill(0).map((_,i)=>i%3===1?PARKED:0),vel:new Float32Array(max*3),age:new Float32Array(max),life:new Float32Array(max),next:0,alive:0});
@@ -26,8 +26,8 @@ export function step(p,dt,floorY=0){
 
 // parent: where the points live (world coordinates). origin: {x,y,z} in the world; yaw: the model's yaw, so the spray leaves along the log's way (model +x); floorY: the deck's height.
 export function createSawdust(parent,{origin,yaw,floorY,max=SAWDUST_MAX,random=Math.random}){
- const P=createParticles(max),geometry=new THREE.BufferGeometry(),position=new THREE.BufferAttribute(P.pos,3);position.setUsage(THREE.DynamicDrawUsage);geometry.setAttribute('position',position);
- const points=new THREE.Points(geometry,new THREE.PointsMaterial({color:'#d9b47c',size:.075,sizeAttenuation:true,transparent:true,opacity:.85,depthWrite:false}));
+ const K=tslKit('points')?.PointsNodeMaterial?tslKit():null,P=createParticles(max),geometry=new THREE.BufferGeometry(),position=K?new THREE.InstancedBufferAttribute(P.pos,3):new THREE.BufferAttribute(P.pos,3);position.setUsage(THREE.DynamicDrawUsage);geometry.setAttribute('position',position);
+ const points=K?createPointsSpriteTSL({THREE,TSL:K.TSL,PointsNodeMaterial:K.PointsNodeMaterial,position,color:'#d9b47c',size:.075,opacity:.85,name:'sawdust'}):new THREE.Points(geometry,new THREE.PointsMaterial({color:'#d9b47c',size:.075,sizeAttenuation:true,transparent:true,opacity:.85,depthWrite:false})); // WebGPU T6: sized points on the node path (tsl-points.js)
  points.name='sawdust';points.frustumCulled=false;points.visible=false;points.castShadow=false;parent.add(points);
  const c=Math.round(Math.cos(yaw)),s=Math.round(Math.sin(yaw));
  return {points,particles:P,

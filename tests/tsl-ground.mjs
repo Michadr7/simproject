@@ -109,6 +109,7 @@ function makeCpuTSL(st) {
   normalView: wrap(null, () => st.normalView),
   cameraViewMatrix: { mul: v => wrap(null, () => raw(v)) },
   screenCoordinate: wrap(null, () => st.screenCoord),
+  screenSize: wrap(null, () => st.screenSize || [1400, 900]),
   faceDirection: wrap(null, () => st.faceDir),
   dFdx: node => deriv(node, 'x'),
   dFdy: node => deriv(node, 'z')
@@ -125,7 +126,7 @@ function evalGlslGround(kind, st, { isHigh = true, edgeBox = null, gravel = 0, w
   const d = Math.min(Math.min(x - edgeBox.x0, edgeBox.x1 - x), Math.min(z - edgeBox.z0, edgeBox.z1 - z));
   const ec = R.edgeCover(kind, d, x, z);
   edgeM = ec.m;
-  if (amount > 0.5 && ec.cover < R.bayerAt(st.screenCoord[0], st.screenCoord[1])) discarded = true;
+  if (amount > 0.5 && ec.cover < R.bayerAt(st.screenCoord[0], (st.screenSize || [1400, 900])[1] - st.screenCoord[1])) discarded = true;
  }
  let diff = [...baseColor];
  if (vertexColors) diff = diff.map((c, i) => c * st.vertexColor[i]);
@@ -271,7 +272,8 @@ for (const kind of R.GROUND_KINDS) {
   });
   assert.equal(mat.isMeshStandardNodeMaterial, true);
   assert.equal(mat.userData.groundKind, kind);
-  assert.equal(mat.customProgramCacheKey(), groundProgramKey(kind, isHigh, !!(edgeBox && isHigh)));
+  assert.equal(mat.userData.groundProgramKey, groundProgramKey(kind, isHigh, !!(edgeBox && isHigh)));
+  assert.equal(Object.hasOwn(mat, 'customProgramCacheKey'), false, 'T5: no shared program key on a node material (WebGPURenderer would reuse the first material\'s node build)');
   assert.equal(mat.polygonOffset, true);
   assert.equal(mat.polygonOffsetFactor, -2);
   assert.equal(!!mat.normalNode, isHigh && R.GD_DETAIL_KINDS.includes(kind) && kind !== 'paving');

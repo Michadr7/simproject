@@ -4,7 +4,7 @@
 import {coverFor,coverJob,COVER_RULES,coverReach,tierOf} from './ground-cover-rules.js';
 import {WIND_KIND_MUL,WIND_BASE,windUniform} from './wind.js';
 import {makeCoverSampler} from './cover-sampler.js';
-import {kindModel,kindRuns,packRun,kindUniform,COVER_BOUND_PAD} from './cover-pack.js';
+import {kindModel,kindRuns,packRun,kindUniform,COVER_BOUND_PAD} from './cover-pack.js';import {tslKit} from './render-backend.js';import {createCoverWindTSL,createCoverMaterialTSL} from './tsl-cover.js';
 export const COVER_BUILD_DIST=62; // metres from the player to a chunk's nearest edge: closer than this and its cover is built
 export const COVER_DROP_DIST=95; // beyond this its cover is disposed (hysteresis: no building and dropping at the border)
 export const COVER_CHECK_S=.25; // how often update() looks at which chunks need cover
@@ -22,13 +22,14 @@ export function patchCoverShader(vertexShader,fragmentShader,frontFacingChunk){
  let f=fragmentShader;if(frontFacingChunk&&frontFacingChunk.includes('gl_FrontFacing ? 1.0 : - 1.0'))f=f.replace('#include <normal_fragment_begin>',frontFacingChunk.replace('gl_FrontFacing ? 1.0 : - 1.0','1.0')); // double-sided leaves keep their (up-leaning) normal on the back: no black undersides
  return {vertexShader:v,fragmentShader:f}}
 export function createCoverView({THREE,heightAt,seed=0,rects=[],tier='high'}){
- const wind={uWind:{value:new THREE.Vector4(WIND_BASE.dx,WIND_BASE.dz,.85,.5)},uWindT:{value:0}},windArr=[0,0,0,0];
+ const K=tslKit('cover'),wind=K?createCoverWindTSL({THREE,TSL:K.TSL}):{uWind:{value:new THREE.Vector4(WIND_BASE.dx,WIND_BASE.dz,.85,.5)},uWindT:{value:0}},windArr=[0,0,0,0]; // WebGPU T5: behind ?webgpu=1 the cover materials are tsl-cover.js twins (same uniforms)
  let assets=null,atlas=null,models=null,cur=tierOf(tier);
  const materials=new Map(),geos=new Map(),ready=new Map(),built=new Map(),queue=[],stat={chunks:0,instances:0,draws:0,lastPlaceMs:0,lastMeshMs:0,builtTotal:0,droppedTotal:0,placeMsTotal:0,maxPlaceMs:0,maxFrameMs:0};
  let sinceCheck=1e9,pos={x:0,z:0},pending=null,work=null;
  const rectDist=(b,x,z)=>Math.hypot(Math.max(b.x0-x,0,x-b.x1),Math.max(b.z0-z,0,z-b.z1));
  function makeAtlas(a){const img=new Image();const t=new THREE.Texture(img);t.flipY=false;t.colorSpace=THREE.SRGBColorSpace;t.generateMipmaps=true;t.minFilter=THREE.LinearMipmapLinearFilter;t.magFilter=THREE.LinearFilter;t.wrapS=t.wrapT=THREE.ClampToEdgeWrapping;img.onload=()=>{t.needsUpdate=true};img.src=a.png;return t}
  function materialFor(kind){let m=materials.get(kind);if(m)return m;
+  if(K){const t=createCoverMaterialTSL({THREE,TSL:K.TSL,MeshStandardNodeMaterial:K.MeshStandardNodeMaterial,kind,height:models.get(kind).height,tier:cur,atlas,wind});t.material.userData.uniforms=t.uniforms;materials.set(kind,t.material);return t.material}
   const r=coverReach(kind,cur),mdl=models.get(kind),u=kindUniform(kind,r,WIND_KIND_MUL[kind]??1,mdl.height);
   const uniforms={uKind:{value:new THREE.Vector4(u[0],u[1],u[2],u[3])},uUp:{value:COVER_UP[kind]??.5},uWind:wind.uWind,uWindT:wind.uWindT};
   m=new THREE.MeshStandardMaterial({map:atlas,vertexColors:true,alphaTest:COVER_ALPHA_TEST,side:THREE.DoubleSide,roughness:1,metalness:0});m.name='cover-'+kind;

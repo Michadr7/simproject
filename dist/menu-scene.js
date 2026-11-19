@@ -5,6 +5,7 @@
 import * as THREE from './vendor/three.module.js';
 import {createProp,createPropInstances,propInfo} from './props.js';import {applyPaint} from './paint-shader.js';
 import {PINES,modelGeometry,createNatureMaterials} from './nature.js';import {createSky} from './sky.js';import {lightSwitch,VEHICLE_LAMPS} from './night-lights-rules.js';
+import {tslKit} from './render-backend.js';import {createMenuWindMaterialTSL} from './tsl-menu.js';import {createPointsSpriteTSL} from './tsl-points.js';
 import {MENU_VEHICLE,leanSpot,menuPose,windSway,hazeAt,MENU_PLANS,plansOps,MENU_COVER,groundCover,coverShape,COVER_WIND} from './menu-scene-rules.js';
 
 const SOLID={apply:m=>m},DUST=36,PLANS_LEAN=.8,HAND={x:.27,y:1.3,z:.25}; // HAND: where each wrist goes (character space, metres); the fist hangs about 10 cm below and ahead of the wrist. The sheet is 46 cm wide (edge at 23 cm), so the wrist sits 4 cm outside the edge and the fist closes around it from the side and below, behind the sheet's plane, instead of through the face
@@ -48,6 +49,7 @@ function coverGeometry(kind,root,tip){
 }
 // The wind for the cover, in the vertex shader (the same formula as coverBend in menu-scene-rules.js): one uniform pair a frame, no matrices on the CPU.
 function windMaterial(wind){
+ {const K=tslKit('menu');if(K){const r=createMenuWindMaterialTSL({THREE,TSL:K.TSL,MeshLambertNodeMaterial:K.MeshLambertNodeMaterial,wind});wind.uTime=r.uniforms.uTime;wind.uGust=r.uniforms.uGust;return r.material}} // WebGPU T5: the TSL twin; update() keeps writing wind.uTime/uGust .value
  const W=COVER_WIND,f=n=>n.toFixed(4),material=new THREE.MeshLambertMaterial({vertexColors:true});
  material.onBeforeCompile=shader=>{shader.uniforms.uTime=wind.uTime;shader.uniforms.uGust=wind.uGust;
   shader.vertexShader='uniform float uTime;\nuniform float uGust;\nattribute float aBend;\n'+shader.vertexShader.replace('#include <begin_vertex>',`#include <begin_vertex>
@@ -114,8 +116,8 @@ export function createMenuScene({createCharacter,appearance,vehicle=MENU_VEHICLE
  }
 
  // Dust in the light: a handful of points, placed by hazeAt.
- const dustGeometry=own(new THREE.BufferGeometry()),dustAt=new Float32Array(DUST*3);dustGeometry.setAttribute('position',new THREE.BufferAttribute(dustAt,3));
- const dust=new THREE.Points(dustGeometry,own(new THREE.PointsMaterial({color:'#fff1cf',size:.05,transparent:true,opacity:.4,depthWrite:false})));dust.frustumCulled=false;dust.position.set(spot.x,0,spot.z);scene.add(dust);
+ const PK=tslKit('points')?.PointsNodeMaterial?tslKit():null,dustGeometry=own(new THREE.BufferGeometry()),dustAt=new Float32Array(DUST*3);dustGeometry.setAttribute('position',PK?new THREE.InstancedBufferAttribute(dustAt,3):new THREE.BufferAttribute(dustAt,3));
+ const dust=PK?createPointsSpriteTSL({THREE,TSL:PK.TSL,PointsNodeMaterial:PK.PointsNodeMaterial,position:dustGeometry.attributes.position,color:'#fff1cf',size:.05,opacity:.4,name:'menu-dust'}):new THREE.Points(dustGeometry,own(new THREE.PointsMaterial({color:'#fff1cf',size:.05,transparent:true,opacity:.4,depthWrite:false})));if(PK)own(dust.material); // WebGPU T6: sized dust on the node path (tsl-points.js)dust.frustumCulled=false;dust.position.set(spot.x,0,spot.z);scene.add(dust);
 
  // The camera: three-quarter view of the character and the hull, the subject kept right of the menu column.
  const camera=new THREE.PerspectiveCamera(36,1,.1,90),home=new THREE.Vector3(spot.x+4.6,1.55,spot.z+4.4),look=new THREE.Vector3(spot.x-.2,1.2,spot.z-.3);

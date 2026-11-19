@@ -4,6 +4,7 @@
 // colour grade replaces three.js's empty CustomToneMapping so every material gets it with no extra pass (Low quality too).
 import * as THREE from './vendor/three.module.js';
 import {skyAt,gradeGLSL,NIGHT_FLOOR,clampNightFloor,clampExposureScale,wrapMinutes} from './daynight.js';
+import {tslKit} from './render-backend.js';import {createSkyTSL} from './tsl-sky.js'; // WebGPU T5: behind ?webgpu=1 createSky hands over to its TSL twin (same API)
 
 export const INDOOR_EXPOSURE=1.12; // interiors, the character preview and the menu keep the exposure the game always had (they stay day-bright for now)
 export const STAR_COUNT=600,SUN_DISTANCE=60;
@@ -41,6 +42,7 @@ void main(){float a=smoothstep(0.5,0.15,length(gl_PointCoord-0.5));gl_FragColor=
 
 // scene: the world scene (it has a Fog and a Color background). sun, hemi: the two lights that already exist. renderer: only toneMapping and toneMappingExposure are set.
 export function createSky({scene,renderer,sun,hemi}){
+ {const K=tslKit('sky');if(K)return createSkyTSL({THREE,TSL:K.TSL,NodeMaterial:K.NodeMaterial,scene,renderer,sun,hemi})}
  const graded=installGrade();if(graded)renderer.toneMapping=THREE.CustomToneMapping; // set once, before the first frame: the tone-mapping mode never changes afterwards
  const v3=()=>({value:new THREE.Vector3()}),c3=()=>({value:new THREE.Color()});
  const dome=new THREE.Mesh(new THREE.SphereGeometry(1,24,16),new THREE.ShaderMaterial({name:'sky-dome',vertexShader:DOME_VERTEX,fragmentShader:DOME_FRAGMENT,side:THREE.BackSide,depthTest:false,depthWrite:false,fog:false,
