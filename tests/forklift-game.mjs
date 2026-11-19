@@ -8,7 +8,7 @@ import {floorPallets,palletsOf} from '../dist/pallets.js';
 import {bayX,FACE_ROWS,WAREHOUSE_STAGING} from '../dist/warehouse-layout.js';
 import {BAY,TIP} from '../dist/forklift.js';
 import {CARRY_Z,levelBase} from '../dist/fork-pallets.js';
-globalThis.location={search:'?debug',hostname:'localhost',href:'http://localhost/?debug',origin:'http://localhost',protocol:'http:',host:'localhost'};
+globalThis.location={search:'?debug&webgpu=0',hostname:'localhost',href:'http://localhost/?debug',origin:'http://localhost',protocol:'http:',host:'localhost'};
 const {bootGame}=await import('./support/boot-game.mjs');
 
 // The forklift in the game (0.35 step 5 and DESIGN 4.16 I step 2): E at it to drive (Yard hand on shift); W S A D drive, R and F move the forks (Shift: slowly). There is no E to lift or set a pallet down:

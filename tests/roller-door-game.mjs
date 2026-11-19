@@ -5,7 +5,7 @@ import {clockIn} from '../dist/shift.js';
 import {forkLoadOf} from '../dist/forest.js';
 import {BAY} from '../dist/forklift.js';
 import {IN,OUT,YARD,inYard} from '../dist/dock.js';
-globalThis.location={search:'?debug',hostname:'localhost',href:'http://localhost/?debug',origin:'http://localhost',protocol:'http:',host:'localhost'};
+globalThis.location={search:'?debug&webgpu=0',hostname:'localhost',href:'http://localhost/?debug',origin:'http://localhost',protocol:'http:',host:'localhost'};
 const {bootGame}=await import('./support/boot-game.mjs');
 
 // The roller door in the game (D2): it rolls up when the forklift comes near, the forklift drives out through it onto the apron (a short fade, the same forklift, load and fork height kept), stays on the apron,

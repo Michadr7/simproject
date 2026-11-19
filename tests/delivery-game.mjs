@@ -9,7 +9,7 @@ import {DOCK_BAY} from '../dist/customers.js';
 import {ZONE,IN} from '../dist/dock.js';
 import {BAY} from '../dist/forklift.js';
 import {CARRY_Z} from '../dist/fork-pallets.js';
-globalThis.location={search:'?debug',hostname:'localhost',href:'http://localhost/?debug',origin:'http://localhost',protocol:'http:',host:'localhost'};
+globalThis.location={search:'?debug&webgpu=0',hostname:'localhost',href:'http://localhost/?debug',origin:'http://localhost',protocol:'http:',host:'localhost'};
 const {bootGame}=await import('./support/boot-game.mjs');
 import {deliveryPay} from '../dist/plank-delivery.js';import {priceTable} from '../dist/plank-economy.js';
 import {addPlanks,removePlanks,countOf,freeCount,orderCount,orderIdsOf,removeOrderPlanks,takeAll,unloadOne,unloadKind,normalizeCargo,cargoText} from '../dist/cargo.js';

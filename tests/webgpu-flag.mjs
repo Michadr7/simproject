@@ -8,7 +8,7 @@ import {copyFile,rename,writeFile} from 'node:fs/promises';
 import {join,resolve} from 'node:path';
 import {fileURLToPath,pathToFileURL} from 'node:url';
 
-const CASES={off:{search:'',gpu:true,label:'WebGL'},on:{search:'?webgpu=1',gpu:true,label:'WebGPU'},force:{search:'?webgpu=1&webgl=1',gpu:true,label:'WebGL2 via WebGPU'},nogpu:{search:'?webgpu=1',gpu:false,label:'WebGL2 via WebGPU'}};
+const CASES={off:{search:'?webgpu=0',gpu:true,label:'WebGL'},default:{search:'',gpu:true,label:'WebGPU'},on:{search:'?webgpu=1',gpu:true,label:'WebGPU'},force:{search:'?webgpu=1&webgl=1',gpu:true,label:'WebGL2 via WebGPU'},nogpu:{search:'?webgpu=1',gpu:false,label:'WebGL2 via WebGPU'}};
 // the modules that build a TSL twin during a boot in Node (ground cover needs Image to load its atlas, so it never builds here: see cover-view.mjs / tsl-materials.mjs)
 const TWINS=['sky','shadows','world','paint','tracks','smoke','debris','lights','tags','menu','points']; // T6: points = sawdust + menu dust as sized sprites
 const which=process.argv[2];
@@ -18,6 +18,7 @@ if(!which){
  assert.deepEqual(backendFlag(''),{webgpu:false,forceWebGL:false});assert.deepEqual(backendFlag('?webgpu=1'),{webgpu:true,forceWebGL:false});assert.deepEqual(backendFlag('?webgpu'),{webgpu:true,forceWebGL:false});
  assert.deepEqual(backendFlag('?webgpu=0'),{webgpu:false,forceWebGL:false});assert.deepEqual(backendFlag('?webgl=1'),{webgpu:false,forceWebGL:false},'webgl alone changes nothing');
  assert.deepEqual(backendFlag('?debug&webgpu=true&webgl=1'),{webgpu:true,forceWebGL:true});assert.deepEqual(backendFlag(null),{webgpu:false,forceWebGL:false});
+ assert.deepEqual(backendFlag('',true),{webgpu:true,forceWebGL:false},'0.36.0: WebGPU is the default in a page');assert.deepEqual(backendFlag('?webgpu=0',true),{webgpu:false,forceWebGL:false},'?webgpu=0 opts out');assert.deepEqual(backendFlag('?webgl=1',true),{webgpu:true,forceWebGL:true},'default + ?webgl=1 = the WebGL2 backend');
  assert.equal(backendLabel({backend:{isWebGPUBackend:true}},false),BACKEND_WEBGL);assert.equal(backendLabel({backend:{isWebGPUBackend:true}},true),BACKEND_WEBGPU);assert.equal(backendLabel({backend:{isWebGLBackend:true}},true),BACKEND_WEBGL2);
  assert.equal(tslKit('x'),null);assert.deepEqual(tslUses(),{},'no kit: nothing counted');setTslKit({TSL:{}});tslKit('a');tslKit('a');assert.deepEqual(tslUses(),{a:2});setTslKit(null);assert.equal(tslKit('a'),null);
  const out=[];
@@ -27,13 +28,13 @@ if(!which){
   out.push(r.stdout.trim().split('\n').pop());
  }
  for(const line of out)console.log(line);
- console.log('PASS webgpu-flag: off = WebGLRenderer with no WebGPU/TSL download; ?webgpu=1 = WebGPURenderer, init awaited before the first render, '+TWINS.length+' TSL twins built, no GLSL patch left; &webgl=1 and no navigator.gpu = WebGL2 via WebGPU.');
+ console.log('PASS webgpu-flag: ?webgpu=0 = WebGLRenderer with no WebGPU/TSL download; no flag and ?webgpu=1 = WebGPURenderer (the 0.36.0 default), init awaited before the first render, '+TWINS.length+' TSL twins built, no GLSL patch left; &webgl=1 and no navigator.gpu = WebGL2 via WebGPU.');
  process.exit(0);
 }
 
 const c=CASES[which];assert(c,'unknown case '+which);
 const {bootGame}=await import('./support/boot-game.mjs');const {writeMockRenderer}=await import('./support/mock-renderer.mjs');
-if(c.search)globalThis.location={search:c.search,pathname:'/'};
+globalThis.location={search:c.search,pathname:'/'}; // a real page always has a location (WebGPU is the default there); Node tests without one stay on WebGL
 if(c.gpu)Object.defineProperty(globalThis.navigator,'gpu',{value:{},configurable:true});
 const g=await bootGame({play:false,editRelease:async dir=>{
  const v=join(dir,'vendor');

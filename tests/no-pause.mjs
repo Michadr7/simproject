@@ -6,7 +6,7 @@ import {talkOpen,talkName,reply,closeTalk} from './support/talk.mjs';
 
 // Talking to NPCs (both the docked #talk panel and the legacy #dialog.in-world menus) must never pause time, needs, or world updates;
 // walking stays locked, blocking modals (pause, bills, inventory) still pause, and walk-away / speaker-gone / shop-close / vehicle-hit close talk cleanly.
-globalThis.location={search:'?debug',hostname:'localhost',href:'http://localhost/?debug',origin:'http://localhost',protocol:'http:',host:'localhost'};
+globalThis.location={search:'?debug&webgpu=0',hostname:'localhost',href:'http://localhost/?debug',origin:'http://localhost',protocol:'http:',host:'localhost'};
 const {bootGame}=await import('./support/boot-game.mjs');
 
 const O=MAP.offices[0],W=MAP.offices.find(o=>o.kind==='warehouse');

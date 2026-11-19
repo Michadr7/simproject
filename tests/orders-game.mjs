@@ -12,7 +12,7 @@ import {CARRY_Z} from '../dist/fork-pallets.js';
 
 // Filling a customer order (0.35 step 3b, DESIGN 4.16 C): take planks out of a floor-level rack, stage them on the order's pallet, and when it is staged the customer's truck comes to the dock;
 // E at the dock door loads it: the order is done, pays, and the truck leaves.
-globalThis.location={search:'?debug',hostname:'localhost',href:'http://localhost/?debug',origin:'http://localhost',protocol:'http:',host:'localhost'};
+globalThis.location={search:'?debug&webgpu=0',hostname:'localhost',href:'http://localhost/?debug',origin:'http://localhost',protocol:'http:',host:'localhost'};
 const {bootGame}=await import('./support/boot-game.mjs');
 const W=MAP.offices.find(o=>o.kind==='warehouse'),DAY=3;
 // the route is real: it starts at the map edge and ends in the bay, and the bay is against the loading door (the bed's middle at the dock's x)

@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-globalThis.location={search:'?debug',hostname:'localhost',href:'http://localhost/?debug',origin:'http://localhost',protocol:'http:',host:'localhost'};
+globalThis.location={search:'?debug&webgpu=0',hostname:'localhost',href:'http://localhost/?debug',origin:'http://localhost',protocol:'http:',host:'localhost'};
 const {bootGame}=await import('./support/boot-game.mjs');
 
 // The phone's Messages in the game (DESIGN 4.19): every notification is saved with its app, the phone button and each app icon count the unread ones, opening an app reads its messages,
