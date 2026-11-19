@@ -5,10 +5,10 @@
 export const BACKEND_WEBGL='WebGL',BACKEND_WEBGPU='WebGPU',BACKEND_WEBGL2='WebGL2 via WebGPU';
 const ON=new Set(['','1','true','on','yes']);
 // search: location.search ('?webgpu=1'). webgpu: use WebGPURenderer; forceWebGL: ?webgl=1 as well (WebGPURenderer on its WebGL2 backend, for testing the fallback on a WebGPU machine).
-export function backendFlag(search=''){
+export function backendFlag(search='',defaultOn=false){
  let q;try{q=new URLSearchParams(String(search||''))}catch{return {webgpu:false,forceWebGL:false}}
  const on=k=>q.has(k)&&ON.has(String(q.get(k)).toLowerCase());
- return {webgpu:on('webgpu'),forceWebGL:on('webgpu')&&on('webgl')};
+ const webgpu=q.has('webgpu')?on('webgpu'):!!defaultOn;return {webgpu,forceWebGL:webgpu&&on('webgl')}; // 0.36.0 owner: defaultOn is true in a real page (WebGPU is the default, ?webgpu=0 opts out); Node tests have no location, so they stay on WebGL
 }
 // T6: the node path grades + encodes per material (tsl-output.js, WebGL's look). &direct=0 keeps T5's single output pass, for A/B checks (scripts/webgpu-diff.mjs) and as a way back.
 export function directOutputWanted(search=''){try{return new URLSearchParams(String(search||'')).get('direct')!=='0'}catch{return true}}
