@@ -215,7 +215,7 @@ async function paintSignPictures(mesh){try{const {SIGN_PICTURES}=await import('.
 export function createWorld(scene,{label,cullRadius,streaming=false}={}){
  let fountainParts=null,townTime=0;
  const K=tslKit('world'),layout=worldLayout(),colliders=createColliders(),fade=K?createSightlineFadeTSL({THREE,TSL:K.TSL}):createSightlineFade(); // WebGPU T5: behind ?webgpu=1 the sightline fade and the ground are TSL twins (tsl-sightline.js, tsl-ground.js)
- const gdShared=K?createGroundUniformsTSL({TSL:K.TSL}):null,groundPatch=(m,kind)=>{if(!K)return patchGround(m,kind);const t=makeGroundMaterialTSL(kind,{THREE,TSL:K.TSL,MeshStandardNodeMaterial:K.MeshStandardNodeMaterial,base:m,shared:gdShared});if(m.name)t.name=m.name;return t}; // the TSL ground is a NEW material: every caller below uses the one returned
+ const gdShared=K?createGroundUniformsTSL({TSL:K.TSL}):null,tslGround=new Map(),groundPatch=(m,kind)=>{if(!K)return patchGround(m,kind);const t=makeGroundMaterialTSL(kind,{THREE,TSL:K.TSL,MeshStandardNodeMaterial:K.MeshStandardNodeMaterial,base:m,shared:gdShared});if(m.name)t.name=m.name;tslGround.set(t,{kind,base:m});return t}; // the TSL ground is a NEW material: every caller below uses the one returned
  const group=new THREE.Group();group.name='world-zones';scene.add(group);
 
 
@@ -564,9 +564,9 @@ export function createWorld(scene,{label,cullRadius,streaming=false}={}){
  const MAX_LOG_INSTANCES=96;
  const logMesh=new THREE.InstancedMesh(new THREE.CylinderGeometry(.12,.12,1.15,8).rotateZ(Math.PI/2),new THREE.MeshStandardMaterial({map:nature.logBark,color:'#d2b080',roughness:1}),MAX_LOG_INSTANCES);
  logMesh.count=0;logMesh.castShadow=logMesh.receiveShadow=true;logMesh.frustumCulled=false;logMesh.name='ground-logs';group.add(logMesh);
- let clock=0,chunkView=null,edgeHills=null,cover=null;
+ let clock=0,chunkView=null,edgeHills=null,cover=null,gmat=null;
  if(streaming){ // chunk streaming (F1): the 5 x 5 chunks round the spawn are built here, behind the loading screen; world.update() keeps the ring loaded from then on
-  const gmat={asphalt:groundLayer(asphalt,-.045),driveway:groundLayer(new THREE.MeshStandardMaterial({color:'#8f9396',roughness:.95}),-.05),path:groundLayer(new THREE.MeshStandardMaterial({color:'#b9b3a4',roughness:.9}),-.049)};
+  gmat={asphalt:groundLayer(asphalt,-.045),driveway:groundLayer(new THREE.MeshStandardMaterial({color:'#8f9396',roughness:.95}),-.05),path:groundLayer(new THREE.MeshStandardMaterial({color:'#b9b3a4',roughness:.9}),-.049)};
   const groundChunk=slice=>{const b=gb.get(slice.key);if(!b)return null;const set=new THREE.Group();set.name='ground-'+slice.key;
    for(const kind of ['asphalt','driveway','path']){const d=b[kind];if(!d.idx.length)continue;const g=new THREE.BufferGeometry();g.setAttribute('position',new THREE.Float32BufferAttribute(d.pos,3));g.setIndex(d.idx);g.computeVertexNormals();g.computeBoundingSphere();const mesh=new THREE.Mesh(g,gmat[kind]);mesh.receiveShadow=true;mesh.name='ground-'+kind+'-'+slice.key;set.add(mesh)}
    if(b.dashes.length){const marks=new THREE.InstancedMesh(new THREE.BoxGeometry(.18,.02,2.2),lineMaterial,b.dashes.length);b.dashes.forEach((d,i)=>marks.setMatrixAt(i,m4.compose(v.set(d.x,d.y,d.z),q.setFromAxisAngle(yAxis,d.yaw),s.set(1,1,1))));marks.computeBoundingSphere();marks.name='road-lines-'+slice.key;set.add(marks)}
@@ -584,6 +584,7 @@ export function createWorld(scene,{label,cullRadius,streaming=false}={}){
   blocked:(x,z)=>colliders.blocked(x,z),blockedStatic:(x,z)=>colliders.blockedAll(x,z), // blockedStatic: every collider as built, never streaming or play state (createColliders blockedAll)
   // GD5: the wind of this frame (a wind.js windSample result) for the cover shader; the tier follows applyQuality ('high' or 'low'); stats for tests and the debug hook.
   setWind:w=>cover?.setWind(w),setCoverTier:t=>cover?.setTier(t),coverStats:()=>cover?cover.stats():null,coverView:cover,
+  rebuildGroundTSL(high){setGroundQuality(high);if(!K)return 0;const used=new Set();group.traverse(o=>{if(!o.material)return;if(Array.isArray(o.material))for(const m of o.material)used.add(m);else used.add(o.material)});if(gmat)for(const m of Object.values(gmat))used.add(m);const swap=new Map();for(const [oldMat,spec] of [...tslGround.entries()]){tslGround.delete(oldMat);if(!used.has(oldMat))continue;const next=makeGroundMaterialTSL(spec.kind,{THREE,TSL:K.TSL,MeshStandardNodeMaterial:K.MeshStandardNodeMaterial,base:spec.base,shared:gdShared,polygonOffset:oldMat.polygonOffset,polygonOffsetFactor:oldMat.polygonOffsetFactor,polygonOffsetUnits:oldMat.polygonOffsetUnits,isHigh:!!high});if(oldMat.name)next.name=oldMat.name;tslGround.set(next,spec);swap.set(oldMat,next)}group.traverse(o=>{if(!o.material)return;if(Array.isArray(o.material)){for(let i=0;i<o.material.length;i++){const n=swap.get(o.material[i]);if(n)o.material[i]=n}}else{const n=swap.get(o.material);if(n)o.material=n}});if(gmat)for(const k of Object.keys(gmat)){const n=swap.get(gmat[k]);if(n)gmat[k]=n}for(const oldMat of swap.keys())oldMat.dispose?.();return swap.size},
   // Hide or show a landmark prop and its colliders (the Hal egg pallet while the crates are on the truck).
   setLandmarkVisible(id,v){const l=landmarks.find(e=>e.id===id);if(!l)return false;l.hidden=!v;l.mesh.visible=!!v;for(const b of l.boxes)b.active=!!v;return true},
   // The height of a deck or platform under the point (a building's raised floor), or null on open ground.

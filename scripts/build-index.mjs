@@ -74,7 +74,7 @@ export function buildIndex({root=ROOT,head=undefined}={}){
   if(GENERATED.test(name)){generated.push(`- ${name} · ${kb(size)}`);continue}
   const text=read(file),lines=lineCount(text),purpose=leadingComment(text,62)||PURPOSE_OVERRIDES[name]||'',ex=exportsOf(text),cov=covers.get(name)||[];
   if(!purpose)missing++;
-  const shown=ex.slice(0,5).join(', ')+(ex.length>5?` (+${ex.length-5})`:'');
+  const shown=ex.slice(0,3).join(', ')+(ex.length>3?` (+${ex.length-3})`:'');
   const testText=name==='game.js'?`the ${booted} tests that boot the packaged game (tests/support/boot-game.mjs)`:cov.length?cov.slice(0,2).join(', ')+(cov.length>2?` (+${cov.length-2})`:''):'none';
   code.push(`- ${name} · ${lines} lines${size>60*1024?' · read by range':''} · ${purpose||'(no header comment)'}${shown?` · exports: ${shown}`:''} · tests: ${testText}`)}
  // In the hub/ and test lines the words "Mikkadr Hub" repeat on most lines under a section already about the hub: leave them out and clip shorter by the same amount, so the same description shows.

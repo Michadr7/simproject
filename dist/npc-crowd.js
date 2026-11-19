@@ -4,7 +4,7 @@
 // planOf(personId, day) -> plan replaces schedule.planOf (W-D3: npc-dialogue.js createRosterPlanner wraps the named NPCs in namedPlan: sick people stay home).
 // exclude lists people someone else already draws (Hal Brennan, hal.js). Not drawn: people indoors, asleep, in a car (no NPC car system yet) or off the map. Needs three.js (the characters), so it is not unit tested; npc-walk.js is.
 import {MAP} from './map-definition.js';
-import {WALK_SPEED,placePoint} from './population.js';
+import {WALK_SPEED} from './population.js';import {walkPlacePoint} from './walk-legs.js';
 import {personPose,findRoute,freeReach,PACE_STEP} from './npc-walk.js';
 import {crowdWarm} from './npc-routes.js';
 import {crowdPool} from './busyness.js';
@@ -28,7 +28,7 @@ const wrap=a=>{while(a>Math.PI)a-=2*Math.PI;while(a<-Math.PI)a+=2*Math.PI;return
 
 export function createNpcCrowd({scene,createCharacter,outfit,population,schedule,pedestrians=[],blocked,cost=null,groundAt=null,map=MAP,radius=DRAW_RADIUS,pool=POOL,exclude=[],planOf=null,workProps=null,seed=map.seed}){
  const bounds=map.playable,points=new Map(),routes=new Map(),placedX=[],placedZ=[];let budget=ROUTES_PER_FRAME,hidden=false;
- const point=place=>{if(!points.has(place))points.set(place,placePoint(place,map));return points.get(place)};
+ const point=place=>{if(!points.has(place))points.set(place,walkPlacePoint(place,map));return points.get(place)};
  const route=(from,to)=>{const key=from+'>'+to;if(routes.has(key))return routes.get(key);
   const a=point(from),b=point(to);if(!a||!b){routes.set(key,null);return null}
   if(budget<=0){ctx.starved=true;return null} // later this frame or the next (ctx.starved: update() keeps a drawn person where they are instead of hiding them: audit B7)
