@@ -4,11 +4,12 @@
 import * as THREE from './vendor/three.module.js';
 import {paintUniforms,colourOf,coloursOf} from './paint.js';
 import {WEAR_PNG,CRACK_PNG} from './damage-textures.js';
+import {tslKit} from './render-backend.js';import {makePaintMaterialTSL,makeGlassMaterialTSL} from './tsl-paint.js';
 // Paint (paint.js): the body material is patched once to recolour pixels near the model's paint hue; the numbers are per-material uniforms, so every vehicle has its own colour and all share one shader program.
 const bodyMaterial=material=>Array.isArray(material)?material[0]:material;
 // The two shared textures (made once, by headless Blender: scripts/make-damage-textures.py): 128 px wear (RGB: scratches, grime, chips) and 256 px crack. Until the PNG decodes (or without a DOM, in a test) a 1 px black texture stands in.
 const blank=()=>{const t=new THREE.DataTexture(new Uint8Array([0,0,0,255]),1,1);t.needsUpdate=true;return t};
-function load(uri,{repeat,anisotropy=4}){if(typeof document==='undefined')return blank();const t=new THREE.TextureLoader().load(uri);t.colorSpace=THREE.NoColorSpace;t.anisotropy=anisotropy;if(repeat){t.wrapS=t.wrapT=THREE.RepeatWrapping}else{t.wrapS=t.wrapT=THREE.ClampToEdgeWrapping}return t}
+function load(uri,{repeat,anisotropy=4}){if(typeof document==='undefined'||typeof document.createElementNS!=='function')return blank();const t=new THREE.TextureLoader().load(uri);t.colorSpace=THREE.NoColorSpace;t.anisotropy=anisotropy;if(repeat){t.wrapS=t.wrapT=THREE.RepeatWrapping}else{t.wrapS=t.wrapT=THREE.ClampToEdgeWrapping}return t}
 let texWear=null,texCrack=null;
 const wearTexture=()=>texWear||(texWear=load(WEAR_PNG,{repeat:true})),crackTexture=()=>texCrack||(texCrack=load(CRACK_PNG,{repeat:false}));
 export const WEAR_TILE=1.1; // metres of vehicle surface per repeat of the wear texture
@@ -51,22 +52,34 @@ diffuseColor.rgb=mix(diffuseColor.rgb,vec3(.95,.97,1.),k);diffuseColor.a=max(dif
  material.customProgramCacheKey=()=>'vehicle-glass';material.needsUpdate=true;return u;
 }
 // The paint and glass materials of a vehicle mesh (found once): the body's own paint material (the S70, the flatbed) or the model's body material, and the glass parts.
-function lookParts(mesh){
+function lookParts(mesh,model){
  if(mesh.userData.lookParts)return mesh.userData.lookParts;
  const paints=[],glass=[];
  const own=mesh.userData?.paint;if(own&&own.isMaterial)paints.push(own);else{const m=bodyMaterial(mesh.material);if(m&&m.userData)paints.push(m)}
  mesh.traverse(o=>{if(o.isMesh&&/glass$/.test(o.name)&&o.material&&!glass.includes(o.material))glass.push(o.material)});
+ {const K=tslKit('paint');if(K)swapTSL(mesh,K,paints,glass,model)}
  return mesh.userData.lookParts={paints,glass};
 }
+// WebGPU T5: behind ?webgpu=1 each paint and glass material is swapped ONCE for its tsl-paint.js twin (the uniforms keep the same names on userData.paint / userData.crack, so applyPaint and
+// applyLook below run unchanged). The twin keeps vertex colours, the alpha test and a sightline maskNode the old material had; every mesh of the vehicle that used the old one gets the twin.
+function swapTSL(mesh,K,paints,glass,model='default'){
+ const twins=new Map(),twin=(m,isGlass)=>{let t=twins.get(m);if(t)return t;
+  t=(isGlass?makeGlassMaterialTSL:makePaintMaterialTSL)({THREE,TSL:K.TSL,MeshStandardNodeMaterial:K.MeshStandardNodeMaterial,base:m,model,wearTex:wearTexture(),crackTex:crackTexture()}).material;
+  t.vertexColors=!!m.vertexColors;if(m.alphaTest)t.alphaTest=m.alphaTest;if(m.maskNode)t.maskNode=m.maskNode;if(m.emissive&&t.emissive)t.emissive.copy(m.emissive);twins.set(m,t);return t};
+ paints.forEach((m,i)=>{paints[i]=twin(m,false)});glass.forEach((m,i)=>{glass[i]=twin(m,true)});
+ const swap=x=>twins.get(x)||x;
+ mesh.traverse(o=>{if(!o.material)return;o.material=Array.isArray(o.material)?o.material.map(swap):swap(o.material)});
+ if(mesh.userData.paint?.isMaterial)mesh.userData.paint=swap(mesh.userData.paint);
+}
 export function applyPaint(mesh,model,colourId){
- const parts=lookParts(mesh);for(const m of parts.paints)patchPaint(m);for(const m of parts.glass)patchGlass(m); // every vehicle's materials are patched when it is built (the one program per kind compiles with the first draw, never at a crash)
+ const parts=lookParts(mesh,model);for(const m of parts.paints)patchPaint(m);for(const m of parts.glass)patchGlass(m); // every vehicle's materials are patched when it is built (the one program per kind compiles with the first draw, never at a crash)
  if(mesh.userData?.paint?.isMaterial){const c=colourOf(model,colourId)||coloursOf(model)[0];if(c)mesh.userData.paint.color.set(c.swatch);return} // a model with its own paint material (the S70, the flatbed): set the colour itself
  const m=bodyMaterial(mesh.material);if(!m||!m.userData)return;
  const n=paintUniforms(model,colourId),u=patchPaint(m);u.uPaint.value.set(n.hue,n.sat,n.val,n.src);u.uBand.value=n.band;
 }
 // The damage look (damage.js lookOf): wear 0..1 on the paint, crack 0..1 on the glass. Only touches a uniform that changed. Returns how many glass materials took the crack (0: this model has no separate glass: no crack, nothing faked).
 export function applyLook(mesh,look,model='default',ext=null){
- const parts=lookParts(mesh);for(const m of parts.paints){const u=patchPaint(m);if(u.uWear.value.y!==look.wear)u.uWear.value.y=look.wear;const h=look.hit||[0,0,0,0];if(u.uHit.value.x!==h[0]||u.uHit.value.y!==h[1]||u.uHit.value.z!==h[2]||u.uHit.value.w!==h[3])u.uHit.value.set(h[0],h[1],h[2],h[3]);if(ext&&(u.uExt.value.x!==ext[0]||u.uExt.value.y!==ext[1]))u.uExt.value.set(ext[0],ext[1])} // VD7b: hit = [front, rear, left, right] 0..1, ext = [half width, half length] of the hull
+ const parts=lookParts(mesh,model);for(const m of parts.paints){const u=patchPaint(m);if(u.uWear.value.y!==look.wear)u.uWear.value.y=look.wear;const h=look.hit||[0,0,0,0];if(u.uHit.value.x!==h[0]||u.uHit.value.y!==h[1]||u.uHit.value.z!==h[2]||u.uHit.value.w!==h[3])u.uHit.value.set(h[0],h[1],h[2],h[3]);if(ext&&(u.uExt.value.x!==ext[0]||u.uExt.value.y!==ext[1]))u.uExt.value.set(ext[0],ext[1])} // VD7b: hit = [front, rear, left, right] 0..1, ext = [half width, half length] of the hull
  const place=CRACK_PLACE[model]||CRACK_PLACE.default;
  for(const m of parts.glass){const u=patchGlass(m);if(u.uCrack.value!==look.crack)u.uCrack.value=look.crack;if(u.uCrackMap.value.z!==place[2]||u.uCrackMap.value.x!==place[0]||u.uCrackMap.value.y!==place[1])u.uCrackMap.value.set(place[0],place[1],place[2])}
  return parts.glass.length;

@@ -21,6 +21,8 @@ export function createGradeTSL({ TSL }) {
 
 export function installGradeTSL({ THREE, TSL, renderer }) {
  if (!renderer?.library?.addToneMapping) return null;
+ const had = renderer.library.getToneMappingFunction?.(THREE.CustomToneMapping); // T5: the game's sky and the menu's sky both install it; a second addToneMapping only warns
+ if (had) { renderer.toneMapping = THREE.CustomToneMapping; return had; }
  const gradeTSL = createGradeTSL({ TSL });
  renderer.library.addToneMapping(gradeTSL, THREE.CustomToneMapping);
  renderer.toneMapping = THREE.CustomToneMapping;

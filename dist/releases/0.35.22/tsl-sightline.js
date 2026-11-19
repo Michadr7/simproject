@@ -13,7 +13,7 @@ export const BAYER_4X4 = Object.freeze([0, 8, 2, 10, 12, 4, 14, 6, 3, 11, 1, 9, 
 export function createSightlineFadeTSL({ THREE, TSL } = {}) {
  const {
   Fn, uniform, array, float, int, clamp, distance, dot, floor, max, mod, smoothstep, step,
-  positionWorld, screenCoordinate
+  positionWorld, screenCoordinate, screenSize
  } = TSL;
  const uFadeCamera = uniform(new THREE.Vector3());
  const uFadeTarget = uniform(new THREE.Vector3());
@@ -32,7 +32,7 @@ export function createSightlineFadeTSL({ THREE, TSL } = {}) {
    .mul(float(1.0).sub(smoothstep(SIGHTLINE_FADE.tEnd0, SIGHTLINE_FADE.tEnd1, t)))
    .mul(uFadeEnabled);
   const bx = floor(mod(screenCoordinate.x, 4.0));
-  const by = floor(mod(screenCoordinate.y, 4.0));
+  const by = floor(mod(screenSize.y.sub(screenCoordinate.y), 4.0)); // T6: TSL counts y from the top, gl_FragCoord from the bottom: flipped so the 4x4 rows match WebGL (T5 gap 4)
   const bayer = bayerArr.element(int(by.mul(4.0).add(bx))).add(0.5).div(16.0);
   return fade.mul(SIGHTLINE_FADE.maxFade).lessThanEqual(bayer);
  })();

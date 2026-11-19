@@ -2,7 +2,7 @@
 // second at a speed and throttle; the pool is the sawdust pool's (sawdust.js: plain arrays, one THREE.Points object, one draw call, nothing drawn while no puff is alive), with no gravity
 // (smoke rises) and a longer life. Cost: at most SMOKE_MAX = 150 points (VD3: a per-point colour for the damage tiers), one draw call, about 0.05 ms of CPU a frame; no shadows, no textures.
 import * as THREE from './vendor/three.module.js';
-import {createParticles,spawn,PARKED} from './sawdust.js';
+import {createParticles,spawn,PARKED} from './sawdust.js';import {tslKit} from './render-backend.js';import {createSmokeMeshTSL} from './tsl-smoke.js';
 
 export const SMOKE_MAX=150,RISE=.8,DRAG=1.1,WIND=.35,GROW=1.6; // 150 (VD3: 90 + the hood smoke of a damaged vehicle); the tiers: 0 grey (as before), 1 dark, 2 black
 export const SMOKE_COLOURS=Object.freeze(['#9a9c9e','#4a4c4e','#1e1e20']); // VD7a: darker damage tiers
@@ -31,12 +31,14 @@ function softDot(){if(typeof document==='undefined'||!document.createElement)ret
 
 // parent: where the points live (world coordinates).
 export function createSmoke(parent,{max=SMOKE_MAX,random=Math.random}={}){
- const P=createParticles(max),geometry=new THREE.BufferGeometry(),position=new THREE.BufferAttribute(P.pos,3);position.setUsage(THREE.DynamicDrawUsage);geometry.setAttribute('position',position);
- const col=new Float32Array(max*3),tiers=SMOKE_COLOURS.map(c=>new THREE.Color(c)),colour=new THREE.BufferAttribute(col,3);colour.setUsage(THREE.DynamicDrawUsage);geometry.setAttribute('color',colour);for(let i=0;i<max;i++)tiers[0].toArray(col,i*3);
- const points=new THREE.Points(geometry,new THREE.PointsMaterial({color:'#ffffff',vertexColors:true,size:1,sizeAttenuation:true,transparent:true,opacity:SMOKE_ALPHA,depthWrite:false,map:softDot(),alphaTest:.01}));
+ const K=tslKit('smoke'),S=K?createSmokeMeshTSL({THREE,TSL:K.TSL,MeshBasicNodeMaterial:K.MeshBasicNodeMaterial,max,map:softDot()}):null,tiers=SMOKE_COLOURS.map(c=>new THREE.Color(c));let P,geometry,position,col,colour,points,base,size,fade,aSize,aFade; // WebGPU T5: behind ?webgpu=1 the puffs are tsl-smoke.js billboards (the same arrays, the same API below)
+ if(S){({particles:P,geometry,aPos:position,col,aColor:colour,mesh:points,base,size,fade,aSize,aFade}=S);parent.add(points)}else{
+ P=createParticles(max);geometry=new THREE.BufferGeometry();position=new THREE.BufferAttribute(P.pos,3);position.setUsage(THREE.DynamicDrawUsage);geometry.setAttribute('position',position);
+ col=new Float32Array(max*3);colour=new THREE.BufferAttribute(col,3);colour.setUsage(THREE.DynamicDrawUsage);geometry.setAttribute('color',colour);for(let i=0;i<max;i++)tiers[0].toArray(col,i*3);
+ points=new THREE.Points(geometry,new THREE.PointsMaterial({color:'#ffffff',vertexColors:true,size:1,sizeAttenuation:true,transparent:true,opacity:SMOKE_ALPHA,depthWrite:false,map:softDot(),alphaTest:.01}));
  points.name='exhaust-smoke';points.frustumCulled=false;points.visible=false;points.castShadow=false;parent.add(points);
- const base=new Float32Array(max).fill(.8),size=new Float32Array(max).fill(.8),fade=new Float32Array(max),aSize=new THREE.BufferAttribute(size,1),aFade=new THREE.BufferAttribute(fade,1);aSize.setUsage(THREE.DynamicDrawUsage);aFade.setUsage(THREE.DynamicDrawUsage);geometry.setAttribute('aSize',aSize);geometry.setAttribute('aFade',aFade);
- points.material.onBeforeCompile=s=>{s.vertexShader=s.vertexShader.replace('#include <common>','attribute float aSize;attribute float aFade;varying float vFade;\n#include <common>').replace('gl_PointSize = size;','gl_PointSize = size * aSize;vFade = aFade;');s.fragmentShader=s.fragmentShader.replace('#include <common>','varying float vFade;\n#include <common>').replace('#include <alphatest_fragment>','diffuseColor.a *= vFade;\n#include <alphatest_fragment>')}; // VD7a: a size and a fade per puff (one program, one draw call)
+ base=new Float32Array(max).fill(.8);size=new Float32Array(max).fill(.8);fade=new Float32Array(max);aSize=new THREE.BufferAttribute(size,1);aFade=new THREE.BufferAttribute(fade,1);aSize.setUsage(THREE.DynamicDrawUsage);aFade.setUsage(THREE.DynamicDrawUsage);geometry.setAttribute('aSize',aSize);geometry.setAttribute('aFade',aFade);
+ points.material.onBeforeCompile=s=>{s.vertexShader=s.vertexShader.replace('#include <common>','attribute float aSize;attribute float aFade;varying float vFade;\n#include <common>').replace('gl_PointSize = size;','gl_PointSize = size * aSize;vFade = aFade;');s.fragmentShader=s.fragmentShader.replace('#include <common>','varying float vFade;\n#include <common>').replace('#include <alphatest_fragment>','diffuseColor.a *= vFade;\n#include <alphatest_fragment>')}} // VD7a: a size and a fade per puff (one program, one draw call)
  const carry=new Map(); // fractional puffs owed to each emitter id
  // one puff at (x, y, z), drifting back along (dx, dz) (the direction the exhaust points, world) at a little speed, 0.9 to 1.5 s of life
  const puff=(x,y,z,dx,dz,speed=.5,tier=0,boost=0)=>{const slot=P.next;tiers[tier]?.toArray(col,slot*3);colour.needsUpdate=true;base[slot]=(SMOKE_SIZE[tier]??.8)*(.85+random()*.3)*(1+boost*.25);spawn(P,x+(random()-.5)*.06,y+(random()-.5)*.04,z+(random()-.5)*.06,dx*speed+(random()-.5)*.25,.2+random()*.3+boost,dz*speed+(random()-.5)*.25,(.9+random()*.6)*(1+boost*.6)*(SMOKE_LIFE[tier]??1))}; // boost: a hood plume leaves with a push up and lasts longer (it must clear the cab to be seen from behind)

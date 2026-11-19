@@ -7,7 +7,8 @@ import {dayPlan} from './schedule.js';
 import {ROSTER_ORDER,byId} from './npc-roster.js';
 import {moodTick,isSick,needsFor,normalizeNpcs,MOOD_MIN,MOOD_MAX} from './npc-life.js';
 import {normalizeWorld,visitCounts,pumpAvailMgal,pumpSell,TICK_MINUTE,CATCH_UP_MAX} from './world-state.js';
-import {normalizeNeeds,needsFrom,expire,retireOffKinds,PLACE_POINTS,newsText} from './needs.js';
+import {normalizeNeeds,needsFrom,expire,retireOffKinds,PLACE_POINTS,newsText,hashOf} from './needs.js';
+import {DEMAND as PLANK_DEMAND,SUPPLIER as PLANK_SUPPLIER} from './plank-needs.js';
 import {PALLET_LINK,PLACES,PUMP_PLACE,SOLD_OUT_TEXT} from './world-goods.js';
 import {totalPlanks,crewPutAway} from './pallets.js';
 import {strollDemand} from './stroll-visits.js';
@@ -82,7 +83,8 @@ export function runWorldDay(progress,dayNow=tickTargetDay(progress),ctx={}){
    if(s.reason==='sick'&&r.home){sickNpcs.push({id,home:r.home,good:'bread',qty:1,origin:'shop:market'});continue}
    if((s.kind==='restock'||s.kind==='harvest')&&!PLACES[s.place]?.goods[s.good])continue; // needs.js reads the place's target for these kinds: only goods the world really holds
    if(PLACE_POINTS[s.place]||ctx.placePoint?.(s.place))needSeeds.push({kind:s.kind,place:s.place,good:s.good,person:s.person,qty:s.qty,dueIn:Math.max(1,s.dueDay-dayNow)})}} // seeds for places with no point on the map would only fill the board
- needs=needsFrom(world,dayNow,{needs,sickNpcs,needSeeds,boardOnly:true,keepNeedIds,events:ctx.events,keeperOf:ctx.keeperOf,placePoint:ctx.placePoint});
+ const plankStock={},openPlanks=needs.filter(n=>n.status==='open'&&n.good==='planks').length;let lowPicked=0;for(const [pl,d] of Object.entries(PLANK_DEMAND)){if(pl===PLANK_SUPPLIER)continue;const wantLow=openPlanks<2&&lowPicked<1&&hashOf(seed,pl,dayNow,'plank-need')%8===0;if(wantLow)lowPicked++;plankStock[pl]=wantLow?0:d.target}
+ needs=needsFrom(world,dayNow,{needs,sickNpcs,needSeeds,plankStock,boardOnly:true,keepNeedIds,events:ctx.events,keeperOf:ctx.keeperOf,placePoint:ctx.placePoint});
  yard=normalizeYard({...yard,planks:world.stock[SAWMILL_PLACE].planks}); // what the supply (and any late restock from the sawmill) took leaves the yard: conserved
  const out={...P,world,needs,npcs,sawmillYard:yard,crewMark:yard.logsSawn};
  if(wh.real&&company!==wh.company)out.companies={...P.companies,[PALLET_LINK.company]:company};

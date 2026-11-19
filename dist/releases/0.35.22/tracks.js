@@ -2,7 +2,7 @@
 // A lay() writes one slot of a ring (the oldest is overwritten). The fade and the distance cull run on the graphics card from a spawn-time attribute (aInfo = birth, life, alpha, side) and the uniform uTime, so a frame costs
 // nothing on the CPU unless a segment is laid. Same style as debris.js. Not saved.
 import * as THREE from './vendor/three.module.js';
-import {TRACK_MAX,TRACK_FADE_FROM,TRACK_DRAW_NEAR,TRACK_DRAW_FAR} from './tracks-rules.js';
+import {TRACK_MAX,TRACK_FADE_FROM,TRACK_DRAW_NEAR,TRACK_DRAW_FAR} from './tracks-rules.js';import {tslKit} from './render-backend.js';import {createTracksMaterialTSL} from './tsl-tracks.js';
 const num=n=>Number.isInteger(n)?n+'.':String(n);
 export function createTracks(parent,{max=TRACK_MAX}={}){
  const pos=new Float32Array(max*12),col=new Float32Array(max*12),info=new Float32Array(max*16),index=new Uint16Array(max*6);
@@ -10,8 +10,9 @@ export function createTracks(parent,{max=TRACK_MAX}={}){
  const geometry=new THREE.BufferGeometry(),position=new THREE.BufferAttribute(pos,3),colour=new THREE.BufferAttribute(col,3),aInfo=new THREE.BufferAttribute(info,4);
  for(const a of [position,colour,aInfo])a.setUsage(THREE.DynamicDrawUsage);
  geometry.setAttribute('position',position);geometry.setAttribute('color',colour);geometry.setAttribute('aInfo',aInfo);geometry.setIndex(new THREE.BufferAttribute(index,1));
- const uTime={value:0},material=new THREE.MeshBasicMaterial({color:'#ffffff',vertexColors:true,transparent:true,depthWrite:false,polygonOffset:true,polygonOffsetFactor:-2,polygonOffsetUnits:-2});
- material.onBeforeCompile=sh=>{sh.uniforms.uTime=uTime;
+ const K=tslKit('tracks'),T=K?createTracksMaterialTSL({THREE,TSL:K.TSL,MeshBasicNodeMaterial:K.MeshBasicNodeMaterial}):null; // WebGPU T5: the TSL twin behind ?webgpu=1 (same uTime)
+ const uTime=T?T.uniforms.uTime:{value:0},material=T?T.material:new THREE.MeshBasicMaterial({color:'#ffffff',vertexColors:true,transparent:true,depthWrite:false,polygonOffset:true,polygonOffsetFactor:-2,polygonOffsetUnits:-2});
+ if(!T)material.onBeforeCompile=sh=>{sh.uniforms.uTime=uTime;
   sh.vertexShader=sh.vertexShader.replace('#include <common>','#include <common>\nattribute vec4 aInfo;uniform float uTime;varying float vA;varying float vSide;')
    .replace('#include <fog_vertex>',`#include <fog_vertex>
  float age=uTime-aInfo.x;float t=aInfo.y>0.?age/aInfo.y:2.;float fd=age<0.||t>=1.?0.:(t<=${num(TRACK_FADE_FROM)}?1.:(1.-t)/${num(1-TRACK_FADE_FROM)});
@@ -19,7 +20,7 @@ export function createTracks(parent,{max=TRACK_MAX}={}){
  if(vA<.004)gl_Position=vec4(3.,3.,3.,1.);`);
   sh.fragmentShader=sh.fragmentShader.replace('#include <common>','#include <common>\nvarying float vA;varying float vSide;')
    .replace('#include <opaque_fragment>','diffuseColor.a*=vA*(1.-smoothstep(.55,1.,abs(vSide)));if(diffuseColor.a<.01)discard;\n#include <opaque_fragment>')};
- material.customProgramCacheKey=()=>'tyre-tracks';
+ if(!T)material.customProgramCacheKey=()=>'tyre-tracks';
  const mesh=new THREE.Mesh(geometry,material);mesh.name='tyre-tracks';mesh.frustumCulled=false;mesh.visible=false;mesh.castShadow=false;mesh.receiveShadow=false;parent.add(mesh);
  let next=0,count=0,clock=0,lastDeath=0;const tmp=new THREE.Color(),cache=new Map(),rgb=hex=>{let c=cache.get(hex);if(!c){tmp.set(hex);c=[tmp.r,tmp.g,tmp.b];cache.set(hex,c)}return c};
  return {mesh,max,uTime,

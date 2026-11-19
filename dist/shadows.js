@@ -39,7 +39,7 @@ export function createShadows({scene,renderer,sun,footing=()=>0,people=()=>[],ve
  let geometry,box,aBox,material,blobs,uOpacity;
  if(T){({geometry,box,aBox,material,blobs}=T);uOpacity=T.uniforms.uOpacity}
  else{
- geometry=new THREE.InstancedBufferGeometry();
+ geometry=new THREE.BufferGeometry(); /* not InstancedBufferGeometry: instanceCount defaults to Infinity and r187 WebGPU passes it to drawIndexed */
  geometry.setAttribute('position',new THREE.BufferAttribute(new Float32Array([-.5,0,-.5,.5,0,-.5,.5,0,.5,-.5,0,.5]),3));geometry.setIndex([0,2,1,0,3,2]);
  box=new Float32Array(BLOB.capacity);aBox=new THREE.InstancedBufferAttribute(box,1);aBox.setUsage(THREE.DynamicDrawUsage);geometry.setAttribute('aBox',aBox);
  material=new THREE.ShaderMaterial({name:'blob-shadows',vertexShader:BLOB_VERTEX,fragmentShader:BLOB_FRAGMENT,transparent:true,depthWrite:false,fog:true,toneMapped:false,

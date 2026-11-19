@@ -8,16 +8,16 @@ export const SHOPS=Object.fromEntries(Object.entries(MAP.shops).map(([kind,shop]
 // Interior placements come from the map (both shops share one layout).
 const layout=MAP.shops.market.interior;
 export const SHOP_ENTRY=layout.spawn,SHOP_EXIT=layout.exit,COUNTER=layout.counter;
-export function createShop(kind){const cafe=kind==='cafe',scene=new T.Group();scene.name=kind+'-interior';const occluders=[],blocks=[];
- function box(w,h,d,x,y,z,c,solid=false){const m=new T.Mesh(new T.BoxGeometry(w,h,d),new T.MeshStandardMaterial({color:c,roughness:.85}));m.position.set(x,y,z);scene.add(m);if(y>0)occluders.push(m);if(solid)blocks.push({x,z,hx:w/2,hz:d/2});return m}
+export function createShop(kind){const cafe=kind==='cafe',scene=new T.Group();scene.name=kind+'-interior';const occluders=[],blocks=[],litMeshes=[];
+ function box(w,h,d,x,y,z,c,solid=false,occlude=false){const m=new T.Mesh(new T.BoxGeometry(w,h,d),new T.MeshStandardMaterial({color:c,roughness:.85}));m.position.set(x,y,z);m.userData.baseColor=m.material.color.clone();scene.add(m);litMeshes.push(m);if(occlude&&y>0)occluders.push(m);if(solid)blocks.push({x,z,hx:w/2,hz:d/2});return m}
  box(12,.2,10,0,-.1,0,cafe?'#ad9271':'#c5c5b2');for(let x=-6;x<=6;x+=1)box(.015,.004,10,x,.002,0,'#a59d88');
- for(const z of [-5])box(12,3.4,.16,0,1.7,z,cafe?'#d6c7ac':'#d3dccb',true);for(const x of [-6,6])box(.16,3.4,10,x,1.7,0,'#b1bfad',true);
+ for(const z of [-5])box(12,3.4,.16,0,1.7,z,cafe?'#d6c7ac':'#d3dccb',true,true);for(const x of [-6,6])box(.16,3.4,10,x,1.7,0,'#b1bfad',true,true);
  // A real window opening: opaque walls stop at sill and lintel.
- for(const x of [-3.65,3.65])box(4.7,.3,.16,x,.15,5,'#b1bfad'); // sill either side of the doorway, not across it
- box(12,.45,.16,0,3.175,5,'#b1bfad');
- const glass=[];for(const x of [-3.55,3.55]){const pane=box(4.6,2.65,.025,x,1.625,5,'#c1e0df');pane.name='storefront-glass';pane.material.transparent=true;pane.material.opacity=.16;pane.material.depthWrite=false;pane.material.roughness=.12;occluders.splice(occluders.indexOf(pane),1);glass.push(pane);for(const dx of [-2.3,0,2.3])box(.065,2.7,.1,x+dx,1.65,5,'#44675c')}
- const door=box(1.7,2.7,.025,0,1.65,5,'#b8d8d5');door.name='glass-door';door.material.transparent=true;door.material.opacity=.12;door.material.depthWrite=false;occluders.splice(occluders.indexOf(door),1);glass.push(door);const doorBits=[door];for(const x of [-.9,.9])doorBits.push(box(.08,2.9,.13,x,1.6,5,'#44675c'));doorBits.push(box(.07,.35,.09,.62,1.35,5.06,'#d9c899')); // doorBits: the room's own doorway (pane, frame posts, brass handle): the street door is a second set 8 cm in front, so game.js shows these only while you are inside
- box(4,1,1,0,.5,-3.5,cafe?'#735b45':'#6e8b72',true);box(4.2,.1,1.15,0,1.05,-3.5,'#ded2b8');box(.45,.35,.35,1.2,1.28,-3.5,'#344b49');
+ for(const x of [-3.65,3.65])box(4.7,.3,.16,x,.15,5,'#b1bfad',false,true); // sill either side of the doorway, not across it
+ box(12,.45,.16,0,3.175,5,'#b1bfad',false,true);
+ const glass=[];for(const x of [-3.55,3.55]){const pane=box(4.6,2.65,.025,x,1.625,5,'#c1e0df');pane.name='storefront-glass';pane.material.transparent=true;pane.material.opacity=.14;pane.material.depthWrite=false;pane.material.roughness=.12;pane.material.side=T.FrontSide;pane.renderOrder=2;litMeshes.splice(litMeshes.indexOf(pane),1);glass.push(pane);for(const dx of [-2.3,0,2.3])box(.065,2.7,.1,x+dx,1.65,5,'#44675c',false,true)}
+ const doorBits=[];
+ const counter=box(4,1,1,0,.5,-3.5,cafe?'#735b45':'#6e8b72',true);counter.name='shop-counter';box(4.2,.1,1.15,0,1.05,-3.5,'#ded2b8');box(.45,.35,.35,1.2,1.28,-3.5,'#344b49');
  const clerk=createCharacter(cafe?outfit('female','Formal',{hair:'#825337'}):outfit('male','Casual_2'));clerk.group.position.set(0,.02,-4.35);scene.add(clerk.group);
  if(cafe){for(const x of [-3.8,3.8])for(const z of [-.7,2]){box(1.25,.1,1.05,x,.82,z,'#a98b61',true);box(.2,.8,.2,x,.4,z,'#4a5950');for(const dz of [-.85,.85]){box(.5,.45,.5,x,.225,z+dz,'#718879',true);box(.5,.45,.07,x,.65,z+dz+(dz<0?-.2:.2),'#718879')}box(.12,.16,.12,x,.95,z,'#eee2cb')}
  box(.9,.55,.55,-1,1.38,-3.5,'#455953');
@@ -28,5 +28,5 @@ export function createShop(kind){const cafe=kind==='cafe',scene=new T.Group();sc
  const usedCups=[usedCup];if(cafe)for(const [x,z] of [[-3.8,2],[3.8,-.7],[3.8,2]]){const c=box(.13,.18,.13,x,.97,z,'#eee5d1');c.visible=false;usedCups.push(c)} // a used cup on each table that needs clearing
  for(const c of customers){c.group.name='cafe-customer';c.group.visible=false;scene.add(c.group)}
  const exitSpec=MAP.shops[kind].interior.exitDoor,exitDoor=(exitSpec.kind==='double'?createDoubleDoor:createSlidingDoor)({width:exitSpec.width,height:exitSpec.height});exitDoor.group.position.set(0,0,exitSpec.z);scene.add(exitDoor.group);
- return {scene,occluders,glass,doorBits,customer,customers,usedCup,usedCups,clerk,exitDoor,blocked(x,z){return Math.abs(x)>5.55||Math.abs(z)>4.55||blocks.some(b=>Math.abs(x-b.x)<b.hx+.32&&Math.abs(z-b.z)<b.hz+.32)}};
+ return {scene,occluders,glass,doorBits,customer,customers,usedCup,usedCups,clerk,exitDoor,setLight(scale){const s=Math.max(.05,Math.min(1,scale));for(const m of litMeshes)m.material.color.copy(m.userData.baseColor).multiplyScalar(s)},blocked(x,z){return Math.abs(x)>5.55||Math.abs(z)>4.55||blocks.some(b=>Math.abs(x-b.x)<b.hx+.32&&Math.abs(z-b.z)<b.hz+.32)}};
 }

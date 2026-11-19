@@ -85,7 +85,7 @@ import {hutPlanks,hutTopStack,hutSlabs,hutRect,hutWorld,nearestOn,putDownRule,HU
 import {stockAt,priceOf} from './world-state.js';import {PLACES as WORLD_PLACES,GOODS as WORLD_GOODS,CRATE_UNITS} from './world-goods.js';import {moodLine,tierFor,moodWord,gainStanding,meet as npcMeet,talk as npcTalk} from './npc-life.js';import {talkContext,openConversation,chooseReply,remember} from './talk-engine.js';import {castOf} from './cast.js';import {createTalkPanel} from './talk-panel.js';import {withMem} from './talk-memory.js';import {openTalk,talkOutcome,registerTalk,knock,flatDoors,topicsFor,pagedChoices,createRosterPlanner,rosterByPersonId} from './npc-dialogue.js';import {ROSTER as NPC_ROSTER,byId as npcById} from './npc-roster.js';const parcelHeld=p=>parcelHeldRaw(p)&&!p.gigs.active.needId; // a need gig has no box in the hands (gig-parcel.js counts every active gig as a box): the egg run drives, the crates ride on the truck
 import {addCrates as addNeedCrates,removeCrates as removeNeedCrates,capacity as crateCapacity,acceptsCrates,takesCrateGigs,usesLoadDrag,BEDS} from './cargo.js';import {loadFactor,isHeavy,cargoMassKg,parcelMassKg,HEAVY_TEXT} from './load-drag.js'; // W-D2: the egg run, the shelves, Noah's mood line
 import {sell,fillCan,pour,canText,CAN_CAPACITY_MGAL,STEP_MGAL,FLOW_MGAL_PER_S,REACH_M,USE_RANGE_M,fuelText,fuelTitle,fuelName,gallons} from './fuel.js';
-import * as THREE from './vendor/three.module.js';
+import * as THREE from './vendor/three.module.js';import {backendFlag,backendLabel,setTslKit,directOutputWanted} from './render-backend.js'; // WebGPU T5: ?webgpu=1 (default stays WebGL)
 import { createCameraController } from './camera.js';
 import {MARKET,routeFor,targetFor,nearby,money,transactJob} from './jobs.js';
 import {STUDIO,totalDue,housingTransaction,weekday,weekNumber,dueIn,estimatedUtilities} from './housing.js';
@@ -99,7 +99,9 @@ import {outfit as makeOutfit,palettes,defaults,loadAppearance,saveAppearance,nor
 await loadCharacterAssets();
 const $=id=>document.getElementById(id);
 const scene=new THREE.Scene();scene.background=new THREE.Color('#b9cbd0');scene.fog=new THREE.Fog('#b9cbd0',65,155);
-let renderer;try{renderer=new THREE.WebGLRenderer({canvas:$('world'),antialias:true,powerPreference:loadSettings({getItem:k=>localStorage.getItem(k)}).quality==='high'?'high-performance':'low-power'});}catch(e){$('error').hidden=false;$('error').textContent='This prototype needs WebGL. Please try a browser with hardware acceleration enabled.';throw e;}
+const backendWanted=backendFlag(globalThis.location?.search||''),startSettings=loadSettings({getItem:k=>localStorage.getItem(k)});let renderer=null,renderBackend='WebGL';const perfMod=/[?&]perf\b/.test(globalThis.location?.search||'')?await import('./perf-probe.js'):null,perfWanted=!!perfMod&&perfMod.perfFlag(globalThis.location?.search||'',true);let perf=null; /* WebGPU T6: ?perf=1 loads perf-probe.js and turns on GPU timestamps; the probe itself starts in the Dev Mode block at the end */ // WebGPU T5: only ?webgpu=1 loads three.webgpu.js + three.tsl.js (2.3 MB) and makes a WebGPURenderer (the library falls back to WebGL2 without an adapter; &webgl=1 forces that); without the flag nothing here changes
+if(backendWanted.webgpu){try{const [WGPU,TSL,OUT]=await Promise.all([import('./vendor/three.webgpu.js'),import('./vendor/three.tsl.js'),import('./tsl-output.js')]);const r=new WGPU.WebGPURenderer({canvas:$('world'),antialias:true,powerPreference:startSettings.quality==='high'?'high-performance':'low-power',forceWebGL:backendWanted.forceWebGL,trackTimestamp:perfWanted});if(directOutputWanted(globalThis.location?.search||''))OUT.installDirectOutputTSL({THREE:WGPU,TSL,renderer:r});await r.init();renderer=r;setTslKit({TSL,NodeMaterial:WGPU.NodeMaterial,MeshBasicNodeMaterial:WGPU.MeshBasicNodeMaterial,MeshStandardNodeMaterial:WGPU.MeshStandardNodeMaterial,MeshLambertNodeMaterial:WGPU.MeshLambertNodeMaterial,PointsNodeMaterial:WGPU.PointsNodeMaterial});renderBackend=backendLabel(r,true);setGroundQuality(startSettings.quality==='high');console.info('[renderer] '+renderBackend+' (?webgpu=1): TSL materials on, grade + sRGB per material as WebGL (tsl-output.js; &direct=0 = the T5 output pass); compileAsync + hidden-twin warm-up instead of renderer.compile; the ground keeps the quality it was built with until a reload')}catch(e){console.warn('[renderer] WebGPURenderer did not start, using WebGLRenderer',e);setTslKit(null);renderer=null}}
+if(!renderer)try{renderer=new THREE.WebGLRenderer({canvas:$('world'),antialias:true,powerPreference:startSettings.quality==='high'?'high-performance':'low-power'});}catch(e){$('error').hidden=false;$('error').textContent='This prototype needs WebGL. Please try a browser with hardware acceleration enabled.';throw e;}
 renderer.setPixelRatio(Math.min(devicePixelRatio,1.6));renderer.setSize(innerWidth,innerHeight);renderer.shadowMap.enabled=true;renderer.shadowMap.type=THREE.PCFShadowMap;renderer.outputColorSpace=THREE.SRGBColorSpace;renderer.toneMapping=THREE.ACESFilmicToneMapping;renderer.toneMappingExposure=1.12;
 const camera=new THREE.PerspectiveCamera(52,innerWidth/innerHeight,.1,700);const hemi=new THREE.HemisphereLight('#d8e8f0','#777655',1.7);scene.add(hemi);const sun=new THREE.DirectionalLight('#ffe3b9',3.1);sun.position.set(-24,30,22);sun.castShadow=true;sun.shadow.mapSize.set(2048,2048);Object.assign(sun.shadow.camera,{left:-65,right:65,top:65,bottom:-65,far:130});sun.shadow.bias=-.0005;scene.add(sun);
 const sky=createSky({scene,renderer,sun,hemi});let frameProbe=null; // day and night (sky.js, daynight.js): this one light is the sun and the moon; the grade replaces ACES through CustomToneMapping. frameProbe: the dev panel's frame timer
@@ -479,7 +481,7 @@ function getMeWorldPosition(target){
  return player.parent.localToWorld(target);
 }
 
-setMePosition(MAP.spawn.x,MAP.spawn.y,MAP.spawn.z);let editorHook=null,yaw=0,pitch=.38,zoom=7,zoomTarget=7,active=false,modal=false,discovered=false,phase=0,busy=null,worldPanel=null,selectedInteraction=null;const keys=createMovementInput(window,document,()=>active&&!modal&&!creatorOpen&&!actionBusy()&&!talking());const updateCamera=createCameraController(camera,cameraSolids,trees,lampMeshes);
+setMePosition(MAP.spawn.x,MAP.spawn.y,MAP.spawn.z);let editorHook=null,yaw=0,pitch=.38,zoom=7,zoomTarget=7,active=false,modal=false,dialogTalking=false,discovered=false,phase=0,busy=null,worldPanel=null,selectedInteraction=null;const keys=createMovementInput(window,document,()=>active&&!modal&&!creatorOpen&&!actionBusy()&&!talking());const updateCamera=createCameraController(camera,cameraSolids,trees,lampMeshes);
 // Reset safety net (safe-spot.js). Every reset, teleport and rescue goes through placeSafely: a destination that is blocked (a car parked on the spawn, a
 // closed shop door's blocker) becomes the nearest clear spot instead, never a place you cannot walk out of. Runs when asked, never per frame.
 function placeSafely(x,y,z,{keepIfNone=false}={}){
@@ -497,7 +499,7 @@ if(GameState.progress.position){const p=GameState.progress.position;world.ensure
  if(spot){me.position.x=spot.x;me.position.z=spot.z;camera.position.set(spot.x,4,spot.z+7)}}}
 function worldBlocked(x,z){if(!isWalkable(x,z)||world.blocked(x,z))return true;return colliders.some(b=>Math.abs(x-b.x)<b.hx+.33&&Math.abs(z-b.z)<b.hz+.33)||plankBoxes.some(b=>Math.abs(x-b.x)<b.hx+.33&&Math.abs(z-b.z)<b.hz+.33)||yardBoxes.some(b=>Math.abs(x-b.x)<b.hx+.33&&Math.abs(z-b.z)<b.hz+.33)||timberBoxes.some(b=>Math.abs(x-b.x)<b.hx+.33&&Math.abs(z-b.z)<b.hz+.33)||crateBoxes.some(b=>Math.abs(x-b.x)<b.hx+.33&&Math.abs(z-b.z)<b.hz+.33)}
 function blocked(x,z){if(shop)return shops[shop].blocked(x,z)||forkBlocks(x,z);if(inside)return home.room.blocked(x,z);return worldBlocked(x,z)||driving.blocksWalker(x,z)||customerTruck.blocksWalker(x,z)||dockTruck.blocksWalker(x,z)||forkBlocks(x,z)} // a drivable vehicle is solid to a walker (its hull, inflated by the player radius)
-function clearWorldPanel(){if(worldPanel?.actor){const pa=getMeWorldPosition(new THREE.Vector3()),pb=worldPanel.actor.getWorldPosition(new THREE.Vector3());yaw=Math.atan2(pa.x-pb.x,pa.z-pb.z)+.45;pitch=.32;zoom=zoomTarget=5.8;}worldPanel=null;look.resetMotion()}
+function clearWorldPanel(){if(worldPanel?.actor){const pa=getMeWorldPosition(new THREE.Vector3()),pb=worldPanel.actor.getWorldPosition(new THREE.Vector3());yaw=Math.atan2(pa.x-pb.x,pa.z-pb.z)+.45;pitch=.32;zoom=zoomTarget=5.8;}worldPanel=null;dialogTalking=false;look.resetMotion()}
 function pause(show){if(sleepElapsed!==null)return;if(show&&talking())talkPanel.close();if(show){phone?.close();inventoryUI?.close();storeUI?.close();}if(show){$('dialog').hidden=true;clearWorldPanel();}$('controls').hidden=!show;$('settings').hidden=true;$('credits').hidden=true;modal=show;keys.clear();if(show)look.release()}
 function startGame(){if(currentAppearance.name){saveMenu.backupOnPlay();$('welcome').hidden=true;active=true}else openCreator()}$('start').onclick=startGame;$('help').onclick=()=>pause(true);
 // Credits (credits.js): built from the data the first time they are opened from the Controls panel.
@@ -598,7 +600,7 @@ function talkWith(who,actor,place,o={}){const cast=castOf(who);if(!cast||!npcByI
  if(talkNow)talkPanel.close();if(!talkPanel)talkPanel=createTalkPanel($('talk'),{onPick:talkPick,onClose:talkClosed});
  if(id==='noah'&&s0&&!s0.done&&s0.step===0)storyEvent('read-message'); // H7: his phone message counts as read, so a pickup cannot stall the story at step 0
  if(id==='walt'&&o.office?.employer==='ridgeline')storyEvent('note-given'); // before the context, so Walt sees steps 7/8 and reads Hal's note
- const t={who:id,cast,actor:actor||null,place,office:o.office||null,at:o.at||null,from:{x:me.position.x,z:me.position.z},session:null,handoff:false},r=openConversation(cast,id,talkCtx(t));if(!r.lines.length&&r.ended)return false;
+ const t={who:id,cast,actor:actor||null,place,office:o.office||null,at:o.at||null,from:{x:me.position.x,z:me.position.z},shop,inside,slotId:actor?crowdSlotId(actor):null,session:null,handoff:false},r=openConversation(cast,id,talkCtx(t));if(!r.lines.length&&r.ended)return false;
  npcKeep(registerTalk(GameState.progress,id,npcDay())); // one talk counts once (talk, met, standing +1 capped at 3 a day), as recordTalk did; recordTalk('hal') is gone
  const a=talkRunActs(t,r);t.session=r.session;talkEffects(id,r.effects.filter(e=>e.kind!=='act'));talkNow=t;
  phone?.close();inventoryUI?.close();storeUI?.close();if(!$('dialog').hidden){$('dialog').hidden=true;clearWorldPanel();modal=false}keys.clear();
@@ -615,8 +617,8 @@ function talkPick(id){const t=talkNow;if(!t||!t.session)return;clearTimeout(talk
 function talkClosed(){const t=talkNow;if(!t)return;talkNow=null;clearTimeout(talkTimer);const p=GameState.progress,n=p.npcs?.[t.who];if(t.session&&n)GameState.progress={...p,npcs:{...p.npcs,[t.who]:withMem(n,remember(n.mem,t.session))}};
  if(t.actor){const pa=getMeWorldPosition(talkW),pb=t.actor.getWorldPosition(talkV);yaw=Math.atan2(pa.x-pb.x,pa.z-pb.z)+.45;pitch=.32;zoom=zoomTarget=5.8}look.resetMotion();persist();keys.clear();if(!t.handoff)look.capture()}
 // Every frame while talking (instead of the #dialog anchoring): walking more than 3 m away (or the speaker more than 12 m off) says "See you" and closes; the speaking chevron is smoothed, one style write.
-function talkFrame(){const t=talkNow,now=performance.now(),dt=Math.min(.1,Math.max(0,(now-talkChev.t)/1000));talkChev.t=now;
- let gone=Math.hypot(me.position.x-t.from.x,me.position.z-t.from.z)>3;if(t.actor){t.actor.getWorldPosition(talkV);getMeWorldPosition(talkW);if(Math.hypot(talkW.x-talkV.x,talkW.z-talkV.z)>12)gone=true}
+const crowdSlotId=actor=>npcCrowd.slots.find(s=>s.avatar.group===actor)?.id||null,roomOpen=()=>!shop||(officeByKey(shop)?officeOpen(officeByKey(shop)):shopOpen(shop,GameState.progress.routine)),actorShown=a=>{for(let p=a;p;p=p.parent){if(!p.visible)return false;if(p===scene||p===shops[shop]?.scene||p===home?.room?.scene)return true}return false};function actorGone(actor,slotId){if(!actor)return false;if(!actorShown(actor))return true;if(slotId){const s=npcCrowd.slots.find(q=>q.avatar.group===actor);if(!s||!s.owner||s.id!==slotId)return true}actor.getWorldPosition(talkV);getMeWorldPosition(talkW);return Math.hypot(talkW.x-talkV.x,talkW.z-talkV.z)>12||Math.abs(talkW.y-talkV.y)>4}const vehicleHit=()=>!inside&&!shop&&(driving.blocksWalker(me.position.x,me.position.z)||customerTruck.blocksWalker(me.position.x,me.position.z)||dockTruck.blocksWalker(me.position.x,me.position.z)||((customerTruck.phase==='in'||customerTruck.phase==='out')&&Math.hypot(customerTruck.mesh.position.x-me.position.x,customerTruck.mesh.position.z-me.position.z)<2.2)||((dockTruck.phase==='in'||dockTruck.phase==='out')&&Math.hypot(dockTruck.mesh.position.x-me.position.x,dockTruck.mesh.position.z-me.position.z)<2.2)),talkGone=t=>Math.hypot(me.position.x-t.from.x,me.position.z-t.from.z)>3||t.shop!==shop||t.inside!==inside||(shop&&!roomOpen())||driving.active||fork.on||actorGone(t.actor,t.slotId)||vehicleHit();function worldPanelFrame(){const w=worldPanel;if(talkGone(w)){closeWorldDialog();return}const anchor=screenAnchor(w.anchor(),camera,innerWidth,innerHeight,THREE.Vector3);if(anchor){const width=Math.min(320,innerWidth-24),height=$('dialog').offsetHeight||260;$('dialog').style.left=Math.max(12,Math.min(innerWidth-width-12,anchor.x+26))+'px';$('dialog').style.top=Math.max(12,Math.min(innerHeight-height-12,anchor.y-height*.55))+'px'}else{$('dialog').style.left='12px';$('dialog').style.top='100px'}}function talkFrame(){const t=talkNow,now=performance.now(),dt=Math.min(.1,Math.max(0,(now-talkChev.t)/1000));talkChev.t=now;
+ const gone=talkGone(t);
  if(gone){if(t.session&&!t.session.ended){const r=chooseReply(t.session,t.cast,'bye',talkCtx(t));if(r.session)t.session=r.session}talkPanel.close();return}
  let a=null;if(t.actor){talkV.y+=2.15;a=screenAnchor(talkV,camera,innerWidth,innerHeight,THREE.Vector3)}else if(t.at){talkV.set(t.at.x,(t.at.y||1.5)+.5,t.at.z);a=screenAnchor(talkV,camera,innerWidth,innerHeight,THREE.Vector3)}
  if(a){if(talkChev.on){const k=1-Math.exp(-14*dt);talkChev.x+=(a.x-talkChev.x)*k;talkChev.y+=(a.y-talkChev.y)*k}else{talkChev.x=a.x;talkChev.y=a.y;talkChev.on=true}}else talkChev.on=false;talkPanel.moveChevron(talkChev.x,talkChev.y,!!a);
@@ -703,7 +705,7 @@ function dinerClockAct(on){if(on){const r=doClockIn('diner');return r.error?{err
 function worldPoint(point,parent=player.parent){return parent.localToWorld(new THREE.Vector3(point.x,point.y??1.2,point.z))}
 function entityPoint(actor){const p=actor.getWorldPosition(new THREE.Vector3());p.y+=1.9;return p}
 function showWorld(anchor,name,text,choices=[],actor=null){
- showDialog(name,'',text,'',choices[0]?.run,choices[0]?.label);worldPanel={anchor,actor};$('dialog').classList.add('in-world');$('closeDialog').textContent=actor?'See you':'Close';
+ if(sleepElapsed!==null||consuming)return;showDialog(name,'',text,'',choices[0]?.run,choices[0]?.label);worldPanel={anchor,actor,from:{x:me.position.x,z:me.position.z},shop,inside,slotId:actor?crowdSlotId(actor):null};dialogTalking=true;$('dialog').classList.add('in-world');$('closeDialog').textContent=actor?'See you':'Close';
  if(choices[1])extraAction(choices[1].label,choices[1].run);if(choices[2]){$('thirdAction').hidden=false;$('thirdAction').textContent=choices[2].label;$('thirdAction').onclick=choices[2].run}
  $('dialog').classList.remove('bubble-enter');void $('dialog').offsetWidth;$('dialog').classList.add('bubble-enter');
 }
@@ -1050,7 +1052,7 @@ function updateWorldUI(){
  { const target=chopping?chopping.tree:hit?.id?.startsWith('tree-')?hit.point:null;world.setTarget(active&&!modal?target:null); }
  const p=hit?screenAnchor(hit.anchor(),camera,innerWidth,innerHeight,THREE.Vector3):null;$('prompt').hidden=!active||modal||talking()||!!busy||!!chopping||!p||!!driving.active;
  if(p){$('prompt').style.left=p.x+'px';$('prompt').style.top=p.y+'px';$('prompt').querySelector('span').textContent=hit.label;const kbd=$('prompt').querySelector('kbd');if(kbd){kbd.hidden=hit.key==='';kbd.textContent=hit.key||'E'}}
- if(talking())talkFrame();else if(worldPanel&&!$('dialog').hidden){const anchor=screenAnchor(worldPanel.anchor(),camera,innerWidth,innerHeight,THREE.Vector3);if(anchor){const width=Math.min(320,innerWidth-24),height=$('dialog').offsetHeight||260;$('dialog').style.left=Math.max(12,Math.min(innerWidth-width-12,anchor.x+26))+'px';$('dialog').style.top=Math.max(12,Math.min(innerHeight-height-12,anchor.y-height*.55))+'px';}else{$('dialog').style.left='12px';$('dialog').style.top='100px'}}
+ if(talking())talkFrame();else if(worldPanel&&!$('dialog').hidden)worldPanelFrame();
  
 }
 // Small destination marker, shared by pickups and drop-offs.
@@ -1136,7 +1138,7 @@ function updateWork(dt){
  const atJob=carrying&&nearby(me.position,dest),atApartment=nearby(me.position,STUDIO); // E here only delivers an order; shop doors need no prompt
  const atCar=vehicles.some(v=>Math.hypot(me.position.x-v.x,me.position.z-v.z)<1.6);$('prompt').hidden=!active||modal||(!atJob&&!atApartment&&!atCar&&!nearestPerson());$('prompt').querySelector('span').textContent=atJob?'Deliver order':atApartment?'Apartment entrance':atCar?'Inspect parked vehicle':'Talk to '+nearestPerson()?.name;
  syncParcel(carrying);
- if(active&&!modal){saveElapsed+=dt;if(saveElapsed>=4){saveElapsed=0;persist()}}
+ if(active&&(!modal||dialogTalking)){saveElapsed+=dt;if(saveElapsed>=4){saveElapsed=0;persist()}}
 }
 window.addEventListener('keydown',e=>{
  if(cargoUI?.isOpen&&cargoUI.key(e.code)){e.preventDefault();return}
@@ -1225,7 +1227,7 @@ function renderOptions(){
 // Drag on the empty stage beside the panel to turn the figure.
 {let dragX=null;const stage=$('creator');stage.addEventListener('pointerdown',e=>{if(e.target!==stage)return;dragX=e.clientX;stage.setPointerCapture?.(e.pointerId)});stage.addEventListener('pointermove',e=>{if(dragX===null)return;previewTurn+=(e.clientX-dragX)*.012;dragX=e.clientX});for(const type of ['pointerup','pointercancel'])stage.addEventListener(type,()=>{dragX=null})}
 renderOptions();
-function openCreator(){if(consuming)return;phone?.close();inventoryUI?.close();storeUI?.close();clearWorldPanel();$('dialog').hidden=true;draft={...currentAppearance};$('characterName').value=draft.name;creatorOpen=true;modal=true;look.release();keys.clear();$('welcome').hidden=true;$('controls').hidden=true;$('creator').hidden=false;document.body.classList.add('creating');creatorTab='look';renderOptions();updateDraft();focusPreview(false);Object.assign(previewFrame,previewFocus);$('characterName').focus()}
+function openCreator(){if(consuming)return;if(talking())talkPanel.close();phone?.close();inventoryUI?.close();storeUI?.close();clearWorldPanel();$('dialog').hidden=true;draft={...currentAppearance};$('characterName').value=draft.name;creatorOpen=true;modal=true;look.release();keys.clear();$('welcome').hidden=true;$('controls').hidden=true;$('creator').hidden=false;document.body.classList.add('creating');creatorTab='look';renderOptions();updateDraft();focusPreview(false);Object.assign(previewFrame,previewFocus);$('characterName').focus()}
 let currentAppearance={...(savedCharacter||defaults)};
 if(savedCharacter)$('customizeSaved').hidden=false;
 let creatorFromMenu=false;$('customizeSaved').onclick=()=>{openCreator();creatorFromMenu=creatorOpen}; // Edit character on the main menu: saving goes back to the menu (menu-scene-rules.js creatorReturn)
@@ -1245,7 +1247,7 @@ function drawCreator(){
  const narrow=innerWidth<=700,left=narrow?0:410;
  const top=narrow?Math.round(innerHeight*.38):innerHeight;
  const reserved=narrow?0:150,h=Math.max(1,top-reserved),w=narrow?innerWidth:Math.max(1,innerWidth-410);
- const y=innerHeight-top+reserved;renderer.setViewport(0,0,innerWidth,innerHeight);renderer.setScissorTest(false);renderer.clear();renderer.setScissorTest(true);renderer.setScissor(left,y,w,h);renderer.setViewport(left,y,w,h);
+ const y0=innerHeight-top+reserved,y=renderBackend==='WebGL'?y0:innerHeight-y0-h;renderer.setViewport(0,0,innerWidth,innerHeight); // WebGPU T5: WebGPURenderer counts viewport and scissor y from the toprenderer.setScissorTest(false);renderer.clear();renderer.setScissorTest(true);renderer.setScissor(left,y,w,h);renderer.setViewport(left,y,w,h);
  previewCamera.aspect=w/h;framePreview(w/h);previewCamera.updateProjectionMatrix();previewAvatar.group.rotation.y=previewTurn;
  renderer.toneMappingExposure=INDOOR_EXPOSURE;renderer.render(previewScene,previewCamera);renderer.setScissorTest(false);renderer.setViewport(0,0,innerWidth,innerHeight);
 }
@@ -1549,7 +1551,7 @@ function updateDoorFade(dt){
  else{veil.style.opacity=String(Math.max(0,1-doorFade.t/.22));if(doorFade.t>=.22){veil.style.opacity='0';doorFade=null}}
 }
 function updateDoors(dt){
- if(modal)return; // doors, like everything else, wait while a menu is open
+ if(modal&&!dialogTalking)return; // doors wait while a blocking menu is open, but keep running during in-world NPC talk
  updateDoorFade(dt);if(inside&&home.room.frontDoor){home.room.frontDoor.update(dt);if(leaveAfter>0){leaveAfter-=dt;if(leaveAfter<=0)leaveHome()}}
  doorCooldown=Math.max(0,doorCooldown-dt);
  const ready=doorCooldown<=0&&active&&!modal&&!actionBusy(),routine=GameState.progress.routine;
@@ -1670,7 +1672,7 @@ let gigLabelId='',gigLabelDone=-1;function updateGig(dt){
 // Passing out (DESIGN 4.18): black fade, then (at black) the vehicle or forklift stops, a carried log or planks are put down, and you are moved to your main home's bed
 // (or beside the starter apartment's door with no home); two game hours pass and you wake with energy 25. Online the clock cannot jump: a 60 s black screen with a countdown.
 let passT=null,passMoved=false;
-function startPassOut(){passT=0;passMoved=false;phone?.close();$('dialog').hidden=true;clearWorldPanel();modal=true;keys.clear();look.release();const fe=$('sleepFade');fe.hidden=false;fe.style.opacity='0';fe.textContent='You passed out from exhaustion'}
+function startPassOut(){passT=0;passMoved=false;if(talking())talkPanel.close();phone?.close();$('dialog').hidden=true;clearWorldPanel();modal=true;keys.clear();look.release();const fe=$('sleepFade');fe.hidden=false;fe.style.opacity='0';fe.textContent='You passed out from exhaustion'}
 function passOutMove(){
  if(fork.on)getOffFork();
  if(driving.active){driving.active.state.speed=0;exitVehicle(true)}
@@ -1696,7 +1698,7 @@ function updatePassOut(dt){
 function startSleep(){
  if(!canAct('sleep')||!inside||shop||(home.kind==='studio'&&!GameState.progress.housing.rented)||(home.room.floor||0)!==(home.BED_FLOOR||0)||Math.hypot(me.position.x-home.BED.x,me.position.z-home.BED.z)>=1.4)return;
  phone?.close();$('dialog').hidden=true;clearWorldPanel();modal=true;keys.clear();look.release();
- sleepElapsed=0;$('sleepFade').hidden=false;$('sleepFade').style.opacity='0';
+ if(talking())talkPanel.close();sleepElapsed=0;$('sleepFade').hidden=false;$('sleepFade').style.opacity='0';
 }
 function updateSleep(dt){
  if(sleepElapsed===null||document.hidden)return;
@@ -1823,26 +1825,26 @@ function stepWorld(step){
    driveSave+=step;if(driveSave>=5){driveSave=0;persist()}}
  }else if(active&&!modal&&!talking()&&!actionBusy()&&!putting){let f=Number(keys.has('KeyW')||keys.has('ArrowUp'))-Number(keys.has('KeyS')||keys.has('ArrowDown')),s=Number(keys.has('KeyD')||keys.has('ArrowRight'))-Number(keys.has('KeyA')||keys.has('ArrowLeft'));let len=Math.hypot(f,s);if(len){f/=len;s/=len;const fx=moveFx(),speed=(fx.sprint&&(keys.has('ShiftLeft')||keys.has('ShiftRight'))?8.2:4.5)*fx.speed,dx=(-Math.sin(yaw)*f+Math.cos(yaw)*s)*speed*step,dz=(-Math.cos(yaw)*f-Math.sin(yaw)*s)*speed*step;if(!blocked(me.position.x+dx,me.position.z))me.position.x+=dx;if(!blocked(me.position.x,me.position.z+dz))me.position.z+=dz;const angle=Math.atan2(dx,dz);me.rotation.y+=Math.atan2(Math.sin(angle-me.rotation.y),Math.cos(angle-me.rotation.y))*(1-Math.exp(-step*24));{const pb=Math.floor(phase/Math.PI);phase+=step*speed*2.0;if(Math.floor(phase/Math.PI)!==pb)footstep(speed>5)}pressed=true}}
  const movedStep=Math.hypot(me.position.x-startX,me.position.z-startZ),moving=pressed&&movedStep>.000001,running=moving&&moveFx().sprint&&(keys.has('ShiftLeft')||keys.has('ShiftRight'));if(moving&&!running&&(keys.has('ShiftLeft')||keys.has('ShiftRight'))&&!needsEffects(GameState.progress.life).canRun)breathTired();
- if(active&&!modal&&!document.hidden){GameState.progress=sessionStep(step);if(worldDue(GameState.progress,!multiplayer.online||multiplayer.isHost))worldDayPassed();const oldStage=GameState.progress.activeJob?.stage;
+ if(active&&(!modal||dialogTalking)&&!document.hidden){GameState.progress=sessionStep(step);if(worldDue(GameState.progress,!multiplayer.online||multiplayer.isHost))worldDayPassed();const oldStage=GameState.progress.activeJob?.stage;
 const load=Math.max(1,carryEffects(GameState.progress.carry).load);
 tickLife(step,moving,running,load);if(passT===null&&sleepElapsed===null&&needsEffects(GameState.progress.life).passOut)startPassOut();
 GameState.progress=tickContract(GameState.progress,{position:parcelAwayNow()?null:me.position,room:currentRoom(),dt:step,moving,paused:!!consuming,running,distance:movedStep});
 if(oldStage&&!GameState.progress.activeJob)notifyPhone('gigs','Gig failed: the time ran out.');storyTick();petTick();garageTick();if(oldStage!==GameState.progress.activeJob?.stage){settleParcel();persist()}if(!inside&&!shop){{const day=GameState.progress.housing?.day||1,minute=GameState.progress.routine?.minutes||0;npcCrowd.update(step,me.position,{day,minute,busy:busyness({weather:npcWeather(day),minute,weekday:day})})}hal.update(step,me.position,halHere(GameState.progress))}else npcCrowd.hideAll();regrowClock+=step;if(regrowClock>=5){regrowClock=0;tickRegrowth()}if(inside||shop){saveElapsed+=step;if(saveElapsed>=4){saveElapsed=0;persist()}}}
- if(active&&!modal&&!document.hidden)updateCafeVisuals(step);updateConsumption(step);updateDoors(step);updateChop(step);updatePutting(step);fuelTick(step);forkSound();
+ if(active&&(!modal||dialogTalking)&&!document.hidden)updateCafeVisuals(step);updateConsumption(step);updateDoors(step);updateChop(step);updatePutting(step);fuelTick(step);forkSound();
  return pressed;
 }
 function frame(now){
- requestAnimationFrame(frame);if(frameProbe)frameProbe(now);
+ requestAnimationFrame(frame);if(frameProbe)frameProbe(now);if(perf)perf.begin(active);
  const real=Math.max(0,Math.min((now-prev)/1000,MAX_FRAME)),view=Math.min(real,.1); // real time drives the simulation; visuals smooth over at most 0.1 s
  prev=now;
- if(!warmed){warmed=true;const w0=performance.now();try{renderer.compile(scene,camera)}catch{}globalThis.__warmMs=Math.round(performance.now()-w0)} // VD3: every shader program in the scene (the one vehicle paint, one glass, the rest) compiles once, now, so the first crash or the first purchased vehicle never hitches
+ if(!warmed){warmed=true;const w0=performance.now();try{if(renderer.compile)renderer.compile(scene,camera);else{renderer.compileAsync?.(scene,camera)?.catch?.(()=>{});renderer.__directOutput?.warmHidden(scene,camera)}}catch{}globalThis.__warmMs=Math.round(performance.now()-w0)} // VD3: every shader program in the scene (the one vehicle paint, one glass, the rest) compiles once, now, so the first crash or the first purchased vehicle never hitches
  if(npcWarm){if(active)npcWarm.run();else npcWarm.step();if(npcWarm.done){npcRoutesReady();if(active&&npcWarm){npcWarm.run();npcRoutesReady()}}} // N2: the route table fills in slices on the menu; pressing Play first finishes it at once, so the schedule is rebuilt before anyone is drawn
  if(GameState.progress.properties!==signsFor){signsFor=GameState.progress.properties;houseSigns.sync(heldIds(GameState.progress))} // rent, buy, move out, eviction: the sign follows
  if(creatorOpen){previewAvatar.update(view);drawCreator();return}
  if(editorHook){editorHook.frame(view);renderer.render(scene,camera);return} // the scene editor (scene-editor.js) is open: the world is paused, only its camera and helpers move
  // Before the game starts only the main menu is visible: draw the world once (this warms the shaders and textures), then stop until Play.
  if(!active){if(menuDrawn){menuLive.tick(now);return}menuDrawn=true}else{menuDrawn=false;menuLive.dispose()}
- frames++;elapsed+=real;if(elapsed> .75){$('fps').textContent=Math.round(frames/elapsed)+' FPS';frames=0;elapsed=0}
+ frames++;elapsed+=real;if(elapsed> .75){$('fps').textContent=Math.round(frames/elapsed)+' FPS'+(renderBackend==='WebGL'?'':' | '+renderBackend);frames=0;elapsed=0}
  const frameX=me.position.x,frameZ=me.position.z;
  let pressed=false;{const {count,step}=substeps(real);for(let i=0;i<count;i++)if(stepWorld(step))pressed=true}
  driving.setWalker(driving.active||inside||shop?null:me.position);driving.update(view);updateCustomerTruck(view);updateDockTruck(view);updateFork();if(driving.active){driveIdle+=view;if(driveIdle>1.5){const k=1-Math.exp(-4*view);yaw+=Math.atan2(Math.sin(driving.yaw+Math.PI-yaw),Math.cos(driving.yaw+Math.PI-yaw))*k;pitch+=(driving.cameraPitch()-pitch)*k}} // the chase camera springs back behind the vehicle 1.5 s after the mouse stops
@@ -1877,7 +1879,7 @@ if(typeof location!=='undefined'&&new URLSearchParams(location.search).has('debu
 const updateNotice=installUpdateNotice({document,version:VERSION,fetchJson:url=>fetch(url,{cache:'no-store'}).then(r=>r.ok?r.json():null),beforeReload:()=>{if($('welcome').hidden)persist()},reload:()=>location.reload()});
 // Dev mode (dev.js): one flag, dev-flag.js. With it off, dev.js is never fetched. To remove it for good, delete dev-flag.js, dev.js, the DEV_MODE import and this block.
 // Everything the panel can do goes through the object below.
-if(DEV_MODE){try{
+if(DEV_MODE){try{if(perfWanted)perf=perfMod.createPerfProbe({renderer,backend:renderBackend}); // ?perf=1 (WebGPU T6): 600 frames of CPU, interval and GPU time, printed as a table (perf-probe.js)
  const edit=await import('./interior-edit.js'),rooms=await import('./interiors.js'),currentRoom2=()=>inside&&home.kind==='house'?home.room:null;let problemsKey='',problemsNow=[];
  const {installDevMode}=await import('./dev.js'),centre=id=>{const b=MAP.zones.find(zone=>zone.id===id).bounds;return {x:(b.x0+b.x1)/2,z:(b.z0+b.z1)/2}},at=(id,label,x,z)=>({id,label,x,z}),street=kind=>({x:MAP.shops[kind].x,z:MAP.shops[kind].doorZ+4});
  installDevMode({
@@ -1890,7 +1892,7 @@ if(DEV_MODE){try{
   snapshot:()=>({minutes:GameState.progress.routine.minutes,cash:GameState.progress.cash}),
   setShadows(on){renderer.shadowMap.enabled=!!on;scene.traverse(m=>{if(m.material)m.material.needsUpdate=true})}, // for finding what causes a glitch on your GPU
   setTreeFade(on){world.fade.uniforms.uFadeEnabled.value=on?1:0},
-  sky:{tune:v=>sky.tune(v),tuning:()=>sky.tuning(),state:()=>sky.state(),cost:()=>({calls:renderer.info?.render.calls??0,triangles:renderer.info?.render.triangles??0,programs:renderer.info?.programs?.length??0}),probe:fn=>{frameProbe=fn}}, // the look sliders and the cost line (sky.js)
+  sky:{tune:v=>sky.tune(v),tuning:()=>sky.tuning(),state:()=>sky.state(),cost:()=>{const d=renderer.__directOutput?.last;return {calls:d?d.calls:renderer.info?.render.drawCalls??renderer.info?.render.calls??0,triangles:d?d.triangles:renderer.info?.render.triangles??0,programs:renderer.info?.programs?.length??0}},probe:fn=>{frameProbe=fn}}, // the look sliders and the cost line (sky.js)
   lights:{tune:v=>nightLights.tune(v),tuning:()=>nightLights.tuning(),state:()=>nightLights.state()}, // the "Lights" slider and what is lit now (night-lights.js)
   vehicles:{ // the drivable vehicles: spawn one in front of the player (or the nearest free spot), or take it out of the world; never the one the player is in
    list:()=>MAP.vehicles.filter(v=>v.sale!=='online').map(v=>({id:v.id,name:v.name,present:driving.present(v.id)})),

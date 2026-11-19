@@ -50,7 +50,7 @@ export function createBlobMaterialTSL({ THREE, TSL, NodeMaterial, fog = null } =
 }
 
 export function createBlobMeshTSL({ THREE, TSL, NodeMaterial, fog = null, capacity = BLOB.capacity } = {}) {
- const geometry = new THREE.InstancedBufferGeometry();
+ const geometry = new THREE.BufferGeometry(); // not InstancedBufferGeometry: its instanceCount defaults to Infinity and r187 WebGPU passes that to drawIndexed (the Low-quality crash); InstancedMesh.count drives the draw
  geometry.setAttribute('position', new THREE.BufferAttribute(new Float32Array([-.5, 0, -.5, .5, 0, -.5, .5, 0, .5, -.5, 0, .5]), 3));
  geometry.setIndex([0, 2, 1, 0, 3, 2]);
  const box = new Float32Array(capacity);
