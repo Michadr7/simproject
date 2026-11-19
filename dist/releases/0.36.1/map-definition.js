@@ -18,7 +18,7 @@ const zones=[
  {id:'farm',name:'Willow Fields',label:'WILLOW FIELDS',subtitle:'Fields & plots',color:'#c9ae63',grid:true,bounds:{x0:-170,x1:-35,z0:n(-216),z1:n(-108)},minimap:{label:{x:-102,z:n(-205)}}},
  {id:'forest',name:'Pine Ridge',label:'PINE RIDGE',subtitle:'Timber & trails',color:'#3f6a3c',grid:true,bounds:{x0:-25,x1:190,z0:n(-246),z1:n(-146)},minimap:{label:{x:82,z:n(-236)}}},
  // The south bank, north of Oak Street and east of the County Road: Alder Center (a town square), Cedar Heights (a quiet loop of homes) and Eastbank Works (workshops and freight).
- {id:'alder',name:'Ironwood',label:'IRONWOOD',subtitle:'Downtown',color:'#a39d8c',grid:false,bounds:{x0:-20,x1:58,z0:-125,z1:-48},minimap:{label:{x:19,z:-131}}},
+ {id:'alder',name:'Ironwood',label:'IRONWOOD',subtitle:'Downtown',color:'#a39d8c',grid:false,bounds:{x0:-20,x1:70,z0:-142,z1:-48},minimap:{label:{x:25,z:-147}}}, // I3: Ironwood grows into the belt trees to the north and east (core size, x -20..70, z -142..-48)
  {id:'cedar',name:'Cedar Heights',label:'CEDAR HEIGHTS',subtitle:'Quiet homes',color:'#9aa57e',grid:false,bounds:{x0:70,x1:170,z0:-135,z1:-40},minimap:{label:{x:120,z:-141}}},
  {id:'eastbank',name:'Eastbank Works',label:'EASTBANK WORKS',subtitle:'Workshops & freight',color:'#8e8a82',grid:false,bounds:{x0:70,x1:190,z0:-38,z1:75},minimap:{label:{x:130,z:83}}},
  {id:'freight',name:'Freight Road',label:'FREIGHT ROAD',subtitle:'The cargo route',color:'#7a7f83',grid:false,bounds:{x0:190,x1:200,z0:n(-246),z1:75},minimap:{label:{x:218,z:-60}}}
@@ -32,6 +32,7 @@ const roads={
   oakWest:{x:-55,z:6},oakEast:{x:55,z:6},alderNorth:{x:-30,z:-60},alderSouth:{x:-30,z:60},countyEnd:{x:-30,z:n(-246)},
   farmGate:{x:-164,z:n(-160)},farmJoin:{x:-34,z:n(-160)},woodsJoin:{x:-26,z:n(-180)},woodsEnd:{x:195,z:n(-180)},woodsLaneNorth:{x:90,z:n(-246)},woodsLaneSouth:{x:90,z:n(-146)},
   alderStreetS:{x:50,z:-3.5},alderStreetN:{x:50,z:-125},alderCrossW:{x:-30,z:-90},alderCrossE:{x:84,z:-90},
+  ironwoodN:{x:50,z:-142},riverW:{x:-30,z:-137.5},riverE:{x:50,z:-137.5}, // I3: Ironwood Street's north end, and River Street (west end on the County Road, east end on Ironwood Street)
   oakEastEnd:{x:195,z:6},cedarLinkS:{x:120,z:6},cedarLoopStart:{x:120,z:-57},
   freightW:{x:72,z:68},freightS:{x:195,z:68},freightE:{x:199.5,z:68},outEast:{x:290,z:68}, // outEast: Freight South carried on to the ground's east edge (0.35): the road customer trucks come and go by (MAP.exits)
 freightN:{x:195,z:n(-180)-3.5},
@@ -55,6 +56,9 @@ freightN:{x:195,z:n(-180)-3.5},
   // Cedar Heights' loop at a T in the east (the loop's west side is vertical there, so the join is square).
   {id:'alder-street',from:'alderStreetS',to:'alderStreetN',width:10,surface:'asphalt',level:'rural',walkable:true,class:'street'},
   {id:'alder-cross',from:'alderCrossW',to:'alderCrossE',width:12,surface:'asphalt',level:'rural',walkable:true,class:'street'},
+  // I3 (notes/ironwood-city-design.md 1.3): Ironwood Street carried north to the zone edge as its own edge (alder-street's rectangle stays as pinned), and River Street across the north of town from the County Road, 8.5 m south of the bridge deck.
+  {id:'ironwood-street-n',from:'alderStreetN',to:'ironwoodN',width:10,surface:'asphalt',level:'rural',walkable:true,class:'street'},
+  {id:'river-street',from:'riverW',to:'riverE',width:9,surface:'asphalt',level:'rural',walkable:true,class:'street'},
   // Oak Street continues east through Eastbank Works to the Freight Road; Cedar Heights hangs off it to the north and off Alder Center's cross street.
   {id:'oak-east',from:'oakEast',to:'oakEastEnd',width:12,surface:'asphalt',level:'rural',walkable:true,zone:'eastbank'},
   {id:'cedar-link',from:'cedarLinkS',to:'cedarLoopStart',width:9,surface:'asphalt',level:'rural',walkable:true},
@@ -189,12 +193,13 @@ const reserved=[
  {id:'C2',name:'Commercial plot C2',kind:'commercial',facing:'north',x0:-7,x1:3,z0:-81,z1:-70},
  {id:'C3',name:'Commercial plot C3',kind:'commercial',facing:'north',x0:3,x1:14,z0:-81,z1:-69},
  {id:'C4',name:'Commercial plot C4',kind:'commercial',facing:'north',x0:14,x1:21.5,z0:-81,z1:-71.5},
- {id:'C5',name:'Commercial plot C5',kind:'commercial',facing:'north',x0:21.5,x1:28.5,z0:-81,z1:-73},
  {id:'C6',name:'Commercial plot C6',kind:'commercial',facing:'north',x0:28.5,x1:36,z0:-81,z1:-72.5},
  {id:'C7',name:'Commercial plot C7',kind:'commercial',facing:'north',x0:36,x1:43,z0:-81,z1:-72},
  {id:'C8',name:'Commercial plot C8',kind:'commercial',facing:'south',x0:-20,x1:-6.5,z0:-108,z1:-99},
  {id:'C9',name:'Commercial plot C9',kind:'commercial',facing:'south',x0:-6.5,x1:1,z0:-108,z1:-99},
  {id:'C10',name:'Commercial plot C10',kind:'commercial',facing:'south',x0:1,x1:9,z0:-107,z1:-99},
+ // I3: C5 is retired (it is now Barber's Walk, a pavement to the car park); the barber moved to C12, east of Ironwood Street, facing west onto its sidewalk.
+ {id:'C12',name:'Commercial plot C12',kind:'commercial',facing:'west',x0:57,x1:69,z0:-66,z1:-59},
  {id:'R1',name:'Residential plot R1',kind:'residential',facing:'south',x0:94,x1:106,z0:-85,z1:-73,
   driveway:{x0:101.6,x1:105.1,z0:-75.9,z1:-63.5},path:{x0:99.25,x1:100.75,z0:-75.9,z1:-63.5},park:{x:103.35,z:-73.3,heading:'north'}},{id:'R2',name:'Residential plot R2',kind:'residential',facing:'south',x0:114,x1:126,z0:-83,z1:-71,
   driveway:{x0:121.6,x1:125.1,z0:-73.9,z1:-61},path:{x0:119.25,x1:120.75,z0:-73.9,z1:-61},park:{x:123.35,z:-71.3,heading:'north'}},{id:'R3',name:'Residential plot R3',kind:'residential',facing:'south',x0:134,x1:146,z0:-85,z1:-73,
@@ -287,7 +292,7 @@ const properties=[
  {id:'alder-offices',type:'commercial',landmark:'alder-offices',plot:'C2',name:'Ironwood Offices',enterable:false,reason:'Office interiors arrive with a later update.'},
  {id:'alder-tower',type:'commercial',landmark:'alder-tower',plot:'C3',name:'Ironwood Tower',enterable:false,reason:'Office interiors arrive with a later update.'},
  {id:'alder-bakery',type:'shop',landmark:'alder-bakery',plot:'C4',name:'Ironwood Bakery',enterable:false,reason:'Shop interiors arrive with the store jobs update.'},
- {id:'alder-barber',type:'shop',landmark:'alder-barber',plot:'C5',name:'Ironwood Barber',enterable:false,reason:'Shop interiors arrive with the store jobs update.'},
+ {id:'alder-barber',type:'shop',landmark:'alder-barber',plot:'C12',name:'Ironwood Barber',enterable:false,reason:'Shop interiors arrive with the store jobs update.'},
  {id:'alder-pharmacy',type:'shop',landmark:'alder-pharmacy',plot:'C6',name:'Ironwood Pharmacy',enterable:false,reason:'Shop interiors arrive with the store jobs update.'},
  {id:'alder-bank',type:'commercial',landmark:'alder-bank',plot:'C7',name:'Ironwood Bank',enterable:false,reason:'Office interiors arrive with a later update.'},
  {id:'police-station',type:'civic',landmark:'police-station',plot:'C8',name:'Police Station',enterable:false,reason:'Its interior arrives with a later update.'},
@@ -435,9 +440,11 @@ export const MAP=deepFreeze({
  // The marked parking lot behind the south row of shops: bays 2.7 m wide and 5 m deep along its north edge, an aisle to Alder Street, the lot's own asphalt.
  lots:[{id:'alder-lot',x0:-14,x1:45,z0:-63,z1:-52,bays:{x0:-13.5,z0:-63,count:20,width:2.7,depth:5}}],
  // Parking lanes on the cross street (6 m bays, nose in the direction of traffic: eastbound on the south side, westbound on the north), and the lane edge lines.
- parking:[{id:'cross-s',z:-85.25,edge:-86.5,x0:-19,x1:37,bay:6,face:'east'},{id:'cross-n',z:-94.75,edge:-93.5,x0:-19,x1:37,bay:6,face:'west'}],
+ // I3: each lane is split around the new crosswalk on the hotel's axis (x 25): seven bays west of it (x -19..23) and one east of it (x 29..35), so 18 parallel bays became 16.
+ parking:[{id:'cross-s',z:-85.25,edge:-86.5,x0:-19,x1:23,bay:6,face:'east'},{id:'cross-s2',z:-85.25,edge:-86.5,x0:29,x1:35,bay:6,face:'east'},{id:'cross-n',z:-94.75,edge:-93.5,x0:-19,x1:23,bay:6,face:'west'},{id:'cross-n2',z:-94.75,edge:-93.5,x0:29,x1:35,bay:6,face:'west'}],
  // Crosswalks: `road` is the way the road runs; stripes 3 m long along it, 0.5 m wide, one every metre across `span`, centred on (x, z). Stop lines: a bar across the approaching lane.
  crossings:[
+  {x:25,z:-90,road:'x',span:12},{x:50,z:-128,road:'z',span:10}, // I3: across Main Street on the hotel's axis, and across Ironwood Street north of the square
   {x:50,z:-98.5,road:'z',span:10},{x:50,z:-81.5,road:'z',span:10},{x:41,z:-90,road:'x',span:12},{x:59,z:-90,road:'x',span:12},{x:-23,z:-90,road:'x',span:12},{x:50,z:-10.5,road:'z',span:10},
   {x:-41,z:6,road:'x',span:19},{x:-13,z:6,road:'x',span:19},{x:44,z:6,road:'x',span:19},{x:-30,z:-12,road:'z',span:16},{x:-30,z:24,road:'z',span:16},{x:120,z:-3,road:'z',span:9},{x:110,z:6,road:'x',span:12},{x:130,z:6,road:'x',span:12}],
  stopLines:[{x:46.5,z:-102,along:'x',w:4.5},{x:53.5,z:-78,along:'x',w:4.5},{x:37.5,z:-93.2,along:'z',w:6},{x:62.5,z:-86.8,along:'z',w:6}],
@@ -454,7 +461,7 @@ export const MAP=deepFreeze({
   {id:'st-w-n',a:[44.5,-121],b:[44.5,-100],face:[1,0],lamp:24,lampAt:4,bin:30,binAt:14},
   {id:'st-w-s',a:[44.5,-83],b:[44.5,-65],face:[1,0],lamp:24,lampAt:3,hydrant:60,hydrantAt:12},
   {id:'st-e-n',a:[55.5,-121],b:[55.5,-97],face:[-1,0],lamp:24,lampAt:4,bin:30,binAt:15},
-  {id:'st-e-s',a:[55.5,-83],b:[55.5,-53],face:[-1,0],lamp:24,lampAt:3,hydrant:60,hydrantAt:20,bench:16,benchAt:7}],
+  {id:'st-e-s',a:[55.5,-83],b:[55.5,-53],face:[-1,0],lamp:24,lampAt:3,hydrant:60,hydrantAt:29,bench:100,benchAt:30}], // I3: the hydrant and bench moved to the south end so the sidewalk is clear for walkers from the barber's door (56, -62.5) north to Main Street
  // The town square (a raised paved square north of the cross street): a fountain in the middle, a ring path, planters at the corners, benches round the edge, trees and bollards on its street side.
  plazas:[{id:'alder-square',x0:9,x1:38,z0:-122,z1:-96,fountain:{x:23.5,z:-109,r:3.4},
   planters:[],trees:[[14,-114],[33,-114],[14,-104],[33,-104]],
@@ -471,7 +478,11 @@ export const MAP=deepFreeze({
   // Alder Center's own (drawn by world.js, `draw: true`): sidewalks 3 m wide along the cross street (the police station's side stops at the town square, which runs flush to the road),
   // 2 m wide along Alder Street, and the town square itself.
   {x0:-20,x1:43,z0:-84,z1:-80.7,draw:true},{x0:-20,x1:9,z0:-99.3,z1:-96,draw:true},{x0:38,x1:43,z0:-99.3,z1:-96,draw:true},{x0:9,x1:38,z0:-122,z1:-96,draw:true,plaza:true},
-  {x0:43,x1:45,z0:-122,z1:-99,draw:true},{x0:43,x1:45,z0:-84,z1:-64,draw:true},{x0:55,x1:57,z0:-122,z1:-96,draw:true},{x0:55,x1:57,z0:-84,z1:-52,draw:true}],
+  {x0:43,x1:45,z0:-122,z1:-99,draw:true},{x0:43,x1:45,z0:-84,z1:-64,draw:true},{x0:55,x1:57,z0:-122,z1:-96,draw:true},{x0:55,x1:57,z0:-84,z1:-52,draw:true},
+  // I3 (design 1.4): River Street's south sidewalk (it stops at x 43 so it does not lie on Ironwood Street's), Ironwood Street's two sidewalks carried north to River Street, Main Street's sidewalks east of Ironwood Street,
+  // Barber's Walk (on foot only, Main Street to the car park), the square's east terrace, the Bus Plaza, the back court, and the Alder Avenue gap (the strip west of the store, from the avenue's sidewalk to Main Street's).
+  {x0:-20,x1:43,z0:-133,z1:-131,draw:true},{x0:43,x1:45,z0:-133,z1:-122,draw:true},{x0:55,x1:57,z0:-133,z1:-122,draw:true},{x0:57,x1:70,z0:-84,z1:-81,draw:true},{x0:57,x1:70,z0:-99,z1:-96,draw:true},
+  {x0:21.5,x1:28.5,z0:-80.7,z1:-63,draw:true},{x0:38,x1:43,z0:-122,z1:-99.3,draw:true},{x0:57,x1:69,z0:-73.5,z1:-66,draw:true},{x0:-20,x1:9,z0:-122,z1:-108,draw:true},{x0:-21.5,x1:-20,z0:-84,z1:-60,draw:true}],
  // Buildings placed from converted models or placeholders (props.js): yaw is a multiple of 90 degrees so the collision boxes stay axis-aligned. The farmstead (a barn,
  // a farmhouse, a silo and a shed; a placeholder for now) fills the free north-east strip of Willow Fields and faces the farm road; the sawmill stands in Pine Ridge's empty clearing.
  landmarks:[
@@ -488,7 +499,7 @@ export const MAP=deepFreeze({
   {id:'alder-offices',prop:'shop-i',plot:'C2',zone:'alder',x:-2,z:-75.50,yaw:Math.PI},
   {id:'alder-tower',prop:'shop-l',plot:'C3',zone:'alder',x:8.5,z:-75.10,yaw:Math.PI},
   {id:'alder-bakery',prop:'shop-c',plot:'C4',zone:'alder',x:17.75,z:-76.35,yaw:Math.PI},
-  {id:'alder-barber',prop:'shop-d',plot:'C5',zone:'alder',x:25,z:-77.10,yaw:Math.PI},
+  {id:'alder-barber',prop:'shop-d',plot:'C12',zone:'alder',x:60.6,z:-62.5,yaw:-Math.PI/2}, // I3: moved from C5 (now Barber's Walk); its front (x 57) is on Ironwood Street's east sidewalk
   {id:'alder-pharmacy',prop:'shop-a',plot:'C6',zone:'alder',x:32.25,z:-76.95,yaw:Math.PI},
   {id:'alder-bank',prop:'shop-f',plot:'C7',zone:'alder',x:39.5,z:-76.60,yaw:Math.PI},
   {id:'police-station',prop:'shop-e',plot:'C8',zone:'alder',x:-13.25,z:-103.35,yaw:0},
@@ -500,9 +511,9 @@ export const MAP=deepFreeze({
   {id:'house-r7',prop:'house-r',plot:'R7',zone:'cedar',x:94,z:-48.08,yaw:Math.PI},{id:'house-r8',prop:'house-l',plot:'R8',zone:'cedar',x:146,z:-48.08,yaw:Math.PI},
   // Cars parked on the cross street, in the marked lot and along Oak Street (props now, drivable later); the police car stands outside the police station.
   {id:'park-cs-1',prop:'taxi',zone:'alder',x:-4,z:-85.25,yaw:Math.PI/2,decor:true},{id:'park-cs-2',prop:'car',zone:'alder',x:14,z:-85.25,yaw:Math.PI/2,decor:true},{id:'park-cs-3',prop:'suv',zone:'alder',x:32,z:-85.25,yaw:Math.PI/2,decor:true},
-  {id:'park-cn-1',prop:'police-car',zone:'alder',x:-10,z:-94.75,yaw:-Math.PI/2,decor:true},{id:'park-cn-2',prop:'sports-car',zone:'alder',x:2,z:-94.75,yaw:-Math.PI/2,decor:true},{id:'park-cn-3',prop:'car-2',zone:'alder',x:26,z:-94.75,yaw:-Math.PI/2,decor:true},
+  {id:'park-cn-1',prop:'police-car',zone:'alder',x:-10,z:-94.75,yaw:-Math.PI/2,decor:true},{id:'park-cn-2',prop:'sports-car',zone:'alder',x:2,z:-94.75,yaw:-Math.PI/2,decor:true},{id:'park-cn-3',prop:'car-2',zone:'alder',x:32,z:-94.75,yaw:-Math.PI/2,decor:true},
   {id:'park-lot-1',prop:'car',zone:'alder',x:-4.05,z:-60.5,yaw:Math.PI,decor:true},{id:'park-lot-2',prop:'suv',zone:'alder',x:4.05,z:-60.5,yaw:Math.PI,decor:true},{id:'park-lot-3',prop:'sports-car-2',zone:'alder',x:9.45,z:-60.5,yaw:Math.PI,decor:true},
-  {id:'park-lot-4',prop:'taxi',zone:'alder',x:20.25,z:-60.5,yaw:Math.PI,decor:true},{id:'park-lot-5',prop:'car-2',zone:'alder',x:28.35,z:-60.5,yaw:Math.PI,decor:true},{id:'park-lot-6',prop:'sports-car',zone:'alder',x:36.45,z:-60.5,yaw:Math.PI,decor:true},
+  {id:'park-lot-4',prop:'taxi',zone:'alder',x:20.25,z:-60.5,yaw:Math.PI,decor:true},{id:'park-lot-5',prop:'car-2',zone:'alder',x:31.05,z:-60.5,yaw:Math.PI,decor:true},{id:'park-lot-6',prop:'sports-car',zone:'alder',x:36.45,z:-60.5,yaw:Math.PI,decor:true},
   {id:'park-oak-1',prop:'car-2',zone:'city',x:-4,z:-1.9,yaw:-Math.PI/2,decor:true},{id:'park-oak-2',prop:'suv',zone:'city',x:30,z:13.9,yaw:Math.PI/2,decor:true},{id:'park-oak-3',prop:'sports-car',zone:'city',x:6,z:13.9,yaw:Math.PI/2,decor:true},
   // Cars parked on their driveways (props now, drivable later): R2, R4, R6 and R8 are lived in, R1, R3, R5 and R7 are vacant.
   {id:'car-r2',prop:'suv',zone:'cedar',x:123.35,z:-71.3,yaw:Math.PI,decor:true},{id:'car-r4',prop:'car',zone:'cedar',x:101.35,z:-118.08,yaw:Math.PI,decor:true},{id:'car-r6',prop:'sports-car',zone:'cedar',x:138.65,z:-117.18,yaw:Math.PI,decor:true},{id:'car-r8',prop:'car',zone:'cedar',x:149.35,z:-54.76,yaw:0,decor:true},
@@ -539,7 +550,7 @@ export const MAP=deepFreeze({
   {id:'husky-farmstead',name:'Husky Ranch farmstead',region:'ranch-growth',x:-200,z:-250}],
  signs:[
   {id:'fork',zone:'forest',x:-23.8,z:n(-170),yaw:0,boards:[{text:'← WILLOW FIELDS',y:2.1},{text:'PINE RIDGE →',y:2.9}]},
-  {id:'alder-sign',zone:'alder',x:57,z:-56,yaw:0,boards:[{text:'IRONWOOD',y:2.4}]},
+  {id:'alder-sign',zone:'alder',x:56,z:-50,yaw:0,boards:[{text:'IRONWOOD',y:2.4}]},
   {id:'cedar-sign',zone:'cedar',x:127,z:-44,yaw:0,boards:[{text:'CEDAR HEIGHTS',y:2.4}]},
   {id:'eastbank-sign',zone:'eastbank',x:74,z:-5,yaw:-1.5707963267948966,boards:[{text:'EASTBANK WORKS →',y:2.4}]},
   {id:'bay-road-sign',wild:true,x:259,z:79,yaw:0,boards:[{text:'KASPIAN BAY',y:2.7},{text:'BAY ROAD',y:2.0}]}, // R4: Kaspian Bay's street signs (MAP.towns): wild signs lie in the world and name no zone

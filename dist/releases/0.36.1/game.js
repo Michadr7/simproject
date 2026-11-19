@@ -72,7 +72,7 @@ import {MAP,roadRects,nearestRescuePoint,roadGraph} from './map-definition.js';i
 import {activeAction,canStart,refusal} from './actions.js';
 import {resolveObjective} from './objective.js';
 import {substeps,MAX_FRAME} from './timestep.js';
-import {CARRY,CARRY_DIR,CARRY_POLE,CHOP_TIMING,chopPose,carryGrip,SAW_CARRY,SAW_DIR,sawPose,sawStand,sawCutting} from './chop-path.js';import {spawn as spawnDust} from './sawdust.js'; // STEP 4: trail carry, chainsaw bucking pose, sawdust chips into the sawmill's one Points pool
+import {CARRY,CARRY_DIR,CARRY_POLE,CHOP_IMPACT,HITS_PER_SWING,swingSeconds,chopVariant,chopPose,carryGrip,SAW_CARRY,SAW_DIR,sawPose,sawStand,sawCutting} from './chop-path.js';import {spawn as spawnDust} from './sawdust.js';import {forestTarget,forestDuck,createCreakGate,thudSizeForLogs} from './logging-wiring.js'; // LOG1: logging sounds (audio.logging, the forest loop, seeded creaks) // STEP 4: trail carry, chainsaw bucking pose, sawdust chips into the sawmill's one Points pool
 import {createPedestrians,createVehicles} from './neighborhood.js';import {createNpcCrowd} from './npc-crowd.js';import {townPopulation} from './population.js';import {createSchedule,dayPlan} from './schedule.js';import {createRouteTable,tripWithTable,walkPairsOf} from './npc-routes.js';import {busyness} from './busyness.js';import {createWalkSchedule,walkLegCandidatePairs,townWalkBlocked,townWalkCost} from './walk-legs.js';
 import {createDriving} from './driving.js';import {shakeAmplitude,shakeOffset,SHAKE_SECONDS,ENERGY_COST,bandToast,smokeOf,hitStopOf,stopSlice,flashOf} from './damage.js';import {createDebris} from './debris.js'; // VD7a: crash feedback
 import {pullOutAvailable,BOG_PULL_HOURS} from './surface-table.js';import {pullOut,pullFee,hoursNow,shopList,offers as garageQuotes,collect as collectRepair,startRepair,useKit,towTo,bayPose,inBay,inShop,condOf,hoursText as repairText,KIT_CAP} from './garage.js';import {percent as condPct} from './damage.js'; // VD4: the repair shop (garage.js holds every rule)
@@ -170,7 +170,7 @@ world.setLogs(GameState.progress.logs);
 const me=GameState.me;
 // consuming: an item is being raised and used (blocks input). armRecovery: the empty hand lowering afterwards (cosmetic only).
 let cargoUI=null,phone=null,inventoryUI=null,storeUI=null,consuming=null,armRecovery=null,chopping=null,sleepElapsed=null;
-let sawRecover=null,sawLean=false,heldHeadEnd=NaN,heldGrip=carryGrip(),carryAt=CARRY,sawDustLive=0;const SAW_OUT=sawPose(0,1),SAW_STEP=sawPose(0,1),SAW_STAND_AT={x:0,z:0,yaw:0},CHOP_OUT=chopPose(0),SAW_DUST_RATE=45,SAW_DUST_BURST=10; // STEP 4: the chainsaw's recoil after a cut, the axe's sliding grip, the arm's carry target, the chips
+let sawRecover=null,sawLean=false,heldHeadEnd=NaN,heldGrip=carryGrip(),carryAt=CARRY,sawDustLive=0;const SAW_OUT=sawPose(0,1),SAW_STEP=sawPose(0,1),SAW_STAND_AT={x:0,z:0,yaw:0},CHOP_OUT=chopPose(0),CHOP_VAR=chopVariant(0,0),CHOP_NUDGE={amp:.035,t:.16},SAW_DUST_RATE=45,SAW_DUST_BURST=10; // STEP 4: the chainsaw's recoil after a cut, the axe's sliding grip, the arm's carry target, the chips
 // Hotbar, equipped tool, hold-E chopping, plot grid toggle and tree regrowth bookkeeping.
 let doorCooldown=1,doorFade=null,hotbarSignature='',eHeld=false,carried=null,carryWeight=0,gridOn=false,regrowClock=99;
 const pendingLogs=new Set(),lastStages=new Map();
@@ -452,7 +452,7 @@ function syncCrates(){const p=GameState.progress,drops=p.crateDrops||NO_DROPS,k=
 let carryPlanks=null,dropsFor=null,plankBoxes=[],planksPose=0,yardBoxes=[],yardPile=null; // plankBoxes: a put-down stack is a solid box (carry.js plankBox); planksPose: how far the two-handed carry pose has blended in
 // The two drivable Eastbank vehicles (driving.js, vehicle.js): their poses come from the save. worldBlocked is blocked() without them, so a vehicle never collides with itself.
 for(const v of GameState.progress.vehicles||[])world.ensure(v.x,v.z); // a saved vehicle is placed against real ground: build its chunks first
-const surfaceLive=(x,z)=>{const s=world.chunks?.surfaceAt?.(x,z)||0;return s||terrain().surfaceAt(x,z)};const footstep=run=>{const sf=inside||shop?'wood':surfaceLive(me.position.x,me.position.z);audio.step(sf,null,null,run)};let ambClock=0,ambWater=Infinity;function ambienceTick(dt){ambClock+=dt;if(ambClock>=.25){ambClock=0;const sf=surfaceLive(me.position.x,me.position.z);ambWater=sf===6||sf===7||sf===8?5:Infinity}const m=GameState.progress.routine?.minutes||0;audio.ambience({outdoors:!inside&&!shop,isNight:m<330||m>=1230,windSpeed:5,waterDist:ambWater})} // SND3: footsteps by surface (a step every PI of phase) and the ambience bed (birds by day, crickets by night, a little wind, water at the lake and the river) // PB1: the ground under a vehicle: the loaded tiles first (the wilds east of x 300 and beyond the other rims), the whole-map mask inside the old ground
+const surfaceLive=(x,z)=>{const s=world.chunks?.surfaceAt?.(x,z)||0;return s||terrain().surfaceAt(x,z)};const footstep=run=>{const sf=inside||shop?'wood':surfaceLive(me.position.x,me.position.z);audio.step(sf,null,null,run)};let ambClock=0,ambWater=Infinity;const forestSt={on:false,d:Infinity,x:0,z:0},creakGate=createCreakGate();function forestScan(){forestSt.d=Infinity;if(inside||shop)return;const px=me.position.x,pz=me.position.z;let best=Infinity;for(const t of world.trees.values()){if(!t.standing)continue;const dx=t.x-px,dz=t.z-pz,d=dx*dx+dz*dz;if(d<best){best=d;forestSt.x=t.x;forestSt.z=t.z}}forestSt.d=Math.sqrt(best)}function ambienceTick(dt){ambClock+=dt;if(ambClock>=.25){ambClock=0;const sf=surfaceLive(me.position.x,me.position.z);ambWater=sf===6||sf===7||sf===8?5:Infinity;forestScan()}const m=GameState.progress.routine?.minutes||0;const fp=forestTarget(forestSt,forestSt.d,!inside&&!shop),working=!!chopping?.tree&&!chopping.tree.stump&&!chopping.tree.buck;if(creakGate.tick(dt,fp,working))audio.logging('woodCreak',working?{x:chopping.tree.x,z:chopping.tree.z}:{x:forestSt.x,z:forestSt.z},listenerAt());audio.ambience({outdoors:!inside&&!shop,isNight:m<330||m>=1230,windSpeed:5,waterDist:ambWater,forest:fp,duck:forestDuck({vehicle:!!driving.driving||!!fork.on,talking:talking()})})} // LOG1: forest loop + one seeded, timer-gated creak every 16-38 s (7-15 s while a tree is being worked) // SND3: footsteps by surface (a step every PI of phase) and the ambience bed (birds by day, crickets by night, a little wind, water at the lake and the river) // PB1: the ground under a vehicle: the loaded tiles first (the wilds east of x 300 and beyond the other rims), the whole-map mask inside the old ground
 const driving=createDriving({scene,fade:world.fade,surface:surfaceLive,footing:standHeight,baseBlocked:(x,z)=>worldBlocked(x,z),saved:GameState.progress.vehicles});let driveIdle=9,driveSave=0;const vehicleHud=createVehicleHud($);const fuel=createFuelStation({scene,fade:world.fade,footing:standHeight});const smoke=createSmoke(scene);const debris=createDebris(scene);let voiceT=0,warmed=false;const nightLights=createNightLights({scene,footing:standHeight,cityWindows,cityLampHeads});const shadows=createShadows({scene,renderer,sun,footing:standHeight,people:()=>[driving.active?null:me,...Object.values(remoteMeshes),...pedestrians.people.map(p=>p.group)],vehicles:()=>[...driving.fleet.map(f=>({mesh:f.mesh,hx:f.cls.hx,hz:f.cls.hz})),...[customerTruck,dockTruck].map(t=>({mesh:t.mesh,hx:CLASSES.flatbed.hx,hz:CLASSES.flatbed.hz})),...vehicles.map(v=>({mesh:v.group}))]});let lightMode='auto',lightsHeldFor=null,lightsHeld=[]; // night lights (night-lights.js): lamps, windows, vehicle lamps; lightMode: the L key's switch for the vehicle you drive. Before that: the Eastbank pumps: nozzles, hoses and the nozzle in your hand
 // P-B wiring (notes/planks-economy-design.md): the yard (progress.sawmillYard, sawmill-yard.js) is the sawmill's ONE plank stock: logs wait on the bench, the saw cuts one in 4 game minutes (game time, so any frame rate), planks wait in the yard.
 // Every board of the yard is drawn in the lumber hut (owner 2026-11-18: the sawmill deck is no store; lumber-hut.js), the waiting logs beside the feed end (syncYardPile, sawmill-pile.js); progress.belt stays derived for old saves; the lever follows the yard's switch; the daily trickle and the supply to the Eastbank supplier run in world-tick.js.
@@ -890,7 +890,7 @@ function putDownCarried(){const p=GameState.progress;if((!p.carry&&parcelHeld(p)
   let found=false;for(const [d,k] of [[0,0],[1.1,8],[1.8,8],[2.6,8]]){for(let i=0;i<(k||1)&&!found;i++){const a=i/(k||1)*Math.PI*2,cx=me.position.x+Math.sin(a)*d,cz=me.position.z+Math.cos(a)*d;if(!bad(cx,cz)){x=cx;z=cz;found=true}}if(found)break}
   if(!found){toast('Find some clear ground to put it down.');return}}
  const rot=me.rotation.y+Math.PI/2,q=quarterOf(me.rotation.y); // the stack lies across the way you were facing, as you carried it
- beginBend(()=>{const cur=GameState.progress,log=cur.carry?.kind==='log'||cur.carry?.kind==='trunk',r=!cur.carry?{error:'Nothing to put down.'}:log?putDownLog(cur,{x,z,rot}):cur.carry.kind==='planks'?putDownPlanks(cur,{x,z,q}):cur.carry.kind==='slab'?putDownSlab(cur,{x,z,q}):putDownCrate(cur,{x,z,q}); /* T-E: a trunk or two logs go down like the log, a slab onto slabDrops */if(r.error){toast(r.error);return}GameState.progress=r.state;persist();if(log)world.setLogs(GameState.progress.logs);{const k=cur.carry.kind;if(k==='crate'||k==='box')audio.sweep('crate-drop');else audio.timber(log||k==='slab'?'logDrop':'plankDrop')}toast(r.message)})}
+ beginBend(()=>{const cur=GameState.progress,log=cur.carry?.kind==='log'||cur.carry?.kind==='trunk',r=!cur.carry?{error:'Nothing to put down.'}:log?putDownLog(cur,{x,z,rot}):cur.carry.kind==='planks'?putDownPlanks(cur,{x,z,q}):cur.carry.kind==='slab'?putDownSlab(cur,{x,z,q}):putDownCrate(cur,{x,z,q}); /* T-E: a trunk or two logs go down like the log, a slab onto slabDrops */if(r.error){toast(r.error);return}GameState.progress=r.state;persist();if(log)world.setLogs(GameState.progress.logs);{const k=cur.carry.kind;if(k==='crate'||k==='box')audio.sweep('crate-drop');else if(log)audio.logging('logThud',null,null,{size:'medium'});else audio.timber(k==='slab'?'logDrop':'plankDrop')}toast(r.message)})}
 function updatePutting(dt){
  if(!putting)return;const u=putting;u.elapsed+=dt;const t=u.elapsed/BEND_TIME;bendNow=bendAmount(t);avatar.setLean(bendLean(t));avatar.setCrouch(bendDrop(t));
  if(!u.done&&u.elapsed>=BEND_TIME*BEND_RELEASE){u.done=true;u.apply()}
@@ -1304,17 +1304,17 @@ function startChop(tree,{quiet=false}={}){
  me.rotation.y=Math.atan2(tree.x-me.position.x,tree.z-me.position.z);
  armRecovery=null;keys.clear();updateEquipped(0);carryWeight=1;
  const total=swingTime(levelOf(GameState.progress.skills.lumberjack.xp).level);
- chopping={tree,elapsed:0,struck:false,total,impact:CHOP_TIMING.impact*total};
+ chopping={tree,elapsed:0,struck:false,total:swingSeconds(total,hitsFor(GameState.progress.equipped,levelOf(GameState.progress.skills.lumberjack.xp).level)),variant:chopVariant(Math.floor((GameState.progress.plots?.[tree.key]?.hits|0)/HITS_PER_SWING),tree.key,CHOP_VAR)};chopping.impact=CHOP_IMPACT*chopping.total; // logging polish: one heavy swing lands HITS_PER_SWING hits (same felling time); a seeded variant per swing (the plot's hits so far, so co-op clients agree)
  return true;
 }
 function updateChop(dt){
  if(!chopping||modal||document.hidden)return;
  const c=chopping;if(c.saw){if(!eHeld){chopping=null;sawRecover={t:c.elapsed,release:c.elapsed,total:c.total};toast('Hold E to cut through the trunk.');return}c.elapsed=Math.min(c.total,c.elapsed+dt);sawStep(c,dt);if(c.elapsed>=c.total){chopping=null;sawRecover={t:c.total,release:c.total,total:c.total};keys.clear();strikeBuck(c,true)}return} // T-E: the chainsaw cut is a hold, not a swing; STEP 4: letting go or finishing starts the recoil (sawRecover), updateEquipped draws the pose
  c.elapsed=Math.min(c.total,c.elapsed+dt);
- const pose=chopPose(c.elapsed/c.total,CHOP_OUT,carryGrip(heldHeadEnd));
- avatar.reach('R',pose.point,1,CARRY_POLE);avatar.setLean(pose.lean);avatar.setTwoHanded(pose.twoHand);heldGrip=pose.grip;avatar.alignHeld(pose.align?CARRY_DIR:null); // trail carry -> both hands on the handle -> trail carry
- if(!c.struck&&c.elapsed>=c.impact){c.struck=true;strikeTree(c)}
- if(c.elapsed>=c.total){avatar.reach('R',CARRY,1,CARRY_POLE);avatar.setLean(0);avatar.setTwoHanded(0);avatar.alignHeld(CARRY_DIR);heldGrip=carryGrip(heldHeadEnd);carryWeight=1;chopping=null;keys.clear();if(eHeld&&!modal&&!c.tree.stump){if(c.tree.buck){const t=(GameState.progress.logs||[]).find(l=>l.id===c.tree.buck);if(t)startBuck(t)}else chopNext()}}
+ const pose=chopPose(c.elapsed/c.total,CHOP_OUT,carryGrip(heldHeadEnd),c.variant);
+ avatar.reach('R',pose.point,1,CARRY_POLE);avatar.setLean(pose.lean);avatar.setCrouch(pose.crouch);avatar.setTwoHanded(pose.twoHand);heldGrip=pose.grip;avatar.alignHeld(pose.align?CARRY_DIR:null); // trail carry -> both hands on the handle -> trail carry
+ if(!c.struck&&c.elapsed>=c.impact){c.struck=true;strikeTree(c);if(!calm()){shake.amp=Math.max(shake.t>0?shake.amp:0,CHOP_NUDGE.amp);shake.t=Math.max(shake.t,CHOP_NUDGE.t)}} // the blade lands at CHOP_IMPACT: chips, the chop sound and a small camera nudge (the crash shake helper)
+ if(c.elapsed>=c.total){avatar.reach('R',CARRY,1,CARRY_POLE);avatar.setLean(0);avatar.setCrouch(0);avatar.setTwoHanded(0);avatar.alignHeld(CARRY_DIR);heldGrip=carryGrip(heldHeadEnd);carryWeight=1;chopping=null;keys.clear();if(eHeld&&!modal&&!c.tree.stump){if(c.tree.buck){const t=(GameState.progress.logs||[]).find(l=>l.id===c.tree.buck);if(t)startBuck(t)}else chopNext()}}
 }
 // Digging out a stump (a Ridgeline task): the same swing as chopping, the stump is gone afterwards and the ground is bare until a sapling goes in.
 function startClear(key,t){
@@ -1323,7 +1323,7 @@ function startClear(key,t){
  const check=clearStump(GameState.progress,key,me.position);if(check.error){toast(check.error);return}
  me.rotation.y=Math.atan2(t.x-me.position.x,t.z-me.position.z);armRecovery=null;keys.clear();updateEquipped(0);carryWeight=1;
  const total=swingTime(levelOf(GameState.progress.skills.lumberjack.xp).level);
- chopping={tree:{key,x:t.x,z:t.z,stump:true},elapsed:0,struck:false,total,impact:CHOP_TIMING.impact*total};
+ chopping={tree:{key,x:t.x,z:t.z,stump:true},elapsed:0,struck:false,total:swingSeconds(total),variant:chopVariant(0,key,CHOP_VAR)};chopping.impact=CHOP_IMPACT*chopping.total;
 }
 function strikeStump(c){
  const result=clearStump(GameState.progress,c.tree.key,me.position);if(result.error){toast(result.error);return}
@@ -1338,19 +1338,19 @@ function plantHere(key){
 }
 function strikeTree(c){
  if(c.tree.stump){strikeStump(c);return}if(c.tree.buck){strikeBuck(c,false);return}
- const result=chopTree(GameState.progress,c.tree.key,me.position);
+ let result=null,up=null;for(let i=0;i<HITS_PER_SWING;i++){const r=chopTree(GameState.progress,c.tree.key,me.position);if(r.error){if(!result)result=r;break}result=r;GameState.progress=r.state;if(r.leveledUp)up=r;if(r.felled)break}if(up&&!result.leveledUp)result={...result,leveledUp:true,level:up.level}; // logging polish: one heavy swing lands HITS_PER_SWING hits
  if(result.error){toast(result.error);return}
  GameState.progress=result.state;persist();
  let shiftNote='';if(result.felled){const tf=treeFelled(GameState.progress,c.tree,result.logs.map(l=>l.id));if(tf.state!==GameState.progress){GameState.progress=tf.state;persist()}shiftNote=tf.message?' · '+tf.message:''}
  if(result.felled){
-  audio.timber('chop',{x:c.tree.x,z:c.tree.z},listenerAt());audio.timber('fall',{x:c.tree.x,z:c.tree.z},listenerAt()); // SND2: the last chop, then the creak and crash
+  audio.logging('axeHit',{x:c.tree.x,z:c.tree.z},listenerAt());audio.logging('woodCrack',{x:c.tree.x,z:c.tree.z},listenerAt(),{scale:.55});audio.logging('treeFall',{x:c.tree.x,z:c.tree.z},listenerAt()); // LOG1: the last hit (axe + a quieter crack), then the recorded fall sequence (replaces timber chop/fall)
   // The trunk falls first; its logs appear on the ground (and can be picked up) once it has landed.
   const ids=result.logs.map(l=>l.id);ids.forEach(id=>pendingLogs.add(id));
-  world.fellTree(c.tree.key,me.position,()=>{ids.forEach(id=>pendingLogs.delete(id));world.setLogs(GameState.progress.logs);audio.timber('thud',{x:c.tree.x,z:c.tree.z},listenerAt())});
+  world.fellTree(c.tree.key,me.position,()=>{ids.forEach(id=>pendingLogs.delete(id));world.setLogs(GameState.progress.logs);audio.logging('logThud',{x:c.tree.x,z:c.tree.z},listenerAt(),{size:thudSizeForLogs(ids.length),scale:.6})}); // LOG1: the trunk lands: a log thud sized by how many logs it gives
   minimap.invalidateAt(c.tree.x,c.tree.z);
   toast((result.leveledUp?`${result.message} Lumberjack level ${result.level}! ${perkText(result.level)}`:result.message)+shiftNote);
  }else{
-  audio.timber('chop',{x:c.tree.x,z:c.tree.z},listenerAt());world.hitTree(c.tree.key,me.position);
+  audio.logging('axeHit',{x:c.tree.x,z:c.tree.z},listenerAt());world.hitTree(c.tree.key,me.position);
   if(result.leveledUp)toast(`Lumberjack level ${result.level}! ${perkText(result.level)}`);
  }
 }
@@ -1363,7 +1363,7 @@ function startBuck(log){
  me.rotation.y=Math.atan2(log.x-me.position.x,log.z-me.position.z);armRecovery=null;keys.clear();updateEquipped(0);carryWeight=1;const target={buck:log.id,key:'buck-'+log.id,x:log.x,z:log.z};
  if(isSaw(tool)){const st=sawStand(log.x,log.z,log.rot||0,me.position.x,me.position.z,SAW_STAND_AT),free=!worldBlocked(st.x,st.z),yaw0=me.rotation.y;sawRecover=null; // STEP 4: step in beside the trunk's middle, facing across it (where you stand is blocked: cut from here)
   chopping={tree:target,saw:true,elapsed:0,struck:false,total:buckTimeSec(tool),impact:Infinity,step:0,dx:free?st.x-me.position.x:0,dz:free?st.z-me.position.z:0,yaw0,turn:free?Math.atan2(Math.sin(st.yaw-yaw0),Math.cos(st.yaw-yaw0)):0,dust:0,bit:false,rng:(log.id*2654435761)>>>0,ground:heightAt(log.x,log.z)+(world.floorAt(log.x,log.z)??0)};return true}
- const total=swingTime(levelOf(p.skills.lumberjack.xp).level);chopping={tree:target,elapsed:0,struck:false,total,impact:CHOP_TIMING.impact*total};return true;
+ const lv=levelOf(p.skills.lumberjack.xp).level,total=swingSeconds(swingTime(lv),isAxe(tool)?buckHitsFor(tool,lv):HITS_PER_SWING);chopping={tree:target,elapsed:0,struck:false,total,impact:CHOP_IMPACT*total,variant:chopVariant(Math.floor((buckHits.get(log.id)||0)/HITS_PER_SWING),target.key,CHOP_VAR)};return true;
 }
 // One step of the chainsaw hold: the step in and the turn follow sawPose's step (added as a change, so it never fights other movement); while the bar is in the wood, chips fly from the kerf
 // into the sawmill's sawdust pool (sawdust.js spawn: the one Points object, no new draw call), from a seeded generator (the trunk's id), never Math.random.
@@ -1371,10 +1371,10 @@ function sawStep(c,dt){const p=sawPose(c.elapsed,c.total,-1,SAW_STEP),k=p.step-c
  const sd=sawmillCtl?.ready&&sawmillCtl.dust;if(!p.cutting||!sd)return;if(!c.bit){c.bit=true;c.dust+=SAW_DUST_BURST}c.dust+=SAW_DUST_RATE*dt;const fx=Math.sin(me.rotation.y),fz=Math.cos(me.rotation.y),rx=-Math.cos(me.rotation.y),rz=Math.sin(me.rotation.y),y=c.ground+2*TRUNK_RADIUS+.03;
  const rnd=()=>(c.rng=(Math.imul(c.rng,1664525)+1013904223)>>>0)/4294967296;while(c.dust>=1){c.dust--;const back=.4+rnd()*.7,side=.15+rnd()*.5,up=1.1+rnd()*.9;spawnDust(sd.particles,c.tree.x+(rnd()-.5)*.08,y,c.tree.z+(rnd()-.5)*.08,-fx*back+rx*side,up,-fz*back+rz*side,.35+rnd()*.3)}sawDustLive=1} // chips fly back toward the cutter's right, up and out of the kerf
 function strikeBuck(c,last){
- const p=GameState.progress,tool=buckTool(p),id=c.tree.buck;if(!last&&isAxe(tool))audio.timber('chop',me.position,listenerAt());
- if(!last&&isAxe(tool)){const n=(buckHits.get(id)||0)+1,need=buckHitsFor(tool,levelOf(p.skills.lumberjack.xp).level);if(n<need){buckHits.set(id,n);toast(`Cut ${n} / ${need}`);return}}
+ const p=GameState.progress,tool=buckTool(p),id=c.tree.buck;if(!last&&isAxe(tool))audio.logging('buckCut',{x:c.tree.x,z:c.tree.z},listenerAt());
+ if(!last&&isAxe(tool)){const n=(buckHits.get(id)||0)+HITS_PER_SWING,need=buckHitsFor(tool,levelOf(p.skills.lumberjack.xp).level);if(n<need){buckHits.set(id,n);toast(`Cut ${n} / ${need}`);return}}
  buckHits.delete(id);const was=(p.logs||[]).find(l=>l.id===id),r=buckTrunk(p,id,me.position);if(r.error){toast(r.error);return}
- {const bp=trunkBucked(r.state,!!was?.unmarked);r.state=bp.state;r.message+=bp.message}GameState.progress=r.state;persist();world.setLogs(GameState.progress.logs);toast(r.leveledUp?`${r.message} Lumberjack level ${r.level}! ${perkText(r.level)}`:r.message);
+ {const bp=trunkBucked(r.state,!!was?.unmarked);r.state=bp.state;r.message+=bp.message}GameState.progress=r.state;persist();world.setLogs(GameState.progress.logs);audio.logging('woodCrack',{x:c.tree.x,z:c.tree.z},listenerAt(),{scale:.55});audio.logging('logThud',{x:c.tree.x,z:c.tree.z},listenerAt(),{size:'medium',delay:.12,scale:.7});toast(r.leveledUp?`${r.message} Lumberjack level ${r.level}! ${perkText(r.level)}`:r.message);
 }
 function chopNext(){
  const next=world.cuttableNear(me.position.x,me.position.z,CHOP_RANGE).sort((a,b)=>Math.hypot(a.x-me.position.x,a.z-me.position.z)-Math.hypot(b.x-me.position.x,b.z-me.position.z))[0];

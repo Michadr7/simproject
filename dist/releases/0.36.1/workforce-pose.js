@@ -20,7 +20,7 @@ export const FELLER_LOGS_PER_TRUNK=2,FELLER_TRUNKS_PER_DAY=2,BUCK_CUT_END=.8;
 export const FELLER_PHASE_MIN=Object.freeze({chop:18,buck:12,bend:1.5});
 export const FELLER_CHAIN=Object.freeze({cutter:Object.freeze([360,720]),hauler:Object.freeze([720,1080])}); // [first slot start, last slot end] in game minutes
 export const FELLER_CHAIN_START=Object.freeze({cutter:FELLER_CHAIN.cutter[0],hauler:FELLER_CHAIN.hauler[0]});
-export const SWING_SECONDS=.74,CHOP_BEAT_SECONDS=1.6; // one swing, then a breath before the next
+export const SWING_SECONDS=1.5,CHOP_BEAT_SECONDS=2.4; // one heavy swing (chop-path.js phases), then a breath; logging polish 2026-11-19 (was .74/1.6): the 36 s chop = 15 swings, the 19.2 s buck cut = 8, none cut short at a phase end
 export const swingAt=sec=>{const b=sec>0?sec%CHOP_BEAT_SECONDS:0;return b<SWING_SECONDS?b/SWING_SECONDS:0}; // the swing's progress at sec real seconds into a chop (0 while resting between swings)
 export const SAWYER_PHASE_MIN=Object.freeze({pick:1.5,feed:2,saw:12,belt:1.5,hut:1.5}); // the sawyer's station minutes (a log fed, sawn, the boards carried into the lumber hut)
 export const HAUL_SPEED=+(WALK_SPEED*LOG_CARRY_FACTOR).toFixed(4);
