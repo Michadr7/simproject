@@ -1,0 +1,9 @@
+michadr.
+
+- Created [notes/cooking-design.md](notes/cooking-design.md) (**150 lines**). Design note only: no files in `dist/`, `tests/`, `scripts/`, or `notes/handoff.md` were edited, and no tests were run.
+- **Why cooking does nothing today:** `lifeAct('cook')` (`dist/game.js:698-699`) only changes `life.groceries`/`food`/`energy` with no `busy` timer, animation, sound, burner visual, time advance, `storyEvent('ate')`, or `look.capture()`; `studioHome.KITCHEN` (`{x:3,z:-3.5}`) is 1.77 m off the studio stove (`x:4.2,z:-4.8` in `dist/apartment.js:22`); and full stats (`food>=100 && energy>=100`) error without closing the bubble.
+- **Bakery goods / Eden Wholesale:** Home cooking should **not** share `25 kg`/`20 kg` `bakery-goods.js` cargo sacks (`cargo.js`/`progress.carry`), though Eden Wholesale's front `COUNTER` can optionally sell small retail `flour-bag` and `ground-coffee` pocket items (`items.js`).
+- **Two options + plan:** **Small (`S0`, Opus)** fixes the studio stove coordinates, adds a 3 s `busy` loop + reused `diner-sounds`/`eat-bite` audio (0 KB added), `advanceTime(10)`, and `look.capture()`. **Large (`L1–L5`)** adds real `items.js` ingredients, 20-slot home fridges, an 8-recipe table, `hospitality` skill XP/quality, warm-meal buff, `cat-food`, and idempotent `migrateGroceries` (`jobs.js`, no schema bump).
+- **Co-op:** Client-local saves and `PROTOCOL=1` (`relay-protocol.js`) work without relay changes; online joiners must skip clock jumps on `advanceTime` while `sessionClock.following`.
+- **Could NOT verify:** Did not boot the browser or run `npm test` (read-only design stage); did not check whether `notes/eval/outbox/map-I3.md` already wired Eden Wholesale into `map-definition.js` beyond `dist/eden-wholesale.js`.
+- **Confidence:** High on code findings, line citations, save migration, and relay impact (verified directly in source); medium on Large-option price/restore balance until playtested.

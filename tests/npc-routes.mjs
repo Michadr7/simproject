@@ -52,7 +52,7 @@ const trip=tripWithTable(table,MAP);let worst=0,worstOld=0,blocks=0;
 for(const p of pop.people)for(const d of days){
  for(const b of dayPlan(p,d,{trip}))if(b.act==='travel'&&b.mode==='walk'){const len=table.get(b.origin,b.place);assert.ok(len!==null,'every walking block has a measured length: '+b.origin+'>'+b.place);blocks++;worst=Math.max(worst,hurryOf(len,b.to-b.from))}
  for(const b of dayPlan(p,d))if(b.act==='travel'&&b.mode==='walk'){const len=table.get(b.origin,b.place);if(len!==null)worstOld=Math.max(worstOld,hurryOf(len,b.to-b.from))}}
-assert.ok(worstOld>HURRY_LIMIT,'sanity: the old estimate does make people hurry ('+worstOld.toFixed(2)+'x) on these routes');
+assert.ok(worstOld>=worst-1e-9,'sanity: the old estimate is never kinder than the measured routes ('+worstOld.toFixed(2)+'x vs '+worst.toFixed(2)+'x)'); // I3: this used to demand worstOld > HURRY_LIMIT; the one route that did (the barber's walk to its old C5 door) is gone now the barber stands on Ironwood Street, and the old estimate is under the limit (1.10x) on every remaining route
 assert.ok(worst<=HURRY_LIMIT,'nobody needs more than '+HURRY_LIMIT+'x walking speed, worst '+worst.toFixed(3));
 // the warm job over frames gives the same table as the one-shot (budget 3 ms with a fake clock)
 {let clock=0;const pairs=table.entries().map(([from,to])=>({from,to})),job=crowdWarm(pairs,(a,b)=>{clock+=1;return routeFn(a,b)},{now:()=>clock,budgetMs:3});let steps=0;while(!job.done){job.step();steps++}

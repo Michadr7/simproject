@@ -633,3 +633,31 @@ Verified **Creative Commons 0 (CC0 1.0)** on each Freesound page on 2026-11-18 (
 | `cat-purr.ogg` | Freesound 126151 "Purr2a.wav" | Buskieboy (https://freesound.org/people/Buskieboy/sounds/126151/) | 1.20 to 4.70 s (3.20 s loop after 0.30 s cross-fade, cv=0.217, 30,526 B) | rms -20.0 dBFS, peak -2.1 dBFS |
 | `cat-hiss.ogg` | Freesound 485952 "Cat Hissing" | aunrea (https://freesound.org/people/aunrea/sounds/485952/) | 0.00 to 0.65 s (0.65 s, sharp hiss, 8,224 B) | peak -4.0 dBFS, rms -14.3 dBFS |
 | `cat-eat.ogg` | Freesound 496279 "8_Cat, eating granules.wav" | 16GPanskaZlochova_Eliska (https://freesound.org/people/16GPanskaZlochova_Eliska/sounds/496279/) | 1.75 to 2.85 s (1.10 s, 4 to 5 dry kibble crunches, 14,312 B) | peak -4.0 dBFS, rms -32.5 dBFS |
+
+## Logging sounds and forest ambience (LOG1, 2026-11-19, recorded, all CC0 1.0) in `dist/assets/sounds/`
+
+Mono 22.05 kHz Ogg Vorbis, cut windows and loudness per clip in `assets-src/sounds-sweep/README.md`. Registered in `dist/logging-sounds.js`, played by `audio.logging` and the forest loop in `audio.ambience`.
+
+| File | Source | Author |
+|---|---|---|
+| `axe-hit-1.ogg` | Freesound 767326 | Hano_van_Dalen (https://freesound.org/people/Hano_van_Dalen/sounds/767326/) |
+| `axe-hit-2.ogg` | Freesound 767326 | Hano_van_Dalen (https://freesound.org/people/Hano_van_Dalen/sounds/767326/) |
+| `axe-hit-3.ogg` | Freesound 753925 | xkeril (https://freesound.org/people/xkeril/sounds/753925/) |
+| `axe-hit-4.ogg` | Freesound 753925 | xkeril (https://freesound.org/people/xkeril/sounds/753925/) |
+| `axe-hit-5.ogg` | Freesound 847818 | ElSchorscho (https://freesound.org/people/ElSchorscho/sounds/847818/) |
+| `axe-hit-6.ogg` | Freesound 847818 | ElSchorscho (https://freesound.org/people/ElSchorscho/sounds/847818/) |
+| `wood-crack-1.ogg` | Freesound 567053 | Sheyvan (https://freesound.org/people/Sheyvan/sounds/567053/) |
+| `wood-crack-2.ogg` | Freesound 630400 | viwright2112 (https://freesound.org/people/viwright2112/sounds/630400/) |
+| `wood-crack-3.ogg` | Freesound 483354 | craigsmith (https://freesound.org/people/craigsmith/sounds/483354/) |
+| `tree-fall-seq-1.ogg` | Freesound 494071 | Kinoton (https://freesound.org/people/Kinoton/sounds/494071/) |
+| `tree-fall-seq-2.ogg` | Freesound 869103 | ozymandias37 (https://freesound.org/people/ozymandias37/sounds/869103/) |
+| `log-thud-small.ogg` | Freesound 449955 | Breviceps (https://freesound.org/people/Breviceps/sounds/449955/) |
+| `log-thud-medium.ogg` | Freesound 584891 | KrystianPawlowski (https://freesound.org/people/KrystianPawlowski/sounds/584891/) |
+| `log-thud-heavy.ogg` | Freesound 381609 | dorian.mastin (https://freesound.org/people/dorian.mastin/sounds/381609/) |
+| `wood-creak-1.ogg` | Freesound 620759 | Oleh.Ibrahimov (https://freesound.org/people/Oleh.Ibrahimov/sounds/620759/) |
+| `wood-creak-2.ogg` | Freesound 620759 | Oleh.Ibrahimov (https://freesound.org/people/Oleh.Ibrahimov/sounds/620759/) |
+| `wood-creak-3.ogg` | Freesound 726217 | Sacha.Julien (https://freesound.org/people/Sacha.Julien/sounds/726217/) |
+| `wood-creak-4.ogg` | Freesound 726217 | Sacha.Julien (https://freesound.org/people/Sacha.Julien/sounds/726217/) |
+| `wood-creak-5.ogg` | Freesound 456814 | Breviceps (https://freesound.org/people/Breviceps/sounds/456814/) |
+| `wood-creak-6.ogg` | Freesound 506665 | Rudmer_Rotteveel (https://freesound.org/people/Rudmer_Rotteveel/sounds/506665/) |
+| `amb-forest-pines.ogg` | Freesound 843926 | nicotep (https://freesound.org/people/nicotep/sounds/843926/) |

@@ -1,7 +1,7 @@
 import './legacy-keys.js';
 import {bandOf,misfiring} from './damage.js';
 import {PHONE_CLIPS} from './phone-calls.js'; // PH1: the Call app's sounds (lazy, fallback tones)
-import {SOUND_EXT,CRANK_CLIP,STALL_CLIP,VEHICLE_SET,YELL_CLIPS,SCRAPE_CLIPS,engineFor,crashPlan,pickIndex,createYellGate,createVoices,scrapeGain,scrapeRate,TYRE,TYRE_CLIPS,tyreMix,stepTyreBlend,freshTyreBlend} from './vehicle-sounds.js';import {TIMBER_SHOTS,TIMBER_FILES,CHAINSAW,SAWMILL_BLADE} from './timber-sounds.js';import {STEP_CLIPS,STEP_LEVEL,SWEEP_SHOTS,SWEEP_LOOPS,SWEEP_CORE,stepKind} from './sweep-sounds.js';import {CAT_SHOTS,CAT_FILES} from './cat-sounds.js'; // SND1: recorded vehicle, crash and yell sounds (optional: the generated sounds stay as the fallback)
+import {SOUND_EXT,CRANK_CLIP,STALL_CLIP,VEHICLE_SET,YELL_CLIPS,SCRAPE_CLIPS,engineFor,crashPlan,pickIndex,createYellGate,createVoices,scrapeGain,scrapeRate,TYRE,TYRE_CLIPS,tyreMix,stepTyreBlend,freshTyreBlend} from './vehicle-sounds.js';import {TIMBER_SHOTS,TIMBER_FILES,CHAINSAW,SAWMILL_BLADE} from './timber-sounds.js';import {STEP_CLIPS,STEP_LEVEL,SWEEP_SHOTS,SWEEP_LOOPS,SWEEP_CORE,stepKind} from './sweep-sounds.js';import {CAT_SHOTS,CAT_FILES} from './cat-sounds.js';import {pickLoggingClip,pickLogThud,LOGGING_LOOPS} from './logging-sounds.js';import {LOGGING_ONESHOT_FILES,forestLoopGain} from './logging-wiring.js'; // SND1: recorded vehicle, crash and yell sounds (optional: the generated sounds stay as the fallback)
 const PHONE_LEVEL={key:.45,pickup:.7,ring:.5,busy:.5,hangup:.7}; // PH1: levels of the recorded phone clips
 const PHONE_TONES={key:{f:[697,1209],on:.09,per:.09,n:1,lv:.12},ring:{f:[440,480],on:1.8,per:2,n:1,lv:.1},busy:{f:[480,620],on:.5,per:1,n:6,lv:.1},pickup:{click:1800},hangup:{click:900}}; // the generated fallbacks (Hz)
 // Sound, generated with the Web Audio API (no sound files). One AudioContext, created on the first click or key (browsers do not allow sound before one); a master volume and a mute that are saved;
@@ -132,6 +132,13 @@ export function createAudio({AudioContextClass,storage,random=Math.random,sample
    const a=at&&listener?attenuate(distance(listener,at)):1;if(a<.02)return false;
    return pickShot(T.clips,T.slot,T.level*a,{rate:1+(random()-.5)*T.jitter,delay});
   },
+  // LOG1: a logging one-shot (logging-sounds.js): kind 'axeHit'|'woodCrack'|'treeFall'|'buckCut'|'woodCreak' (non-repeating pick from this module's injected random) or 'logThud' (size 'small'|'medium'|'heavy'). at {x,z} + listener = placed; scale 0..1 makes it quieter; delay in seconds.
+  logging(kind,at,listener,{delay=0,scale=1,size='medium'}={}){
+   if(!ctx||settings.muted)return false;want(LOGGING_ONESHOT_FILES);
+   const a=at&&listener?attenuate(distance(listener,at)):1;if(a<.02)return false;
+   let p;if(kind==='logThud')p=pickLogThud(size,random());else{const key='lg-'+kind;last[key]??=-1;p=pickLoggingClip(kind,last[key],random());if(!p)return false;last[key]=p.index}
+   return shot(p.file,p.level*a*Math.max(0,Math.min(1,scale)),{rate:p.rate,delay});
+  },
   // SND3: a one-shot from the sweep table (SWEEP_SHOTS: ui-click, cash-register, door-open, car-horn, ...). at {x,z} + listener = placed in the world; no `at` = the player's own, full level. The first call also starts loading the core set.
   sweep(name,at,listener){
    const T=SWEEP_SHOTS[name];if(!ctx||settings.muted||!T)return false;if(!tim.warm){tim.warm=true;want(SWEEP_CORE)}want(T.clips);
@@ -151,11 +158,14 @@ export function createAudio({AudioContextClass,storage,random=Math.random,sample
    last['step'+k]??=-1;return pickShot(STEP_CLIPS[k],'step'+k,(running?STEP_LEVEL.run:STEP_LEVEL.walk)*a,{rate:1+(random()-.5)*STEP_LEVEL.jitter*2});
   },
   // Outdoor ambience, every frame: birds by day, crickets by night, wind (windSpeed in m/s, a fifth of it indoors), water near the lake (waterDist in metres to the nearest water). Quiet and slow to change.
-  ambience({outdoors=true,isNight=false,windSpeed=0,waterDist=Infinity}={}){
+  ambience({outdoors=true,isNight=false,windSpeed=0,waterDist=Infinity,forest=0,duck=1}={}){
    if(!ctx)return;const L=SWEEP_LOOPS,names={birds:L.birds,crickets:L.crickets,wind:L.wind,water:L.water};want(Object.values(names));
    for(const k of Object.keys(names))if(!tim.amb[k]&&buffers.has(names[k]))tim.amb[k]=loopOf(names[k]);
    const to={birds:outdoors&&!isNight?.2:0,crickets:outdoors&&isNight?.2:0,wind:.18*Math.min(1,windSpeed/12)*(outdoors?1:.2),water:outdoors?.22*attenuate(waterDist):0};
    for(const k of Object.keys(to))if(tim.amb[k])ease(tim.amb[k].g.gain,to[k],1.2);
+   // LOG1: the forest pines loop (forest 0..1 = how close to the trees, duck 1..0 = lowered under an engine or a conversation); fades over about 1.5 s, silent indoors
+   if(forest>0){want([LOGGING_LOOPS.forestPines.file]);want(LOGGING_ONESHOT_FILES);if(!tim.amb.forestPines&&buffers.has(LOGGING_LOOPS.forestPines.file))tim.amb.forestPines=loopOf(LOGGING_LOOPS.forestPines.file)}
+   if(tim.amb.forestPines)ease(tim.amb.forestPines.g.gain,outdoors?forestLoopGain(forest,duck):0,.5);
   },
   // The forklift, every frame: on (engine/seat), speed (negative = reversing: the beep), raise (non-zero while the forks move: the hydraulic whine), at {x,z}, listener {x,z}.
   forklift({on=false,speed=0,raise=0,at,listener}={}){

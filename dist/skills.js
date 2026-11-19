@@ -1,4 +1,5 @@
 // Skills: experience that persists in progress.skills. Only the lumberjack exists so far.
+import {HITS_PER_SWING,swingSeconds} from './chop-path.js';
 export const MAX_LEVEL=20;
 export const XP={hit:2,fell:12};
 // XP needed to go from `level` to the next one.
@@ -33,4 +34,5 @@ export function normalizeStats(value){
  return {treesFelled:n(value?.treesFelled),logsCollected:n(value?.logsCollected)};
 }
 // hits: the swings a pine takes with the axe you have (tools.js hitsFor), or null when you have none
-export const perksText=(level,hits=null)=>`Swing ${swingTime(level).toFixed(2)} s · ${hits?hits+' swings per tree':'no axe'} · ${logsFromTrunk(level)} logs per trunk`; // T-E
+// logging polish: a heavy swing lands HITS_PER_SWING hits, so show the real swing length and the swings a tree takes (chop-path.js)
+export const perksText=(level,hits=null)=>`Swing ${swingSeconds(swingTime(level),hits||HITS_PER_SWING).toFixed(2)} s · ${hits?Math.ceil(hits/HITS_PER_SWING)+(hits<=HITS_PER_SWING?' swing per tree':' swings per tree'):'no axe'} · ${logsFromTrunk(level)} logs per trunk`; // T-E

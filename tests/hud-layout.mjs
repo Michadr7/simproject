@@ -10,7 +10,7 @@ const css=fs.readFileSync(new URL('../dist/style.css',import.meta.url),'utf8');
 const REQUIRED_IDS=[
  'help','hudRight','minimapDock','streetChips','chipStreet','chipCross',
  'minimapCard','minimap','minimapNorth','minimapKey','minimapScale','minimapScaleText',
- 'clockChip','statusDock','vehiclePanel','vpName','vpSpeed','vpSpeedBar','vpSpeedFill',
+ 'clockChip','statusDock','vehiclePanel','vpName','vpSpeed','vpSpeedUnit','vpSpeedBar','vpSpeedFill',
  'vpFuelLabel','vpFuel','vpFuelBar','vpFuelFill','vpDamage','vpLamp','vpDmgText',
  'vpDmgBar','vpDmgFill','vpStuck','vpGps','vpGpsArrow','vpGpsText','vpKeys','vpNote',
  'vitals','vitalFood','vitalFoodFill','vitalFoodValue','vitalThirst','vitalThirstFill',
@@ -41,6 +41,9 @@ assert(/@media\(prefers-reduced-motion:reduce\)\{[^}]*#minimap[^}]*\.vehicle-pan
 assert(/\.gps-card\{[^}]*border-radius:\s*16px/.test(css),'map card uses 16px rounded corners');
 assert(!/\.gps-card\{[^}]*(backdrop-filter|transform:|filter:)/.test(css),'.gps-card has no backdrop-filter/transform that would trap fixed #minimap.large');
 assert(/\.gps-card #minimap\.large\{[^}]*position:\s*fixed;[^}]*right:\s*50%;[^}]*bottom:\s*50%;[^}]*transform:\s*translate\(50%,50%\);[^}]*z-index:\s*60/.test(css),'large-map rule centres #minimap.large over everything');
+assert(/\.vehicle-panel\{[^}]*background-image:\s*none[^}]*backdrop-filter:\s*blur\(/.test(css),'speedometer card uses glass backdrop blur without honeycomb pattern');
+assert(/\.vp-bar,\.vp-mini-bar\{[^}]*height:\s*3px/.test(css),'speed and mini bars are 3px tall');
+assert(/\.gps-north\{[^}]*top:\s*7px;[^}]*right:\s*29px/.test(css)&&/\.gps-key\{[^}]*top:\s*7px;[^}]*right:\s*7px/.test(css),'N and M badges sit top-right');
 // 4. Parse CSS custom properties & box metrics from dist/style.css and assert zero overlaps across the 4 viewport sizes.
 const num=(re,src,fallback)=>{const m=src.match(re);return m?Number(m[1]):fallback};
 const block=(marker,src=css)=>{const i=src.indexOf(marker);assert(i>=0,'missing CSS marker: '+marker);let depth=0,start=-1;for(let k=i;k<src.length;k++){if(src[k]==='{'){if(depth===0)start=k+1;depth++}else if(src[k]==='}'){depth--;if(depth===0)return src.slice(start,k)}}throw Error('unclosed CSS block: '+marker)};
@@ -125,6 +128,7 @@ for(const vp of VIEWPORTS){
  for(let i=0;i<boxes.length;i++){
   const a=boxes[i];
   assert(a.x0>=0&&a.x1<=vp.w&&a.y0>=0&&a.y1<=vp.h,`${vp.name}: #${a.id} (${JSON.stringify(a)}) inside viewport`);
+  if(vp.w<=360)assert(a.x0>vp.w/2,`${vp.name}: #${a.id} (${a.x0}) never covers road centre (${vp.w/2})`);
   for(let j=i+1;j<boxes.length;j++){
    const b=boxes[j];
    const xOverlap=a.x0<b.x1&&b.x0<a.x1,yOverlap=a.y0<b.y1&&b.y0<a.y1;
@@ -138,6 +142,12 @@ for(const vp of VIEWPORTS){
  const touchBottom=mobile?num(/bottom:\s*([\d.]+)px/,mobileCss):0;
  const bottomLimit=mobile?vp.h-(touchBottom+58):vp.h-(ftBottom+20);
  assert(vitals.y1<=bottomLimit,`${vp.name}: #vitals bottom (${vitals.y1}) clears bottom HUD (${bottomLimit})`);
+ if(narrow){
+  const objCss=block('#objective{',media600);
+  const objRight=num(/left:\s*([\d.]+)px/,objCss)+num(/width:\s*([\d.]+)px/,objCss);
+  assert(objRight<vitals.x0,`${vp.name}: #objective right (${objRight}) clears #vitals left (${vitals.x0})`);
+  assert(objRight<vp.w/2,`${vp.name}: #objective right (${objRight}) stays left of road centre (${vp.w/2})`);
+ }
 }
 
 console.log('PASS hud-layout.mjs: right-column DOM order, all required JS IDs, large-map centering, safe-area & reduced-motion rules, and zero box overlaps at 1920x1080, 1280x720, 1024x600, and 360x780.');

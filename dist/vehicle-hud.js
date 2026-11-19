@@ -12,7 +12,7 @@ export const STOP_SPEED=1; // m/s: below this you may get out (the same rule as 
 // and says in its note what to do next and where (fork-guide.js forkGoal, one line) and why the forks are stopped or what to do with them (fork-pallets.js forkHint, the next line).
 export function forkliftHudModel({speed=0,lift=0,load=0,hint='',goal=''}){
  const stopped=Math.abs(speed)<STOP_SPEED;
- return {state:'driving',name:'Forklift · indoor',speed:`${mph(speed)} mph`,fuel:`${lift.toFixed(2)} m · ${load?load+' planks':'empty'}`,fuelLabel:'Forks',
+ return {state:'driving',name:'Forklift · indoor',speed:`${mph(speed)} mph`,speedBar:bar(speedCard({speedMs:speed,topSpeedMs:5})),fuel:`${lift.toFixed(2)} m · ${load?load+' planks':'empty'}`,fuelLabel:'Forks',
   keys:[{kbd:'W S',text:'Drive and reverse'},{kbd:'A D',text:'Steer (rear wheels: the back swings out)'},{kbd:'R F',text:'Raise and lower the forks'},{kbd:'Shift',text:'Hold to drive faster'},{kbd:'E',text:stopped?'Get off':'Stop to get off',muted:!stopped}],
   note:[goal,hint].filter(Boolean).join('\n')||'Slide the forks into a pallet, raise to lift it, lower to set it down. Indoor only.'};
 }
@@ -53,7 +53,9 @@ export function createVehicleHud($){
   {const d=$('vpDamage');if(d){d.hidden=!model.damage;if(model.damage){if(d.dataset.model!==model.damage.model)d.dataset.model=model.damage.model;if(d.dataset.band!==model.damage.band)d.dataset.band=model.damage.band;const t=$('vpDmgText');if(t)t.textContent=model.damage.text;const l=$('vpLamp');if(l&&l.dataset.lamp!==model.damage.lamp)l.dataset.lamp=model.damage.lamp}}} // the band class changes only when the band does
   {const g=$('vpGps');if(g){g.hidden=!model.gps;if(model.gps){const a=$('vpGpsArrow'),t=$('vpGpsText');if(a)a.textContent=model.gps.arrow;if(t)t.textContent=model.gps.text}}}
   {const s=$('vpStuck');if(s){s.hidden=!model.stuck;if(model.stuck){s.dataset.level=model.stuck.level;s.textContent=model.stuck.text}}}
-  $('vpName').textContent=model.name;$('vpSpeed').textContent=model.speed;$('vpFuel').textContent=model.fuel;{const l=$('vpFuelLabel');if(l)l.textContent=model.fuelLabel||'Fuel'}
+  $('vpName').textContent=model.name;
+  {const su=$('vpSpeedUnit');if(su){const m=String(model.speed||'').match(/^(\S+)\s+(mph)$/i);$('vpSpeed').textContent=m?m[1]:model.speed;su.textContent=m?m[2].toUpperCase():'MPH';su.hidden=!m}else $('vpSpeed').textContent=model.speed}
+  $('vpFuel').textContent=model.fuel;{const l=$('vpFuelLabel');if(l)l.textContent=model.fuelLabel||'Fuel'}
   const keys=$('vpKeys');keys.replaceChildren();
   for(const k of model.keys){
    const row=document.createElement('div');row.className='vp-key';row.dataset.muted=String(!!k.muted);

@@ -10,17 +10,20 @@ const T=terrain(),scene=new THREE.Scene(),world=createWorld(scene,{cullRadius:In
 assert.deepEqual(validateMap(),[]);
 
 // ── The street wall: shops shoulder to shoulder, flush with the sidewalk, no gaps ───────────────────────────────────────────
-const shops=MAP.landmarks.filter(l=>l.plot&&/^C\d+$/.test(l.plot)),rect=l=>{const f=propInfo(l.prop).footprint,s=Math.round(Math.sin(l.yaw)),c=Math.round(Math.cos(l.yaw)),xs=[f.x0,f.x1].map(x=>l.x+x*c),zs=[f.z0,f.z1].map(z=>l.z+z*c);return {x0:Math.min(...xs),x1:Math.max(...xs),z0:Math.min(...zs),z1:Math.max(...zs)}};
-const south=shops.filter(l=>Math.abs(Math.cos(l.yaw)+1)<1e-9).sort((a,b)=>a.x-b.x),north=shops.filter(l=>Math.abs(Math.cos(l.yaw)-1)<1e-9).sort((a,b)=>a.x-b.x);
-assert.deepEqual([south.length,north.length],[7,3],'seven shops south of the cross street, three north of it');
+const shops=MAP.landmarks.filter(l=>l.plot&&/^C\d+$/.test(l.plot)&&l.plot!=='C21'),rect=l=>{const f=propInfo(l.prop).footprint,s=Math.round(Math.sin(l.yaw)),c=Math.round(Math.cos(l.yaw)),xs=[f.x0,f.x1].map(x=>l.x+x*c),zs=[f.z0,f.z1].map(z=>l.z+z*c);return {x0:Math.min(...xs),x1:Math.max(...xs),z0:Math.min(...zs),z1:Math.max(...zs)}};
+const west=shops.filter(l=>Math.abs(Math.sin(l.yaw)+1)<1e-9),south=shops.filter(l=>Math.abs(Math.cos(l.yaw)+1)<1e-9).sort((a,b)=>a.x-b.x),north=shops.filter(l=>Math.abs(Math.cos(l.yaw)-1)<1e-9).sort((a,b)=>a.x-b.x);
+assert.deepEqual([south.length,north.length,west.length],[6,3,1],"six shops south of the cross street (I3: C5 is Barber's Walk), three north of it, and the barber on Ironwood Street facing west");
 for(const [name,row,front,end] of [['south',south,-80.7,43],['north',north,-99.3,9]]){
  const r=row.map(rect);assert(near(r[0].x0,-20,.2),`${name} row starts at the west edge: ${r[0].x0.toFixed(2)}`);assert(near(r.at(-1).x1,end,.2),`${name} row ends at ${end}: ${r.at(-1).x1.toFixed(2)}`);
- for(let i=1;i<r.length;i++)assert(r[i].x0-r[i-1].x1<=.5&&r[i].x0-r[i-1].x1>=-.2,`${name} row: ${(r[i].x0-r[i-1].x1).toFixed(2)} m between buildings ${i} and ${i+1}`);
+ for(let i=1;i<r.length;i++)assert(r[i].x0-r[i-1].x1<=.5&&r[i].x0-r[i-1].x1>=-.2||name==='south'&&near(r[i-1].x1,21.5,.5)&&near(r[i].x0,28.5,.5),`${name} row: ${(r[i].x0-r[i-1].x1).toFixed(2)} m between buildings ${i} and ${i+1}`);
  for(const [k,b] of r.entries())assert(near(name==='south'?b.z0:b.z1,front,.15),`${name} building ${k+1} stands at the sidewalk (${(name==='south'?b.z0:b.z1).toFixed(2)})`)}
 // the sidewalk meets the facade, and there are at least eight different buildings along the street
 assert(new Set(shops.map(l=>l.prop)).size>=9,'varied buildings along the street');
-for(const l of shops){const b=rect(l),z=l.yaw?b.z0-.5:b.z1+.5;assert.equal(T.surfaceAt(l.x,z),SURFACE.PAVEMENT,`${l.id}: the sidewalk is in front of it`)}
-assert.equal(MAP.pavements.filter(p=>p.draw).length,8,'eight drawn pavements');
+for(const l of shops){const b=rect(l);if(west.includes(l)){assert.equal(T.surfaceAt(l.x-propInfo(l.prop).footprint.z1-.5,l.z),SURFACE.PAVEMENT,`${l.id}: the sidewalk is in front of it (it faces west)`);continue}const z=l.yaw?b.z0-.5:b.z1+.5;assert.equal(T.surfaceAt(l.x,z),SURFACE.PAVEMENT,`${l.id}: the sidewalk is in front of it`)}
+assert.equal(MAP.pavements.filter(p=>p.draw).length,20,"twenty drawn pavements (I3 added ten: River Street, two on Ironwood Street, two on Main Street east, Barber's Walk, the terrace, the Bus Plaza, the back court, the Alder Avenue gap; W-PLACE added Eden Wholesale's footway)");
+for(const [x,z] of [[25,-70],[63,-70],[0,-115],[40,-110],[-20.7,-70],[20,-132],[44,-128],[56,-128],[62,-82.5],[62,-97.5]])assert.equal(T.surfaceAt(x,z),SURFACE.PAVEMENT,`I3 pavement at ${x},${z}`);
+for(const [x,z] of [[-20.7,-61],[-20.7,-83],[25,-81.5],[25,-64]])assert(T.walkable(x,z)&&!world.blocked(x,z),`Barber's Walk and the Alder Avenue strip are open at ${x},${z}`);
+for(const [x,z] of [[50,-130],[0,-137.5],[50,-141],[-28,-137.5]])assert.equal(T.surfaceAt(x,z),SURFACE.ROAD,`River Street and Ironwood Street north are road at ${x},${z}`);
 for(const p of MAP.pavements.filter(p=>p.draw))assert(scene.getObjectByName(p.plaza?'town-square':'pavement'),'pavements are drawn');
 // ── Crosswalks, stop lines and parking bays are painted on the road, and the four arms of Alder Street's junction all have one ──────
 const bars=markingBars();assert(bars.length>=200,'markings: '+bars.length);
@@ -32,7 +35,7 @@ const paint=scene.getObjectByName('road-markings');assert.equal(paint.count,bars
 // the lot and the lanes
 const lot=MAP.lots[0];assert.equal(T.surfaceAt((lot.x0+lot.x1)/2,(lot.z0+lot.z1)/2),SURFACE.ROAD,'the lot is asphalt');assert(scene.getObjectByName('lot-alder-lot'));
 for(const [x,z] of [[44,-57],[50,-57]])assert.equal(T.surfaceAt(x,z),SURFACE.ROAD,'the lot joins Alder Street along its aisle');
-const bays=parkingBays();assert.equal(bays.length,9*2+20,'18 parallel bays and 20 lot bays');
+const bays=parkingBays();assert.equal(bays.length,8*2+17,'I3: 16 parallel bays (each lane is split around the crosswalk at x 25); W-PLACE: 17 lot bays (18-20 gave way to the Eden Wholesale door and dock)');assert(!bays.some(b=>b.id.startsWith('cross')&&Math.abs(b.x-25)<1.5+b.w/2),'no bay on the new crosswalk');
 // ── Parked cars: in bays, facing the way the bay faces, clear of crosswalks, and not too many ───────────────────────────────────────
 const parked=MAP.landmarks.filter(l=>l.decor&&/^park-/.test(l.id)),yawOf={east:Math.PI/2,west:-Math.PI/2,north:Math.PI};
 assert(parked.length>=12&&parked.length<=16,'a dozen or so cars: '+parked.length);

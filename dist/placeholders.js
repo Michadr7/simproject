@@ -1,6 +1,7 @@
 // Stand-in buildings made of plain coloured boxes (like the city's), used until a real model is found. A placeholder has the same shape as a converted prop
 // (width, depth, height, footprint, colliders, floor) plus build(fade), so swapping in a real model later means changing one prop id in map-definition.js.
 import * as THREE from './vendor/three.module.js';
+import {PROP_INFO as EDEN_INFO} from './eden-wholesale-place.js';
 
 const materials=new Map();
 const paint=(fade,color)=>{const key=color;if(!materials.has(key))materials.set(key,fade.apply(new THREE.MeshStandardMaterial({color,roughness:.92})));return materials.get(key)};
@@ -31,5 +32,8 @@ export const PLACEHOLDERS={
    silo(group,fade,{x:9,z:-13,r:3,h:12});
    return group;
   }
- }
+ },
+ // Eden Wholesale (stage W-PLACE): a real GLB (dist/assets/buildings/eden-wholesale.glb) that game.js loads with GLTFLoader into this empty group (userData.model, userData.fade);
+ // the data (footprint, the registry's SOLIDS as colliders, the door) comes from eden-wholesale-place.js, so the world's collision, ground cover, street furniture and maps see it at once.
+ 'eden-wholesale':{...EDEN_INFO,build(fade){const group=new THREE.Group();group.name='prop-eden-wholesale';group.userData.model=EDEN_INFO.model;group.userData.fade=fade;return group}}
 };

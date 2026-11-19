@@ -11,22 +11,48 @@ export const CARRY_POLE=null; // the elbow keeps its natural down-and-out direct
 export const GRIP=.12; // swinging: the right hand holds the handle 12 cm from its butt end (the item origin; the butt is 7 cm behind it)
 export const CHOKE=.2,CARRY_GRIP=.45; // carrying: the hand sits CHOKE below the far end of the head (CARRY_GRIP for the basic 0.72 m axe)
 export const carryGrip=headEnd=>Number.isFinite(headEnd)?Math.max(GRIP,headEnd-CHOKE):CARRY_GRIP; // headEnd: the axe model's far end along +z (item-models.js)
-export const CHOP_TIMING={windUp:.44,impact:.6,hold:.66};
-const JOIN=.5,ALIGN_OFF=.12,ALIGN_ON=.82; // the left hand is on by half the wind-up; the carry alignment is let go early in the wind-up and taken again late in the recovery
-const UP=new T.Vector3(-.22,1.95,.02),DOWN=new T.Vector3(-.1,1.12,.55);
+// Logging polish (owner 2026-11-19, notes/eval/prompts/opus-logging-polish.md): a slow, heavy, chunky swing in five phases of progress: wind-up (0..windUp, slow),
+// a held beat at the top (..top), a fast committed strike (..impact: the blade hits at CHOP_IMPACT), a hit-stop of a few frames then a small recoil out of the cut (..hold),
+// and a slow recovery to the trail carry (..1). Every phase border is continuous in position, lean and crouch; at 0 and 1 the pose is the carry whatever the variant.
+export const CHOP_TIMING=Object.freeze({windUp:.4,top:.52,impact:.62,stop:.665,hold:.72});
+export const CHOP_IMPACT=CHOP_TIMING.impact; // game.js lands the hit (chips, the chop sound, the camera nudge) at this progress, not at the swing's start
+// One heavy swing lands HITS_PER_SWING of tools.js's hits, so a pine takes half the swings, each about twice as long: the felling time stays as before.
+// swingSeconds(base, need): base = skills.js swingTime(level), need = the hits the job takes (tools.js hitsFor / buckHitsFor). Exact for any need >= 2; a 1-hit job still gets one full heavy swing.
+export const HITS_PER_SWING=2;
+export const swingSeconds=(base,need=HITS_PER_SWING)=>{const n=Math.max(1,Math.floor(need)||1);return base*Math.max(n,HITS_PER_SWING)/Math.ceil(n/HITS_PER_SWING)};
+const JOIN=.5,ALIGN_OFF=.12,ALIGN_ON=.86; // the left hand is on by half the wind-up; the carry alignment is let go early in the wind-up and taken again late in the recovery
+const UP=new T.Vector3(-.22,1.95,.02),DOWN=new T.Vector3(-.1,1.12,.55),COCK=new T.Vector3(0,.035,-.03),RECOIL=new T.Vector3(-.01,.07,-.05); // COCK: the extra lift during the held beat; RECOIL: the bounce out of the cut
 const WIND_CONTROL=new T.Vector3(-.4,1.62,.25),STRIKE_CONTROL=new T.Vector3(-.3,1.75,.5),RECOVER_CONTROL=new T.Vector3(-.45,1,.4);
 const clamp01=t=>Math.max(0,Math.min(1,t));
 const smoother=t=>{t=clamp01(t);return t*t*t*(t*(t*6-15)+10)};
 const bezier=(a,b,c,t,out)=>{const u=1-t;return out.set(u*u*a.x+2*u*t*b.x+t*t*c.x,u*u*a.y+2*u*t*b.y+t*t*c.y,u*u*a.z+2*u*t*b.z+t*t*c.z)};
-const LEAN={back:-.12,forward:.32};
-// out.twoHand: the left hand's weight on the handle; out.grip: where the right hand holds the handle (metres from the item origin); out.align: 1 = carry alignment (CARRY_DIR), 0 = follow the forearm.
-export function chopPose(progress,out={point:new T.Vector3(),lean:0,twoHand:0,grip:CARRY_GRIP,align:1},carry=CARRY_GRIP){
- const p=clamp01(progress),{windUp,impact,hold}=CHOP_TIMING;
- if(p<windUp){const t=smoother(p/windUp),j=smoother(p/(windUp*JOIN));bezier(CARRY,WIND_CONTROL,UP,t,out.point);out.lean=LEAN.back*t;out.twoHand=j;out.grip=carry+(GRIP-carry)*j}
- else if(p<impact){const t=(p-windUp)/(impact-windUp);bezier(UP,STRIKE_CONTROL,DOWN,t**1.7,out.point);out.lean=LEAN.back+(LEAN.forward-LEAN.back)*smoother(t);out.twoHand=1;out.grip=GRIP}
- else if(p<hold){out.point.copy(DOWN);out.lean=LEAN.forward;out.twoHand=1;out.grip=GRIP}
- else{const t=smoother((p-hold)/(1-hold));bezier(DOWN,RECOVER_CONTROL,CARRY,t,out.point);out.lean=LEAN.forward*(1-t);out.twoHand=1-t;out.grip=GRIP+(carry-GRIP)*t}
- out.align=p<ALIGN_OFF||p>ALIGN_ON?1:0;
+const LEAN={back:-.12,cock:-.16,forward:.34,recoil:.29},CROUCH={top:.03,strike:.17,recoil:.13}; // the torso rocks back to load, then drops its weight into the blow
+// Variety (pure, no Math.random): chopVariant(swing index, seed) -> {side, tilt, lift, snap, sag}. side alternates every swing (the notch is cut from alternate sides:
+// a slightly diagonal blow from the right, then from the left), tilt how diagonal (0.2..1 of DIAG metres), lift the wind-up height, snap the strike's ease power (higher = later, harder),
+// sag the recovery's dip. seed: a number or a string (the tree's plot key, the trunk id, the worker): every co-op client gets the same sequence.
+const DIAG=.08,V=Object.freeze({lift:[-.03,.07],snap:[1.6,2.3],sag:[-.06,.06]});
+const NEUTRAL=Object.freeze({side:1,tilt:0,lift:0,snap:1.9,sag:0});
+const hashOf=s=>{if(typeof s==='number'&&Number.isFinite(s))return s>>>0;let h=2166136261;for(const ch of String(s))h=Math.imul(h^ch.charCodeAt(0),16777619);return h>>>0};
+const mix=(a,b)=>{let h=Math.imul(a^Math.imul(b,0x9E3779B1),0x85EBCA6B)>>>0;h^=h>>>13;h=Math.imul(h,0xC2B2AE35)>>>0;h^=h>>>16;return h>>>0};
+export function chopVariant(index,seed,out={side:1,tilt:0,lift:0,snap:1.9,sag:0}){
+ const i=Math.max(0,Math.floor(index)||0),s=hashOf(seed),r=k=>mix(mix(s,i),k)/4294967296,L=(range,k)=>range[0]+(range[1]-range[0])*r(k);
+ out.side=((i+(s&1))&1)?-1:1;out.tilt=.2+.8*r(1);out.lift=L(V.lift,2);out.snap=L(V.snap,3);out.sag=L(V.sag,4);return out;
+}
+const vUp=new T.Vector3(),vTop=new T.Vector3(),vDown=new T.Vector3(),vRec=new T.Vector3(),vWind=new T.Vector3(),vStrike=new T.Vector3(),vRecover=new T.Vector3(); // scratch (no allocation per call)
+// out.twoHand: the left hand's weight on the handle; out.grip: where the right hand holds the handle (metres from the item origin); out.align: 1 = carry alignment (CARRY_DIR), 0 = follow the forearm;
+// out.lean/out.crouch: for avatar.setLean/setCrouch. variant: chopVariant's output (null = the plain overhead swing).
+export function chopPose(progress,out={point:new T.Vector3(),lean:0,twoHand:0,grip:CARRY_GRIP,align:1,crouch:0},carry=CARRY_GRIP,variant=null){
+ const p=clamp01(Number.isFinite(progress)?progress:0),{windUp,top,impact,stop,hold}=CHOP_TIMING,v=variant||NEUTRAL,d=(v.side<0?-1:1)*clamp01(v.tilt)*DIAG,lift=Math.max(V.lift[0],Math.min(V.lift[1],v.lift||0));
+ vUp.set(UP.x-d,UP.y+lift,UP.z);vTop.copy(vUp).add(COCK);vDown.set(DOWN.x+d*.5,DOWN.y,DOWN.z);vRec.copy(vDown).add(RECOIL);
+ vWind.set(WIND_CONTROL.x-d*.5,WIND_CONTROL.y+lift*.5,WIND_CONTROL.z);vStrike.set(STRIKE_CONTROL.x-d*.3,STRIKE_CONTROL.y+lift*.5,STRIKE_CONTROL.z);vRecover.set(RECOVER_CONTROL.x,RECOVER_CONTROL.y+Math.max(V.sag[0],Math.min(V.sag[1],v.sag||0)),RECOVER_CONTROL.z);
+ let crouch=0;
+ if(p<windUp){const t=smoother(p/windUp),j=smoother(p/(windUp*JOIN));bezier(CARRY,vWind,vUp,t,out.point);out.lean=LEAN.back*t;out.twoHand=j;out.grip=carry+(GRIP-carry)*j;crouch=CROUCH.top*t}
+ else if(p<top){const t=smoother((p-windUp)/(top-windUp));out.point.copy(vUp).addScaledVector(COCK,t);out.lean=LEAN.back+(LEAN.cock-LEAN.back)*t;out.twoHand=1;out.grip=GRIP;crouch=CROUCH.top} // the held beat: a slow last lift, the weight loaded
+ else if(p<impact){const t=(p-top)/(impact-top),snap=Math.max(V.snap[0],Math.min(V.snap[1],v.snap||NEUTRAL.snap));bezier(vTop,vStrike,vDown,t**snap,out.point);const e=smoother(t);out.lean=LEAN.cock+(LEAN.forward-LEAN.cock)*e;out.twoHand=1;out.grip=GRIP;crouch=CROUCH.top+(CROUCH.strike-CROUCH.top)*e}
+ else if(p<stop){out.point.copy(vDown);out.lean=LEAN.forward;out.twoHand=1;out.grip=GRIP;crouch=CROUCH.strike} // the hit-stop: dead still for a few frames
+ else if(p<hold){const t=smoother((p-stop)/(hold-stop));out.point.copy(vDown).lerp(vRec,t);out.lean=LEAN.forward+(LEAN.recoil-LEAN.forward)*t;out.twoHand=1;out.grip=GRIP;crouch=CROUCH.strike+(CROUCH.recoil-CROUCH.strike)*t} // the recoil out of the cut
+ else{const t=smoother((p-hold)/(1-hold));bezier(vRec,vRecover,CARRY,t,out.point);out.lean=LEAN.recoil*(1-t);out.twoHand=1-t;out.grip=GRIP+(carry-GRIP)*t;crouch=CROUCH.recoil*(1-t)}
+ out.crouch=crouch;out.align=p<ALIGN_OFF||p>ALIGN_ON?1:0;
  return out;
 }
 

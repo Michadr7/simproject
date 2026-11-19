@@ -38,3 +38,11 @@ console.log('Vehicle panel: greyed out on foot; driving shows the name, speed in
 
 // off road: the panel names the ground and the share of top speed it allows (only when it is a real slowdown)
 {const {vehicleHudModel}=await import('../dist/vehicle-hud.js');const base={driving:{},seat:'driver',name:'Worktruck',speed:10,fuel:{mgal:5000,capacityMgal:21000,type:'diesel'}};const road=vehicleHudModel({...base,ground:{label:'Road',factor:1}}),grass=vehicleHudModel({...base,ground:{label:'Grass',factor:.5}});assert(!/Off road/.test(road.note),'no warning on the road');assert(/Off road · Grass · top speed 50%/.test(grass.note),'the panel says so on the grass: '+grass.note)}
+// slop-newyork split readout: when #vpSpeedUnit exists, #vpSpeed gets the number and #vpSpeedUnit gets MPH (hidden when off)
+{const split=Object.fromEntries(['vehiclePanel','vpName','vpSpeed','vpSpeedUnit','vpSpeedBar','vpSpeedFill','vpFuel','vpKeys','vpNote'].map(id=>[id,{...fakeEl(id),style:{},hidden:true}]));
+ const sh=createVehicleHud(id=>split[id]||null);
+ sh(vehicleHudModel({driving:true,seat:'driver',name:'Kasumuchi S70',speed:10,topSpeed:29}));
+ assert.equal(split.vpSpeed.textContent,'22');assert.equal(split.vpSpeedUnit.textContent,'MPH');assert.equal(split.vpSpeedUnit.hidden,false);
+ assert.equal(split.vpSpeedBar.hidden,false);assert.equal(split.vpSpeedBar.dataset.band,'normal');assert.equal(split.vpSpeedFill.style.width,'34%');
+ sh(vehicleHudModel({}));
+ assert.equal(split.vpSpeed.textContent,'—');assert.equal(split.vpSpeedUnit.hidden,true);assert.equal(split.vpSpeedBar.hidden,true);}

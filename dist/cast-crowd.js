@@ -527,6 +527,30 @@ const SPECS=[
   workExtra:'Nails, straps, crates, and keeping the loading bay moving.',
   rumour:'Heard Walt’s warehouse has been moving plenty of planks lately.',
   byeRain:'keep your gear dry.',byeSnow:'take the ridge road easy.',byeFriend:'Drop by Eastbank anytime.',byeDefault:'See you round Eastbank!'
+ },
+ { // W-PLACE (2026-11-19): the Eden Wholesale counter clerk (map-definition.js post 'eden-wholesale'). PLACEHOLDER lines: the content writer may replace them.
+  id:'dana',personId:'commuter:eden-wholesale',name:'Dana Sato',
+  voice:'Brisk Eden Wholesale counter clerk who knows every sack on the dock.',
+  job:'I run the trade counter at Eden Wholesale, behind the Pharmacy.',
+  home:'My car is the dusty one parked by the dock; I come in from the east.',
+  hint:'The bakery buys its flour and coffee beans from our dock. Small bags are at the counter too.',
+  vest:'Ridgeline vest! If you ever haul for the bakery, the sacks are on our dock.',
+  rain:'Rain on the dock canopy all shift.',
+  storm:'Rolled the dock shutter down before this storm hit.',
+  snow:'The car park out front needs a shovel.',
+  fog:'Fog so thick I can barely see the car park.',
+  morning:'Opening the counter for the bakery run.',
+  afternoon:'Counting flour sacks between orders.',
+  evening:'Closing up the counter and the dock.',
+  night:'Late errand before the drive home.',
+  door:'Just stepping out from the counter.',
+  open:'Taking a short walk while the dock is quiet.',
+  friend:'Hey, friend! Need anything from the counter?',
+  close:'Good to see a familiar face round the back of the Pharmacy.',
+  workVest:'The bakery and the crews both keep our dock busy.',
+  workExtra:'Flour, coffee beans, and keeping the pallets moving.',
+  rumour:'Heard the bakery wants more coffee beans than ever.',
+  byeRain:'keep your sacks dry.',byeSnow:'mind the ice in the car park.',byeFriend:'Drop by the counter anytime.',byeDefault:'See you at the dock!'
  }
 ];
 

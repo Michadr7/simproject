@@ -80,4 +80,28 @@ assert.equal(byClass(root,'talk-typing')[0].hidden,false,'typing beat starts on 
 panel.append({who:'you',text:'Got it.'});
 assert.equal(byClass(root,'talk-typing')[0].hidden,true,'player echo flushes pending typing beat');
 panel.handleKey('q');assert.equal(closed,3);
+
+// Fit rules: >4 options use 2-col grid; >7 options page with More; >320 chars clamp with more expander; older lines fade/drop.
+panel.show({name:'Noah',lines:[{who:'noah',text:'A'},{who:'you',text:'B'},{who:'noah',text:'C'},{who:'noah',text:'D'}],replies:[1,2,3,4,5,6,7].map(n=>({id:'r'+n,label:'Opt '+n,asked:false}))});
+assert.ok(byClass(root,'talk-replies')[0].className.includes('grid'),'5-7 options use grid');
+assert.equal(btns().length,7);
+panel.handleKey('7');assert.equal(picks.at(-1),'r7','number key 7 works in grid');
+assert.equal(log().children.filter(c=>!c.className.includes('fading')).length,3,'only newest 3 lines stay active');
+flushTimers();
+assert.equal(log().children.length,3,'fading lines removed after 200 ms');
+
+panel.setReplies(Array.from({length:9},(_,i)=>({id:'m'+(i+1),label:'Choice '+(i+1),asked:false})));
+assert.equal(btns().length,7,'6 real options + More row');
+assert.ok(labels()[6].startsWith('More (3)'));
+panel.handleKey('7');
+assert.equal(btns().length,4,'page 2 shows remaining 3 options + More back to page 1');
+panel.handleKey('2');assert.equal(picks.at(-1),'m8','page 2 option 2 picks m8');
+
+panel.append({who:'noah',text:'Z'.repeat(340)});
+const lastLine=log().children.at(-1);
+assert.ok(lastLine.className.includes('shrink')&&lastLine.className.includes('clamp'),'very long reply gets shrink + clamp');
+const moreBtn=byClass(lastLine,'talk-more-btn')[0];assert.ok(moreBtn,'clamped reply has more button');
+moreBtn.listeners.click();assert.equal(byClass(root,'talk-sheet')[0].hidden,false,'more button opens sheet');
+panel.handleKey('Escape');assert.equal(byClass(root,'talk-sheet')[0].hidden,true,'Escape closes sheet before leaving');
+
 console.log('PASS talk-panel');

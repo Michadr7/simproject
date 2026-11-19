@@ -20,16 +20,19 @@ assert(samples.every(s=>s.twoHand>=0&&s.twoHand<=1&&s.grip>=GRIP-1e-9&&s.grip<=C
 assert(samples[0].align===1&&samples.at(-1).align===1&&samples.some(s=>s.align===0),'carry alignment at the ends, the forearm leads the swing');
 assert.equal(carryGrip(.65),.45);assert(Math.abs(carryGrip(AXE_MESHES['steel-axe'].bounds[5])-(AXE_MESHES['steel-axe'].bounds[5]-CHOKE))<1e-9);assert.equal(carryGrip(.1),GRIP,'never below the swing grip');assert.equal(carryGrip(undefined),CARRY_GRIP);
 // Continuous: no jump between neighbouring samples (the old path had snaps between segments).
-let biggest=0;for(let i=1;i<samples.length;i++)biggest=Math.max(biggest,samples[i].point.distanceTo(samples[i-1].point));assert(biggest<.06,'largest step '+biggest);
+// Re-pinned (logging polish, owner 2026-11-19: a chunky swing, the strike is now a short fast phase): outside the strike a 1/400 step stays under 1.5 cm; inside it under 9 cm (was one bound of 6 cm for the whole path).
+let biggest=0,strikeStep=0;for(let i=1;i<samples.length;i++){const s=samples[i].point.distanceTo(samples[i-1].point);if(samples[i].p>CHOP_TIMING.top&&samples[i].p<=CHOP_TIMING.impact+1e-9)strikeStep=Math.max(strikeStep,s);else biggest=Math.max(biggest,s)}assert(biggest<.015&&strikeStep<.09,'largest step '+biggest+' / '+strikeStep+' in the strike');
 // Rises to overhead, then comes down fast: the hand is quickest just before impact.
 const speed=i=>samples[i].point.distanceTo(samples[i-1].point);
-const peak=samples.reduce((a,b)=>b.point.y>a.point.y?b:a);assert(Math.abs(peak.p-CHOP_TIMING.windUp)<.03&&peak.point.y>1.9,'overhead at the end of the wind-up');
-let fastest=1;for(let i=2;i<samples.length;i++)if(speed(i)>speed(fastest))fastest=i;assert(samples[fastest].p>CHOP_TIMING.windUp&&samples[fastest].p<=CHOP_TIMING.impact+.01,'fastest during the strike: '+samples[fastest].p);
+// Re-pinned (logging polish): the peak is at the end of the held beat at the top (CHOP_TIMING.top), after a small last lift; the fastest point is in the strike (top..impact).
+const peak=samples.reduce((a,b)=>b.point.y>a.point.y?b:a);assert(Math.abs(peak.p-CHOP_TIMING.top)<.03&&peak.point.y>1.9,'overhead at the end of the held beat');
+assert(chopPose(CHOP_TIMING.windUp).point.distanceTo(chopPose(CHOP_TIMING.top).point)<.06,'the held beat barely moves');
+let fastest=1;for(let i=2;i<samples.length;i++)if(speed(i)>speed(fastest))fastest=i;assert(samples[fastest].p>CHOP_TIMING.top&&samples[fastest].p<=CHOP_TIMING.impact+.01,'fastest during the strike: '+samples[fastest].p);
 const impact=chopPose(CHOP_TIMING.impact).point;assert(impact.z>.45&&impact.y<1.3,'the blow lands in front of and below the shoulder');
 // Never behind the body, always on the right side.
 for(const s of samples){assert(s.point.z>-.3,'stays in front of the back: '+s.point.z);assert(s.point.x<-.05,'right side');}
 // Leans back to wind up, forward on the blow, and holds still at impact.
-assert(Math.min(...samples.map(s=>s.lean))<-.1&&Math.max(...samples.map(s=>s.lean))>.3);assert.equal(chopPose(CHOP_TIMING.impact+.01).lean,chopPose(CHOP_TIMING.hold-.01).lean,'holds at impact');
+assert(Math.min(...samples.map(s=>s.lean))<-.1&&Math.max(...samples.map(s=>s.lean))>.3);assert.equal(chopPose(CHOP_TIMING.impact+.01).lean,chopPose(CHOP_TIMING.stop-.01).lean,'holds at impact'); // re-pinned (logging polish): the dead hold ends at CHOP_TIMING.stop; stop..hold is the recoil
 // ── The character performs it ─────────────────────────────────────────────────
 await loadCharacterAssets();
 const axe=()=>createHeldItem(itemById('axe')),longAxis=(c,item)=>{item.updateMatrixWorld(true);return new T.Vector3(0,0,1).applyQuaternion(item.getWorldQuaternion(new T.Quaternion()))};
@@ -54,11 +57,13 @@ for(const body of ['male','female']){
  // Released, it follows the forearm again.
  c.alignHeld(null);for(let i=0;i<10;i++)c.update(.1);const wrist=new T.Vector3(),elbow=new T.Vector3();c.bone('WristR').getWorldPosition(wrist);c.bone('LowerArmR').getWorldPosition(elbow);
  assert(longAxis(c,item).angleTo(wrist.sub(elbow).normalize())<.15,'follows the forearm when not aligned');
+ // Re-pinned (logging polish): MID is the same point of the strike as the old .55 (the hand about half-way down, leaning into it), now inside the shorter strike phase.
+ const MID=CHOP_TIMING.top+.72*(CHOP_TIMING.impact-CHOP_TIMING.top);
  // Mid-swing (the swing grip): the left hand is on the handle, both hands close around it, and leaning moves the head forward.
  item.children[0].position.z=-GRIP;
  const head=()=>{c.group.updateMatrixWorld(true);const v=new T.Vector3();c.bone('Head').getWorldPosition(v);return c.group.worldToLocal(v)};
- c.reach('R',chopPose(.55).point,1,CARRY_POLE);c.setTwoHanded(1);c.setLean(0);for(let i=0;i<4;i++)c.update(.05);const upright=head();
- const pose=chopPose(.55);c.reach('R',pose.point,1,CARRY_POLE);c.setLean(pose.lean);c.setTwoHanded(pose.twoHand);for(let i=0;i<4;i++)c.update(.05);
+ c.reach('R',chopPose(MID).point,1,CARRY_POLE);c.setTwoHanded(1);c.setLean(0);for(let i=0;i<4;i++)c.update(.05);const upright=head();
+ const pose=chopPose(MID);c.reach('R',pose.point,1,CARRY_POLE);c.setLean(pose.lean);c.setTwoHanded(pose.twoHand);for(let i=0;i<4;i++)c.update(.05);
  assert(head().z-upright.z>.08,`${body}: leaning moves the head forward (${(head().z-upright.z).toFixed(2)} m)`);
  c.group.updateMatrixWorld(true);const left=new T.Vector3(),right=new T.Vector3();c.bone('WristL').getWorldPosition(left);c.bone('WristR').getWorldPosition(right);
  const along=longAxis(c,item),toLeft=left.clone().sub(right),offLine=toLeft.clone().sub(along.clone().multiplyScalar(toLeft.dot(along))).length();

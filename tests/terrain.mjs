@@ -27,7 +27,7 @@ for(let x=MAP.ground.x0+.2;x<MAP.ground.x1;x+=1.1)for(let z=MAP.ground.z0+.3;z<M
  else{outsideCells++;if(w&&odd.length<5)odd.push(['outside the playable area is walkable',x,z])}}
 assert.deepEqual(odd,[]);assert(landCells>150000&&waterCells>1000&&outsideCells>10000,`${landCells} land, ${waterCells} water, ${outsideCells} outside samples`);
 // Every district can be walked into from open ground on every side (the old bug: Alder Center could not be entered from the County Road).
-for(const [id,sides] of Object.entries({alder:[[-22,-90],[19,-47.9],[59,-110]],cedar:[[69,-100],[120,-39],[171,-100],[120,-136]],eastbank:[[69,30],[130,-21],[130,76]],farm:[[-171,-230],[-100,-179]],forest:[[0,-215],[60,-317]]})){
+for(const [id,sides] of Object.entries({alder:[[-22,-90],[19,-47.9],[71,-110]],cedar:[[69,-100],[120,-39],[171,-100],[120,-136]],eastbank:[[69,30],[130,-21],[130,76]],farm:[[-171,-230],[-100,-179]],forest:[[0,-215],[60,-317]]})){
  const zone=MAP.zones.find(z=>z.id===id);for(const [x,z] of sides)assert(isWalkable(x,z),`${id} can be entered from ${x},${z}`);assert(isWalkable((zone.bounds.x0+zone.bounds.x1)/2,(zone.bounds.z0+zone.bounds.z1)/2))}
 const walkFromSpawn=T.reach(MAP.spawn.x,MAP.spawn.z);for(const [x,z] of [[-22,-90],[69,-100],[130,-21],[0,100-1],[-240,0]])assert(walkFromSpawn[T.index(x,z)],`${x},${z} is on the spawn's side of the river`);
 
