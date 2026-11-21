@@ -33,7 +33,7 @@ assert.equal(verdictText(deployChecks(good),'0.36.0'),'Ready to go online (0.36.
 // the job: in the table, safe, summarised from the script's one line
 assert.deepEqual(tableProblems(JOBS),[]);assert.ok(JOBS['deploy-check']&&JOBS['deploy-check'].script==='scripts/deploy-check.mjs'&&JOBS['deploy-check'].args.length===0);
 const s=summarise('deploy-check','noise\nFACTS '+JSON.stringify(good)+'\n',0);assert.equal(s.ok,true);assert.equal(s.version,'0.36.0');assert.equal(s.live,'0.35.3');assert.equal(s.checks.length,6);
-assert.equal(summarise('deploy-check','FACTS '+JSON.stringify({...good,wrangler:'out'}),1).ok,false);assert.equal(summarise('deploy-check','crashed',1).text,'The check did not finish');assert.equal(summarise('deploy-check','FACTS {bad',0).ok,false);
+assert.equal(summarise('deploy-check','FACTS '+JSON.stringify({...good,wrangler:'out'}),1).ok,false);assert.equal(summarise('deploy-check','crashed',1).text,'The check did not finish');{const stale=summarise('deploy-check','FACTS '+JSON.stringify(good),1);assert.equal(stale.ok,false,'a check script that exits 1 beats this hub older rules');assert.match(stale.text,/Restart the hub/)}assert.equal(summarise('deploy-check','FACTS {bad',0).ok,false);
 // the page's sentence
 const job=(sum,run)=>({running:run?{}:null,last:sum?{summary:sum,endedAt:1e6}:null});
 assert.match(nextLine({enabled:true},job(null)),/Press Check/);assert.match(nextLine({enabled:true},job(null,true)),/Checking now/);assert.match(nextLine({enabled:true},job({ok:true,version:'0.36.0',checks:[]}),1e6+60000),/0\.36\.0/);assert.match(nextLine({enabled:true},job({ok:false,checks:[]}),1e6),/blocks/i);assert.match(nextLine({enabled:false},null),/switched off/);

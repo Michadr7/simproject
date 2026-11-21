@@ -112,10 +112,10 @@ export function createNightLights({scene,footing=()=>0,cityWindows=[],cityLampHe
   const hz=info.hz||2.2,yaw=mesh.rotation.y,sin=Math.sin(yaw),cos=Math.cos(yaw),g0=beamBase+n*BEAM_VERTICES;
   beam.vertices.forEach(([lx,lz,s],k)=>{const z0=lz+hz,x=mesh.position.x+lx*cos+z0*sin,z=mesh.position.z-lx*sin+z0*cos,o=(g0+k)*3,g=s*BEAM.strength*strength*beamShare;gPos.set([x,footing(x,z)+LAMP.poolLift+.01,z],o);gTint.set([BEAM.colour[0]*g,BEAM.colour[1]*g,BEAM.colour[2]*g],o)});
  }
- function setSpot(plan,source){
-  if(plan.present&&!spot){spot=new THREE.SpotLight(SPOT.colour,0,SPOT.distance,SPOT.angle,SPOT.penumbra,SPOT.decay);spot.name='player-headlight';spot.castShadow=false}
-  if(plan.present&&!spotIn){scene.add(spot,spot.target);spotIn=true}                     // one recompile: the light count changed (the hitch the user accepted)
-  if(!plan.present&&spotIn){scene.remove(spot,spot.target);spotIn=false}                  // and one more when day comes or the quality drops to Low
+ function setSpot(plan,source,keep=false){ // keep (High): the light stays in the scene at intensity 0 by day, so the light count never changes in play (a change recompiles every lit material: 0.5-4 s freeze, measured by Neo 2026-11-19)
+  if((plan.present||keep)&&!spot){spot=new THREE.SpotLight(SPOT.colour,0,SPOT.distance,SPOT.angle,SPOT.penumbra,SPOT.decay);spot.name='player-headlight';spot.castShadow=false}
+  if((plan.present||keep)&&!spotIn){scene.add(spot,spot.target);spotIn=true}                     // one recompile: the light count changed (the hitch the user accepted)
+  if(!plan.present&&!keep&&spotIn){scene.remove(spot,spot.target);spotIn=false}                  // and one more when day comes or the quality drops to Low
   if(!spotIn)return;
   spot.intensity=source?plan.intensity*scale:0;
   if(source){const hz=sizeOf(source.model).hz||2.2;source.mesh.updateMatrixWorld();spot.position.set(0,SPOT.height,hz).applyMatrix4(source.mesh.matrixWorld);spot.target.position.set(0,SPOT.height-SPOT.aimDrop,hz+SPOT.aimAhead).applyMatrix4(source.mesh.matrixWorld);spot.target.updateMatrixWorld()}
@@ -144,7 +144,7 @@ export function createNightLights({scene,footing=()=>0,cityWindows=[],cityLampHe
    const plan=source.own?spotlightPlan({high,on:true,level,present:spotIn}):null;if(source.own)own={source,plan};
    writeVehicle(n++,source,vehicleGlow(level)*scale,plan?.present?BEAM.spotShare:1);
   }
-  setSpot(own?own.plan:spotlightPlan({high,on:false,level,present:spotIn}),own?.source||null);
+  setSpot(own?own.plan:spotlightPlan({high,on:false,level,present:spotIn}),own?.source||null,!!high);
   vehicleSprites=n*4;beams=n;
   spriteGeometry.instanceCount=lamps.length+vehicleSprites;groundGeometry.setDrawRange(0,beamIndexBase+n*BEAM_INDICES);
   if(n){aCentre.needsUpdate=aTint.needsUpdate=aSize.needsUpdate=true;gPosA.needsUpdate=gTintA.needsUpdate=true}

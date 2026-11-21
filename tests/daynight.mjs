@@ -137,7 +137,7 @@ near(skyAt(720,{exposureScale:2}).exposure,2.24,1e-9,'the dev exposure slider mu
   const sun=()=>{let l;scene.traverse(o=>{if(o.isDirectionalLight)l=o});return l},hemi=()=>{let l;scene.traverse(o=>{if(o.isHemisphereLight)l=o});return l};
   assert(scene.getObjectByName('sky-dome'),'the world scene has the sky dome');assert(scene.getObjectByName('sky-stars'),'and the stars');
   S.progress.routine.minutes=720;g.pump(.2);const noon=count(),noonSun=sun().intensity,noonPos=sun().position.clone(),noonFog=scene.fog.color.clone();
-  assert.equal(noon.dir,1,'one directional light');assert.equal(noon.lights,2,'two lights in the world: the hemisphere and the sun');near(noonSun,3.1,.05,'noon sun strength');near(hemi().intensity,1.7,.05,'noon hemisphere');
+  assert.equal(noon.dir,1,'one directional light');assert.equal(noon.lights,3,'three lights in the world: the hemisphere, the sun and the headlight kept at intensity 0 (0.36.3: no recompile freeze when it turns on)');near(noonSun,3.1,.05,'noon sun strength');near(hemi().intensity,1.7,.05,'noon hemisphere');
   S.progress.routine.minutes=0;g.pump(.2);const night=count();
   assert.deepEqual({lights:night.lights,dir:night.dir},{lights:noon.lights,dir:noon.dir},'the same lights at midnight: nothing recompiles at dusk');assert.equal(night.objects,noon.objects,'no object added or removed either');
   near(sun().intensity,3.1*NIGHT_FLOOR,.02,'the moon is the sun x NIGHT_FLOOR');near(hemi().intensity,1.7*NIGHT_FLOOR,.02,'the hemisphere dims at night (it never did before)');

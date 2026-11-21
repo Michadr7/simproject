@@ -85,6 +85,7 @@ export function resolveRoute(root,pathname,host,port){
  if(pathname==='/api/activity')return {api:'activity'};
  if(pathname==='/api/jobs')return {api:'jobs'};
  if(pathname==='/api/hub-id')return {api:'hub-id'};
+ if(pathname==='/api/hub-stale')return {api:'hub-stale'};
  if(Object.hasOwn(RECORD_ROUTES,pathname))return {api:RECORD_ROUTES[pathname][0],write:RECORD_ROUTES[pathname][1]};
  if(Object.hasOwn(COMMIT_ROUTES,pathname))return {api:COMMIT_ROUTES[pathname][0],write:COMMIT_ROUTES[pathname][1]};
  if(Object.hasOwn(TOOL_WRITES,pathname))return {api:TOOL_WRITES[pathname],write:true};
@@ -322,6 +323,11 @@ export function createHubServer({root,port=0,runs=null,chat=null,jobs=null,commi
     if(r.api==='activity')return json(200,activityOf(runs,chat,{root,jobs}));
     if(r.api==='jobs')return json(200,jobs&&runs?jobs.list():{enabled:false,busy:false,running:null,jobs:[]});
     if(r.api==='hub-id')return json(200,{hub:HUB_NAME,version:HUB_VERSION,pid:process.pid,startedAt,canRestart:!!(restart&&runs)});
+    if(r.api==='hub-stale'){ // hub code that changed after this hub started (it loads server code once): the page says "restart needed"
+     const stale=[],SERVER_WEB=new Set(['deploy-rules.js','fetch-rules.js','shell.js']),dir=path.join(root,'hub');
+     try{for(const n of fs.readdirSync(dir)){if(!/\.(m?js)$/.test(n))continue;if(fs.statSync(path.join(dir,n)).mtimeMs>startedAt)stale.push('hub/'+n)}}catch{}
+     try{for(const n of SERVER_WEB){if(fs.statSync(path.join(dir,'web',n)).mtimeMs>startedAt)stale.push('hub/web/'+n)}}catch{}
+     return json(200,{stale:stale.length,files:stale.slice(0,12)})}
     if(r.api==='commit-proposal')return json(200,commits&&runs?commits.proposal():{enabled:false});
     if(r.api==='commit-summary')return json(200,commits&&runs?commits.summary():{enabled:false,files:0,unpushed:0});
     if(r.api==='push-status')return json(200,commits&&runs?commits.pushStatus():{enabled:false,canPush:false,count:0,commits:[]});

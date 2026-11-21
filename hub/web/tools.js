@@ -71,6 +71,7 @@ export function mountTools(view,{onChange}={}){
   if(!d){body.append(h('p',{class:'soon'},'Could not read the tools. Is the hub still running?'));return}
   if(!d.enabled){body.append(h('div',{class:'box'},h('div',{class:'label'},'Tools are off'),h('p',{},'Tools are switched on together with runs when the hub starts. Stop the hub and start it again with:'),h('code',{class:'cmd'},'npm run hub -- --runs')));return}
   const jobs=d.jobs.filter(j=>j.kind==='job'&&!/^(deploy|bump|fetch)/.test(j.key)),services=d.jobs.filter(j=>j.kind==='service');
+  if(d.stale)body.append(h('div',{class:'box tool on'},h('div',{class:'tool-head'},h('span',{class:'plan-main'},h('span',{class:'plan-title'},'Restart needed'),h('span',{class:'plan-meta tool-res bad'},`${d.stale.stale} hub file${d.stale.stale===1?'':'s'} changed after this hub started (${d.stale.files.slice(0,3).join(', ')}). The running hub still uses the old code, so Check and Publish can disagree.`)),h('span',{class:'acts'},h('button',{class:'btn pri',type:'button',disabled:!d.canRestart||d.busy,onclick:restart},'Restart now')))));
   body.append(h('h2',{class:'sect'},'Checks and builds'),h('div',{class:'tool-list'},jobs.map(row)));
   body.append(h('h2',{class:'sect'},'Servers'),h('div',{class:'tool-list'},services.map(row)));
   body.append(h('h2',{class:'sect'},'The hub'),h('div',{class:'box tool'},h('div',{class:'tool-head'},
@@ -80,7 +81,7 @@ export function mountTools(view,{onChange}={}){
  async function load(force){
   clearTimeout(timer);
   const [d,id]=await Promise.all([getJson('/api/jobs'),getJson('/api/hub-id')]);if(!alive)return;
-  if(d)d.canRestart=!!(id&&id.canRestart);
+  if(d){d.canRestart=!!(id&&id.canRestart);const st=await getJson('/api/hub-stale');if(!alive)return;d.stale=st&&st.stale?st:null}
   if(!restarting)draw(d,force);
   timer=setTimeout(()=>{if(document.hidden)timer=setTimeout(load,4000);else load()},d&&(d.running||d.busy)?2000:8000)}
  load();

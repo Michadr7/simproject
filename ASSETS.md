@@ -661,3 +661,40 @@ Mono 22.05 kHz Ogg Vorbis, cut windows and loudness per clip in `assets-src/soun
 | `wood-creak-5.ogg` | Freesound 456814 | Breviceps (https://freesound.org/people/Breviceps/sounds/456814/) |
 | `wood-creak-6.ogg` | Freesound 506665 | Rudmer_Rotteveel (https://freesound.org/people/Rudmer_Rotteveel/sounds/506665/) |
 | `amb-forest-pines.ogg` | Freesound 843926 | nicotep (https://freesound.org/people/nicotep/sounds/843926/) |
+
+
+## Logging sounds pass 2 (LOG2, 2026-11-19, 44.1 kHz mono, all CC0 1.0 or derived from CC0) in `dist/assets/sounds/`
+
+44.1 kHz mono Ogg Vorbis (details & loudness in `assets-src/sounds-sweep/README.md`). Registered in `dist/logging-sounds.js` (`chopLayers`, `fellSequence`, `LOGGING_FILES`).
+
+| File | Source | Author |
+|---|---|---|
+| `axe-heavy-1.ogg` | Freesound 454381 | kyles (https://freesound.org/people/kyles/sounds/454381/) |
+| `axe-heavy-2.ogg` | Freesound 454381 | kyles (https://freesound.org/people/kyles/sounds/454381/) |
+| `axe-heavy-3.ogg` | Freesound 767326 | Hano_van_Dalen (https://freesound.org/people/Hano_van_Dalen/sounds/767326/) |
+| `axe-heavy-4.ogg` | Freesound 655325 | 21100495 (https://freesound.org/people/21100495/sounds/655325/) |
+| `axe-light-1.ogg` | Freesound 767325 | Hano_van_Dalen (https://freesound.org/people/Hano_van_Dalen/sounds/767325/) |
+| `axe-light-2.ogg` | Freesound 767325 | Hano_van_Dalen (https://freesound.org/people/Hano_van_Dalen/sounds/767325/) |
+| `axe-body-1.ogg` | Freesound 655325 | 21100495 (https://freesound.org/people/21100495/sounds/655325/) |
+| `axe-body-2.ogg` | Freesound 655325 | 21100495 (https://freesound.org/people/21100495/sounds/655325/) |
+| `axe-body-3.ogg` | Freesound 655325 | 21100495 (https://freesound.org/people/21100495/sounds/655325/) |
+| `axe-body-4.ogg` | Freesound 706978 | JesterWhoo (https://freesound.org/people/JesterWhoo/sounds/706978/) |
+| `trunk-groan-1.ogg` | Freesound 669457 | EricsSoundschmiede (https://freesound.org/people/EricsSoundschmiede/sounds/669457/) |
+| `trunk-groan-2.ogg` | Freesound 183450 | utsuru (https://freesound.org/people/utsuru/sounds/183450/) |
+| `trunk-groan-3.ogg` | Freesound 183452 | utsuru (https://freesound.org/people/utsuru/sounds/183452/) |
+| `trunk-groan-4.ogg` | Freesound 501303 | JappeHallunken (https://freesound.org/people/JappeHallunken/sounds/501303/) |
+| `tree-fall-deep-1.ogg` | Freesound 515313 | matt_beer (https://freesound.org/people/matt_beer/sounds/515313/) |
+| `tree-fall-deep-2.ogg` | Freesound 515312 | matt_beer (https://freesound.org/people/matt_beer/sounds/515312/) |
+| `tree-fall-deep-3.ogg` | Freesound 139952 | ecfike (https://freesound.org/people/ecfike/sounds/139952/) |
+| `log-thud-xs.ogg` | Freesound 584891 | KrystianPawlowski (https://freesound.org/people/KrystianPawlowski/sounds/584891/) |
+| `log-thud-s.ogg` | Freesound 400188 | opriema (https://freesound.org/people/opriema/sounds/400188/) |
+| `log-thud-m.ogg` | Freesound 584891 | KrystianPawlowski (https://freesound.org/people/KrystianPawlowski/sounds/584891/) |
+| `log-thud-l.ogg` | Freesound 400188 | opriema (https://freesound.org/people/opriema/sounds/400188/) |
+| `chop-tail-1.ogg` | derived (Node delay-tap echo from `axe-heavy-1`, CC0) | kyles / derived |
+| `chop-tail-2.ogg` | derived (Node delay-tap echo from `axe-heavy-2`, CC0) | kyles / derived |
+| `chop-tail-3.ogg` | derived (Node delay-tap echo from `axe-heavy-3`, CC0) | Hano_van_Dalen / derived |
+| `chop-tail-4.ogg` | derived (Node delay-tap echo from `axe-heavy-4`, CC0) | 21100495 / derived |
+| `chop-tail-5.ogg` | derived (Node delay-tap echo from `axe-body-1`, CC0) | 21100495 / derived |
+| `chop-tail-6.ogg` | derived (Node delay-tap echo from `axe-body-2`, CC0) | 21100495 / derived |
+| `amb-forest-bed.ogg` | Freesound 670307 + derived faint creak mix (CC0) | bruno.auzet / derived |
+| `amb-deep-woods.ogg` | Freesound 670307 (CC0) | bruno.auzet (https://freesound.org/people/bruno.auzet/sounds/670307/) |

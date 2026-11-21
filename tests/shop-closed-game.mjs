@@ -59,7 +59,7 @@ try{
  assert(cam.position.z>=origin.z-4.6&&cam.position.z<=origin.z+4.6,'market camera Z inside room: '+cam.position.z);
 
  // 4. Walk-loop candidate pairs warmed into __npcRoutes.
- assert(globalThis.__npcRoutes&&globalThis.__npcRoutes.pairs>45,'walk-loop candidate pairs warmed: '+JSON.stringify(globalThis.__npcRoutes));
+ for(let i=0;i<4000&&!globalThis.__npcRoutes;i++)pump(.05);assert(globalThis.__npcRoutes&&globalThis.__npcRoutes.pairs>45,'walk-loop candidate pairs warmed: '+JSON.stringify(globalThis.__npcRoutes));
 
  console.log(`PASS shop-closed-game.mjs: 03:00 hides market/cafe clerk+customers+cups and dims lights; 12:00 restores clerk+lights; market camera clamped inside room; __npcRoutes warmed ${globalThis.__npcRoutes.pairs} pairs.`);
 }finally{

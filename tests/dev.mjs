@@ -67,7 +67,7 @@ assert.match(await readFile('dist/dev-flag.js','utf8'),/export const DEV_MODE=tr
   slide('devSkyTime',720);btn2('Night').click();g.pump(.1);assert.equal(g.find('devSkyTimeLabel').textContent,'clock','setting the real clock drops the Look at override');S.progress.routine.minutes=5;
   g.find('devSkyReset').click();g.pump(.1);assert(Math.abs(light().intensity-moon)<.01,'Reset look puts 0.12 back');assert.equal(g.find('devNightFloor').value,'0.12');
   assert.match(g.find('devCost').textContent,/draw calls · .* triangles · .* shaders · frame/,'the cost line is drawn');
-  assert.equal(g.find('devGlow').value,'1','Reset look puts the Lights slider back too');assert.match(g.find('devLights').textContent,/^lamps 100% \(40\) · windows lit \d+ of \d+ · vehicles lit 0 · \+2 draw calls$/,'the lights line: '+g.find('devLights').textContent);
+  assert.equal(g.find('devGlow').value,'1','Reset look puts the Lights slider back too');assert.match(g.find('devLights').textContent,/^lamps 100% \(40\) · windows lit \d+ of \d+ · vehicles lit 0 · (spotlight in the scene · )?\+2 draw calls$/,'the lights line: '+g.find('devLights').textContent);
   assert.equal(frameCostText({calls:140,triangles:176400,programs:41},[5,6,7,8,30]),'140 draw calls · 176k triangles · 41 shaders · frame 7.0 ms median, 30.0 ms 95th (5 frames)');assert.match(frameCostText({calls:1,triangles:12,programs:1}),/12 triangles .* frame – median/);}
 
  // Money: whole cents, capped

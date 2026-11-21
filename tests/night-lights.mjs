@@ -139,8 +139,8 @@ assert.deepEqual(spotlightPlan({high:true,on:false,level:1,present:false}),{pres
  s=lights.update(.04,{sky:night,high:true,vehicles:[]});assert.equal(s.spot,true,'out of the vehicle at night: still in, at 0');assert.equal(s.spotIntensity,0);
  s=lights.update(.04,{sky:night,high:false,vehicles:[own]});assert.equal(s.spot,false,'dropping to Low takes it out');assert.equal(count(),2);
  s=lights.update(.04,{sky:night,high:true,vehicles:[own]});assert.equal(count(),3);s=lights.update(.04,{sky:skyAt(720),high:true,vehicles:[own]});
- assert.deepEqual({spot:s.spot,sprites:s.vehicleSprites,own:s.ownOn,calls:s.drawCalls},{spot:false,sprites:0,own:false,calls:0},'day takes it out too; on auto the lamps are off');assert.equal(count(),2);
- s=lights.update(.04,{sky:skyAt(720),high:true,vehicles:[{...own,mode:'on'}]});assert.deepEqual({spot:s.spot,sprites:s.vehicleSprites,own:s.ownOn,calls:s.drawCalls},{spot:false,sprites:4,own:true,calls:2},'switched on by day: lamps and beam, but the SpotLight is night-only');
+ assert.deepEqual({spot:s.spot,sprites:s.vehicleSprites,own:s.ownOn,calls:s.drawCalls},{spot:true,sprites:0,own:false,calls:0},'by day the SpotLight is dark (intensity 0)'); assert.equal(s.spotIntensity,0,'but it stays in the scene on High, so the light count never changes in play (no recompile freeze)');assert.equal(count(),3);
+ s=lights.update(.04,{sky:skyAt(720),high:true,vehicles:[{...own,mode:'on'}]});assert.deepEqual({spot:s.spot,sprites:s.vehicleSprites,own:s.ownOn,calls:s.drawCalls},{spot:true,sprites:4,own:true,calls:2},'switched on by day: lamps and beam, but the SpotLight stays at 0 (it is only dark, never removed)');
  assert.equal(lights.sprites.material.uniforms.uLevel.value,0,'and the street lamps stay off');
  // parked is dark; a truck that only counts while it moves
  s=lights.update(.04,{sky:night,vehicles:[{key:'p',mesh:truck,model:'flatbed',use:'parked',mode:'on'}]});assert.equal(s.vehicleSprites,0,'a parked vehicle is dark');
@@ -166,11 +166,11 @@ assert.deepEqual(spotlightPlan({high:true,on:false,level:1,present:false}),{pres
   const flatsLit=()=>{let n=0;scene.traverse(o=>{if(o.material?.name==='city-window-lit')n++});return n},keys=()=>g.ids.get('vpKeys').children.map(r=>r.children.map(c=>c.textContent).join(' '));
   const press=code=>{g.send('keydown',code);g.send('keyup',code);g.pump(.3)};
   at(720);const noonObjects=objects();
-  assert.deepEqual({s:sprites.visible,g:ground.visible},{s:false,g:false},'noon: the night lights are not drawn');near(heads.material.emissiveIntensity,.55,1e-9,'the lamp heads look as they did');assert.equal(flatsLit(),0);assert.equal(lights(),2);
+  assert.deepEqual({s:sprites.visible,g:ground.visible},{s:false,g:false},'noon: the night lights are not drawn');near(heads.material.emissiveIntensity,.55,1e-9,'the lamp heads look as they did');assert.equal(flatsLit(),0);assert.equal(lights(),3,'by day on High: the dark headlight is still in the scene');
   at(clock(20));
   assert.deepEqual({s:sprites.visible,g:ground.visible},{s:true,g:true},'20:00: sprites and ground patches are drawn (+2 draw calls)');near(heads.material.emissiveIntensity,LAMP.headNight,.01,'the lamp heads are bright');
   assert.equal(sprites.geometry.instanceCount,40,'34 street lamps and the 6 Oak Street lamps each have a halo');assert.equal(ground.geometry.drawRange.count,40*poolShape().indices.length,'and a pool');
-  assert(flatsLit()>20,`the old city's flats are lit (${flatsLit()})`);assert.equal(lights(),2,'still two lights: nothing recompiles at dusk');assert.equal(objects(),noonObjects,'no object is added or removed between noon and 20:00');
+  assert(flatsLit()>20,`the old city's flats are lit (${flatsLit()})`);assert.equal(lights(),3,'still three lights: nothing recompiles at dusk');assert.equal(objects(),noonObjects,'no object is added or removed between noon and 20:00');
   at(clock(3));assert.equal(flatsLit(),0,'03:00: every flat is dark');assert.equal(sprites.visible,true,'the lamps stay on all night');
   // get in at night (High is the default quality): the lamps come on by themselves, the panel shows the key, ONE SpotLight appears
   press('KeyE');assert.match(g.ids.get('vpName').textContent,/Worktruck/,'in the Worktruck');
@@ -183,8 +183,8 @@ assert.deepEqual(spotlightPlan({high:true,on:false,level:1,present:false}),{pres
   g.ids.get('quality').value='low';g.ids.get('quality').onchange();g.pump(.2);assert.equal(lights(),2,'Low: no SpotLight');assert.equal(sprites.geometry.instanceCount,44,'the glow stays');
   g.ids.get('quality').value='high';g.ids.get('quality').onchange();g.pump(.2);assert.equal(lights(),3);
   // by day: auto is off, the SpotLight leaves the scene; the switch still works
-  at(720);assert.deepEqual(keys().slice(-1),['L Lights: auto (off)']);assert.equal(lights(),2,'day: the SpotLight is gone');assert.equal(sprites.visible,false);
-  press('KeyL');assert.deepEqual(keys().slice(-1),['L Lights: on']);assert.equal(sprites.visible,true,'switched on by day');assert.equal(lights(),2,'but never the SpotLight by day');
+  at(720);assert.deepEqual(keys().slice(-1),['L Lights: auto (off)']);assert.equal(lights(),3,'day: the SpotLight stays at 0, never removed');assert.equal(sprites.visible,false);
+  press('KeyL');assert.deepEqual(keys().slice(-1),['L Lights: on']);assert.equal(sprites.visible,true,'switched on by day');assert.equal(lights(),3,'the SpotLight stays in the scene');assert.equal(scene.getObjectByName('player-headlight').intensity,0,'but never lit by day');
   // get out: the vehicle is parked and dark, and the switch is back on auto for next time
   at(clock(22));press('KeyE');assert.equal(g.ids.get('vpName').textContent,'Not in a vehicle');assert.equal(sprites.geometry.instanceCount,40,'a parked vehicle is dark');
   press('KeyE');assert.deepEqual(keys().slice(-1),['L Lights: auto (on)'],'getting back in: auto again');

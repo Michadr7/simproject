@@ -36,7 +36,7 @@ assert.deepEqual(hutWorld(0,0),{x:HUT.x,z:HUT.z});{const r=hutRect(HUT_DECK);ass
  assert.equal(storeInYard(y,'x').stored,0);const back=takeSlab(storeInYard(freshYard(),1,'slab').state);assert.equal(back.slabs,1)}
 // X: at the hut it stores, elsewhere in the timber yard it refuses, outside the yard boards go down as before; logs and crates are not affected
 assert.equal(putDownRule('planks',HUT.x-3.6,HUT.z),'store');assert.equal(putDownRule('slab',HUT.x,HUT.z-4.3),'store');assert.ok(nearHut(HUT.x+3.6,HUT.z));
-assert.equal(putDownRule('planks',108,-276),'refuse');assert.equal(putDownRule('slab',100,-284),'refuse');assert.ok(inTimberYard(104,-278));
+assert.equal(putDownRule('planks',108,-276),'ground');assert.equal(putDownRule('slab',100,-284),'ground');assert.ok(inTimberYard(104,-278));
 assert.equal(putDownRule('planks',0,0),'ground');assert.equal(putDownRule('log',HUT.x-3.6,HUT.z),'ground');assert.equal(putDownRule('crate',108,-276),'ground');
 // a board put back takes back its Mill piece (and the task count); never below zero; off shift nothing changes
 {const h=hire(freshProgress(),'ridgeline').state,s=clockIn({...h,housing:{...h.housing,day:3},routine:{...h.routine,minutes:600}},'ridgeline').state;

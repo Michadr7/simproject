@@ -52,6 +52,6 @@ export const inTimberYard=(x,z)=>x>=TIMBER_YARD.x0&&x<=TIMBER_YARD.x1&&z>=TIMBER
 export function putDownRule(kind,x,z){
  if(kind!=='planks'&&kind!=='slab')return 'ground';
  if(nearHut(x,z))return 'store';
- return inTimberYard(x,z)?'refuse':'ground';
+ return 'ground'; // owner 2026-11-19: no 'refuse' any more, boards can be put down anywhere (the hut only takes them at its deck)
 }
 export const HUT_CAPS=freeze({planks:YARD_MAX_PLANKS,slabs:YARD_MAX_SLABS});

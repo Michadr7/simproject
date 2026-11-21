@@ -35,7 +35,7 @@ try{
  const {GameState,pump,scene}=g,p=()=>GameState.progress,obj=n=>scene().getObjectByName(n),M=new THREE.Matrix4(),P=new THREE.Vector3(),Q=new THREE.Quaternion(),S=new THREE.Vector3();
  const instances=mesh=>{const out=[];for(let i=0;i<mesh.count;i++){mesh.getMatrixAt(i,M);M.decompose(P,Q,S);out.push({x:P.x,z:P.z,yaw:new THREE.Euler().setFromQuaternion(Q,'YXZ').y})}return out};
  const near=(list,x,z,yaw)=>list.some(o=>Math.hypot(o.x-x,o.z-z)<.02&&Math.abs(Math.atan2(Math.sin(o.yaw-yaw),Math.cos(o.yaw-yaw)))<.02);
- const at=minute=>{GameState.progress={...p(),housing:{...p().housing,day:DAY},routine:{...p().routine,minutes:minute-.3}};GameState.me.position.x=SPOT.x;GameState.me.position.z=SPOT.z;pump(.6)};
+ const at=minute=>{for(let i=0;i<4000&&!globalThis.__npcRoutes;i++)pump(.05);GameState.progress={...p(),housing:{...p().housing,day:DAY},routine:{...p().routine,minutes:minute-.3}};GameState.me.position.x=SPOT.x;GameState.me.position.z=SPOT.z;pump(.6)};
  const drawCalls=()=>{let n=0;scene().traverse(o=>{if(!(o.isMesh||o.isPoints))return;for(let x=o;x;x=x.parent)if(!x.visible)return;if(o.isInstancedMesh&&!o.count)return;n++});return n}; // a proxy: visible meshes with something to draw (the stub renderer counts nothing)
  const meshes=()=>{let n=0;scene().traverse(o=>{if((o.isMesh||o.isPoints)&&!/^(worker-|axe-)/.test(o.name))n++});return n}; // the crew's hand props (an axe, a log, boards) come and go with what each worker holds (calm crew timing, 2026-11-18): not counted
  at(mCarry2);const before={calls:drawCalls(),meshes:meshes()},logs0=obj('ground-logs').count;

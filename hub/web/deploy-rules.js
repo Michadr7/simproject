@@ -36,7 +36,7 @@ export function deployChecks(f={}){
  );
  if(!t)add('tests','Tests','fail','No test run is recorded. Run "Check" on the Tools page first.');
  else if(!t.ok)add('tests','Tests','fail','The last test run had failures. Fix them, then run "Check" again.');
- else if(newest>0&&(testAt===null||testAt<newest))add('tests','Tests','fail','A dist/ or tests/ file changed after the last passing test run. Run "Check" on the Tools page first.');
+ else if(newest>0&&(testAt===null||testAt<newest))add('tests','Tests','fail','A dist/ or tests/ file changed after the last test run the hub started. Press "Test gate" on the Tools page (a terminal npm test does not count), then press Check again.');
  else add('tests','Tests','ok','The last test run passed.');
  if(f.changed==null)add('changed','Uncommitted files','unknown','The hub could not read the git status.');
  else if(f.changed>0)add('changed','Uncommitted files','warn',`${f.changed} file${f.changed===1?'':'s'} changed since the last commit. The game goes online from this folder, not from GitHub, so commit and push on #commit too.`,'#commit');

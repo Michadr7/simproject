@@ -32,7 +32,7 @@ export const TYRE_CLIPS=Object.freeze({asphalt:'tyres-asphalt',gravel:'tyres-gra
 export const TYRE_FILES=Object.freeze(Object.values(TYRE_CLIPS));
 export const ALL_FILES=Object.freeze([...new Set(Object.values(ENGINES).map(e=>e.file)),...VEHICLE_SET,...PHONE_CLIPS,...TYRE_FILES,...TIMBER_FILES,CONVEYOR_CLIP,...SWEEP_FILES,...DINER_FILES,...CAT_FILES,...LOGGING_FILES]); // PH1: the phone clips are registered here too (loaded by audio.phone(), not on entering a vehicle)
 // Budgets (tests check the files against them).
-export const MAX_LOOP_BYTES=320000,LONG_LOOPS=Object.freeze([LOGGING_LOOPS.forestPines.file]); // LOG1: the 45 s forest loop is the one file allowed over MAX_FILE_BYTES (decoded about 8.6 MB at 48 kHz)
+export const MAX_LOOP_BYTES=320000,LONG_LOOPS=Object.freeze(Object.values(LOGGING_LOOPS).map(l=>l.file)); // LOG1/LOG2: the forest loops are allowed over MAX_FILE_BYTES (up to 320 KB, < 60 s)
 export const MAX_FILE_BYTES=60000,MAX_PAYLOAD_BYTES=10000000,MAX_VOICES=12,MAX_YELLS=2,YELL_MAX_SECONDS=1.2;
 const ENG_BY_CLASS=new Map(Object.entries(ENGINES).map(([k,v])=>[k,v]));
 export const engineFor=cls=>ENG_BY_CLASS.get(cls)||null;

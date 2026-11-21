@@ -72,7 +72,7 @@ export function buildIndex({root=ROOT,head=undefined}={}){
  const code=[],generated=[];let missing=0;
  for(const name of modules){const file=path.join(dist,name),size=fs.statSync(file).size;
   if(GENERATED.test(name)){generated.push(`- ${name} · ${kb(size)}`);continue}
-  const text=read(file),lines=lineCount(text),purpose=leadingComment(text,62)||PURPOSE_OVERRIDES[name]||'',ex=exportsOf(text),cov=covers.get(name)||[];
+  const text=read(file),lines=lineCount(text),purpose=leadingComment(text,50)||PURPOSE_OVERRIDES[name]||'',ex=exportsOf(text),cov=covers.get(name)||[];
   if(!purpose)missing++;
   const shown=ex.slice(0,3).join(', ')+(ex.length>3?` (+${ex.length-3})`:'');
   const testText=name==='game.js'?`the ${booted} tests that boot the packaged game (tests/support/boot-game.mjs)`:cov.length?cov.slice(0,2).join(', ')+(cov.length>2?` (+${cov.length-2})`:''):'none';
