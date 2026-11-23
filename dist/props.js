@@ -2,12 +2,13 @@
 // vertex colours, and collision boxes, all in metres with the ground at y = 0 and the prop centred on x = z = 0.
 import * as THREE from './vendor/three.module.js';
 import {PROPS} from './props-assets.js';
+import {DOWNTOWN_PROPS} from './props-assets-downtown.js';
 // The farm.* records (about 8 MB) are a separate module, loaded on demand: wait ensureFarmProps() before placing or building any farm.* prop (props-assets-farm.js).
 let FARM=null,farmLoading=null;
 export const isFarmProp=id=>typeof id==='string'&&id.startsWith('farm.');
 export const farmPropsLoaded=()=>FARM!==null;
 export const ensureFarmProps=()=>FARM?Promise.resolve(FARM):(farmLoading||(farmLoading=import('./props-assets-farm.js').then(m=>(FARM=m.FARM_PROPS),e=>{farmLoading=null;throw e})));
-const record=id=>PROPS[id]||FARM?.[id];
+const record=id=>PROPS[id]||DOWNTOWN_PROPS[id]||FARM?.[id];
 import {decode} from './nature.js';
 import {PLACEHOLDERS} from './placeholders.js';
 import {isRigged,riggedInfo,createRigged} from './rigged-props.js';
@@ -50,7 +51,7 @@ export function createPropInstances(id,spots,fade,{shadows=false,geometry=null}=
  if(isFarmProp(id)&&!FARM){const e=new THREE.InstancedMesh(new THREE.BufferGeometry(),new THREE.MeshBasicMaterial(),1);e.count=0;e.name='props-pending-'+id;return e} // not loaded yet: nothing to draw
  const material=propMaterial(id,fade); // flat-colour props (pallets, boxes) and textured ones (the kit's containers) alike
  const mesh=new THREE.InstancedMesh(geometry||propGeometry(id),material,Math.max(1,spots.length)),m=new THREE.Matrix4(),q=new THREE.Quaternion(),up=new THREE.Vector3(0,1,0),one=new THREE.Vector3(1,1,1),at=new THREE.Vector3();
- spots.forEach((s,i)=>{q.setFromAxisAngle(up,s.yaw||0);m.compose(at.set(s.x,s.y||0,s.z),q,one);mesh.setMatrixAt(i,m)});
+ spots.forEach((s,i)=>{q.setFromAxisAngle(up,s.yaw||0);one.set(s.sx||1,s.sy||1,s.sz||1);m.compose(at.set(s.x,s.y||0,s.z),q,one);mesh.setMatrixAt(i,m)});
  mesh.count=spots.length;mesh.instanceMatrix.needsUpdate=true;mesh.name='props-'+id;mesh.castShadow=shadows;mesh.receiveShadow=true;mesh.frustumCulled=false; // instances are scattered: the shared geometry's bounding sphere is the first one's
  return mesh;
 }

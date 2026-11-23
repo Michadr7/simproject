@@ -119,7 +119,7 @@ const inside=(r,b)=>r.x0>=b.x0&&r.x1<=b.x1&&r.z0>=b.z0&&r.z1<=b.z1,overlaps=(a,b
 const scene=new THREE.Scene(),world=createWorld(scene,{cullRadius:Infinity});
 const rects=MAP.landmarks.map(l=>({l,r:rotated(l)}));
 for(const {l,r} of rects){
- assert(inside(r,zoneOf(l.zone)),`${l.id} stands inside its zone ${l.zone}`);
+ if(l.zone)assert(inside(r,zoneOf(l.zone)),`${l.id} stands inside its zone ${l.zone}`);else assert(l.wild&&inside(r,MAP.world),`${l.id} stands inside wilds world`);
  for(const road of DIRT_ROADS)assert(!overlaps(r,road),`${l.id} is clear of the dirt roads`);for(const f of FIELDS)assert(!overlaps(r,f),`${l.id} is clear of the field ${f.id}`);
  for(const b of l.decor?[]:propInfo(l.prop).colliders){const s=Math.round(Math.sin(l.yaw)),c=Math.round(Math.cos(l.yaw));for(const [dx,dz] of [[-1,-1],[1,-1],[-1,1],[1,1]]){const lx=b.x+dx*b.hx*.98,lz=b.z+dz*b.hz*.98,x=l.x+lx*c+lz*s,z=l.z-lx*s+lz*c,k=T.surfaceAt(x,z);
   assert(![SURFACE.ROAD,SURFACE.STREET,SURFACE.BRIDGE,SURFACE.WATER,SURFACE.BANK,...(/^house-/.test(l.prop)?[SURFACE.PAVEMENT]:[])].includes(k),`${l.id}: solid ground-level boxes never stand on a road, bridge or water (and a house's never on a pavement; a shop's walls may touch its sidewalk) (${x.toFixed(1)},${z.toFixed(1)} is ${k})`)}}

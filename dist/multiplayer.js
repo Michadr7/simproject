@@ -66,6 +66,8 @@ export class MultiplayerClient {
         this.hostId = message.id; this.emit('host', message.id);
       } else if (message?.type === 'clock' && validClockMessage(message) && this.id && this.hostId !== this.id) {
         this.emit('clock', {day: message.day, minutes: message.minutes});
+      } else if (this.id && ['bakeryBoard','bakeryResult'].includes(message?.type)) {
+        this.emit(message.type, message);
       } else if (message?.type === 'playerLeft' && typeof message.id === 'string') {
         this.emit('playerLeft', message.id);
       }
@@ -90,6 +92,11 @@ export class MultiplayerClient {
   sendClock(message) {
     if (this.socket?.readyState !== 1 || !this.id || !this.isHost || !validClockMessage(message)) return false;
     this.socket.send(JSON.stringify({type: 'clock', day: message.day, minutes: message.minutes}));
+    return true;
+  }
+  sendBakery(message) {
+    if (!this.online || this.socket.bufferedAmount > 65536) return false;
+    this.socket.send(JSON.stringify(message));
     return true;
   }
   disconnect() {

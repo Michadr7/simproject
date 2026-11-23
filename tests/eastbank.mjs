@@ -38,7 +38,7 @@ for(const id of ['eastbank-warehouse','eastbank-workshop','eastbank-supply','eas
  assert(r.x0>=p.x0&&r.x1<=p.x1&&r.z0>=p.z0&&r.z1<=p.z1,`${id} stands inside plot ${l.plot}`);
  for(const q of MAP.paving)assert(!overlaps(r,q),`${id} does not stand on paving ${q.id}`);
  for(const e of MAP.roads.edges)assert(!overlaps(r,roadRect(e)),`${id} is clear of ${e.id}`);
- const prop=MAP.properties.find(q=>q.landmark===id);assert(prop&&prop.enterable===false&&prop.reason.length>20,`${id} is in the registry with a reason`)}
+ const prop=MAP.properties.find(q=>q.landmark===id);if(id==='eastbank-gas-kiosk')assert(prop&&prop.access==='public'&&prop.exteriorDoor===true,`${id} is open as a public kiosk`);else assert(prop&&prop.enterable===false&&prop.reason.length>20,`${id} is in the registry with a reason`)}
 {const wh=rotated(L('eastbank-warehouse')),yard=MAP.paving.find(p=>p.id==='warehouse-yard');assert(wh.z0-yard.z0>=12&&yard.z1<=wh.z0+1e-9,`the warehouse's truck yard is ${wh.z0-yard.z0} m deep (12 m or more)`);
  // one dock, at the warehouse model's one loading door (door.x is seen from the front; the warehouse faces north, so world x = landmark x - door.x); the plate's lip (local z -0.6) lies against the wall, its ramp end toward the yard
  const door=propInfo('industrial-q').door,docks=MAP.yards.find(y=>y.id==='warehouse-yard').items.filter(i=>i.prop==='prop.dock-plate'),doorX=L('eastbank-warehouse').x-door.x;assert.equal(docks.length,1);

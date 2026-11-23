@@ -7,7 +7,7 @@
 // Writes <outDir>/<mode>-<spot>.png and <outDir>/webgpu-diff.json, prints a markdown table.
 import http from 'node:http';import fs from 'node:fs/promises';import path from 'node:path';import {spawn} from 'node:child_process';import {fileURLToPath,pathToFileURL} from 'node:url';
 const ROOT=path.resolve(path.dirname(fileURLToPath(import.meta.url)),'..'),DIST=path.join(ROOT,'dist');
-const OUT=path.resolve(process.argv[2]||path.join(ROOT,'webgpu-diff-out'));const ALL={webgl:'',t5:'webgpu=1&direct=0',webgpu:'webgpu=1',gl2:'webgpu=1&webgl=1'};
+const OUT=path.resolve(process.argv[2]||path.join(ROOT,'webgpu-diff-out'));const ALL={webgl:'webgpu=0',t5:'webgpu=1&direct=0',webgpu:'webgpu=1',gl2:'webgpu=1&webgl=1'};
 const MODES=(process.argv[3]&&!process.argv[3].startsWith('--')?process.argv[3].split(','):Object.keys(ALL)).filter(m=>m in ALL);const PERF=process.argv.includes('--perf');
 if(!MODES.includes('webgl'))MODES.unshift('webgl');
 await fs.mkdir(OUT,{recursive:true});
@@ -53,16 +53,27 @@ async function browser(port,profile){
   for(let i=0;i<240;i++){if(await run(`!!window.__city&&!!document.getElementById('start')`)===true)return true;await sleep(500)}return false};
  return {run,shot,open,close,logs};
 }
+async function enterPlay(b){
+ await b.run("document.getElementById('start').click();true");
+ for(let i=0;i<120;i++){
+  if(await b.run("document.getElementById('welcome').hidden")===true)return;
+  await sleep(250);
+ }
+ throw new Error('Play did not open the world after shader warm-up');
+}
 const key=(b,code,down)=>b.run(`document.body.dispatchEvent(new KeyboardEvent('${down?'keydown':'keyup'}',{code:'${code}',key:'${code.slice(-1).toLowerCase()}',bubbles:true}));true`);
 async function runMode(mode,port){
  const b=await browser(port,path.join(OUT,'profile-'+mode)),save=(name,png)=>fs.writeFile(path.join(OUT,`${mode}-${name}.png`),Buffer.from(png,'base64'));
  const result={mode,query:ALL[mode],booted:await b.open(ALL[mode]),shots:{},spots:{},logs:b.logs};
- if(!result.booted){await b.close();return result}
+ try{
+ if(!result.booted)return result;
  await sleep(2500);result.shots.menu=await b.shot();await save('menu',result.shots.menu);
- await b.run(`document.getElementById('start').click();true`);await sleep(4000);
+ await enterPlay(b);await sleep(4000);
  result.backend=await b.run(`(()=>{const r=__city.renderer;return {isWebGPURenderer:!!r.isWebGPURenderer,backend:r.backend?(r.backend.isWebGPUBackend?'WebGPUBackend':(r.backend.isWebGLBackend?'WebGLBackend':'?')):'WebGLRenderer',direct:!!r.__directOutput,fps:__city.fps()}})()`);
+ const expected=mode==='webgl'?'WebGLRenderer':mode==='gl2'?'WebGLBackend':'WebGPUBackend';
+ if(result.backend?.backend!==expected)throw new Error('Expected '+expected+', got '+JSON.stringify(result.backend));
  for(const s of SPOTS){
-  if(s.fresh){await b.open(ALL[mode]);await sleep(2500);await b.run(`document.getElementById('start').click();true`);await sleep(4000)} // a new page: the earlier spots move the story and the depot vehicles
+  if(s.fresh){await b.open(ALL[mode]);await sleep(2500);await enterPlay(b);await sleep(4000)} // a new page: the earlier spots move the story and the depot vehicles
   await b.run(`__city.lookAt(${s.minutes??DAY});true`);
   if(s.shop){await b.run(`__city.place(${s.x},-6.2);__city.view(0,.35,6);true`);await sleep(800);await key(b,'KeyW',true);await sleep(2600);await key(b,'KeyW',false);await sleep(1800);result.spots[s.name]={inside:await b.run(`__city.shop||null`)}}
   else if(s.vehicle){await b.run(`__city.place(${s.x},${s.z});true`);await sleep(1500);const v=await b.run(`(()=>{const d=__city.driving;const ok=d.enter('${s.vehicle}');return {ok,driving:!!d.driving}})()`);await b.run(`__city.view(${s.yaw},${s.pitch},${s.zoom});true`);await sleep(3500);result.spots[s.name]={vehicle:v}}
@@ -72,9 +83,11 @@ async function runMode(mode,port){
  }
  result.cost=await b.run(`(()=>{const d=__city.renderer.__directOutput?.last,i=__city.renderer.info?.render;return {lastCalls:d?d.calls:null,infoNow:i?.drawCalls??i?.calls??null}})()`);
  await b.open(ALL[mode]);await sleep(2500);await b.run(`document.getElementById('customizeSaved')?.click();true`);await sleep(3500);result.shots.creator=await b.shot();await save('creator',result.shots.creator);
- if(PERF){await b.open([ALL[mode],'perf=1'].filter(Boolean).join('&'));await sleep(2000);await b.run(`document.getElementById('start').click();true`);await b.run(`__city.lookAt(${NIGHT});__city.place(-5,15);__city.view(2.2,.25,9);true`);
+ if(PERF){await b.open([ALL[mode],'perf=1'].filter(Boolean).join('&'));await sleep(2000);await enterPlay(b);await b.run(`__city.lookAt(${NIGHT});__city.place(-5,15);__city.view(2.2,.25,9);true`);
   for(let i=0;i<90;i++){await sleep(1000);const t=await b.run(`document.getElementById('perfProbe')?.textContent||''`);if(/click to measure again/.test(t)){result.perf=t;break}}}
- await b.close();return result;
+ }catch(error){result.error=error.message;result.shots={}}
+ finally{await b.close()}
+ return result;
 }
 const results={};let port=9480;for(const m of MODES)results[m]=await runMode(m,port++);
 // pixel diffs in a plain page of one more browser
@@ -88,5 +101,5 @@ await fs.writeFile(path.join(OUT,'webgpu-diff.json'),JSON.stringify({modes:MODES
 const others=MODES.filter(m=>m!=='webgl');
 console.log('| spot | '+others.map(m=>m+' mean / max / %>15').join(' | ')+' |');console.log('|---|'+others.map(()=>'---').join('|')+'|');
 for(const n of names)console.log(`| ${n} | `+others.map(m=>{const v=table[n][m];return v?`${v.mean} / ${v.max} / ${v.over15}%`:'n/a'}).join(' | ')+' |');
-for(const m of MODES){const r=results[m];console.log(`\n${m}: booted ${r.booted}, backend ${JSON.stringify(r.backend)}, spots ${JSON.stringify(r.spots)}, cost ${JSON.stringify(r.cost)}`);for(const l of r.logs.filter(l=>l.kind!=='log'||/perf/.test(l.text)).slice(0,25))console.log(`  [${l.kind}] ${l.text.replace(/\s+/g,' ').slice(0,300)}`);if(r.perf)console.log('  perf overlay:\n'+r.perf.split('\n').map(x=>'    '+x).join('\n'))}
-srv.close();process.exit(0);
+for(const m of MODES){const r=results[m];if(r.error)console.warn(`${m}: ${r.error}`);console.log(`\n${m}: booted ${r.booted}, backend ${JSON.stringify(r.backend)}, spots ${JSON.stringify(r.spots)}, cost ${JSON.stringify(r.cost)}`);for(const l of r.logs.filter(l=>l.kind!=='log'||/perf/.test(l.text)).slice(0,25))console.log(`  [${l.kind}] ${l.text.replace(/\s+/g,' ').slice(0,300)}`);if(r.perf)console.log('  perf overlay:\n'+r.perf.split('\n').map(x=>'    '+x).join('\n'))}
+srv.close();process.exit(Object.values(results).some(r=>!r.booted||r.error)?1:0);

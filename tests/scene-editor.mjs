@@ -53,7 +53,7 @@ const near=(a,b,eps=1e-6)=>Math.abs(a-b)<=eps;
 // ── The packaged game ──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
 assert.doesNotMatch(await readFile('dist/game.js','utf8'),/import[^;\n(]*scene-editor/,'game.js never imports the editor');assert.doesNotMatch(await readFile('dist/dev.js','utf8'),/^import[^(\n]*scene-editor/m,'dev.js loads it only with a dynamic import()');assert.match(await readFile('dist/dev.js','utf8'),/import\('\.\/scene-editor\.js'\)/);
 {
- const g=await bootGame({play:false}),{GameState:S}=g,me=S.me.position,canvas=g.ids.get('world'),body=document.body;
+ const g=await bootGame({play:false,devMode:true}),{GameState:S}=g,me=S.me.position,canvas=g.ids.get('world'),body=document.body;
  g.find('menuDev').click();assert(g.find('devOpenEditor'),'the Dev panel has Open Editor');assert.equal(g.find('devOpenEditor').textContent,'Open Editor');assert(g.find('devInteriorToggle'),'the Interior editor is still there');
  const SE=await import(pathToFileURL(join(g.dir,'scene-editor.js')).href);assert.equal(SE.getSceneEditor(),null,'not open yet');
  g.pump(.5);const spot={x:me.x,z:me.z,y:me.y},minutes0=S.progress.routine.minutes,fogFar=g.scene().fog.far;

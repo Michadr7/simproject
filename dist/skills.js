@@ -11,8 +11,10 @@ export function levelOf(xp){
 }
 export const freshSkills=()=>({lumberjack:{xp:0},hospitality:{xp:0}}); // diner D-A: hospitality is the diner career skill
 export function normalizeSkills(value){
- const xp=value?.lumberjack?.xp;
- const hx=value?.hospitality?.xp,ok=x=>Number.isSafeInteger(x)&&x>=0&&x<=1e7?x:0;return {lumberjack:{xp:ok(xp)},hospitality:{xp:ok(hx)}};
+ const xp=value?.lumberjack?.xp,hx=value?.hospitality?.xp,ok=x=>Number.isSafeInteger(x)&&x>=0&&x<=1e7?x:0;
+ const out={lumberjack:{xp:ok(xp)},hospitality:{xp:ok(hx)}};
+ for(const extra of ['welding','driving','fishing','hunting']){const ex=ok(value?.[extra]?.xp);if(ex>0)out[extra]={xp:ex}}
+ return out;
 }
 export function addXp(progress,skill,amount){
  const base=progress.skills[skill]?.xp||0,before=levelOf(base).level,xp=base+amount;

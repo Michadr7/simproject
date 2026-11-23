@@ -4,6 +4,7 @@
 //   plankDrops: [{id,x,z,count,q}] planks put down on the ground (q: quarter turns, 0..3), at most 12 stacks; they never expire and block like a low box.
 //   crateDrops: optional [{id,x,z,k:'crate'|'box',q}] crates and boxes put down on the ground (C-B), at most 12, same rules as plankDrops. slabDrops (T-E): optional [{id,x,z,q}] slabs on the ground, the same rules.
 // A log put into the saw counts as a stack on the belt at once (the cut animation is cosmetic), so a save or a reload mid-cut loses nothing.
+import {isBakeryGood} from './bakery-goods.js';
 import {MAX_LOGS,nextLogIdFor} from './grid.js';
 import {isWalkable} from './world.js';
 import {freshStats} from './skills.js';import {parcelHeld,PARCEL_HANDS,PARCEL_DEFAULT} from './gig-parcel.js';
@@ -11,9 +12,9 @@ import {freshStats} from './skills.js';import {parcelHeld,PARCEL_HANDS,PARCEL_DE
 export const BELT_SLOTS=4,PLANKS_PER_STACK=4,MAX_PLANK_DROPS=12;
 // What carrying does to the body: a log slows you to 80%, planks to 85%; no sprinting while carrying; stamina drains 1.5x (log) or 1.25x (planks). Dropped stacks never expire.
 // Cargo redesign (C-B): the ONE table of hands numbers per carry kind (cargo-items.js handsRule reads it): a crate walks at 60% (no sprint, 1.5x stamina), the parcel and a box at 90%.
-export const HANDS_SPEED=Object.freeze({log:.95,logs2:.9,trunk:.6,slab:.8,planks:.85,crate:.6,parcel:.9,box:.9}); // timber redesign T-A: one log 95%, two logs (carry {kind:'log',count:2}) 90%, a trunk 60%, a slab 80%
-export const HANDS_LOAD=Object.freeze({log:1.5,logs2:1.6,trunk:1.8,slab:1.3,planks:1.25,crate:1.5,parcel:1.1,box:1.1});
-export const CARRY_KINDS=Object.freeze(['log','trunk','slab','planks','crate','parcel','box']);
+export const HANDS_SPEED=Object.freeze({log:.95,logs2:.9,trunk:.6,slab:.8,planks:.85,crate:.6,sack:.6,parcel:.9,box:.9}); // timber redesign T-A: one log 95%, two logs (carry {kind:'log',count:2}) 90%, a trunk 60%, a slab 80%
+export const HANDS_LOAD=Object.freeze({log:1.5,logs2:1.6,trunk:1.8,slab:1.3,planks:1.25,crate:1.5,sack:1.5,parcel:1.1,box:1.1});
+export const CARRY_KINDS=Object.freeze(['log','trunk','slab','planks','crate','parcel','box','sack']);
 export const carryEffects=carry=>{const k=carry?.kind==='log'&&carry.count===2?'logs2':typeof carry?.kind==='string'&&carry.kind!=='logs2'&&Object.prototype.hasOwnProperty.call(HANDS_SPEED,carry.kind)?carry.kind:null;return k?{speed:HANDS_SPEED[k],sprint:false,load:HANDS_LOAD[k]}:{speed:1,sprint:true,load:1}};
 // Items lie on whatever they were put down on: the deck height under them (null on open ground) plus the item's own rest height.
 export const restHeight=(floor,base)=>(Number.isFinite(floor)?floor:0)+base;
@@ -41,6 +42,7 @@ export const normalizeCarry=v=>{
  if(v.kind==='log'&&v.count===2)return {kind:'log',count:2};
  if(v.kind==='log'||v.kind==='trunk'||v.kind==='slab'||v.kind==='crate'||v.kind==='box')return {kind:v.kind};
  if(v.kind==='planks')return Number.isSafeInteger(v.count)&&v.count>=1&&v.count<=PLANKS_PER_STACK?{kind:'planks',count:v.count}:null;
+ if(v.kind==='sack'&&isBakeryGood(v.good)&&Number.isSafeInteger(v.gig)&&v.gig>=1&&v.gig<=1e9)return {kind:'sack',good:v.good,gig:v.gig};
  if(v.kind==='parcel'&&Number.isSafeInteger(v.gig)&&v.gig>=1&&v.gig<=1e9)return {kind:'parcel',gig:v.gig,model:typeof v.model==='string'&&v.model&&v.model.length<=64?v.model:PARCEL_DEFAULT,...(v.large===true?{large:true}:{})};
  return null;
 };

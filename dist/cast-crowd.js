@@ -554,4 +554,29 @@ const SPECS=[
  }
 ];
 
-export const CROWD_CAST=Object.freeze(SPECS.map(makeCrowdCast));
+const downtownStaff=[
+ ['ironwood-arcade','Arthur Baptiste','Ironwood Arcade','attendant','The bus stop is on the west edge of the plaza.','I keep the arcade cabinets wiped down and the coin trays full.','Folks from Cedar Heights drop by after work for a high score.'],
+ ['ironwood-florist','Henry Keane','Ironwood Florist','florist','The shop fronts the sidewalk just south of the barber.','I cut the stems before they go into the buckets.','The barber likes the purple bunches.'],
+ ['ironwood-post-office','Samuel Abbott','Ironwood Post Office','postal clerk','The post office is on the corner north of Main Street.','I sort the outgoing envelopes apart from local letters.','People forget the return address more than the stamp.'],
+ ['alder-hardware','Mina Quinn','Alder Hardware','sales clerk','The hardware store is between the post office and the furniture showroom.','I count the small fasteners into paper bags.','A customer brought in a hinge older than the shop.'],
+ ['ironwood-furniture','Arthur Ferreira','Ironwood Furniture','sales clerk','You can reach the showroom from the east sidewalk on Ironwood Street.','I measure the doorway before promising a delivery.','Everyone asks about the chair they sat in first.'],
+ ['eden-ridge-gazette','Elliot Abbott','the Gazette','editor','The Gazette is the last building before River Street.','I check street names before sending the copy to print.','A reader sent in a sketch of the new crosswalks.'],
+ ['ironwood-town-hall','Leila Moreno','Ironwood Town Hall','town clerk','The town hall entrance faces River Street.','I file notices by street so they are easy to find.','The river walk has the best view of the old bridge.'],
+ ['ironwood-clinic','Greta Moreno','Ironwood Clinic','receptionist','The clinic is next to the town hall on River Street.','I keep the front desk and waiting room in order.','The River Street benches are a quiet place to sit.'],
+ ['ironwood-clothes','Naomi Lindqvist','Ironwood Clothes','sales clerk','The clothes shop is east of the clinic.','I keep spare hangers behind the counter.','Work jackets go out quicker than dress shirts.'],
+ ['ironwood-hotel','Clara Reyes','The Ironwood Hotel','receptionist','The hotel overlooks the north side of Town Square.','I keep the guest keys racked and the bell polished.','Visitors love watching the Town Square fountain from the front steps.']
+].map(([id,name,site,role,hint,workExtra,rumour])=>({
+ id,personId:'commuter:'+id,name,voice:`A downtown ${role} who knows ${site} and its sidewalk.`,
+ job:`I work at ${site} as a ${role}.`,home:`I commute in for my shifts at ${site}.`,hint,workExtra,rumour,
+ open:`Taking a short break from ${site}.`,door:`I'm just outside the door at ${site}.`,
+ morning:`I'm getting ${site} ready before it gets busy.`,afternoon:`The sidewalk by ${site} has been busy.`,
+ evening:`I'm making one last round near ${site}.`,night:`It's quiet by ${site}.`,
+ vest:`I see the Ridgeline crew pass ${site} sometimes.`,workVest:`We have a few regulars from the timber crew at ${site}.`,
+ rain:`Rain is dripping off the front of ${site}.`,storm:`The wind has picked up at ${site}.`,
+ snow:`The pavement outside ${site} is getting slippery.`,fog:`Hard to see past ${site} in this fog.`,
+ friend:`I hoped I'd see you near ${site}.`,close:`You know where to find me at ${site}.`,
+ byeRain:`watch the wet paving by ${site}.`,byeSnow:`take care on the walk outside ${site}.`,
+ byeFriend:`Come by ${site} again.`,byeDefault:`See you around ${site}.`
+}));
+
+export const CROWD_CAST=Object.freeze([...SPECS,...downtownStaff].map(makeCrowdCast));

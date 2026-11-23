@@ -3,8 +3,8 @@ import {skipStarter} from '../dist/starter.js'; // S-RESET: a save with progress
 import * as THREE from '../dist/vendor/three.module.js';
 // Exercise the real game startup and UI with a synthetic DOM and GPU-only renderer stub.
 import {mkdtemp,readFile,cp,rm} from 'node:fs/promises';
-import './support/unref-game-timers.mjs';import {talkOpen,talkName,talkText,talkReplies,reply,closeTalk} from './support/talk.mjs';import {writeMockRenderer} from './support/mock-renderer.mjs';import {tmpdir} from 'node:os';import {join} from 'node:path';import {pathToFileURL} from 'node:url';import assert from 'node:assert/strict';
-const html=await readFile('dist/index.html','utf8');
+import {spawnSync} from 'node:child_process';
+import './support/unref-game-timers.mjs';import {talkOpen,talkName,talkText,talkReplies,reply,closeTalk} from './support/talk.mjs';import {writeMockRenderer} from './support/mock-renderer.mjs';import {tmpdir} from 'node:os';import {join} from 'node:path';import {fileURLToPath,pathToFileURL} from 'node:url';import assert from 'node:assert/strict';
 class El extends EventTarget{
  constructor(tag='div'){super();this.tag=tag;this.hidden=false;this.value='';this.children=[];this.dataset={};this.style={setProperty(){}};this.classList={add(){},remove(){},toggle(){}};this.selectors=new Map()}
  append(...els){this.children.push(...els)}replaceChildren(...els){this.children=[...els]}setAttribute(k,v){this[k]=v}querySelector(s){if(!this.selectors.has(s))this.selectors.set(s,new El());return this.selectors.get(s)}focus(){}matches(s){return ['input','textarea','select'].includes(this.tag)}setCustomValidity(){}reportValidity(){}setPointerCapture(){}click(){this.onclick?.({preventDefault(){}})}
@@ -14,7 +14,19 @@ class El extends EventTarget{
  appendChild(el){if(el?.parentNode)el.remove();el.parentNode=this;this.children.push(el);return el}remove(){const p=this.parentNode;if(p){const i=p.children.indexOf(this);if(i>=0)p.children.splice(i,1)}this.parentNode=null}
  get ownerDocument(){return globalThis.document}get textContent(){return this._text}set textContent(v){this._text=v;this.children=[]}
 }
-for(const saved of [false,true]){
+const phase=process.argv[2];
+if(phase===undefined){
+ // A completed boot leaves game modules cached. Give each save its own process.
+ for(const save of ['fresh','existing']){
+  const result=spawnSync(process.execPath,[fileURLToPath(import.meta.url),save],{stdio:'inherit'});
+  if(result.error)throw result.error;
+  if(result.signal)throw new Error(`Startup (${save}) ended with ${result.signal}`);
+  if(result.status!==0){process.exitCode=result.status;break}
+ }
+}else{
+ assert(phase==='fresh'||phase==='existing',`Unknown startup phase: ${phase}`);
+ const saved=phase==='existing';
+ const html=await readFile('dist/index.html','utf8');
  const dir=await mkdtemp(join(tmpdir(),'city-startup-'));
  try{
  const release=html.match(/import\('\.\/(releases\/[^/]+)\/game\.js'/)[1];
@@ -62,10 +74,11 @@ for(const saved of [false,true]){
  assert(ids.get('menuHome').hidden===false,'the menu is back on its home panel for next time');
  if(saved){
  const pressE=()=>{const e=new Event('keydown');e.code='KeyE';win.dispatchEvent(e)},pressKey=code=>{const e=new Event('keydown',{cancelable:true});e.code=code;win.dispatchEvent(e)};let simTime=performance.now()+100;const pump=seconds=>{for(let i=0;i<seconds*25;i++){simTime+=40;nextFrame(simTime)}};
- assert(ids.get('welcome').hidden);assert.equal(ids.get('cash').textContent,'$112.00');pressE();assert(ids.get('dialogText').textContent.includes('Furnished studio'));ids.get('jobAction').click();pump(.1);assert.equal(ids.get('cash').textContent,'$22.00');
- const roomModule=await import(pathToFileURL(join(dir,'apartment.js')).href),person=globalThis.__renderScene.getObjectByName('player');
  const {GameState}=await import(pathToFileURL(join(dir,'state.js')).href);
- const go=(x,z)=>Object.assign(GameState.me.position,{x,y:.02,z});go(roomModule.BED.x,roomModule.BED.z);GameState.progress.life.energy=20;const sleepMinutes=GameState.progress.routine.minutes,sleepDay=GameState.progress.housing.day;pressE();ids.get('jobAction').click();pump(.1);assert(!ids.get('sleepFade').hidden);pump(1.4);assert(ids.get('sleepFade').hidden);assert.equal(GameState.progress.life.energy,100);assert.equal(GameState.progress.routine.minutes,sleepMinutes,'sleep does not advance clock');assert.equal(GameState.progress.housing.day,sleepDay);assert(ids.get('clockStatus').textContent.includes('Monday'));ids.get('billsButton').click();assert(ids.get('jobAction').hidden,'no bill before the weekly due day');ids.get('closeDialog').click();pump(.1);assert.equal(ids.get('cash').textContent,'$22.00');go(roomModule.EXIT.x,roomModule.EXIT.z);pressE();
+ const go=(x,z)=>Object.assign(GameState.me.position,{x,y:.02,z});
+ assert(ids.get('welcome').hidden);assert.equal(ids.get('cash').textContent,'$112.00');pressE();pump(.1);assert.equal(ids.get('locationName').textContent,'OAK STREET LOBBY');go(-3.2,-1.8);pressE();assert(talkOpen(ids)&&/Studio 2B/.test(talkText(ids)));reply(ids,/Rent Studio 2B/);pump(.1);assert.equal(ids.get('cash').textContent,'$22.00');
+ const roomModule=await import(pathToFileURL(join(dir,'apartment.js')).href),person=globalThis.__renderScene.getObjectByName('player');
+ go(roomModule.BED.x,roomModule.BED.z);GameState.progress.life.energy=20;const sleepMinutes=GameState.progress.routine.minutes,sleepDay=GameState.progress.housing.day;pressE();ids.get('jobAction').click();pump(.1);assert(!ids.get('sleepFade').hidden);pump(1.4);assert(ids.get('sleepFade').hidden);assert.equal(GameState.progress.life.energy,100);assert.equal(GameState.progress.routine.minutes,sleepMinutes,'sleep does not advance clock');assert.equal(GameState.progress.housing.day,sleepDay);assert(ids.get('clockStatus').textContent.includes('Monday'));ids.get('billsButton').click();assert(ids.get('jobAction').hidden,'no bill before the weekly due day');ids.get('closeDialog').click();pump(.1);assert.equal(ids.get('cash').textContent,'$22.00');go(roomModule.EXIT.x,roomModule.EXIT.z);pressE();pump(.8);go(0,5.6);pressE();pump(.1);
  // Doors only enter; work is offered by the clerk inside.
  // Shop doors slide open as you walk up and you walk through them: no E.
  const enter=x=>{go(x,-7.5);pump(1);go(x,-8.9);pump(2.5)},leave=()=>{go(0,3.9);pump(.4);pressE();pump(1);go(0,4.4);pump(2.5)}; // door cooldown is 1-2 s after using a door
@@ -92,9 +105,26 @@ for(const saved of [false,true]){
   enter(19);go(0,-2);doc.pointerLockElement=null;click('mousedown');click('mouseup');pump(.1);assert(ids.get('dialog').hidden&&!talkOpen(ids),'uncaptured click does not act');
   doc.pointerLockElement=ids.get('world');const down=click('mousedown');assert(down.defaultPrevented);pump(.1);assert(talkOpen(ids)&&talkName(ids)==='Noah','captured left click acts like E');click('mouseup');doc.pointerLockElement=null;
   assert(closeTalk(ids,pressKey));pump(.1);leave();assert.equal(ids.get('locationName').textContent,'WESTSIDE');}
- enter(36);assert.equal(ids.get('locationName').textContent,'ALDER COFFEE & DINER');go(0,-2);pressE();assert(talkOpen(ids)&&talkName(ids)==='Elena','Elena talks in the panel');reply(ids,/eat and drink/);reply(ids,/Yes, please/);pump(.1);assert.equal(ids.get('cash').textContent,'$12.00');assert(closeTalk(ids,pressKey));leave();go(1,-6.3);pressE();pump(.1);assert.equal(ids.get('locationName').textContent,'STUDIO 2B','rented home opens directly');go(3,-3.5);pressE();ids.get('jobAction').click();{const e=new Event('keydown',{cancelable:true});e.code='KeyI';e.repeat=false;win.dispatchEvent(e)}assert(ids.get('inventoryGroceries').textContent.startsWith('0 grocery packs'));ids.get('inventoryClose').click();
+ enter(36);assert.equal(ids.get('locationName').textContent,'ALDER COFFEE & DINER');
+ {go(-4.5,-7.2);pump(.8);const cCam=globalThis.__renderCamera.position;assert(cCam.z<-18.5&&cCam.x>=29.4&&cCam.x<=42.6&&cCam.z>=-22.9&&cCam.z<=-8.9,'cafe kitchen camera follows past partition inside cafe bounds');}
+ go(0,-2);pressE();assert(talkOpen(ids)&&talkName(ids)==='Elena','Elena talks in the panel');reply(ids,/eat and drink/);reply(ids,/Yes, please/);pump(.1);assert.equal(ids.get('cash').textContent,'$12.00');assert(closeTalk(ids,pressKey));leave();go(1,-6.3);pressE();pump(.1);assert.equal(ids.get('locationName').textContent,'OAK STREET LOBBY','entered Oak Street Lobby');go(2.8,-4.6);pressE();ids.get('jobAction').click();pump(.1);assert.equal(ids.get('locationName').textContent,'STUDIO 2B','elevator to Studio 2B');go(3,-3.5);pressE();ids.get('jobAction').click();{const e=new Event('keydown',{cancelable:true});e.code='KeyI';e.repeat=false;win.dispatchEvent(e)}assert(ids.get('inventoryGroceries').textContent.startsWith('0 grocery packs'));ids.get('inventoryClose').click();
  const wheel=new Event('wheel',{cancelable:true});wheel.deltaY=-400;wheel.deltaMode=0;ids.get('world').dispatchEvent(wheel);pump(4);assert(globalThis.__renderCamera.position.distanceTo(person.position)<5);
- go(roomModule.EXIT.x,roomModule.EXIT.z);pressE();enter(36);const shopRoot=globalThis.__renderScene.getObjectByName('cafe-interior');assert.equal(person.parent,shopRoot);assert(shopRoot.children.filter(m=>m.name==='storefront-glass').every(m=>m.material.transparent&&m.material.opacity<.2));
+ // Leaving Studio 2B returns to the lobby. Visit Floor 3 to knock on Noah (away) & Oscar (home, camera stays indoors).
+ go(roomModule.EXIT.x,roomModule.EXIT.z);pressE();pump(.8);assert.equal(ids.get('locationName').textContent,'OAK STREET LOBBY');
+ {const savedMin=GameState.progress.routine.minutes;GameState.progress.routine.minutes=630;
+  go(2.8,-4.6);pressE();ids.get('extraAction').click();ids.get('extraAction').click();pump(.1);assert.equal(ids.get('locationName').textContent,'OAK STREET · FLOOR 3','elevator rides to Floor 3 hallway');
+  go(0,-2.05);pressE();pump(.2);assert(talkOpen(ids)&&/There's nobody home/.test(talkText(ids)),'knocking while Noah is out says nobody home');assert(closeTalk(ids,pressKey));
+  go(4.2,-2.05);pressE();pump(.5);assert(talkOpen(ids)&&talkName(ids)==='Oscar Masic','knocking on Oscar when home opens #talk');
+  const cam=globalThis.__renderCamera.position;assert(Math.abs(cam.x-420)<=6.55&&Math.abs(cam.z-1260)<=2.9&&cam.y>=0.6&&cam.y<=3.2,'hallway talk camera stays inside walls');
+  assert(closeTalk(ids,pressKey));go(0,2.35);pressE();ids.get('jobAction').click();pump(.1);assert.equal(ids.get('locationName').textContent,'OAK STREET LOBBY','hallway elevator returns to Lobby');
+  GameState.progress.routine.minutes=savedMin;}
+ go(0,5.6);pressE();pump(.1);assert.equal(ids.get('locationName').textContent,'WESTSIDE');
+ {const extLobby=globalThis.__renderScene.getObjectByName('oak-lobby-exterior');assert(extLobby,'exterior Oak Street Apartments lobby bay exists');
+  const extGlass=extLobby.children.filter(m=>m.name==='lobby-storefront-glass');assert(extGlass.length===4&&extGlass.every(m=>m.material.transparent&&m.material.opacity<.35&&m.material.depthWrite===false),'exterior lobby glass is see-through');
+  const brickShells=[];globalThis.__renderScene.traverse(o=>{if(o.name==='oak-apt-brick')brickShells.push(o)});assert(brickShells.length>=4,'OAK STREET APARTMENTS brick shell leaves ground entrance open');}
+ enter(36);assert.equal(ids.get('locationName').textContent,'ALDER COFFEE & DINER');
+ const shopRoot=globalThis.__renderScene.getObjectByName('cafe-interior');assert(shopRoot&&person.parent===shopRoot,'the player is in the cafe interior');assert(shopRoot.children.filter(m=>m.name==='storefront-glass').every(m=>m.material.transparent&&m.material.opacity<.2));
+ {const cafeDoor=shopRoot.getObjectByName('cafe-exit-door'),mktDoor=globalThis.__renderScene.getObjectByName('market-exit-door');assert(cafeDoor?.visible&&mktDoor?.visible,'single exit/front door visible per shop');assert(!globalThis.__renderScene.children.some(c=>c.type==='Group'&&c.name!=='objective-beacon'&&(Math.hypot(c.position.x-36,c.position.z+8.46)<.2||Math.hypot(c.position.x-19,c.position.z+8.46)<.2)),'no duplicate exterior door group on street');}
  go(0,-2);pressE();reply(ids,/cafe work/);reply(ids,/I would like the job/);reply(ids,/Clock me in right now/);{const pr=JSON.parse(store.get('edenridge.profile.v1')).progress;assert(pr.careers.diner.hired&&pr.shift?.employer==='diner'&&pr.cafe===undefined,'hired and clocked in through the talk: '+talkText(ids))}assert(closeTalk(ids,pressKey));pump(10); // diner D-A2: the cafe shift is the diner career (tests/diner-game.mjs plays a whole shift); here: hire, clock in, clock out, paid by the hour
  {const cash=()=>Math.round(parseFloat(ids.get('cash').textContent.slice(1))*100),before=cash();go(0,-2);pressE();reply(ids,/cafe work/);reply(ids,/Clock me out/);pump(.1);const stub=JSON.parse(store.get('edenridge.profile.v1')).progress.payStubs[0];assert.equal(stub.employer,'diner');assert.equal(cash(),before+stub.total,'paid by the hour on site: '+JSON.stringify(stub));assert(closeTalk(ids,pressKey));pressE();reply(ids,/cafe work/);assert(!talkReplies(ids).some(l=>/Clock me out/.test(l)),'no second pay: '+talkReplies(ids).join(' | '));pump(.1);assert.equal(cash(),before+stub.total);assert(closeTalk(ids,pressKey))}
  }
@@ -205,12 +235,12 @@ for(const saved of [false,true]){
  const wasHidden=ids.get('objectiveDetails').hidden;key('KeyJ');assert.equal(ids.get('objectiveDetails').hidden,!wasHidden);key('KeyJ',true);assert.equal(ids.get('objectiveDetails').hidden,!wasHidden);key('KeyJ');assert.equal(ids.get('objectiveDetails').hidden,wasHidden);key('KeyT');assert.equal(ids.get('objectiveDetails').hidden,!wasHidden,'T also toggles the task panel');key('KeyT');assert.equal(ids.get('objectiveDetails').hidden,wasHidden);
  assert(!html.includes('inventoryShopItem'),'bag has no store controls');
  // Shop doors slide open as you walk up: leave through the front door, then walk into the market.
- if(saved){Object.assign(state.me.position,{x:0,y:.02,z:4.4});for(let i=0;i<300;i++)networkFrame()}
+ if(saved){Object.assign(state.me.position,{x:0,y:.02,z:4.4});for(let i=0;i<300;i++)networkFrame();assert.equal(globalThis.__renderScene.getObjectByName('cafe-exit-door')?.visible,true,'single storefront door remains visible after exiting cafe')}
  Object.assign(state.me.position,{x:19,y:.165,z:-7.5});for(let i=0;i<100;i++)networkFrame();Object.assign(state.me.position,{x:19,y:.165,z:-8.9});for(let i=0;i<300;i++)networkFrame();Object.assign(state.me.position,{x:0,y:.02,z:-2});key('KeyE');
  // Noah offers a short menu: browse the store or ask about jobs.
  assert(talkOpen(ids)&&talkName(ids)==='Noah','Noah talks in the panel');{const r=talkReplies(ids);assert(r.some(l=>/shelves/.test(l))&&r.some(l=>/browse items/.test(l))&&r.some(l=>/Any work going/.test(l)),'Noah offers the shelves, the store and work: '+r.join(' | '))}assert(ids.get('storeOverlay').hidden);reply(ids,/browse items/);assert(!ids.get('storeOverlay').hidden);
  const beforeBuy=state.progress.cash;const buyApple=ids.get('storeItems').children[0].children.at(-1);assert.equal(buyApple.id,'buy-apple');buyApple.click();assert.equal(state.progress.cash,beforeBuy-100);assert(ids.get('storeMessage').textContent.startsWith('✓'),'a purchase is confirmed in the pinned header');assert.equal(ids.get('storeMessage').dataset.kind,'ok');assert.equal(state.progress.inventory.slots[0].id,'apple');assert.equal(JSON.parse(store.get('edenridge.profile.v1')).progress.cash,beforeBuy-100);
- ids.get('storeFilter-drink').click();assert.equal(ids.get('storeItems').children.length,5);ids.get('storeClose').click();assert(ids.get('storeOverlay').hidden);
+ ids.get('storeFilter-drink').click();assert.equal(ids.get('storeItems').children.length,6);ids.get('storeClose').click();assert(ids.get('storeOverlay').hidden);
  key('KeyI');assert(!ids.get('inventoryOverlay').hidden);assert.equal(ids.get('inventoryGrid').children[0].children[1].textContent,'Apple');key('Escape');
  console.log(saved?'Existing save: gameplay, phone apps/controls/gigs, and multiplayer frame checks passed.':'Fresh save: creator, phone apps/controls/gigs, and multiplayer frame checks passed.');
  }finally{await rm(dir,{recursive:true,force:true})}

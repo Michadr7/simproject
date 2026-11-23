@@ -11,6 +11,7 @@ import {MAP} from './map-definition.js';
 import {doorOf,propertyById} from './properties.js';
 import {validColour,colourOf,coloursOf,defaultColour} from './paint.js';
 import {weekday} from './housing.js';
+import {HOTEL,hotelRoomHeld} from './hotel.js';
 import {formatClock} from './routine.js';
 
 export const STUDIO_ID='studio';
@@ -52,6 +53,7 @@ export function etaText(arrivesAt,now){
 export function homesHeld(p){
  const out=[];if(p.housing?.rented)out.push({id:STUDIO_ID,name:'Studio 2B',kind:'apartment'});
  for(const id of Object.keys(normalizeProperties(p.properties)))out.push({id,name:MAP.properties.find(q=>q.id===id)?.name||id,kind:'house'});
+ if(hotelRoomHeld(p))out.push({id:HOTEL.id,name:HOTEL.name,kind:'hotel'});
  return out;
 }
 export const holds=(p,id)=>homesHeld(p).some(h=>h.id===id);
@@ -60,6 +62,7 @@ export function mainHome(p){const held=homesHeld(p);if(!held.length)return null;
 // Where the parcel waits: a locker by the studio's entrance, or a box on the grass in front of a house's door, a little to one side of the path.
 export function dropSpot(id){
  if(id===STUDIO_ID)return {x:MAP.studio.x+2.6,z:MAP.studio.doorZ+1.1,kind:'locker',yaw:0};
+ if(id===HOTEL.id)return {...HOTEL.dropSpot};
  const property=propertyById(id),door=property&&doorOf(property);if(!door)return null;
  const sx=door.faceZ,sz=-door.faceX; // sideways along the wall
  return {x:+(door.x+door.faceX*2.4+sx*1.8).toFixed(2),z:+(door.z+door.faceZ*2.4+sz*1.8).toFixed(2),kind:'box',yaw:Math.atan2(door.faceX,door.faceZ)};
@@ -75,7 +78,7 @@ function normalizeLines(list,limit=MAX_UNITS){
 }
 export function normalizeOrders(value){
  const out=freshOrders();if(!value||typeof value!=='object')return out;
- if(typeof value.main==='string'&&(value.main===STUDIO_ID||MAP.properties.some(p=>p.id===value.main&&p.listing)))out.main=value.main;
+ if(typeof value.main==='string'&&(value.main===STUDIO_ID||value.main===HOTEL.id||MAP.properties.some(p=>p.id===value.main&&p.listing)))out.main=value.main;
  out.nextId=int(value.nextId,1,1e9,1);
  for(const o of (Array.isArray(value.queue)?value.queue:[]).slice(0,MAX_QUEUE)){
   const items=normalizeLines(o?.items),vehicle=typeof o?.vehicle==='string'&&VEHICLE_PRICE[o.vehicle]&&validColour(o.vehicle,o.colour)?o.vehicle:null;if((!items.length&&!vehicle)||typeof o.home!=='string'||!dropSpot(o.home))continue;
@@ -140,7 +143,7 @@ export function setMainHome(p,id){
  return {state:{...p,orders:{...orders,main:id}},message:`${homesHeld(p).find(h=>h.id===id).name} is now your main home. Orders go there.`};
 }
 // ── Vehicles ─────────────────────────────────────────────────────────────────────────────────────────────────
-const slotsOf=h=>h.kind==='apartment'?VEHICLE_SLOTS.apartment:VEHICLE_SLOTS[MAP.properties.find(q=>q.id===h.id)?.size]||1;
+const slotsOf=h=>h.kind==='apartment'||h.kind==='hotel'?VEHICLE_SLOTS.apartment:VEHICLE_SLOTS[MAP.properties.find(q=>q.id===h.id)?.size]||1;
 export const vehicleCapacity=p=>homesHeld(p).reduce((n,h)=>n+slotsOf(h),0);
 export const ownedVehicles=p=>p.vehicles||[];
 // The vehicles you own plus the ones on the way: both take a place.
@@ -197,6 +200,7 @@ export function grantVehicle(p,model,colour,pose,{price=0,loan=false,fuelMgal=nu
 // Where a delivered vehicle is aimed: a few metres in front of the home's door, facing along the street.
 export function parkingAim(home){
  if(!dropSpot(home))return null;if(home===STUDIO_ID)return {x:MAP.studio.x+8,z:MAP.studio.doorZ+9,yaw:Math.PI/2};
+ if(home===HOTEL.id)return {...HOTEL.parkBay};
  const park=MAP.reserved.find(r=>r.id===propertyById(home)?.plot)?.park;if(park)return {x:park.x,z:park.z,yaw:park.heading==='south'?0:Math.PI}; // the house's own driveway spot, nose toward the house
  const door=doorOf(propertyById(home));return {x:+(door.x+door.faceX*7).toFixed(2),z:+(door.z+door.faceZ*7).toFixed(2),yaw:Math.atan2(door.faceZ,-door.faceX)};
 }

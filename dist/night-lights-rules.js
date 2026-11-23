@@ -61,14 +61,14 @@ export function buildingKind(landmark,property=null,held=false){
  if(landmark?.decor)return null;
  if(prop.startsWith('house-'))return property&&property.owner===null&&!held?'vacant':'home';
  if(prop.startsWith('industrial-'))return landmark.id==='eastbank-gas-kiosk'?'always':'works';
- if(prop.startsWith('shop-')||prop==='store'){const type=property?.type;return type==='civic'?'always':type==='commercial'?'office':'shop'}
+ if(prop.startsWith('shop-')||prop.startsWith('downtown-')||prop==='store'){const type=property?.type;return type==='civic'?'always':type==='commercial'?'office':'shop'}
  return null;
 }
 // Which texels of a building's colour texture are window glass (sRGB bytes). The Kenney kits paint every window from one light-blue gradient strip of a small palette
 // texture (#cbe4fe at the top to #6c98db at the bottom; houses, shops and industrial units: measured, section 14); nothing else on those models uses it. The flat swatches
 // beside it (#d0e8ff, #6794d9) are not glass. The Store model has its own texture and is left dark for now.
 export const isGlass=(r,g,b)=>b>=215&&r>=105&&r<=206&&g>=150&&g<=230&&b-r>=48;
-export const GLASS_PROPS=prop=>/^(house|shop|industrial)-/.test(prop);
+export const GLASS_PROPS=prop=>/^(house|shop|industrial|downtown)-/.test(prop);
 // The emissive mask of a texture: rgba bytes in, rgba bytes out (white where the glass is, black elsewhere) and how many texels are glass.
 export function glassMaskBytes(rgba){const bytes=new Uint8Array(rgba.length);let count=0;for(let i=0;i+3<rgba.length;i+=4){const on=isGlass(rgba[i],rgba[i+1],rgba[i+2]);if(on)count++;bytes[i]=bytes[i+1]=bytes[i+2]=on?255:0;bytes[i+3]=255}return {bytes,count}}
 

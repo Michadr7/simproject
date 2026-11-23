@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import {makeSessionClock,GAME_MINUTES_PER_SECOND,CLOCK_INTERVAL_S,SNAP_GAME_MINUTES,MAX_CATCHUP_PER_S,validClock,absOf,dayMinute,canSync,syncAdvance,SYNC_WARNING} from '../dist/session-clock.js';
 import {GAME_MINUTES_PER_SECOND as POP_RATE} from '../dist/population.js';
-import {CLOCK_GAME_MINUTES_PER_SECOND,validClockMessage,createLobby} from '../dist/relay-protocol.js';
+import {CLOCK_GAME_MINUTES_PER_SECOND,validClockMessage,createLobby,PROTOCOL} from '../dist/relay-protocol.js';
 import {advanceTime,freshRoutine} from '../dist/routine.js';
 import {gameMinutes} from '../dist/gigs.js';
 
@@ -108,7 +108,7 @@ assert(/Crops will grow/.test(SYNC_WARNING)&&/rent/.test(SYNC_WARNING)&&/cat/.te
 {
  const out=[];let t=0;let n=0;
  const lobby=createLobby({send:(p,m)=>out.push([p,m]),close(){},newId:()=>'p'+(++n),now:()=>t});
- const hello={type:'hello',protocol:1,version:'0.35.9'};
+ const hello={type:'hello',protocol:PROTOCOL,version:'0.35.9'};
  lobby.join('A',hello);lobby.join('B',hello);
  assert.equal(lobby.host,'p1');
  assert.equal(out.find(([p,m])=>p==='A'&&m.type==='welcome')[1].host,'p1');assert.equal(out.find(([p,m])=>p==='B'&&m.type==='welcome')[1].host,'p1');

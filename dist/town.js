@@ -39,9 +39,16 @@ export function townSpots(){
  const T=terrain(),buildings=buildingRects(),crossings=crossingRects(),out={lamp:[],hydrant:[],bin:[],meter:[],bench:[],tree:[]},placed=[];
  const candidates=[];
  for(const kind of ORDER)for(const f of MAP.frontages){const every=f[kind];if(!every)continue;const [ax,az]=f.a,[bx,bz]=f.b,len=Math.hypot(bx-ax,bz-az),tx=(bx-ax)/len,tz=(bz-az)/len;
-  for(let d=f[kind+'At']??every/2;d<=len+1e-6;d+=every)candidates.push({kind,x:+(ax+tx*d).toFixed(2),z:+(az+tz*d).toFixed(2),face:f.face,frontage:f.id})}
+  for(let d=f[kind+'At']??every/2;d<=len+1e-6;d+=every)candidates.push({kind,x:+(ax+tx*d).toFixed(2),z:+(az+tz*d).toFixed(2),tx,tz,face:f.face,frontage:f.id})}
  const why=globalThis.process?.env?.DEBUG_TOWN?{}:null,drop=(c,r)=>{if(why){const k=c.kind+':'+c.frontage+':'+r;why[k]=(why[k]||0)+1}};
+ const lampBlocked=(x,z)=>buildings.some(b=>(Math.abs(x-b.cx)<1.8&&z>b.z0-2.2&&z<b.z1+2.2)||(Math.abs(z-b.cz)<1.8&&x>b.x0-2.2&&x<b.x1+2.2));
+ const freeSpot=(x,z,k)=>T.surfaceAt(x,z)===SURFACE.PAVEMENT&&!crossings.some(r=>x>r.x0&&x<r.x1&&z>r.z0&&z<r.z1)&&!buildings.some(b=>x>b.x0-(k==='bench'?0:.4)&&x<b.x1+(k==='bench'?0:.4)&&z>b.z0-(k==='bench'?0:.4)&&z<b.z1+(k==='bench'?0:.4))&&!placed.some(p=>Math.hypot(p.x-x,p.z-z)<MIN_GAP);
  for(const c of candidates){
+  if(c.kind==='lamp'&&lampBlocked(c.x,c.z)){
+   let moved=false;
+   for(const s of [-3,3,-2.5,2.5]){const nx=+(c.x+c.tx*s).toFixed(2),nz=+(c.z+c.tz*s).toFixed(2);if(freeSpot(nx,nz,'lamp')&&!lampBlocked(nx,nz)){c.x=nx;c.z=nz;moved=true;break}}
+   if(!moved){drop(c,'door');continue}
+  }
   if(T.surfaceAt(c.x,c.z)!==SURFACE.PAVEMENT){drop(c,'not-pavement@'+c.x+','+c.z);continue}
   if(crossings.some(r=>c.x>r.x0&&c.x<r.x1&&c.z>r.z0&&c.z<r.z1)){drop(c,'crossing');continue}
   if(buildings.some(b=>c.x>b.x0-(c.kind==='bench'?0:.4)&&c.x<b.x1+(c.kind==='bench'?0:.4)&&c.z>b.z0-(c.kind==='bench'?0:.4)&&c.z<b.z1+(c.kind==='bench'?0:.4))){drop(c,'building');continue}

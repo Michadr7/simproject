@@ -9,7 +9,7 @@ const fall={id:'t-fall',lip:{x:850,z:-900,y:20},drop:6,w:6,dir:[0,1],pool:{r:6}}
 const map={...MAP,water:{...MAP.water,lakes:[lake],falls:[fall]}};
 assert.deepEqual(validateMap(MAP),[],'the real map is valid');
 const win={x0:500,x1:900,z0:-950,z1:-420};
-const T=buildTerrain(map,{window:win}),P=buildTerrain(MAP,{window:win});
+const T=buildTerrain(map,{window:win}),P=buildTerrain({...MAP,water:{...MAP.water,lakes:[],falls:[]}},{window:win});
 
 // the lake: water and unwalkable inside the outline, walkable grass just outside it
 assert.equal(T.surfaceAt(660,-550),S.WATER);assert.ok(!T.walkable(660,-550),'the middle is not walkable');

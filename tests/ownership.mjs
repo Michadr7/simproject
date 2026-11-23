@@ -14,7 +14,7 @@ assert.equal(MAP.properties.filter(p=>p.listing).every(p=>p.owner===null),true,'
 // ── The save: schema 2, and an old save walks forward ─────────────────────────────────────────────────
 {const old=JSON.parse(readFileSync(new URL('./fixtures/save-schema-1.json',import.meta.url)));assert.equal(old.schema,undefined,'the fixture is from before the schema number');
  const s=normalizeProgress(old);assert.equal(s.schema,SCHEMA);assert.equal(SCHEMA,2);assert.deepEqual(s.properties,{});assert.deepEqual(s.homeNotices,[]);
- assert.equal(s.cash,12345);assert.equal(s.completed,3);assert.equal(s.housing.rented,true);assert.equal(s.housing.day,12);assert.equal(s.life.groceries,2,'everything that was there is kept');
+ assert.equal(s.cash,12345);assert.equal(s.completed,3);assert.equal(s.housing.rented,true);assert.equal(s.housing.day,12);assert.equal(s.life.groceries,0,'legacy groceries unpack into the studio fridge');assert.deepEqual(s.housing.fridge,[{id:'eggs',quantity:2},{id:'produce',quantity:2},{id:'cat-food',quantity:1}]);
  assert.deepEqual(normalizeProgress(JSON.parse(JSON.stringify(s))),s,'normalising twice changes nothing')}
 assert.equal(freshProgress().schema,2);assert.deepEqual(freshProgress().properties,{});
 // junk is cleaned: unknown homes, bad tenures, impossible numbers

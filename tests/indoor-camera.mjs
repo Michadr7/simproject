@@ -23,4 +23,17 @@ room.setFloor(1);assert(room.scene.getObjectByName('floor-1').visible&&room.scen
  assert(cam2.position.y<=bounds.maxY+1e-6&&cam2.position.y>=bounds.minY-1e-6,`camera Y clamped inside ceiling (${cam2.position.y.toFixed(3)})`);
  assert(cam2.position.z>=bounds.minZ-1e-6&&cam2.position.z<=bounds.maxZ+1e-6,`camera Z clamped inside walls (${cam2.position.z.toFixed(3)})`);
  assert(cam2.position.x>=bounds.minX-1e-6&&cam2.position.x<=bounds.maxX+1e-6,`camera X clamped inside walls (${cam2.position.x.toFixed(3)})`);}
-console.log('Indoor camera: the walls between the camera and you fade on the upper floor too, the far wall stays, and bounded shop rooms clamp inside walls and ceiling.');
+// Sub-room zones and partition fade (cafe kitchen/restroom)
+{const cam3=new THREE.PerspectiveCamera(),part=new THREE.Mesh(new THREE.BoxGeometry(6,3,.16),new THREE.MeshStandardMaterial({color:'#d6c7ac'}));
+ part.position.set(0,1.5,-5);part.userData.partition=true;
+ const bounds={minX:-6.57,maxX:6.57,minY:.35,maxY:3.05,minZ:-9.37,maxZ:4.57};
+ const zones=[{test:{minX:-7,maxX:7,minZ:-5,maxZ:5},clamp:{minX:-6.57,maxX:6.57,minY:.35,maxY:3.05,minZ:-4.72,maxZ:4.57}},{test:{minX:-7,maxX:2.6,minZ:-10,maxZ:-5},clamp:{minX:-6.57,maxX:2.28,minY:.35,maxY:3.05,minZ:-9.37,maxZ:-5.28}}];
+ const zUpdate=createIndoorCamera(cam3,[part],{bounds,zones,maxDistance:5.5,minDistance:2.2});
+ const p3={position:new THREE.Vector3(0,.02,-2)};for(let i=0;i<20;i++)zUpdate(p3,0,.4,5.5,.05);
+ assert(part.material.opacity>.9,'partition opaque from dining side');
+ p3.position.set(-4.5,.02,-7.2);
+ zUpdate(p3,0,.4,5.5,.05);
+ assert(part.material.opacity<.85,'partition begins fading immediately while camera crosses doorway');
+ for(let i=0;i<60;i++)zUpdate(p3,0,.4,5.5,.05);
+ assert(cam3.position.z<=-5.28+1e-5&&cam3.position.z>=-9.37-1e-5,`zone pulls camera into back kitchen (${cam3.position.z.toFixed(2)})`);}
+console.log('Indoor camera: the walls between the camera and you fade on the upper floor too, the far wall stays, bounded shop rooms clamp inside walls and ceiling, and sub-room zones enter back rooms.');

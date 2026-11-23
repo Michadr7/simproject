@@ -14,9 +14,9 @@ const map={...MAP,water:{...MAP.water,rivers:[river],bridges:[],fords:[],lakes:[
 assert.deepEqual(waterProblems(map),[],'the synthetic water is valid');
 const R=worldRange();let tests=0;const ok=(c,m)=>{assert(c,m);tests++};
 
-// The shipped map (R3b): the river and the sea are new-form water, so exactly the chunks the river or the sea touch have water, and none of the others (the old block north of the river, the wilds in the north and east).
+// The shipped map (B1): the river, sea, Blackstone Lake, stream and falls touch 65 chunks, and dry corners stay dry.
 {const wet=[];for(let j=R.j0;j<=R.j1;j++)for(let i=R.i0;i<=R.i1;i++)if(waterChunkData(MAP,i,j)!==null)wet.push(i+':'+j);
- ok(wet.length===54,'the shipped river and sea touch 54 chunks (R3b): '+wet.length);ok(wet.includes('4:10')&&wet.includes('5:16')&&wet.includes('9:7')&&wet.includes('1:12'),'the old reach, the estuary, the source and the south reach have water');ok(!wet.includes('0:0')&&!wet.includes('14:0')&&!wet.includes('12:7')&&!wet.includes('7:12'),'far corners, the Blackstone side and the old block south of the river stay dry')}
+ ok(wet.length===65,'the shipped river, sea, and Blackstone Lake/stream/falls touch 65 chunks: '+wet.length);ok(wet.includes('4:10')&&wet.includes('5:16')&&wet.includes('9:7')&&wet.includes('1:12')&&wet.includes('11:6'),'the old reach, the estuary, the source, the south reach, and Blackstone Lake have water');ok(!wet.includes('0:0')&&!wet.includes('14:0')&&!wet.includes('7:12'),'far corners and the old block south of the river stay dry')}
 
 // Every chunk of the synthetic world: attributes present and sane, nothing outside its chunk
 const tri={},kinds=new Set(),total={tri:0,verts:0},per=new Map();let maxTri=0,maxVerts=0,withWater=0,area=new Map();

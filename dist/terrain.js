@@ -135,8 +135,9 @@ export function validateTerrain(terrain,map=MAP){
   if(terrain.surface[c]===SURFACE.WATER||terrain.surface[c]===SURFACE.BANK)problems.push('walkable water at cell '+c)}
  map.zones.forEach((zone,k)=>{const [all,ok]=cells.get(k+1)||[0,0];if(!all)problems.push(`zone ${zone.id} has no walkable ground`);else if(ok<all)problems.push(`zone ${zone.id}: ${all-ok} of ${all} walkable cells cannot be reached from the spawn point`)});
  // relief: a hill and a 25 m margin around it must be open grass (no road, field, plot, water) outside every zone
+ const outer=map.world||map.ground;
  for(const h of map.relief?.hills||[]){let bad=0;for(let a=0;a<=1;a+=.05)for(let b=0;b<6.2832;b+=.35){const x=h.x+Math.cos(b)*(h.rx+25)*a,z=h.z+Math.sin(b)*(h.rz+25)*a;if(nearTrack(map,x,z))continue;if(x<map.playable.x0||x>map.playable.x1||z<map.playable.z0||z>map.playable.z1)continue;if(terrain.surfaceAt(x,z)!==SURFACE.GRASS||map.zones.some(q=>x>=q.bounds.x0-10&&x<=q.bounds.x1+10&&z>=q.bounds.z0-10&&z<=q.bounds.z1+10))bad++}
-  if(bad)problems.push(`hill ${h.id}: ${bad} sample points of it (or its 25 m margin) are not open grass`);if(h.x-h.rx<map.ground.x0||h.x+h.rx>map.ground.x1||h.z-h.rz<map.ground.z0||h.z+h.rz>map.ground.z1)problems.push(`hill ${h.id} leaves the ground`)}
+  if(bad)problems.push(`hill ${h.id}: ${bad} sample points of it (or its 25 m margin) are not open grass`);const insideOld=h.x>=map.ground.x0&&h.x<=map.ground.x1&&h.z>=map.ground.z0&&h.z<=map.ground.z1;if(insideOld?(h.x-h.rx<map.ground.x0||h.x+h.rx>map.ground.x1||h.z-h.rz<map.ground.z0||h.z+h.rz>map.ground.z1):(h.x<outer.x0||h.x>outer.x1||h.z<outer.z0||h.z>outer.z1))problems.push(`hill ${h.id} leaves the ground`)}
  return problems.slice(0,20);
 }
 

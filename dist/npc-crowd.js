@@ -23,7 +23,7 @@ export const PERSONAL_SPACE=1.1; // a person steps aside when the player is clos
 export const SEPARATION=.8;       // metres: two drawn people are never closer than this (drawing only: the plan does not change)
 export const REACH_REFRESH=1;   // seconds: how long a pacing reach (how far the street is clear) is trusted before it is measured again (a plank stack or a car can appear)
 const TURN_RATE=8;               // 1/s: how fast the heading eases to the path direction
-const HIDE_Y=-50;
+const HIDE_Y=-50, MINUTES_PER_DAY=1440;
 const wrap=a=>{while(a>Math.PI)a-=2*Math.PI;while(a<-Math.PI)a+=2*Math.PI;return a};
 
 export function createNpcCrowd({scene,createCharacter,outfit,population,schedule,pedestrians=[],blocked,cost=null,groundAt=null,map=MAP,radius=DRAW_RADIUS,pool=POOL,exclude=[],planOf=null,workProps=null,seed=map.seed}){
@@ -40,7 +40,7 @@ export function createNpcCrowd({scene,createCharacter,outfit,population,schedule
  const props={},propOf=(kind,role)=>{const k=role+'-'+kind;if(!props[k]){const o=workProps?.[kind]?.();if(!o)return null;o.name='worker-'+k;props[k]=o}return props[k]},chopAt=chopPose(0); // one per role and kind (at most 4: the cutter's axe, the hauler's log, the sawyer's log and planks)
  // a worker's hands, lean and prop from the pose; anything else (or a slot handed to someone else) is reset once
  function resetWork(e,avatar){if(!e.work)return;e.work=null;e.align=false;e.swingOn=false;avatar.clearReach();avatar.setLean(0);avatar.setTwoHanded(0);avatar.setCrouch(0);avatar.alignHeld(null);avatar.release();for(const k in props){const o=props[k];if(o.parent===avatar.group||o.parent===avatar.hand)o.removeFromParent()}}
- function workPose(e,avatar,p){
+ function workPose(e,avatar,p,minute){
   if(!p.phase){resetWork(e,avatar);return}
   const prop=p.prop||'none';
   if(e.work!==prop){resetWork(e,avatar);e.work=prop;const o=prop!=='none'&&propOf(prop,p.role);
@@ -50,7 +50,7 @@ export function createNpcCrowd({scene,createCharacter,outfit,population,schedule
   if(prop!=='axe'&&e.align){avatar.alignHeld(null);e.align=false}
   if(prop==='axe'){const swing=p.phase==='chop'||(p.phase==='buck'&&t<BUCK_CUT_END); // the trail carry between swings; chopPose hands it to both hands and back
    if(swing){const u=p.phase==='chop'?t:swingAt(t*FELLER_PHASE_MIN.buck*SECONDS_PER_MINUTE);
-    if(u>0&&!e.swingOn){e.swingOn=true;e.swingVar=chopVariant(Math.round((nowMinute*SECONDS_PER_MINUTE-u*SWING_SECONDS)/CHOP_BEAT_SECONDS),e.person.id,e.swingVar||undefined)}else if(u===0)e.swingOn=false; // logging polish: a variant per swing, latched at its start (from the clock: every co-op client agrees)
+    if(u>0&&!e.swingOn){e.swingOn=true;e.swingVar=chopVariant(Math.round((minute*SECONDS_PER_MINUTE-u*SWING_SECONDS)/CHOP_BEAT_SECONDS),e.person.id,e.swingVar||undefined)}else if(u===0)e.swingOn=false; // logging polish: a variant per swing, latched at its start (from the clock: every co-op client agrees)
     chopPose(u,chopAt,CARRY_GRIP,u>0?e.swingVar:null);avatar.reach('R',chopAt.point,1,CARRY_POLE);avatar.setTwoHanded(chopAt.twoHand);if(p.phase==='buck'){avatar.setLean(chopAt.lean+.25);avatar.setCrouch(.25+chopAt.crouch)}else{avatar.setLean(chopAt.lean);avatar.setCrouch(chopAt.crouch)}}
    else{avatar.reach('R',CARRY,1,CARRY_POLE);avatar.setTwoHanded(0);avatar.setLean(bend*.35)}
    const o=props[p.role+'-axe'],align=!swing||chopAt.align>.5;if(o?.children[0])o.children[0].position.z=-(swing?chopAt.grip:CARRY_GRIP); // the axe slides in the hand: choked up to carry, at the butt to swing
@@ -62,19 +62,19 @@ export function createNpcCrowd({scene,createCharacter,outfit,population,schedule
   else{avatar.clearReach();avatar.setLean(0)}
  }
  // W4 crew timber (forEachWork): the second log's spot while the first is carried, dropped at the deck and walked back from = the pose at the first pick-up (workforce-pose.js fellerPickMinute: the slot's legs last as long as their routes need).
- let nowDay=1,nowMinute=0;const LOOK={x:0,z:0,yaw:0,phase:null,tag:null,moving:false,speed:0,progress:0,prop:null,role:null,state:'',targetX:NaN,targetZ:NaN,trunkX:NaN,trunkZ:NaN,trunkYaw:NaN,groundLogs:0},DECK=SAWMILL_STATIONS.logDeck;
+ let worldAt=null;const LOOK={x:0,z:0,yaw:0,phase:null,tag:null,moving:false,speed:0,progress:0,prop:null,role:null,state:'',targetX:NaN,targetZ:NaN,trunkX:NaN,trunkZ:NaN,trunkYaw:NaN,groundLogs:0},DECK=SAWMILL_STATIONS.logDeck;
  const atTree=q=>(q.phase==='bend'||q.phase==='buck')&&Number.isFinite(q.targetX)&&!(q.x===DECK.x&&q.z===DECK.z);
  function workSpot(e,fn){const p=e.pose;if(!p.phase||(p.role!=='cutter'&&p.role!=='hauler'))return; // phase is null once the plan leaves work (role and trunk fields may be stale then)
   if(Number.isFinite(p.trunkX)){fn(p.trunkX,p.trunkZ,p.trunkYaw,true,0);return}
   const n=p.groundLogs|0;if(!n)return;let q=p;
-  if(!atTree(p)){workforcePose(LOOK,e.person,nowDay,fellerPickMinute(e.person,nowDay,nowMinute,ctx),ctx);if(!atTree(LOOK))return;q=LOOK}
+  if(!atTree(p)){const day=Math.floor(e.poseAt/MINUTES_PER_DAY),minute=e.poseAt%MINUTES_PER_DAY;workforcePose(LOOK,e.person,day,fellerPickMinute(e.person,day,minute,ctx),ctx);if(!atTree(LOOK))return;q=LOOK}
   fn(q.targetX,q.targetZ,q.yaw+Math.PI/2,false,n)}
  const named=new Map(pedestrians.map(p=>[p.name,p]));
- const entries=population.people.filter(p=>!exclude.includes(p.name)).map(person=>({person,named:named.get(person.name)||null,slot:null,shown:false,yaw:0,ox:0,oz:0,pose:{state:'hidden',x:0,z:0,yaw:NaN,moving:false,walked:0}}));
+ const entries=population.people.filter(p=>!exclude.includes(p.name)).map(person=>({person,named:named.get(person.name)||null,slot:null,shown:false,poseAt:0,posePlan:null,delayed:false,yaw:0,ox:0,oz:0,pose:{state:'hidden',x:0,z:0,yaw:NaN,moving:false,walked:0}}));
  for(const e of entries)if(e.named)e.named.group.visible=false; // the six start drawn at their old lanes (neighborhood.js); the plan decides when they appear, so nobody stands frozen outside while the schedule has them indoors
  const slots=[];for(let i=0;i<pool;i++){const avatar=createCharacter(outfit('male','Casual_2',{}));avatar.group.visible=false;avatar.group.position.y=HIDE_Y;scene.add(avatar.group);slots.push({avatar,owner:null,id:null})}
  const lookOf=person=>outfit(person.body,person.workOutfit||person.outfit,{skin:person.skin,hair:person.hair});
- function show(e,x,z,dt,player){
+ function show(e,x,z,dt,player,minute){
   const avatar=e.named||e.slot.avatar,g=avatar.group,p=e.pose;
   if(!e.shown){e.shown=true;e.ox=e.oz=0;g.visible=true;if(Number.isFinite(p.yaw))e.yaw=p.yaw;else if(!e.named)e.yaw=(e.person.id.length*1.7)%6.28}
   if((p.moving||p.phase)&&Number.isFinite(p.yaw))e.yaw+=wrap(p.yaw-e.yaw)*(1-Math.exp(-dt*TURN_RATE)); // W3: a worker at a station turns to face the trunk, deck or lever
@@ -88,10 +88,11 @@ export function createNpcCrowd({scene,createCharacter,outfit,population,schedule
   e.ox+=(wx-e.ox)*k;e.oz+=(wz-e.oz)*k;
   if(blocked&&(e.ox||e.oz)&&blocked(x+e.ox,z+e.oz)){e.ox=wx;e.oz=wz} // the eased offset can still sit in something: jump to the cleared target
   const px=x+e.ox,pz=z+e.oz;placedX.push(px);placedZ.push(pz);g.position.set(px,groundAt?groundAt(px,pz):.165,pz);g.rotation.y=e.yaw;
-  if(p.phase||e.work)workPose(e,avatar,p);
+  if(p.phase||e.work)workPose(e,avatar,p,minute);
   avatar.setMotion(p.moving?(p.speed||WALK_SPEED):0);avatar.update(dt);
  }
  function hide(e){
+  e.delayed=false;e.posePlan=null;
   if(e.named){e.named.group.visible=false;e.shown=false;return}
   if(e.slot){resetWork(e,e.slot.avatar);e.slot.avatar.group.visible=false;e.slot.avatar.group.position.y=HIDE_Y;e.slot.owner=null;e.slot=null}e.shown=false;
  }
@@ -99,21 +100,30 @@ export function createNpcCrowd({scene,createCharacter,outfit,population,schedule
   entries,slots,get routeCount(){return routes.size},routeNow,
   // N2: fill the route cache for every pair (npc-routes.js crowdWarm; opts {now,budgetMs,perStep,table}). Call job.step() each frame, or job.run() behind the loading screen. job.table holds the lengths for tripWithTable.
   warm:(pairs,opts)=>crowdWarm(pairs,routeNow,opts),
-  // time: {day, minute} from the game clock. Call once per frame while the player is outdoors.
-  update(dt,player,time){
-   clock+=dt;budget=ROUTES_PER_FRAME;hidden=false;placedX.length=0;placedZ.length=0;nowDay=time.day;nowMinute=time.minute;
+  // time is the town clock. Hold only the chosen visible avatar while the clock and other people keep moving.
+  update(dt,player,time,talkActor=null,talkSlotId=null){
+   clock+=dt;budget=ROUTES_PER_FRAME;hidden=false;placedX.length=0;placedZ.length=0;
+   const nextAt=time.day*MINUTES_PER_DAY+time.minute,elapsed=worldAt===null?0:Math.max(0,nextAt-worldAt);worldAt=nextAt;
+   const held=talkActor&&entries.find(e=>e.shown&&(e.named||e.slot?.avatar)?.group===talkActor&&(!talkSlotId||e.slot?.id===talkSlotId));
+   if(held){const avatar=held.named||held.slot.avatar;held.delayed=true;held.yaw=talkActor.rotation.y;placedX.push(talkActor.position.x);placedZ.push(talkActor.position.z);
+    resetWork(held,avatar);avatar.setMotion(0);avatar.update(dt)}
    let inUse=0;for(let i=0;i<slots.length;i++)if(slots[i].owner)inUse++;
    const cap=time.busy==null?slots.length:crowdPool(time.busy,slots.length); // N2: time.busy (busyness.js, 0..1) limits how many pool characters may be ADDED; people already drawn stay until they leave
    for(const e of entries){
-    const plan=planOf?planOf(e.person.id,time.day):schedule.planOf(e.person.id,time.day);if(!plan)continue;
-    ctx.starved=false;ctx.person=e.person;ctx.day=time.day;personPose(e.pose,plan,time.minute,ctx);
+    if(e===held)continue;
+    // Continue at the held route time. When the actor goes offscreen or indoors, the live schedule takes over again.
+    const at=e.delayed?Math.min(nextAt,e.poseAt+elapsed):nextAt,day=e.delayed?Math.floor(at/MINUTES_PER_DAY):time.day,minute=e.delayed?at%MINUTES_PER_DAY:time.minute;
+    const plan=e.delayed&&day===Math.floor(e.poseAt/MINUTES_PER_DAY)?e.posePlan:(planOf?planOf(e.person.id,day):schedule.planOf(e.person.id,day));
+    if(!plan){if(e.shown)hide(e);continue}
+    e.poseAt=at;e.posePlan=plan;
+    ctx.starved=false;ctx.person=e.person;ctx.day=day;personPose(e.pose,plan,minute,ctx);
     const p=e.pose;let want=false;
     if(p.state==='hidden'&&ctx.starved&&e.shown){p.state='stand';p.x=e.lx;p.z=e.lz;p.moving=false}
     if(p.state!=='hidden'){const d=Math.hypot(p.x-player.x,p.z-player.z);want=d<(e.shown?radius+DRAW_HYSTERESIS:radius)}
     if(!want){if(e.shown||e.slot)hide(e);continue}
     if(!e.named&&!e.slot){if(inUse>=cap)continue;let slot=null;for(let i=0;i<slots.length;i++)if(!slots[i].owner){slot=slots[i];break}if(!slot)continue;slot.owner=e;e.slot=slot;inUse++;
      if(slot.id!==e.person.id){slot.id=e.person.id;slot.avatar.apply(lookOf(e.person))}}
-    show(e,p.x,p.z,dt,player);e.lx=p.x;e.lz=p.z;
+    show(e,p.x,p.z,dt,player,minute);e.lx=p.x;e.lz=p.z;
    }
   },
   // The player is indoors or in a shop: nothing outside is drawn (and nothing is updated). Cheap to call every frame.

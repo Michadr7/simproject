@@ -61,7 +61,7 @@ const plain = new W.Mesh(new W.PlaneGeometry(), new W.MeshBasicNodeMaterial()); 
 scene.add(hidden, plain); const calls = [];
 const fresh = { render() {}, compileAsync: (o, cam, target) => { calls.push({ o, visible: o.visible, target }); return Promise.resolve(); } };
 const wd = installDirectOutputTSL({ THREE: W, TSL, renderer: fresh });
-assert.equal(wd.warmHidden(scene, {}), 1, 'one hidden twin'); assert.equal(calls[0].o, hidden); assert.equal(calls[0].visible, true); assert.equal(calls[0].target, scene); assert.equal(hidden.visible, false, 'hidden again');
+assert.equal((await wd.warmHidden(scene, {})).length, 1, 'one hidden twin finished warming'); assert.equal(calls[0].o, hidden); assert.equal(calls[0].visible, true); assert.equal(calls[0].target, scene); assert.equal(hidden.visible, false, 'hidden again');
 
 // 5. The numbers: one night pixel (lamp glow over dark ground) and one fogged pixel, WebGL formula vs the T5 linear pass. The direct path computes exactly the WebGL formula.
 const lv = x => Math.round(x * 255);

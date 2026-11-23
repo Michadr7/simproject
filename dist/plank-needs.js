@@ -1,4 +1,4 @@
-// plank-needs.js: town plank demand, the pure gig-board restock needs of the Eastbank Building Supplier, the bakery and the houses; implements P-E of notes/planks-economy-design.md (needs.js shape, no clock, no chance).
+// plank-needs.js: town plank demand, the pure gig-board restock needs of the Eastbank Building Supplier and the houses; implements P-E of notes/planks-economy-design.md (needs.js shape, no clock, no chance).
 // plankNeedsFrom(world,day,opts) returns ONLY the new plank needs to add (needs.js merges them): {id,kind:'restock',place,good:'planks',qty (whole stacks),openedDay,dueDay,unitCents (the world price),origin:the sawmill,status:'open'}.
 // Rules: a place under LOW_FRAC of its target asks for enough stacks to reach REFILL_FRAC; ids are stable (`restock|place|planks|day`); the Ridgeline pallet place is never asked (audit A F5); an unknown stock opens nothing.
 import {GOODS,PLACES,PALLET_LINK} from './world-goods.js';
@@ -12,7 +12,7 @@ export {PLANKS_PER_STACK,RESTOCK_CAP};
 const house=n=>[`property:house-r${n}`,Object.freeze({label:`House ${n}`,target:4,max:12})];
 // target = the stock that is "full" for the place, max = what it can hold. The supplier's numbers are world-goods.js (read live); the bakery and houses are placeholders (no stock exists for them in world-goods.js).
 export const DEMAND=Object.freeze({[SUPPLIER]:Object.freeze({label:'Eastbank Building Supplier',target:PLACES[SUPPLIER].goods.planks.target,max:PLACES[SUPPLIER].goods.planks.max}),
- 'property:alder-bakery':Object.freeze({label:'Ironwood Bakery',target:8,max:24}),...Object.fromEntries([1,2,3,4,5,6,7,8].map(house))});
+ ...Object.fromEntries([1,2,3,4,5,6,7,8].map(house))});
 
 const isInt=Number.isSafeInteger;
 const stacksOf=n=>Math.floor(n/PLANKS_PER_STACK);

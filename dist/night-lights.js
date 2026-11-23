@@ -41,11 +41,20 @@ function browserMask(src,done){
  image.src=src;
 }
 export function maskTexture(bytes,width,height){const t=new THREE.DataTexture(bytes,width,height,THREE.RGBAFormat);t.flipY=false;t.magFilter=t.minFilter=THREE.NearestFilter;t.generateMipmaps=false;t.needsUpdate=true;t.name='glass-mask';return t}
+function roughnessMaskTexture(emissiveTex){
+ const img=emissiveTex?.image,src=img?.data;
+ if(!src?.length||!img.width||!img.height)return null;
+ const bytes=new Uint8Array(src.length);
+ for(let i=0;i+3<src.length;i+=4){const v=src[i]>127?38:230;bytes[i]=bytes[i+1]=bytes[i+2]=v;bytes[i+3]=255}
+ const t=new THREE.DataTexture(bytes,img.width,img.height,THREE.RGBAFormat);
+ t.flipY=false;t.magFilter=t.minFilter=THREE.NearestFilter;t.generateMipmaps=false;t.needsUpdate=true;t.name='glass-roughness';
+ return t;
+}
 
 // scene: the world scene (the lamp heads 'street-lamp-heads' and the landmark meshes 'prop-<model>' are found in it by name: world.js is not changed).
 // footing(x, z): the ground height. cityWindows: [{mesh, id}] the old city's window boxes (game.js). cityLampHeads: the six hand-built Oak Street lamp heads (game.js).
 // makeMask(src, done): for tests; the default decodes the texture in the browser.
-export function createNightLights({scene,footing=()=>0,cityWindows=[],cityLampHeads=[],makeMask=browserMask}){
+export function createNightLights({scene,footing=()=>0,cityWindows=[],cityLampHeads=[],high=false,makeMask=browserMask}){
  const warm=new THREE.Color(LAMP.colour),m4=new THREE.Matrix4(),v=new THREE.Vector3(),v2=new THREE.Vector3();
  // ── Street lamps: where the heads are (read back from the instanced mesh world.js built) ──
  const heads=scene.getObjectByName('street-lamp-heads')||null,lamps=[];
@@ -88,10 +97,10 @@ export function createNightLights({scene,footing=()=>0,cityWindows=[],cityLampHe
   if(!material?.emissive)continue;
   const b={id:l.id,landmark:l,property:MAP.properties.find(p=>p.landmark===l.id)||null,material,ready:false,lit:false,kind:null};buildings.push(b);
   const src=propInfo(l.prop).texture;if(!src)continue;
-  if(!masks.has(src)){const entry={texture:null,users:[]};masks.set(src,entry);makeMask(src,texture=>{entry.texture=texture;for(const u of entry.users)attach(u,texture)})}
-  const entry=masks.get(src);if(entry.texture)attach(b,entry.texture);else entry.users.push(b);
+  if(!masks.has(src)){const entry={texture:null,roughness:null,users:[]};masks.set(src,entry);makeMask(src,texture=>{entry.texture=texture;entry.roughness=roughnessMaskTexture(texture);for(const u of entry.users)attach(u,texture,entry.roughness)})}
+  const entry=masks.get(src);if(entry.texture)attach(b,entry.texture,entry.roughness);else entry.users.push(b);
  }
- function attach(b,texture){b.material.emissiveMap=texture;b.material.emissive.set(WINDOW.colour);b.material.emissiveIntensity=0;b.material.needsUpdate=true;b.ready=true;stale=true} // the one recompile per building material, at load
+ function attach(b,texture,roughTex=roughnessMaskTexture(texture)){b.material.emissiveMap=texture;b.material.emissive.set(WINDOW.colour);b.material.emissiveIntensity=0;b.material.metalnessMap=texture;b.material.metalness=.35;if(roughTex){b.material.roughnessMap=roughTex;b.material.roughness=1}b.material.needsUpdate=true;b.ready=true;stale=true} // the one recompile per building material, at load
  // The old city: every window box is a flat of its own. Two shared materials, dark (as built) and lit; a window swaps between them.
  const cityDark=cityWindows[0]?.mesh.material||null,cityLit=cityDark?cityDark.clone():null;
  if(cityLit){cityLit.name='city-window-lit';cityLit.emissive=new THREE.Color(WINDOW.colour);cityLit.emissiveIntensity=0}
@@ -101,7 +110,7 @@ export function createNightLights({scene,footing=()=>0,cityWindows=[],cityLampHe
  const tracked=new Map(); // key -> {x, z, hold}: the vehicles that count as in use while they move
  function refreshWindows(minutes,held){
   litCount=0;
-  for(const b of buildings){b.kind=buildingKind(b.landmark,b.property,held.includes(b.id));b.lit=b.ready&&windowsLit(b.id,minutes,{kind:b.kind,dark});if(b.lit)litCount++}
+  for(const b of buildings){b.kind=buildingKind(b.landmark,b.property,held.includes(b.id));b.lit=b.ready&&windowsLit(b.id,minutes,{kind:b.kind,dark,hours:b.property?.exteriorDoor?b.property.hours:undefined});if(b.lit)litCount++}
   for(const f of flats){const lit=windowsLit(f.id,minutes,{kind:'home',dark});if(lit!==f.lit){f.lit=lit;f.mesh.material=lit?cityLit:cityDark}if(lit)litCount++}
  }
  // Lamp sprites and the beam of one vehicle, written into slot n. mesh: the vehicle's root (its matrix gives the pose, tilt included).
@@ -120,6 +129,9 @@ export function createNightLights({scene,footing=()=>0,cityWindows=[],cityLampHe
   spot.intensity=source?plan.intensity*scale:0;
   if(source){const hz=sizeOf(source.model).hz||2.2;source.mesh.updateMatrixWorld();spot.position.set(0,SPOT.height,hz).applyMatrix4(source.mesh.matrixWorld);spot.target.position.set(0,SPOT.height-SPOT.aimDrop,hz+SPOT.aimAhead).applyMatrix4(source.mesh.matrixWorld);spot.target.updateMatrixWorld()}
  }
+
+ function setHigh(on){if(on!==spotIn)setSpot({present:false,intensity:0},null,on)}
+ setHigh(high);
 
  // dt: seconds. sky: sky.state() (what skyAt returned for the picture). high: High quality. held: the ids of the homes the player rents or owns.
  // vehicles: [{key, mesh, model, use:'driver'|'moving'|'parked', mode, own}] the vehicles that may have lamps on: 'driver' is in use now (the player drives it),
@@ -156,5 +168,5 @@ export function createNightLights({scene,footing=()=>0,cityWindows=[],cityLampHe
  function state(){return {level,dark,scale,lamps:lamps.length,buildings:buildings.length,ready:buildings.filter(b=>b.ready).length,flats:flats.length,windowsLit:litCount,vehicleSprites,beams,spot:spotIn,spotIntensity:spotIn?spot.intensity:0,ownOn,drawCalls:(sprites.visible?1:0)+(ground.visible?1:0)}}
  // The dev panel's "Lights" slider: every glow times this (0.25 to 3); null puts 1 back.
  function tune(values={}){if('scale' in values)scale=values.scale===null?1:glowScale(values.scale);return {scale}}
- return {sprites,ground,buildings,flats,lamps,update,state,tune,tuning:()=>({scale}),get ownOn(){return ownOn}};
+ return {sprites,ground,buildings,flats,lamps,update,state,setHigh,tune,tuning:()=>({scale}),get ownOn(){return ownOn}};
 }

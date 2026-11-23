@@ -123,7 +123,8 @@ assert.equal(blobsShown({low:true,outdoors:false,opacity:.3}),false,'never in a 
 {const game=await readFile(new URL('../dist/game.js',import.meta.url),'utf8');
  assert(game.includes("import {createShadows} from './shadows.js'")&&game.includes('const shadows=createShadows({scene,renderer,sun,'),'game.js creates the shadows');
  assert(game.indexOf('shadows.update(')>game.indexOf('sky.update(GameState.progress.routine.minutes'),'and updates them after the sky has placed the light');
- assert(/function applyQuality\(value\)\{const high=value==='high';[^\n]*renderer\.shadowMap\.enabled=high;/.test(game),'Low still switches the shadow map off');
+ const quality=game.match(/function applyQuality\(value\)\{([\s\S]*?)\r?\n\}/)?.[1]||'';
+ assert(quality.includes("const high=value==='high'")&&quality.includes('renderer.shadowMap.enabled=high;'),'Low still switches the shadow map off');
  assert(game.includes('setShadows(on){renderer.shadowMap.enabled=!!on;'),'the dev panel\'s Shadows switch still works on the renderer');
  assert(game.includes('sun.shadow.mapSize.set(2048,2048)'),'one 2048 map')}
 

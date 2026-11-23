@@ -8,7 +8,7 @@ import {speedFactor,gripOf,rollDragOf,sinkOf,FIRM_BELOW} from './surface-table.j
 import {normalizeFuelMgal} from './fuel.js';
 import {validColour,defaultColour} from './paint.js';
 import {normalizeCargo} from './cargo.js';
-import {slopeOf,applySlope,slopeSteer} from './slope-rules.js';
+import {slopeOf,applySlope,slopeSteer,driftStep,DRIFT_YAW,DRIFT_SLIDE,DRIFT_SCRUB} from './slope-rules.js';
 
 export const PLAYER_RADIUS=.33; // what blocked() adds around every solid box: the hull points are inset by it, so the inflation lands exactly on the hull edge
 export const SAMPLE_GAP=.5; // metres between hull sample points (a 0.16 m sign post cannot slip between two: the gap must stay under 2 x 0.49 m)
@@ -117,12 +117,15 @@ export function stepVehicle(s,input,dt,cls,env){
  const sg=shoreGuard(s,v,cls,env);if(sg){const lim=SHORE_FLOOR+SHORE_K*sg.free;if(Math.abs(v)>lim)v=toward(v,Math.sign(v)*lim,SHORE_BRAKE*dt)} // RV1: soft turn-back from water and banks
  const want=clamp(sg?(input.steer||0)*(1-sg.c)+sg.turn*Math.min(1,.3+sg.c*2):(input.steer||0),-1,1),want0=sl?slopeSteer(want,sl):want,rate=(want0===0?1/.3:1/.4)*dt;let steer=toward(s.steer,want0,rate);
  // R(v) = max(Rmin, v^2 / aLat): fast corners are wider; yaw rate = steer x v / R (the sign of v makes reversing steer the right way round)
- const radius=Math.max(cls.rMin,v*v/(cls.aLat*grip)),yawRate=Math.abs(v)<.01?0:steer*v/radius;
- const yaw=s.yaw+yawRate*dt,mid=s.yaw+yawRate*dt/2,sd=sl?sl.slide:0,nx=s.x+sin(mid)*v*dt+cos(yaw)*sd*dt,nz=s.z+cos(mid)*v*dt-sin(yaw)*sd*dt; // A2: over 18 degrees of side slope the pose slides downhill (left = (cos yaw, -sin yaw))
- const next={x:nx,z:nz,yaw,speed:v,steer};
- if(poseFree(next,cls,env))return {state:next,hit:false,impact:0,hitKind:null};
+ const radius=Math.max(cls.rMin,v*v/(cls.aLat*grip));
+ const slip=cls.slope?driftStep({slip:s.slip||0,drift:!!input.drift,speed:v,steer,grip,dt}):0;
+ if(slip>0)v=toward(v,0,DRIFT_SCRUB*slip*dt);
+ const yawRate=Math.abs(v)<.01?0:steer*v/radius*(1+DRIFT_YAW*slip);
+ const yaw=s.yaw+yawRate*dt,mid=s.yaw+yawRate*dt/2,sd=(sl?sl.slide:0)-slip*steer*Math.sign(v)*DRIFT_SLIDE,nx=s.x+sin(mid)*v*dt+cos(yaw)*sd*dt,nz=s.z+cos(mid)*v*dt-sin(yaw)*sd*dt; // A2: over 18 degrees side slope slides downhill; hand-brake drift kicks tail out
+ const next=cls.slope?{x:nx,z:nz,yaw,speed:v,steer,slip}:{x:nx,z:nz,yaw,speed:v,steer};
+ if(poseFree(next,cls,env))return {state:next,hit:false,impact:0,hitKind:null,steep:!!sl?.steep};
  // Blocked (C1, collision feel): go as far as the hull can, then slide along whatever is there; never a gap over a few millimetres and no sticking.
- const L=Math.hypot(nx-s.x,nz-s.z),stop={state:{x:s.x,z:s.z,yaw:s.yaw,speed:0,steer},hit:true,impact:Math.abs(v),hitKind:hitKindOf(next,cls,env)};
+ const L=Math.hypot(nx-s.x,nz-s.z),stop={state:{x:s.x,z:s.z,yaw:s.yaw,speed:0,steer,...(cls.slope?{slip:0}:{})},hit:true,impact:Math.abs(v),hitKind:hitKindOf(next,cls,env),steep:!!sl?.steep};
  let from={x:s.x,z:s.z,yaw:s.yaw};
  if(!poseFree(from,cls,env)){const out=pushOut(from,cls,env,Math.atan2(nx-s.x,nz-s.z));if(!out)return stop;from=out} // already inside something (a prop placed later): ease out of it first
  const t=reach(from,next,cls,env),cur=lerpPose(from,next,t),rest=(1-t)*L,dir=Math.atan2(nx-s.x,nz-s.z),first=(input.steer||0)>=0?1:-1;

@@ -7,6 +7,11 @@ import { pathToFileURL } from 'node:url';
 
 const defaultThreeURL = pathToFileURL(resolve('dist/vendor/three.module.js')).href;
 
+// Synthetic frame pumps do not yield to the sawmill's asynchronous GLB decode.
+export async function waitForSawmill(scene) {
+ await scene.getObjectByName('prop-sawmill-v4').userData.ready;
+}
+
 export async function writeMockRenderer(dir, vendorThreeURL = defaultThreeURL, { backend = 'webgl', webgpuModule = null } = {}) {
  const gpuExpr = backend === 'auto' ? '!!globalThis.navigator?.gpu' : String(backend === 'webgpu');
  const rendererBody = `
@@ -79,7 +84,10 @@ export class WebGPURenderer {
   if (!this.initialized) throw new Error('WebGPURenderer: init() must be awaited before compute()');
  }
  get compile() { return undefined; } // the real WebGPURenderer has only compileAsync
- async compileAsync() { if (!this.initialized) throw new Error('WebGPURenderer: init() must be awaited before compileAsync()'); }
+ async compileAsync(...args) {
+  if (!this.initialized) throw new Error('WebGPURenderer: init() must be awaited before compileAsync()');
+  return globalThis.__mockCompileAsync?.(...args);
+ }
 }
 `, 'utf8');
 }

@@ -1,5 +1,5 @@
 import {mkdtemp,readFile,cp,rm} from 'node:fs/promises';
-import './support/unref-game-timers.mjs';import {writeMockRenderer} from './support/mock-renderer.mjs';import {tmpdir} from 'node:os';import {join} from 'node:path';import {pathToFileURL} from 'node:url';import assert from 'node:assert/strict';
+import './support/unref-game-timers.mjs';import {waitForSawmill,writeMockRenderer} from './support/mock-renderer.mjs';import {tmpdir} from 'node:os';import {join} from 'node:path';import {pathToFileURL} from 'node:url';import assert from 'node:assert/strict';
 import * as THREE from '../dist/vendor/three.module.js';
 
 // The carry as the player gets it: no debug hooks and no assignment to progress.carry. A log or a stack of planks is put on the ground, E is pressed beside it (the real interaction: candidates, the bend, the
@@ -24,6 +24,7 @@ try{
  let nextFrame;Object.assign(globalThis,{document:doc,window:win,localStorage:{getItem:k=>store.get(k)||null,setItem:(k,v)=>store.set(k,v)},innerWidth:1400,innerHeight:900,devicePixelRatio:1,requestAnimationFrame:fn=>{nextFrame=fn}});
  await import(pathToFileURL(join(dir,'game.js')).href);nextFrame(performance.now()+16);
  ids.get('start').click();assert(ids.get('welcome').hidden,'Play starts the game');
+ await waitForSawmill(globalThis.__renderScene);
  const {GameState}=await import(pathToFileURL(join(dir,'state.js')).href);
  let simTime=performance.now()+100;const frame=()=>{simTime+=40;nextFrame(simTime)},pump=s=>{for(let i=0;i<s*25;i++)frame()};
  const key=(code,type='keydown')=>{const e=new Event(type);e.code=code;win.dispatchEvent(e)};

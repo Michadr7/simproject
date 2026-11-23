@@ -28,7 +28,7 @@ if(!which){
   out.push(r.stdout.trim().split('\n').pop());
  }
  for(const line of out)console.log(line);
- console.log('PASS webgpu-flag: ?webgpu=0 = WebGLRenderer with no WebGPU/TSL download; no flag and ?webgpu=1 = WebGPURenderer (the 0.36.0 default), init awaited before the first render, '+TWINS.length+' TSL twins built, no GLSL patch left; &webgl=1 and no navigator.gpu = WebGL2 via WebGPU.');
+ console.log('PASS webgpu-flag: ?webgpu=0 = WebGLRenderer with no WebGPU/TSL download; no flag and ?webgpu=1 = WebGPURenderer (the 0.36.0 default), init awaited before the first render, world waits for visible and hidden shader warm-up with the High light installed, '+TWINS.length+' TSL twins built, no GLSL patch left; &webgl=1 and no navigator.gpu = WebGL2 via WebGPU.');
  process.exit(0);
 }
 
@@ -36,6 +36,12 @@ const c=CASES[which];assert(c,'unknown case '+which);
 const {bootGame}=await import('./support/boot-game.mjs');const {writeMockRenderer}=await import('./support/mock-renderer.mjs');
 globalThis.location={search:c.search,pathname:'/'}; // a real page always has a location (WebGPU is the default there); Node tests without one stay on WebGL
 if(c.gpu)Object.defineProperty(globalThis.navigator,'gpu',{value:{},configurable:true});
+const deferred=()=>{let finish;const promise=new Promise(resolve=>{finish=resolve});return {promise,finish}};
+const visibleWarm=deferred(),hiddenWarm=deferred(),compileCalls=[];
+globalThis.__mockCompileAsync=(object,camera,target)=>{
+ compileCalls.push({object,spot:(target||object).getObjectByName('player-headlight')});
+ return target?hiddenWarm.promise:visibleWarm.promise;
+};
 const g=await bootGame({play:false,editRelease:async dir=>{
  const v=join(dir,'vendor');
  // three.tsl.js: counted when loaded (the default path must never load it)
@@ -47,7 +53,20 @@ const g=await bootGame({play:false,editRelease:async dir=>{
 }});
 const mats=new Set(),points=[],collect=s=>s?.traverse(o=>{for(const m of [].concat(o.material||[]))mats.add(m);if(o.isPoints)points.push(o.name||'(points)')});
 g.pump(1);const menu=g.menuScene();assert(menu,'the live menu scene drew');collect(menu); // the menu scene is disposed at Play: read it first
-g.ids.get('start').click();g.pump(2);collect(g.scene());
+g.ids.get('start').click();
+if(which!=='off'){
+ assert(compileCalls.length>1&&compileCalls.every(c=>c.spot?.isSpotLight),'the stable High light is installed before visible and hidden world warm-up');
+ assert.equal(compileCalls[0].spot.intensity,0);
+ assert.equal(g.scene(),undefined,'the menu draws while the world is warming');
+ assert.equal(g.ids.get('welcome').hidden,false,'Play waits with the menu visible');
+ visibleWarm.finish();
+ await new Promise(resolve=>setImmediate(resolve));
+ g.pump(.2);
+ assert.equal(g.scene(),undefined,'visible compile alone does not release Play');
+ hiddenWarm.finish();
+ await new Promise(resolve=>setImmediate(resolve));
+}
+g.pump(2);collect(g.scene());
 const {tslUses}=await import(pathToFileURL(join(g.dir,'render-backend.js')).href);
 const uses=tslUses(),fps=g.ids.get('fps').textContent||'';
 const glsl=[...mats].filter(m=>m.isShaderMaterial||Object.hasOwn(m,'onBeforeCompile')).map(m=>m.name||m.type);

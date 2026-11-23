@@ -59,8 +59,8 @@ export function createDriving({scene,surface,footing,baseBlocked,saved=[]}){
  const byId=new Map(fleet.map(f=>[f.spec.id,f])),others=skip=>fleet.filter(f=>f!==skip&&f.present).map(f=>({state:f.state,cls:f.cls}));
  const slopeEnv=f=>{if(!f.cls.slope)return null;const s=f.state,sy=Math.sin(s.yaw),cy=Math.cos(s.yaw),at=(lx,lz)=>{const x=s.x+lx*cy+lz*sy,z=s.z-lx*sy+lz*cy,d=deckAt(x,z);return d!==null?d:heightAt(x,z)},L=f.cls.hz,W=f.cls.hx;return {grade:Math.atan2(at(0,L)-at(0,-L),2*L)*180/Math.PI,side:Math.atan2(at(-W,0)-at(W,0),2*W)*180/Math.PI}}; // A2 (slope-rules.js): grade = uphill along the heading, side = ground falling to the left, both in degrees; only for classes with slope:true
   const massDrag=(f,c)=>{if(!usesLoadDrag(f.spec.model))return c;const kg=cargoMassKg(f.cargo)+(f.stowKg||0);if(kg<=0)return c;const lf=loadFactor(kg),o=Object.assign(f.dragCls||(f.dragCls={}),c);o.top=Math.min(c.top,f.cls.top*lf);o.accel=Math.min(c.accel,f.cls.accel*lf);return o}; // ATV-STOW (load-drag.js): kg on the bed plus a stowed parcel slow top speed and acceleration; the stronger of this and withLoad wins, one reused object (no per-frame allocation)
-  const envFor=(f,people)=>({blocked:baseBlocked,surface,others:others(f),people,...slopeEnv(f)});
- let devCount=0,clock=0,events=[],driven=null,side='driver',lastHit=false,pulse=0,walker=null,pending=null,seatVec=new THREE.Vector3();
+  const envFor=(f,people)=>({blocked:baseBlocked,surface,others:others(f),people,wet:wetLevel,...slopeEnv(f)});
+ let devCount=0,clock=0,wetLevel=0,events=[],driven=null,side='driver',lastHit=false,pulse=0,walker=null,pending=null,seatVec=new THREE.Vector3();
  const nearPoint=(f,p,side,reach)=>loadPoints(f.spec.model).some(pt=>pt.side===side&&(()=>{const w=toWorld(f.state,pt.x,pt.z);return Math.hypot(w.x-p.x,w.z-p.z)<=reach})());
  // An owned vehicle comes into the world at its saved pose (or, if that has become blocked, the nearest clear one: never stuck, never lost). A display vehicle standing where it is (you bought it there) is taken off the lot.
  const slotOf=model=>MAP.vehicles.find(v=>v.model===model);
@@ -98,8 +98,8 @@ const tilt=f=>{const s=f.state,sy=Math.sin(s.yaw),cy=Math.cos(s.yaw),at=(lx,lz)=
   sprayWheels(sink,dt,{throttle=0,quality='high',calm=false}={}){const f=driven;if(!f||side!=='driver'||f.display||f.cls.group==='fork')return 0;const s=f.state,rear=f.wheels.filter(w=>!w.front);if(!rear.length)return 0;const k=2/rear.length,heading={dx:Math.sin(s.yaw),dz:Math.cos(s.yaw)};let n=0;
    rear.forEach((w,i)=>{const p=toWorld(s,w.pivot.position.x,w.pivot.position.z),sp=sprayOf({surface:surface(p.x,p.z),speed:s.speed,top:f.cls.top,throttle,stuck:f.bog.stuck,quality,calm});if(sp.dust>0||sp.mud>0)n+=sink.spray(f.spec.id+':'+i,dt,{x:p.x,y:footing(p.x,p.z)+.12,z:p.z},heading,s.speed,{dust:sp.dust*k,mud:sp.mud*k,drop:sp.drop*k,colour:sp.colour})});return n},
   // TR6: what the tyre sound needs, written into the reused object fx: surface under the vehicle, top speed, slip 0..1 and spin (the wheels turn on the spot: Stuck, or throttle held below 3 m/s).
-  tyreFx(fx,throttle=0){const f=driven;if(!f||side!=='driver'||f.display||f.cls.group==='fork'){fx.surface=0;fx.slip=0;fx.spin=false;return fx}const s=f.state,sf=surface(s.x,s.z),gr=gripOf(sf,f.cls.group),spin=f.bog.stuck||(throttle>=SPIN_THROTTLE&&Math.abs(s.speed)<SPIN_SPEED&&gr<.8); // spin on the spot only on loose ground
-   fx.surface=sf;fx.top=f.cls.top;fx.spin=spin;fx.slip=slipOf({speed:s.speed,top:f.cls.top,steer:s.steer,grip:gr,spin});return fx},
+  tyreFx(fx,throttle=0){const f=driven;if(!f||side!=='driver'||f.display||f.cls.group==='fork'){fx.surface=0;fx.slip=0;fx.spin=false;return fx}const s=f.state,sf=surface(s.x,s.z),gr=gripOf(sf,f.cls.group,wetLevel),spin=f.bog.stuck||(throttle>=SPIN_THROTTLE&&Math.abs(s.speed)<SPIN_SPEED&&gr<.8); // spin on the spot only on loose ground
+   fx.surface=sf;fx.top=f.cls.top;fx.spin=spin;fx.slip=Math.max(slipOf({speed:s.speed,top:f.cls.top,steer:s.steer,grip:gr,spin}),f.state.slip||0);return fx},
   fleet,byId,
   get active(){return driven},
   get seatSide(){return driven?side:null},
@@ -131,7 +131,7 @@ const tilt=f=>{const s=f.state,sy=Math.sin(s.yaw),cy=Math.cos(s.yaw),at=(lx,lz)=
   step(dt,input,people=[]){if(!driven||side!=='driver')return null;const f=driven,fuelled=!!f.spec.fuel;clock+=dt;
    const eng=engineStep(f.engine,{cond:f.cond,throttle:input.throttle||0,now:clock});f.engine=eng.engine;if(eng.event)events.push({type:eng.event,id:f.spec.id,seconds:eng.event==='crank'?+(f.engine.readyAt-clock).toFixed(2):0}); // stalled, cranking or wrecked: no throttle (the vehicle coasts to a stop; E always gets you out)
    const run=f.engine.mode==='run',load=loadOf(f.spec.model,f.cargo),hurt=withDamage(massDrag(f,withLoad(f.cls,load)),f.cond),k=topFactor(f.bog),dmg=k<1?{...hurt,top:hurt.top*k,reverse:hurt.reverse*k}:hurt,cut=!run||(fuelled&&f.fuelMgal<=0), // an empty tank: no throttle too
-    inp={...input,throttle:cut?0:input.throttle,steer:pulledSteer(input.steer,dmg.pull,f.pullSide,f.state.speed)},before=f.state,b=stepBog(f.bog,{throttle:inp.throttle,speed:f.state.speed,surface:surface(f.state.x,f.state.z),group:f.cls.group,load,dt,bogMul:f.cls.bogMul}),r=stepVehicle(f.state,inp,dt,dmg,envFor(f,people));f.bog=b;if(b.event)events.push({type:b.event==='stuck'?'bog':'unbog',id:f.spec.id});f.state=r.state;lastHit=r.hit; // TR4: the bog meter (surface-table.js) reads the state before the step; Stuck scales the top speed (eased) inside the step
+    inp={...input,throttle:cut?0:input.throttle,steer:pulledSteer(input.steer,dmg.pull,f.pullSide,f.state.speed)},before=f.state,b=stepBog(f.bog,{throttle:inp.throttle,speed:f.state.speed,surface:surface(f.state.x,f.state.z),group:f.cls.group,load,dt,bogMul:f.cls.bogMul,wet:wetLevel}),r=stepVehicle(f.state,inp,dt,dmg,envFor(f,people));f.bog=b;if(b.event)events.push({type:b.event==='stuck'?'bog':'unbog',id:f.spec.id});if(r.steep&&inp.throttle>0)events.push({type:'steep',id:f.spec.id});f.state=r.state;lastHit=r.hit; // TR4: the bog meter (surface-table.js) reads the state before the step; Stuck scales the top speed (eased) inside the step
    if(r.hit)crash(f,r,before.speed);
    if(fuelled){f.burn+=burnMgal(Math.hypot(r.state.x-before.x,r.state.z-before.z),f.cls.gallonsPerMile*(1+.3*load)*(run?dmg.burnMul??1:0));const whole=Math.floor(f.burn);f.burn-=whole;f.fuelMgal=Math.max(0,f.fuelMgal-whole)}
    return r},
@@ -197,6 +197,8 @@ const tilt=f=>{const s=f.state,sy=Math.sin(s.yaw),cy=Math.cos(s.yaw),at=(lx,lz)=
   // where a vehicle's filler cap is on the ground (for the prompt and the glow)
   fillerPoint(id){const f=byId.get(id);return f&&f.spec.fuel?toWorld(f.state,f.spec.fuel.port.x,f.spec.fuel.port.z):null},
   setFuel(id,mgal){const f=byId.get(id);if(f&&f.spec.fuel)f.fuelMgal=Math.max(0,Math.min(f.spec.fuel.tankMgal,Math.round(mgal)))},  // Put a vehicle back in its bay (a debug aid and the last resort).
-  sendHome(id){const f=byId.get(id);if(f&&f!==driven)f.state=freshVehicle(f.spec.home)}
+  sendHome(id){const f=byId.get(id);if(f&&f!==driven)f.state=freshVehicle(f.spec.home)},
+  setWet(v){wetLevel=Math.max(0,Math.min(1,Number.isFinite(v)?v:0))},
+  get wet(){return wetLevel}
  };
 }

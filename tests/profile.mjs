@@ -3,7 +3,7 @@ import {loadProfile,saveProfile} from '../dist/profile.js';
 import {GameState,initializeState} from '../dist/state.js';
 const entries=new Map([['edenridge.progress.v1',JSON.stringify({version:1,progress:{cash:1234,completed:2,position:{x:3,z:5},life:{food:75,energy:60,groceries:3}}})]]);
 globalThis.localStorage={getItem:k=>entries.get(k),setItem:(k,v)=>entries.set(k,v)};
-const profile=loadProfile();assert(profile.playerId);assert.equal(profile.progress.cash,1234);assert.equal(profile.progress.life.groceries,3);
+const profile=loadProfile();assert(profile.playerId);assert.equal(profile.progress.cash,1234);assert.equal(profile.progress.life.groceries,0);assert.deepEqual(profile.progress.inventory.slots,[{id:'eggs',quantity:3},{id:'produce',quantity:3},{id:'cat-food',quantity:1}]);
 assert.equal(loadProfile().playerId,profile.playerId);initializeState(profile);
 GameState.progress={...GameState.progress,cash:4567};
 assert(saveProfile({playerId:GameState.me.id,name:'Test',progress:GameState.progress}));

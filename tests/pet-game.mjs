@@ -4,7 +4,7 @@ import {bootGame} from './support/boot-game.mjs';
 import {MSG,NAME_MAX,PET_COOLDOWN} from '../dist/pets.js';
 import {applyPetSnapshot} from '../dist/pet-view.js';
 import {normalizeProgress} from '../dist/jobs.js';
-import {createLobby} from '../dist/relay-protocol.js';
+import {createLobby,hello} from '../dist/relay-protocol.js';
 import {CAT_FILES} from '../dist/cat-sounds.js';
 import {ALL_FILES} from '../dist/vehicle-sounds.js';
 import {MAP} from '../dist/map-definition.js';
@@ -22,7 +22,7 @@ try{
  assert(!p().messages.some(m=>m.text.includes(MSG.offer)),'not at once: an hour after moving in');
  GameState.progress={...p(),routine:{...p().routine,minutes:p().routine.minutes+61}};pump(5);
  assert(!p().messages.some(m=>m.text.includes(MSG.offer)),'not while you are out');
- pressE();pump(5);assert.equal(ids.get('locationName').textContent,'STUDIO 2B','inside the studio');
+ pressE();pump(1);assert.equal(ids.get('locationName').textContent,'OAK STREET LOBBY','in the lobby');GameState.me.position.x=2.8;GameState.me.position.z=-4.6;pump(.2);pressE();ids.get('jobAction').click();pump(5);assert.equal(ids.get('locationName').textContent,'STUDIO 2B','inside the studio');
  assert.equal(p().messages.filter(m=>m.app==='homes'&&m.text.includes(MSG.offer)).length,1,'the shelter texts');
  assert.equal(ids.get('dialog').hidden,false,'the offer opens at home');assert.match(ids.get('dialogTitle').textContent,/cat/i);assert.equal(ids.get('extraAction').textContent,'No thanks');
  const input=created.find(e=>e.id==='petName');assert(input&&input.tag==='input','the name box');assert.equal(input.maxLength,NAME_MAX);
@@ -68,7 +68,7 @@ try{
 
 // Co-op: the relay passes a cat snapshot on with the position, cleaned, and drops junk (old clients without one see nothing new)
 {let t=0,n=0;const sent=[];const lobby=createLobby({send:(peer,m)=>sent.push([peer,m]),close(){},newId:()=>'p'+(++n),now:()=>t});
- lobby.receive('a',JSON.stringify({type:'hello',protocol:1}));lobby.receive('b',JSON.stringify({type:'hello',protocol:1}));
+ lobby.receive('a',JSON.stringify(hello()));lobby.receive('b',JSON.stringify(hello()));
  const move=pet=>{t+=1000;lobby.receive('a',JSON.stringify({type:'position',position:{x:1,y:0,z:2},room:'home',...(pet===undefined?{}:{pet})}));return sent.filter(([peer,m])=>peer==='b'&&m.type==='playerMoved').at(-1)[1]};
  const ok=move({name:'Mochi',homeId:'studio',clip:'walk',x:1.23456,z:-2,yaw:7});assert.deepEqual(ok.pet,{name:'Mochi',homeId:'studio',clip:'walk',x:1.235,z:-2,yaw:applyPetSnapshot({name:'M',homeId:'h',clip:'idle',x:0,z:0,yaw:7}).yaw});
  assert.equal('pet' in move(undefined),false,'no cat: no field');

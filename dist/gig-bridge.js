@@ -2,6 +2,7 @@
 // game.js, phone.js and objective.js keep calling acceptContract, tickContract, completeContract, availableContracts and gigTarget; the new
 // rules live in gigs.js. progress.gigs.active is the truth; progress.activeJob is a derived VIEW of it (title, stage, locations), rebuilt after every change here.
 // The board is derived from counters, so refreshGigBoard has nothing to do. Walking types only: the vehicle types wait for the vehicle work.
+import {isBakeryGood,GOODS as BAKERY_GOODS} from './bakery-goods.js';
 import {dropParcel,pickParcel} from './gig-parcel.js';import {PARCEL_PIECES_ENABLED,removeParcelPieces,fromLegacyParcel,toLegacyCarry} from './cargo-items.js';import {boardFor,acceptGig,tickGig,completeGig,gigDone,typeById,payFor,doneTodayOf,noMoreWork,NO_MORE_WORK,townContext,gameMinutes,GIG_TYPES,BOARD_SLOTS,parRoute,doorChoices,doorHint,pickNeedHaul,deliverHaul,abandonGig,settleNeed,slotOffer,needOf,needReward,needsPickup,NO_WORK_POSTED,hasCrateBed,atPickup,pickedUp,pickUpGig} from './gigs.js';
 export {NO_WORK_POSTED,hasCrateBed};
 export {gameMinutes};
@@ -14,15 +15,17 @@ export const atGigPoint=(position,room,point)=>room===point.room&&Math.hypot(pos
 export function activeView(p){
  const a=p.gigs?.active;if(!a)return null;const t=typeById(a.type),done=gigDone(p),next=a.places.find((_,i)=>!a.visited[i])||a.places.at(-1);
  const last=a.places.at(-1),now=gameMinutes(p);
+ const bakery=a.needId&&isBakeryGood(a.needGood);
+ const bakeryText=bakery?(a.haul>0?' Deliver the '+BAKERY_GOODS[a.needGood].label.toLowerCase()+' to Ironwood Bakery.':a.mode==='vehicle'?' Park at Eden Wholesale’s dock and load the pallet.':' Pick up a sack at Eden Wholesale.'):'';
  const need=!!a.needId,pick=needsPickup(a),boxWaits=!need&&!pickedUp(a); // G-D: boxWaits = the parcel is still at the pickup point; the marker leads there first and the text says so. // W-D2: a need gig reads its own title and text, pays by needPay, and its marker leads to the farm pile until the crates are on the truck
- return {id:'gig-'+a.id,type:a.type,title:need?(a.needTitle||t.title):`${t.title} for ${nameOf(a.client)}`,description:need?(a.needText||'')+(pick?(a.needGood==='planks'?' Load the planks at the sawmill (E), then deliver them.':' Load the crates at the pile (E), then bring them to the market door.'):a.haul>0?(a.needGood==='planks'?' Planks loaded: deliver them.':' Crates loaded: take them to the market door.'):''):(boxWaits?`Pick up the parcel at ${a.origin.name||'the pickup point'}. Then `+stopsText(a.places).replace(/^Go/,'go'):stopsText(a.places))+' '+t.twist+'.'+doorHint(a.type,a.client,nameOf(a.client)),reward:need?(needOf(p,a)?needReward(p,needOf(p,a),a.mode,a.parM,now):a.needReward||0):payFor(a.type,100,doneTodayOf(p.gigs,now),p.gigs.rep,0,a.large,a.origin?a.parM:null,a.starter),mode:'delivery',
+ return {id:'gig-'+a.id,type:a.type,title:need?(a.needTitle||t.title):`${t.title} for ${nameOf(a.client)}`,description:need?(a.needText||'')+(bakeryText||(pick?(a.needGood==='planks'?' Load the planks at the sawmill (E), then deliver them.':' Load the crates at the pile (E), then bring them to the market door.'):a.haul>0?(a.needGood==='planks'?' Planks loaded: deliver them.':' Crates loaded: take them to the market door.'):'') ):(boxWaits?`Pick up the parcel at ${a.origin.name||'the pickup point'}. Then `+stopsText(a.places).replace(/^Go/,'go'):stopsText(a.places))+' '+t.twist+'.'+doorHint(a.type,a.client,nameOf(a.client)),reward:need?(needOf(p,a)?needReward(p,needOf(p,a),a.mode,a.parM,now):a.needReward||0):payFor(a.type,100,doneTodayOf(p.gigs,now),p.gigs.rep,0,a.large,a.origin?a.parM:null,a.starter),mode:'delivery',
   stage:done?'return':a.visited.some(Boolean)?'task':'travel',location:pick||boxWaits?point(a.origin):point(next),pickup:boxWaits,pickupName:boxWaits?(a.origin.name||''):'',taskLocation:point(next),returnLocation:point(last),kind:a.type,stops:a.places.length,left:a.places.length-a.visited.filter(Boolean).length,done:a.visited.filter(Boolean).length,dueAt:a.dueAt,dropped:!!a.drop};
 }
 const withView=p=>({...p,activeJob:activeView(p)});
 // What the board slot offers (the phone card reads title, description, reward, terms).
 function offer(p,s){
  const t=typeById(s.type),now=gameMinutes(p),large=s.large;
- if(s.needId){const o=slotOffer(p,s,now);return {id:slotId(s.slot),title:s.title,description:s.description,reward:o.reward,terms:o.terms,mode:'delivery',blocked:s.blocked||''}} // W-D2: a world need
+ if(s.needId){const o=slotOffer(p,s,now);return {id:slotId(s.slot),needId:s.needId,title:s.title,description:s.description,reward:o.reward,terms:o.terms,mode:'delivery',blocked:s.blocked||''}} // W-D2: a world need
  return {id:slotId(s.slot),title:`${t.title} for ${s.clientName||nameOf(s.client)}`,description:stopsText(s.places)+' '+t.twist+'.'+doorHint(s.type,s.client,s.clientName||nameOf(s.client)),reward:payFor(s.type,100,doneTodayOf(p.gigs,now),p.gigs.rep,0,large,s.parM,s.starter),terms:t.limit?`${t.limit} min limit`:'No time limit',mode:'delivery'};
 }
 // Walking types only, until the vehicle gigs have their cargo and knock code.
@@ -37,7 +40,9 @@ export const refreshGigBoard=progress=>progress;
 export const starterGigBeat=p=>{const s=p?.starter;return !!s&&!s.done&&(s.step===6||s.step===7)&&!s.gigDone};
 export const availableContracts=p=>p.activeJob||p.gigs?.active?[]:starterGigBeat(p)?starterContracts(p):liveBoard(p).map(s=>offer(p,s));
 export function acceptContract(p,id,position=null,opts={}){
- const i=slotOf(id),starter=opts?.starter===true||(opts?.starter===undefined&&starterGigBeat(p));if(i<0)return {error:'This gig is unavailable.'};
+ const starter=opts?.starter===true||(opts?.starter===undefined&&starterGigBeat(p));
+ const i=opts?.needId?liveBoard(p,{starter}).find(slot=>slot.needId===opts.needId)?.slot??-1:slotOf(id);
+ if(i<0)return {error:'This gig is unavailable.'};
  if(!starter&&noMoreWork(p))return {error:NO_MORE_WORK}; // the daily hard stop (the board is empty then too)
  if(!liveBoard(p,{starter}).some(s=>s.slot===i))return {error:'This gig is unavailable.'};
  const r=acceptGig(p,i,gameMinutes(p),undefined,position&&Number.isFinite(position.x)&&Number.isFinite(position.z)?{x:position.x,z:position.z}:null,{starter});return r.error?r:{state:withView(r.state)};

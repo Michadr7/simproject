@@ -8,6 +8,12 @@ export const CAFE_OLD_PAY=1200; // diner D-A2: what one served customer of the r
 import {normalizeRoutine} from './routine.js';
 import {normalizeLife,normalizeDrainMultiplier} from './life.js';
 import {freshHousing,normalizeHousing} from './housing.js';
+import {normalizeHotel} from './hotel.js';
+import {normalizeKioskShift,normalizeOutdoors} from './kiosk-shift.js';
+import {normalizeFishingLog} from './fishing.js';
+import {normalizeFreight} from './freight.js';
+import {normalizeEdenWork} from './weld-core.js';
+import {normalizeHunting} from './wildlife.js';
 import {SCHEMA,normalizeProperties,normalizeNotices} from './ownership.js';
 import {freshOrders,normalizeOrders} from './orders.js';
 import {normalizeMessages,addMessage} from './messages.js';
@@ -20,7 +26,10 @@ import {freshGarage,normalizeGarage} from './garage.js'; // VD4: the repair shop
 import {normalizeCareers,normalizeCompanies,START_REP} from './careers.js';
 import {normalizeGigs,freshGigs,gameMinutes} from './gigs.js';import {activeView} from './gig-bridge.js';import {normalizeStarter,fresh as freshStarter} from './starter.js'; // 0.36: gigs and the starter story (optional fields, no schema bump)
 import {normalizeShift,normalizePayStubs} from './shift.js';import {normalizePets,fresh as freshPets} from './pets.js'; // PET3: the cat (optional field, no schema bump)
-import {normalizeWorld,TICK_MINUTE} from './world-state.js';import {normalizeNeeds} from './needs.js';import {normalizeNpcs,normalizeStanding} from './npc-life.js';import {normalizeTalkPeople,isEmptyTalk,migrateNpcsTalk} from './talk-memory.js'; // W-D1: the living world's saves (world-tick.js runs the daily tick); optional fields, no schema bump
+import {expireOldPlankNeeds,normalizeBakeryStock,SACKS_PER_PALLET} from './bakery-needs.js';
+import {normalizeWorld,TICK_MINUTE} from './world-state.js';import {normalizeNeeds} from './needs.js';import {normalizeNpcs,normalizeStanding} from './npc-life.js';import {normalizeTalkPeople,isEmptyTalk,migrateNpcsTalk} from './talk-memory.js';import {normalizeCrowdLife} from './npc-relations.js';import {normalizeRelationships} from './relationships.js'; // W-D1: the living world's saves (world-tick.js runs the daily tick); optional fields, no schema bump
+import {migrateGroceries} from './grocery-migrate.js';import {normalizeWarmMeal} from './warm-meal.js';
+import {normalizeComfort} from './weather.js';
 export const MARKET={name:MAP.shops.market.name,x:MAP.shops.market.x,z:MAP.shops.market.z};
 export const ROUTES=[
  {name:'18 Oak Street',description:'A grocery order for a resident at the apartments.',x:3.8,z:-7,pay:1200},
@@ -50,7 +59,7 @@ export function normalizeProgressWith(value,pieces){
  {const sd=normalizeSlabDrops(a.slabDrops);if(sd.length)s.slabDrops=sd}if(Number.isSafeInteger(a.crewMark)&&a.crewMark>=0)s.crewMark=a.crewMark; // crewMark: the yard's logsSawn at the last world tick (world-tick.js demand gate; optional) // T-E (timber redesign): slabs put down on the ground (optional, absent when none). progress.logs keeps kind 'trunk' (grid.js normalizeLogs), carry takes two logs, a trunk or a slab (carry.js normalizeCarry), the yard loads v1 as v2 (sawmill-yard.js normalizeYard): no schema bump
  s.vehicles=normalizeVehicles(a.vehicles,MAP.vehicles,MAP.playable); s.garage=normalizeGarage(a.garage,s.vehicles); // VD4: vehicles in the repair shop and the hard-luck day (optional: an old save has none); 0.33: where the drivable vehicles were left (a new optional field: no schema bump)
  s.focus=typeof a.focus==='string'&&/^[a-z0-9:_-]{1,40}$/i.test(a.focus)?a.focus:null;s.messages=normalizeMessages(a.messages);s.coolers=normalizeCoolers(a.coolers);s.orders=normalizeOrders(a.orders); // messages: the phone's notifications (DESIGN 4.19); 0.34: Store orders and the main home (an optional field: no schema bump)
- s.careers=normalizeCareers(a.careers);migrateCafe(s,a);s.companies=normalizeCompanies(a.companies);s.shift=normalizeShift(a.shift,s.careers);s.payStubs=normalizePayStubs(a.payStubs);s.gigs=normalizeGigs(a.gigs);s.activeJob=activeView(s);s.starter=normalizeStarter(a.starter,s);s.pets=normalizePets(a.pets);{const tick=Math.max(0,s.routine.minutes>=TICK_MINUTE?s.housing.day-1:s.housing.day-2);s.world=normalizeWorld(a.world,MAP.seed,tick);if(s.world.day>tick)s.world={...s.world,day:tick}}s.needs=normalizeNeeds(a.needs);s.npcs=normalizeNpcs(a.npcs);s.standing=normalizeStanding(a.standing);{const tk=normalizeTalkPeople(a.talk);if(!isEmptyTalk(tk))s.talk=tk;s.npcs=migrateNpcsTalk(s.npcs,{...s,talk:tk},s.housing.day-1)}if(a.activeJob&&typeof a.activeJob==='object'&&typeof a.activeJob.id==='string'&&!a.activeJob.id.startsWith('gig-'))s.messages=addMessage(s,{app:'gigs',text:'Your old gig was cancelled. New gigs are on the board.',at:gameMinutes(s)}).state.messages; // 0.35: careers (DESIGN 4.15), optional fields: no schema bump
+ s.careers=normalizeCareers(a.careers);migrateCafe(s,a);s.companies=normalizeCompanies(a.companies);s.shift=normalizeShift(a.shift,s.careers);s.payStubs=normalizePayStubs(a.payStubs);s.gigs=normalizeGigs(a.gigs);{const gig=s.gigs.active;s.vehicles=s.vehicles.map(v=>{if(!v.cargo?.some(c=>c.k==='bakery-pallet'))return v;const cargo=v.cargo.filter(c=>c.k!=='bakery-pallet'||(gig?.truck===v.uid&&gig.haul===SACKS_PER_PALLET&&gig.id===c.j&&gig.needGood===c.g));if(cargo.length)return {...v,cargo};const {cargo:unused,...withoutCargo}=v;return withoutCargo})}if(s.carry?.kind==='sack'&&(s.gigs.active?.id!==s.carry.gig||s.gigs.active.needGood!==s.carry.good||s.gigs.active.truck||s.gigs.active.haul!==1))s.carry=null;s.activeJob=activeView(s);s.starter=normalizeStarter(a.starter,s);s.pets=normalizePets(a.pets);{const tick=Math.max(0,s.routine.minutes>=TICK_MINUTE?s.housing.day-1:s.housing.day-2);s.world=normalizeWorld(a.world,MAP.seed,tick);if(s.world.day>tick)s.world={...s.world,day:tick}}s.needs=expireOldPlankNeeds(normalizeNeeds(a.needs),[s.gigs.active?.needId]);if(a.bakeryStock)s.bakeryStock=normalizeBakeryStock(a.bakeryStock);s.npcs=normalizeNpcs(a.npcs);s.standing=normalizeStanding(a.standing);{const tk=normalizeTalkPeople(a.talk);if(!isEmptyTalk(tk))s.talk=tk;s.npcs=migrateNpcsTalk(s.npcs,{...s,talk:tk},s.housing.day-1)}if(a.activeJob&&typeof a.activeJob==='object'&&typeof a.activeJob.id==='string'&&!a.activeJob.id.startsWith('gig-'))s.messages=addMessage(s,{app:'gigs',text:'Your old gig was cancelled. New gigs are on the board.',at:gameMinutes(s)}).state.messages; // 0.35: careers (DESIGN 4.15), optional fields: no schema bump
  // P-B wiring: the sawmill yard is the sawmill's ONE plank stock. A save without one (older than the wiring) gets a yard holding the world's sawmill planks plus the stacks left on the old belt, so nothing is lost or made. The belt is now only what the yard shows (up to 4 stacks).
  {const y=a.sawmillYard&&typeof a.sawmillYard==='object'&&!Array.isArray(a.sawmillYard)?normalizeYard(a.sawmillYard):normalizeYard({planks:(s.world.stock['property:sawmill']?.planks||0)+s.belt*PLANKS_PER_STACK});s.sawmillYard=y;s.belt=Math.min(BELT_SLOTS,Math.floor(y.planks/PLANKS_PER_STACK))}
  // A save from the first dealership build kept owned vehicles as ids in orders.owned: they become owned vehicles v1, v2 ... where they were left.
@@ -59,8 +68,20 @@ export function normalizeProgressWith(value,pieces){
  s.orders={...s.orders,nextVehicle:Math.max(s.orders.nextVehicle,...s.vehicles.map(v=>+v.uid.slice(1)+1))}; // a new vehicle never reuses an owned uid
  if(typeof a.starter?.loanUid==='string'&&!s.starter.loanUid)s.vehicles=s.vehicles.filter(v=>v.uid!==a.starter.loanUid); // G3: a loan truck whose story step no longer allows it (a broken save) is removed: nobody keeps a free extra truck
  const tool=itemById(a.equipped);s.equipped=tool?.type==='tool'&&hasItem(s,tool.id)?tool.id:null;
- if(pieces)return migrateParcel(purgeOrphanParcels(s)); // C-B: after vehicles and gigs are normalised: stray parcel pieces go, an old held parcel becomes a piece (hands, else stays held); safe to run twice
- return s;
+ if(a.warmMeal)s.warmMeal=normalizeWarmMeal(a.warmMeal);
+ if(a.comfort)s.comfort=normalizeComfort(a.comfort);
+ if(a.hotel)s.hotel=normalizeHotel(a.hotel);
+ if(a.kioskShift){const ks=normalizeKioskShift(a.kioskShift);if(ks)s.kioskShift=ks}
+ if(a.outdoors){const od=normalizeOutdoors(a.outdoors);if(od)s.outdoors=od}
+ if(Array.isArray(a.fishingLog)){const fl=normalizeFishingLog(a.fishingLog);if(fl.length)s.fishingLog=fl}
+ if(a.freight){const fr=normalizeFreight(a.freight);if(fr)s.freight=fr}
+ if(a.edenWork){const ew=normalizeEdenWork(a.edenWork);if(ew)s.edenWork=ew}
+ if(a.hunting){const ht=normalizeHunting(a.hunting);if(ht)s.hunting=ht}
+ if(a.crowdLife){const cl=normalizeCrowdLife(a.crowdLife);if(Object.keys(cl).length)s.crowdLife=cl}
+ if(a.relationships){const rel=normalizeRelationships(a.relationships);if(Object.keys(rel).length)s.relationships=rel}
+ const migrated=migrateGroceries(s);
+ if(pieces)return migrateParcel(purgeOrphanParcels(migrated)); // C-B: after vehicles and gigs are normalised: stray parcel pieces go, an old held parcel becomes a piece (hands, else stays held); safe to run twice
+ return migrated;
 }
 export const routeFor=s=>ROUTES[s.completed%ROUTES.length];
 export const targetFor=s=>s.phase==='carrying'?routeFor(s):MARKET;

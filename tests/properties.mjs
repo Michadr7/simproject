@@ -3,19 +3,23 @@ import * as THREE from '../dist/vendor/three.module.js';
 import {MAP,validateMap} from '../dist/map-definition.js';
 import {PROPERTIES,propertyById,doorOf,doorState,worldDoors} from '../dist/properties.js';
 import {PROPS} from '../dist/props-assets.js';
+import {DOWNTOWN_PROPERTIES} from '../dist/downtown.js';
 import {createWorld} from '../dist/world.js';
 import {terrain,SURFACE,FOOTING} from '../dist/terrain.js';
 globalThis.document={createElement:()=>({width:0,height:0,getContext:()=>new Proxy({},{get:()=>()=>{}})})}; // ground textures draw on a canvas; tests have none
 const world=createWorld(new THREE.Scene(),{cullRadius:Infinity}),T=terrain();
 
 // ── The registry leaves nothing out ───────────────────────────────────────────────────────────
-const HOUSES=['house-r1','house-r2','house-r3','house-r4','house-r5','house-r6','house-r7','house-r8'],EASTBANK=['eastbank-warehouse','eastbank-workshop','eastbank-supply','eastbank-gas-kiosk','ridgeline-office','riden-deals'],ALDER=['alder-store','alder-offices','alder-tower','alder-bakery','alder-barber','alder-pharmacy','alder-bank','eden-wholesale','police-station','alder-books','alder-cinema']; // W-PLACE: Eden Wholesale (C21)
-assert.deepEqual(PROPERTIES.map(p=>p.id),['market','cafe','studio',...HOUSES,...ALDER,'farm-house','farm-barn','farm-small-barn','farm-open-barn','farm-silo','farm-coop','farm-windmill','sawmill',...EASTBANK]);
+const HOUSES=['house-r1','house-r2','house-r3','house-r4','house-r5','house-r6','house-r7','house-r8'],EASTBANK=['eastbank-warehouse','eastbank-workshop','eastbank-supply','eastbank-gas-kiosk','ridgeline-office','riden-deals'],ALDER=['alder-store','alder-offices','alder-tower','alder-bakery','alder-barber','alder-pharmacy','alder-bank','eden-wholesale','police-station','alder-books','alder-cinema'],HOTEL=['ironwood-hotel','ironwood-hotel-w','ironwood-hotel-e'],KASPIAN=['kaspian-harbor','kaspian-chandlery','kaspian-shack','kaspian-inn','kaspian-fish','kaspian-ferry','kaspian-police','eden-cargo-terminal'],EDEN=['eden-guard-hut','eden-office','eden-hall-a','eden-hall-b','eden-hall-c','eden-hall-d','eden-warehouse','eden-outdoors']; // W-PLACE: Eden Wholesale (C21)
+assert.deepEqual(PROPERTIES.map(p=>p.id),['market','cafe','studio',...HOUSES,...ALDER,...DOWNTOWN_PROPERTIES.map(p=>p.id),...HOTEL,'farm-house','farm-barn','farm-small-barn','farm-open-barn','farm-silo','farm-coop','farm-windmill','sawmill',...EASTBANK,...KASPIAN,...EDEN]);
 for(const l of MAP.landmarks.filter(l=>l.prop&&!l.decor))assert(PROPERTIES.some(p=>p.landmark===l.id),`${l.id} has a door rule or an explicit "not enterable"`);
 for(const l of MAP.landmarks.filter(l=>l.decor))assert(!PROPERTIES.some(p=>p.landmark===l.id),`${l.id} is yard decor (a vehicle or a log), not a building`);
 for(const kind of Object.keys(MAP.shops))assert.equal(propertyById(kind)?.type,'shop',`${kind} is registered`);
 assert.equal(propertyById('studio').access,'tenant');
-for(const id of [...ALDER,...EASTBANK,'farm-barn','farm-small-barn','farm-open-barn','farm-silo','farm-coop','farm-windmill','sawmill']){const p=propertyById(id);assert.equal(p.enterable,false,id);assert(p.reason.length>20,`${id} says why it cannot be entered`)}
+assert.equal(propertyById('eden-wholesale').access,'public');
+const OPEN_EXTRA=['eastbank-gas-kiosk','kaspian-harbor','kaspian-chandlery','kaspian-shack','eden-hall-a','eden-outdoors'];
+for(const id of [...EASTBANK,...KASPIAN,...EDEN,'farm-barn','farm-small-barn','farm-open-barn','farm-silo','farm-coop','farm-windmill','sawmill'].filter(x=>!OPEN_EXTRA.includes(x))){const p=propertyById(id);assert.equal(p.enterable,false,id);assert(p.reason.length>20,`${id} says why it cannot be entered`)}
+for(const id of OPEN_EXTRA){const p=propertyById(id);assert.equal(p.access,'public',id);assert.equal(p.exteriorDoor,true,id)}
 assert.deepEqual(validateMap(),[]);
 
 // ── Doors: where they are, and that you can walk up to them ──────────────────────────────────────────
@@ -38,10 +42,10 @@ for(const id of VACANT){const p=propertyById(id);assert.deepEqual(doorState(p),{
 for(const [id,name] of Object.entries(RESIDENTS)){const s=doorState(propertyById(id));assert.equal(s.state,'npc',id);assert.equal(s.label,`Locked · ${name}'s home`);assert(s.message.includes(name)&&s.message.includes('locked'))}
 for(const id of [...HOUSES,'farm-house'])assert.equal(doorState(propertyById(id)).open,false,`${id}: no house opens for a player who owns nothing`);
 // an owner finds the door shut with a note until interiors exist; the shops are public; the studio opens for its tenant
-{const mine=doorState(propertyById('house-r1'),['house-r1']);assert.equal(mine.state,'owned');assert.equal(mine.open,true);assert.equal(mine.label,'Enter · 1 Cedar Loop');const held=worldDoors(['house-r1','house-r3']);assert.deepEqual(held.filter(d=>d.open).map(d=>d.id),['house-r1','house-r3'],'a held door opens, the others stay locked');assert.equal(held.find(d=>d.id==='house-r2').open,false)}
+{const mine=doorState(propertyById('house-r1'),['house-r1']);assert.equal(mine.state,'owned');assert.equal(mine.open,true);assert.equal(mine.label,'Enter · 1 Cedar Loop');const held=worldDoors(['house-r1','house-r3']);assert.deepEqual(held.filter(d=>d.open).map(d=>d.id),['house-r1','house-r3',...ALDER,...DOWNTOWN_PROPERTIES.map(p=>p.id),'ironwood-hotel',...OPEN_EXTRA],'held homes and the public shops are accessible');assert.equal(held.find(d=>d.id==='house-r2').open,false)}
 assert.equal(doorState(propertyById('market')).open,true);assert.equal(doorState(propertyById('studio'),[]).open,false);assert.equal(doorState(propertyById('studio'),['studio']).open,true);
-assert.equal(doorState(propertyById('sawmill')).open,false);assert.equal(doorState(propertyById('alder-store')).state,'closed');
-const doors=worldDoors([]);assert.deepEqual(doors.map(d=>d.id),[...HOUSES,'farm-house']);assert(doors.every(d=>d.label&&d.title&&d.message&&Number.isFinite(d.x)&&Number.isFinite(d.z)));
+assert.equal(doorState(propertyById('sawmill')).open,false);assert.equal(doorState(propertyById('alder-store')).state,'public');
+const doors=worldDoors([]);assert.deepEqual(doors.map(d=>d.id),[...HOUSES,...ALDER,...DOWNTOWN_PROPERTIES.map(p=>p.id),'ironwood-hotel','farm-house',...OPEN_EXTRA]);assert(doors.every(d=>d.label&&d.title&&d.message&&Number.isFinite(d.x)&&Number.isFinite(d.z)));
 
 // ── Driveways: from the house to the road, wide enough for a car, with a front path and a parking spot ───────────────────────────────────
 const parked=MAP.landmarks.filter(l=>l.decor&&/^car-/.test(l.id));

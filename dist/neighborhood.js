@@ -1,5 +1,6 @@
 import * as T from './vendor/three.module.js';
 import {createCharacter} from './character.js';import {outfit,palettes} from './appearance.js';import {createProp,propInfo} from './props.js';
+import {heightAt} from './height.js';import {terrain,SURFACE} from './terrain.js';
 // Routes stay on clear pavement lanes; endpoints pause like storefront visits.
 // [body, outfit] for Alex, Sophie, Robert, Julia, Carlos and Megan (names match the bodies).
 const LOOKS=[['male','Casual_2'],['female','Casual'],['male','Suit'],['female','Formal'],['male','Worker'],['female','Suit']];
@@ -9,8 +10,11 @@ export function createPedestrians(scene){const routes=[[-20,41,-6.7],[-18,39,-5.
 // fade is the world's sightline fade; the default lets tests build them without a world.
 const PARKED=[['taxi','Taxi',23,-1.9,-Math.PI/2],['sports-car-2','Sports coupe',40,13.9,Math.PI/2],['suv','SUV',-35,-22,0]];
 export function createVehicles(scene,colliders,fade={apply:material=>material}){
+ const surf=terrain();
  return PARKED.map(([prop,name,x,z,yaw],i)=>{
-  const info=propInfo(prop),mesh=createProp(prop,fade);mesh.position.set(x,0,z);mesh.rotation.y=yaw;scene.add(mesh);
+  const info=propInfo(prop),mesh=createProp(prop,fade),s=surf.surfaceAt(x,z),h=heightAt(x,z);
+  const y=s===SURFACE.STREET?Math.max(h,.01):(s===SURFACE.ROAD||s===SURFACE.DRIVEWAY||s===SURFACE.PATH?h-.045:s===SURFACE.PAVEMENT?Math.max(h,.165):h);
+  mesh.position.set(x,y,z);mesh.rotation.y=yaw;scene.add(mesh);
   const cos=Math.round(Math.cos(yaw)),sin=Math.round(Math.sin(yaw)),turned=sin!==0;
   for(const b of info.colliders)colliders.push({x:x+b.x*cos+b.z*sin,z:z-b.x*sin+b.z*cos,hx:turned?b.hz:b.hx,hz:turned?b.hx:b.hz});
   return {id:'parked-'+i,name,group:mesh,x,z,spawn:{x,z},drivable:false};

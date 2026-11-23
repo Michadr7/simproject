@@ -10,7 +10,8 @@ const S=SURFACE;
 // TR6 feedback on soft ground: wheel dust and mud spray (debris.js) and tyre sounds per ground (vehicle-sounds.js, audio.js).
 // 1. The spray rules per ground, speed and quality.
 {const run=(surface,speed,o={})=>sprayOf({surface,speed,top:15,...o});
- for(const s of [S.STREET,S.ROAD,S.BRIDGE,S.DRIVEWAY,S.PAVEMENT,S.WATER,S.BANK])for(const q of ['high','low']){const r=run(s,15,{quality:q,throttle:1});assert(r.dust===0&&r.mud===0&&r.drop===0,'no spray on ground '+s)}
+ for(const s of [S.STREET,S.ROAD,S.BRIDGE,S.DRIVEWAY,S.PAVEMENT,S.BANK])for(const q of ['high','low']){const r=run(s,15,{quality:q,throttle:1});assert(r.dust===0&&r.mud===0&&r.drop===0,'no spray on ground '+s)}
+ assert.equal(run(S.WATER,5).dust,0);assert(run(S.WATER,5).mud>0&&run(S.WATER,5).drop>0&&run(S.WATER,5).colour==='#d8eef8','water ford throws splash');
  assert.equal(run(S.DIRT,3).dust,0,'dust needs 4 m/s');assert(run(S.DIRT,5).dust>0);assert(run(S.DIRT,15).dust>run(S.DIRT,8).dust,'faster, more dust');assert.equal(run(S.DIRT,15).dust,DUST_RATE,'full rate at top speed on dirt');
  assert(run(S.GRAVEL,15).dust<run(S.DIRT,15).dust&&run(S.PATH,15).dust>0,'gravel and path raise a little less');assert.equal(run(S.GRASS,5).dust,0,'dry grass needs 6 m/s');assert(run(S.GRASS,10).dust>0&&run(S.GRASS,15).dust<run(S.DIRT,15).dust);
  assert.equal(run(S.DIRT,15).mud,0,'no mud on dirt');assert.notEqual(run(S.DIRT,15).colour,run(S.MUD,5).colour,'the colour follows the ground');assert.equal(run(S.MUD,5).dust,0,'mud throws no dust');

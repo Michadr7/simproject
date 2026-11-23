@@ -7,6 +7,7 @@ export const PLACES=Object.freeze({
  hal:{x:-59.4,z:-235.8},crates:{x:-66,z:-235.4},farmTruck:{x:-70.5,z:-231.5,yaw:0}
 });
 import {countOf,hasCrates,addCrates,removeCrates} from './cargo.js';
+import {hotelRoomHeld} from './hotel.js';
 import {VEHICLE_PRICE,vehicleCount,vehicleCapacity,grantVehicle,parkingAim,STUDIO_ID,vehicleName} from './orders.js';
 export const SKIP_SALE_PRICE=VEHICLE_PRICE.shortbed; // Hal sells the Shortbed at its store price (orders.js), one source
 const B=(id,title,text,event,place,cash=0)=>Object.freeze({id,title,text,event,place,cash});
@@ -38,7 +39,7 @@ export function normalizeStarter(v,p){
 export const skipStarter=()=>({...fresh(),step:10,done:true,skipped:true});
 // The objective card and the tracker's story row read this. aim is a PLACES key.
 // S-RESET: a beat whose end is already true must not wait. Step 8 (rent): a rented studio or any home you hold completes it at once (game.js storyTick fires 'rented'). Beat 9 (sleep) fires after any sleep, anywhere, and the truck handover above never blocks. The gig beat is NOT skipped.
-export const alreadyHoused=p=>!!p&&!!p.starter&&!p.starter.done&&p.starter.step===8&&(!!p.housing?.rented||Object.keys(p.properties||{}).length>0);
+export const alreadyHoused=p=>!!p&&!!p.starter&&!p.starter.done&&p.starter.step===8&&(!!p.housing?.rented||Object.keys(p.properties||{}).length>0||hotelRoomHeld(p));
 // The truck beats (5, 6 and 10) need the short flatbed, which is not built yet: until VEHICLE_BEATS_READY the story pauses after beat 4 and the card goes back to the normal text.
 export const VEHICLE_BEATS_READY=true;
 export function starterObjective(p,{vehicleReady=VEHICLE_BEATS_READY}={}){

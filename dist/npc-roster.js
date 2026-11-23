@@ -2,7 +2,7 @@
 // VERIFIED in the map data: hal (Hal Brennan, owner of property:farm-house, post 'farm' 390-1050), noah (flat 8 of dwelling:oak-apartments, post 'market-day' Clerk at shop:market 420-870), sophie (flat 2 of oak-apartments, no post),
 //   walt (Walt Hargrove, owner of Ridgeline, post 'ridgeline-owner' at office:ridgeline-office; named but not a resident, so population.js makes him a commuter), grace (Grace Whitfield, owner of property:house-r8, no post).
 // VERIFIED (map-definition.js ~l.375): Oscar Masic, Lincoln Brambly and Brentster Lewis are residents of dwelling:oak-apartments, flats 9, 10, 11.
-// VERIFIED (population.js, C3 2026-11-17): Lincoln holds post 'market-evening' (Clerk, shop:market 870-1320), Brentster 'alder-store' (Shopkeeper, Ironwood Store), Elena (flat 7) 'cafe-manager' (shop:cafe 480-1080).
+// VERIFIED (population.js, C3 2026-11-17): Lincoln holds post 'market-evening' (Clerk, shop:market 870-1320), Brentster 'alder-store' (Shopkeeper, Ridge Clothing), Elena (flat 7) 'cafe-manager' (shop:cafe 480-1080).
 // ASSUMED (marked): the foreman and the Eastbank truck driver (no such person exists in the map).
 // personId is the id population.js gives the person (household id + '#1'); id is the short key used in saves and by gig-clients.js (HAL_ID='hal').
 export const MOOD_WORDS=Object.freeze(['miserable','low','okay','good','delighted']);
@@ -61,7 +61,7 @@ export const ROSTER=Object.freeze([
   needs:['restock','haul','errand'],needGoods:{restock:'ammo',haul:'game-meat',errand:'boots'},
   lines:L(['Nobody wants to hear about hunting anyway.','Fine. Ignore me. Everyone does.','Not in the mood.'],['I had a story, but never mind.','You have not asked about the woods in days.','Hm.'],['Hey. Did I tell you about the deer last week?','Out of ammo again, practically.','Morning. Cold enough for a hunt.'],['Good to see you! Ask me about tracking!','Got a great story for you.','I bagged a nice one yesterday.'],['You will not believe the day I had out there!','Best season ever, I swear!','Sit down, I have six stories.']),
   visit:V('acquaintance','friend',null,{friend:6,close:3})}),
- base({id:'brentster',personId:'oak-apartments/11#1',name:'Brentster Lewis',role:'Shopkeeper (Ironwood Store), owner of the cat Brentster Jr.',home:'dwelling:oak-apartments',work:'property:alder-store',flat:'oak-apartments/11',assumed:true,
+ base({id:'brentster',personId:'oak-apartments/11#1',name:'Brentster Lewis',role:'Shopkeeper (Ridge Clothing), owner of the cat Brentster Jr.',home:'dwelling:oak-apartments',work:'property:alder-store',flat:'oak-apartments/11',assumed:true,
   rule:'catowner',traits:['devoted','distracted','soft-hearted'],baseline:50,deliveryDay:null,marketDay:null,
   needs:['tend','errand','restock'],needGoods:{tend:'cat',errand:'vet',restock:'cat-food'},
   lines:L(['Junior is not okay and nothing else matters.','I cannot talk. Have you seen my cat?','I should be looking for him.'],['Junior has been off his food.','Sorry, distracted. Cat stuff.','Not a good day for Junior.'],['Hey. Junior is on the sofa again.','Can you believe he knocked a glass over?','Oh, hi. Have you met my cat?'],['Junior is purring like an engine today!','Great day. He ate everything.','Good to see you, he likes you.'],['Junior learned a new trick!','Best day. Best cat. Best everything.','You have to see him, come on!']),

@@ -2,7 +2,7 @@
 import assert from 'node:assert/strict';
 import {bootGame} from './support/boot-game.mjs';
 import {wipePlayerKeys} from '../dist/profile.js';
-const g=await bootGame({play:false});
+const g=await bootGame({play:false,devMode:true});
 try{
  const st=g.store;for(const k of ['edenridge.profile.v1','citylife.profile.v1','citylife.character.v1'])st.set(k,'{}');for(const k of ['edenridge.settings.v1','edenridge.audio.v1','edenridge.server.v1','edenridge.dev.sky.v1','edenridge.backups.v1'])st.set(k,'keep');
  for(let i=0;i<4;i++)g.send('keydown','KeyD');g.find('menuDev').click();

@@ -15,7 +15,8 @@ export function categoryOf(item){
  if(!item)return null;
  if(item.type==='food')return 'food';
  if(item.type==='drink')return 'drink';
- if(item.type==='tool')return 'tools';
+ if(item.type==='ingredient')return item.id==='ground-coffee'||item.id==='milk'?'drink':'food';
+ if(item.type==='tool'||item.type==='gear')return 'tools';
  if(item.type==='equipment')return item.equipSlot==='backpack'?'tools':'clothing';
  return null;
 }

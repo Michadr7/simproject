@@ -105,17 +105,17 @@ export function installDirectOutputTSL({ THREE, TSL, renderer }) {
  };
  wrap('render'); wrap('compileAsync');
  // T5 gap 9: compileAsync skips hidden objects, so the TSL effects that are hidden until they are needed (night glow, smoke, debris, tracks: names ending '-tsl') are compiled one by
- // one with the scene's lights, shown only while three collects them (synchronously). Returns how many it started.
+ // one with the scene's lights, shown only while three collects them (synchronously). Wait for every pipeline attempt to settle.
  const warmHidden = (scene, camera) => {
-  if (typeof renderer.compileAsync !== 'function' || !scene) return 0;
-  let n = 0;
+  if (typeof renderer.compileAsync !== 'function' || !scene) return Promise.resolve([]);
+  const jobs = [];
   const hidden = [];
   scene.traverse(o => { if (o.visible === false && (o.isMesh || o.isSprite || o.isPoints) && [].concat(o.material || []).some(m => m && m.isNodeMaterial && /-tsl$/.test(m.name || ''))) hidden.push(o); });
   for (const o of hidden) {
    o.visible = true;
-   try { const p = renderer.compileAsync(o, camera, scene); if (p && p.catch) p.catch(() => {}); n++; } catch { /* a twin that cannot build here stays for its first frame */ } finally { o.visible = false; }
+   try { jobs.push(renderer.compileAsync(o, camera, scene)); } catch (error) { jobs.push(Promise.reject(error)); } finally { o.visible = false; }
   }
-  return n;
+  return Promise.allSettled(jobs);
  };
  const result = { syncScene, getOutput, fogFor, contextFor, last, warmHidden };
  renderer.__directOutput = result;

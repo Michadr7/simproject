@@ -62,8 +62,8 @@ export function createSky({scene,renderer,sun,hemi}){
  const U=dome.material.uniforms;
  // minutes: the game clock. target: where the player is ({x,z}; leave out to keep the last one). indoors: inside a shop, the office or the warehouse (rooms that live in the
  // world scene): the two lights keep their noon values there for now, while the sky and fog outside still follow the clock.
- function update(minutes,{target=null,indoors=false}={}){
-  const s=now=skyAt(tuned.minutes??minutes,tuned),L=indoors?DAY:s;
+ function update(minutes,{target=null,indoors=false,weather=null}={}){
+  const s=now=skyAt(tuned.minutes??minutes,weather?{...tuned,weather}:tuned),L=indoors?DAY:s;
   if(target){last.x=target.x;last.z=target.z}
   sun.color.setRGB(L.lightColor[0],L.lightColor[1],L.lightColor[2]);sun.intensity=L.lightStrength;
   sun.position.set(last.x+L.lightDir[0]*SUN_DISTANCE,L.lightDir[1]*SUN_DISTANCE,last.z+L.lightDir[2]*SUN_DISTANCE);sun.target.position.set(last.x,0,last.z);sun.target.updateMatrixWorld();

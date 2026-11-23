@@ -19,7 +19,7 @@ export const BUDGET={brief:3000,index:37000}; /* 36000 -> 37000 (user approved 2
 export const CHARS_PER_TOKEN=1.9;
 export const tokens=text=>Math.ceil(text.length/CHARS_PER_TOKEN);
 // Modules that are generated data: never worth reading, listed on one line each.
-const GENERATED=/(-assets|-asset|-pictures)\.js$|^character-(male|female)\.js$/;
+const GENERATED=/(-assets|-asset|-pictures)\.js$|^character-(male|female)\.js$|^props-assets-downtown\.js$/;
 const NEVER_READ=['dist/releases/','dist/vendor/','dist/assets/','assets-src/','node_modules/','.dev.vars'];
 // Modules with no header comment of their own, described by hand (kept short; add one when a big module has none).
 export const PURPOSE_OVERRIDES={'game.js':'Everything wired together: the frame loop frame(), stepWorld(), interactions, HUD handlers, the dev block at the end. Dense on purpose (one statement per line, long lines).'};
@@ -72,21 +72,21 @@ export function buildIndex({root=ROOT,head=undefined}={}){
  const code=[],generated=[];let missing=0;
  for(const name of modules){const file=path.join(dist,name),size=fs.statSync(file).size;
   if(GENERATED.test(name)){generated.push(`- ${name} · ${kb(size)}`);continue}
-  const text=read(file),lines=lineCount(text),purpose=leadingComment(text,50)||PURPOSE_OVERRIDES[name]||'',ex=exportsOf(text),cov=covers.get(name)||[];
+  const text=read(file),lines=lineCount(text),purpose=leadingComment(text,34)||PURPOSE_OVERRIDES[name]||'',ex=exportsOf(text),cov=covers.get(name)||[];
   if(!purpose)missing++;
   const shown=ex.slice(0,3).join(', ')+(ex.length>3?` (+${ex.length-3})`:'');
   const testText=name==='game.js'?`the ${booted} tests that boot the packaged game (tests/support/boot-game.mjs)`:cov.length?cov.slice(0,2).join(', ')+(cov.length>2?` (+${cov.length-2})`:''):'none';
   code.push(`- ${name} · ${lines} lines${size>60*1024?' · read by range':''} · ${purpose||'(no header comment)'}${shown?` · exports: ${shown}`:''} · tests: ${testText}`)}
  // In the hub/ and test lines the words "Mikkadr Hub" repeat on most lines under a section already about the hub: leave them out and clip shorter by the same amount, so the same description shows.
  const hubDescribed=(text,max)=>{const full=leadingComment(text,1e6),s=full.replace(/\bMikkadr Hub,? ?/g,'');return clip(s,max-(full.length-s.length))};
- const testLines=tests.map(t=>{const c=hubDescribed(read(path.join(root,'tests',t)),42);return `- ${t.replace(/\.mjs$/,'')}${c?' · '+c:''}`});
- const scriptLines=scripts.map(s=>{const c=leadingComment(read(path.join(root,'scripts',s)),60);return `- ${s}${c?' · '+c:''}`});
- const workerLines=workers.map(s=>{const c=leadingComment(read(path.join(root,'worker',s)),60);return `- worker/${s}${c?' · '+c:''}`});
+ const testLines=tests.map(t=>{const c=hubDescribed(read(path.join(root,'tests',t)),26);return `- ${t.replace(/\.mjs$/,'')}${c?' · '+c:''}`});
+ const scriptLines=scripts.map(s=>{const c=leadingComment(read(path.join(root,'scripts',s)),38);return `- ${s}${c?' · '+c:''}`});
+ const workerLines=workers.map(s=>{const c=leadingComment(read(path.join(root,'worker',s)),38);return `- worker/${s}${c?' · '+c:''}`});
  const hubFiles=listFiles(path.join(root,'hub'),n=>/\.(mjs|js)$/.test(n)); // Mikkadr Hub (Node only): the token watcher, the usage probe, the page
- const hubLines=hubFiles.map(s=>{const c=hubDescribed(read(path.join(root,'hub',s)),60);return `- hub/${s}${c?' · '+c:''}`});
+ const hubLines=hubFiles.map(s=>{const c=hubDescribed(read(path.join(root,'hub',s)),38);return `- hub/${s}${c?' · '+c:''}`});
  const otherDist=listFiles(dist,n=>!n.endsWith('.js')).join(', ');
  const docLines=[];for(const doc of ['context.md','DESIGN.md','README.md','DEPLOY.md','ASSETS.md']){const f=path.join(root,doc);if(!fs.existsSync(f))continue;
-  const hs=headings(f,doc==='README.md'?{levels:[2],max:6}:{levels:[2,3],max:70,dropNotes:true});docLines.push(`### ${doc} (${lineCount(read(f))} lines${doc==='context.md'||doc==='DESIGN.md'?', open by line range':''})`);for(const h of hs)docLines.push(`- L${h.line} ${h.title}`)}
+  const hs=headings(f,doc==='README.md'?{levels:[2],max:6}:{levels:[2,3],max:50,width:46,dropNotes:true});docLines.push(`### ${doc} (${lineCount(read(f))} lines${doc==='context.md'||doc==='DESIGN.md'?', open by line range':''})`);for(const h of hs)docLines.push(`- L${h.line} ${h.title}`)}
  const sha=head===undefined?gitHead(root):head,version=pkg.version;
  const modulesText=[...code,...generated,...testLines,...scriptLines,...workerLines,...hubLines,...docLines].join('\n'); // about the whole index, for the size it quotes about itself
  const index=[

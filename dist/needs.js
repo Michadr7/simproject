@@ -5,6 +5,9 @@
 import {GOODS,PLACES,PALLET_LINK} from './world-goods.js';
 import {priceOf,lowStock,deliver,buy,PROSPERITY_FLOOR} from './world-state.js';
 import {payFor,parMetres,meetsMinPar,MIN_PAR_M} from './gig-pay.js';
+import {needsForStock as bakeryNeedForStock,isBakeryGood,isBakeryNeed,needsVehicle as bakeryNeedsVehicle,isOldBakeryPlankNeed,expireOldPlankNeeds,needTitle as bakeryTitle,needDescription as bakeryDescription,priceOf as bakeryPrice,SACKS_PER_PALLET} from './bakery-needs.js';
+import {ID as WHOLESALE_ID,NAME as WHOLESALE_NAME,PICKUP as WHOLESALE_PICKUP,worldPoint as wholesalePoint} from './eden-wholesale.js';
+import {POSE as WHOLESALE_POSE} from './eden-wholesale-place.js';
 import {plankNeedsFrom,plankPriceCents,DEMAND as PLANK_DEMAND,SUPPLIER as PLANK_SUPPLIER} from './plank-needs.js';
 
 export const KINDS=Object.freeze(['restock','harvest','errand','clear','repair','tend','tow','serve']);
@@ -28,10 +31,11 @@ export const isBoardable=kind=>!OFF_KINDS.includes(kind);
 export const EVENT_KINDS=Object.freeze({'tree-down':'clear','road-blocked':'clear','broken-fence':'repair','stranded-car':'tow'}); // ctx.events kind -> need kind
 // Place points (x,z). market/cafe/farm/gas are the gigs.js origins; the warehouse is its door (map-definition.js); the rest are map landmark centres (FIX-R2). ctx.placePoint(place) overrides.
 export const PLACE_POINTS=Object.freeze({
+ ['property:'+WHOLESALE_ID]:Object.freeze({id:WHOLESALE_ID,name:WHOLESALE_NAME,...wholesalePoint(WHOLESALE_PICKUP,WHOLESALE_POSE)}),
  'shop:market':Object.freeze({id:'market',name:'Corner Market',x:19,z:-6.3}),'shop:cafe':Object.freeze({id:'alder-coffee',name:'Alder Coffee',x:36,z:-6.3}),
  'property:farm-house':Object.freeze({id:'farm',name:'Willow Farmhouse',x:-80,z:-236.5}),'property:eastbank-gas-kiosk':Object.freeze({id:'gas',name:'the gas station',x:156.5,z:-8.25}),
  'office:ridgeline-warehouse':Object.freeze({id:'ridgeline-warehouse',name:'Ridgeline Warehouse',x:166.9,z:31.5}),
- 'property:alder-bakery':Object.freeze({id:'alder-bakery',name:'Ironwood Bakery',x:17.75,z:-76.35}),'property:sawmill':Object.freeze({id:'sawmill',name:'Sawmill',x:104,z:-274.5}),
+ 'property:alder-bakery':Object.freeze({id:'alder-bakery',name:'Ironwood Bakery',x:17.75,z:-81.5}),'property:sawmill':Object.freeze({id:'sawmill',name:'Sawmill',x:104,z:-274.5}),
  'property:eastbank-supply':Object.freeze({id:'eastbank-supply',name:'Eastbank Building Supplier',x:83,z:40}),'zone:forest':Object.freeze({id:'forest',name:'Pine Ridge',x:82,z:-266}),
  'property:house-r1':Object.freeze({id:'house-r1',name:'1 Cedar Loop',x:100,z:-63.5}),'property:house-r2':Object.freeze({id:'house-r2',name:'2 Cedar Loop',x:120,z:-61}),'property:house-r3':Object.freeze({id:'house-r3',name:'3 Cedar Loop',x:140,z:-65.5}),'property:house-r4':Object.freeze({id:'house-r4',name:'4 Cedar Loop',x:98,z:-112}),
  'property:house-r5':Object.freeze({id:'house-r5',name:'5 Cedar Loop',x:120,z:-116}),'property:house-r6':Object.freeze({id:'house-r6',name:'6 Cedar Loop',x:145.1,z:-110}),'property:house-r7':Object.freeze({id:'house-r7',name:'7 Cedar Loop',x:92,z:-61.5}),'property:house-r8':Object.freeze({id:'house-r8',name:'8 Cedar Loop',x:144.8,z:-64})}); // FIX-R2: bakery = its landmark point; sawmill and supplier = a free spot beside the building (audit A F7: the landmark centres are inside their colliders); farm = the open yard (-80,-236.5) (audit A F1, see gigs.js FARM_ORIGIN); the forest = inside the Pine Ridge zone (it was z 120, outside the playable area); houses = population.js placePoint doors
@@ -79,14 +83,14 @@ export function valueCents(n,units,day,before=0){
 
 // The producer that can supply a good (most stock first, data order breaks ties), or null.
 function sourceFor(world,good,not){let best=null,bs=0;for(const [id,p] of Object.entries(PLACES)){if(p.kind!=='producer'||id===not||!p.goods[good])continue;const s=world.stock[id][good];if(s>bs){best=id;bs=s}}return best?{place:best,stock:bs}:null}
-const unitCentsFor=(world,place,good)=>good==='planks'?plankPriceCents(world):good&&PLACES[place]?.goods[good]?priceOf(world,place,good):good&&GOODS[good]?GOODS[good].baseCents:CHORE_UNIT_CENTS;
+const unitCentsFor=(world,place,good)=>good==='planks'?plankPriceCents(world):isBakeryGood(good)?bakeryPrice(good,1):good&&PLACES[place]?.goods[good]?priceOf(world,place,good):good&&GOODS[good]?GOODS[good].baseCents:CHORE_UNIT_CENTS;
 
 // Drops open OFF_KINDS needs (no penalty, no expiry): an old save may hold them. keepIds (the active gig's need id) stay, so a walked-there gig still pays out. Returns a NEW list.
 export function retireOffKinds(needs,keepIds=[]){const keep=new Set(Array.isArray(keepIds)?keepIds:[]);return normalizeNeeds(needs).filter(n=>isBoardable(n.kind)||n.status!=='open'||keep.has(n.id))}
 // What the world needs today. ctx: {needs: the current list (open + recently closed), sickNpcs:[{id,home,good?,qty?,origin?}], needSeeds:[{kind,person?,place,good?,qty,origin?,dueIn?}], events: [{id?,kind,at,qty?}] or day=>[...], keeperOf, placePoint}.
 // Returns the NEW full list: open needs are kept (a restock whose shelf has recovered closes as filled), new ones are added in a fixed order up to MAX_OPEN_NEEDS.
 export function needsFrom(world,day,ctx={}){
- const list=(ctx.boardOnly?retireOffKinds(ctx.needs,ctx.keepNeedIds):normalizeNeeds(ctx.needs)).map(clone).filter(n=>n.status==='open'||day-n.closedDay<=PRUNE_DAYS);
+ const list=expireOldPlankNeeds(ctx.boardOnly?retireOffKinds(ctx.needs,ctx.keepNeedIds):normalizeNeeds(ctx.needs),ctx.keepNeedIds).map(clone).filter(n=>n.status==='open'||day-n.closedDay<=PRUNE_DAYS);
  for(const n of list){if(n.status!=='open')continue;
   if(n.kind==='restock'&&PLACES[n.place]?.goods[n.good]?.target>0&&world.stock[n.place]?.[n.good]>=Math.ceil(PLACES[n.place].goods[n.good].target*REFILL_FRAC)){n.status='filled';n.closedDay=day;n.claims={}}
   if(n.kind==='harvest'&&world.stock[n.place]?.[n.good]<=Math.floor(PLACES[n.place].goods[n.good].max*HARVEST_KEEP_FRAC)){n.status='filled';n.closedDay=day;n.claims={}}}
@@ -99,6 +103,8 @@ export function needsFrom(world,day,ctx={}){
   if(cands.some(c=>c.kind==='restock'&&c.place===pn.place&&c.good===pn.good))continue;
   const s=isInt(ctx.plankStock?.[pn.place])?ctx.plankStock[pn.place]:world.stock[pn.place]?.planks||0;
   mk(.35+s/(PLANK_DEMAND[pn.place]?.target||1),'restock',pn.place,pn.good,pn.qty,{origin:pn.origin})}
+ const bakery=bakeryNeedForStock(ctx.bakeryStock,{seed:world.seed,day},list);
+ if(bakery)mk(.05,bakery.kind,bakery.place,bakery.good,bakery.qty,{origin:bakery.origin,dueIn:bakery.dueDay-day});
  for(const [id,p] of Object.entries(PLACES)){if(p.kind!=='producer')continue; // harvest: a producer is full and production is being wasted
   for(const [good,d] of Object.entries(p.goods)){const s=world.stock[id][good];if(!d.rate||s<d.max*HARVEST_FULL_FRAC)continue;
    const qty=Math.min(HARVEST_CAP,s-Math.floor(d.max*HARVEST_KEEP_FRAC));if(qty>=1)mk(.5+(1-s/d.max),'harvest',id,good,qty)}}
@@ -112,7 +118,7 @@ export function needsFrom(world,day,ctx={}){
  let open=list.filter(n=>n.status==='open').length;
  for(const c of cands){if(open>=MAX_OPEN_NEEDS)break;const key=keyOf(c);
   if(ctx.boardOnly&&!isBoardable(c.kind))continue; // OFF_KINDS: no real mechanic behind them yet
-  if(ctx.boardOnly){const sl=needToSlot({id:'',kind:c.kind,place:c.place,good:c.good,qty:c.qty,filled:0,openedDay:day,dueDay:day,origin:c.origin},ctx);if(!sl||(!CHORE.has(c.kind)&&c.good!=='planks'&&sl.parM<MIN_PAR_M.walk))continue} // FIX-R2 (ctx.boardOnly, which world-tick.js sets): only needs that can become a board slot (a point on the map, a par of 300 m or more, as boardFor filters; P-E plank restocks from the sawmill to Cedar Loop / bakery are 192-260 m par) take one of the six places
+  if(ctx.boardOnly){const sl=needToSlot({id:'',kind:c.kind,place:c.place,good:c.good,qty:c.qty,filled:0,openedDay:day,dueDay:day,origin:c.origin},ctx);if(!sl||(!CHORE.has(c.kind)&&c.good!=='planks'&&!isBakeryNeed(c)&&sl.parM<MIN_PAR_M.walk))continue} // FIX-R2 (ctx.boardOnly, which world-tick.js sets): only needs that can become a board slot (a point on the map, a par of 300 m or more, as boardFor filters; P-E plank restocks from the sawmill to Cedar Loop / bakery are 192-260 m par) take one of the six places
   if(list.some(n=>keyOf(n)===key&&(n.status==='open'||day-n.closedDay<HYSTERESIS_DAYS)))continue; // one open need per kind+place+good; hysteresis
   const due=day+(c.dueIn??(DUE_DAYS[c.kind]+hashOf(world.seed,key,day,'due')%2)),vp=c.kind==='errand'&&c.origin?c.origin:c.place;
   list.push({id:`${key}|${day}`,kind:c.kind,place:c.place,good:c.good,person:c.person,qty:c.qty,filled:0,openedDay:day,dueDay:due,closedDay:-1,unitCents:unitCentsFor(world,vp,c.good),claims:{},status:'open',origin:c.origin});open++}
@@ -135,7 +141,7 @@ export function fill(needs,world,id,playerId,qty,now,opts={}){
  if(!n||n.status!=='open'||!want)return {needs:out,world,units:0,cents:0,over:want};
  lapse(n,now);const room=Math.max(0,remainingOf(n)-claimedByOthers(n,playerId)),ask=Math.min(want,room);let w=world,units=0;
  if(ask>0){
-  if(n.kind==='restock'){if(n.good==='planks'&&!PLACES[n.place]?.goods?.planks&&n.place in PLANK_DEMAND){if(opts.carried)units=ask}else{const r=deliver(world,n.place,n.good,ask,opts.carried?null:(n.origin||null));w=r.world;units=r.moved}} // opts.carried: the goods were already taken from the source at pickup (W-D2), so they come from nowhere here; P-E: bakery/houses accept player-carried planks without changing world.stock save shape or breaking daily plank conservation
+  if(n.kind==='restock'){if(isBakeryNeed(n)||isOldBakeryPlankNeed(n)||(n.good==='planks'&&!PLACES[n.place]?.goods?.planks&&n.place in PLANK_DEMAND)){if(opts.carried)units=ask}else{const r=deliver(world,n.place,n.good,ask,opts.carried?null:(n.origin||null));w=r.world;units=r.moved}} // opts.carried: the goods were already taken from the source at pickup (W-D2), so they come from nowhere here; P-E: bakery/houses accept player-carried planks without changing world.stock save shape or breaking daily plank conservation
   else if(n.kind==='harvest'){const r=buy(world,n.place,n.good,ask);w=r.world;units=r.sold}
   else if(n.kind==='errand'&&n.origin&&PLACES[n.origin]?.goods[n.good]){const r=buy(world,n.origin,n.good,ask);w=r.world;units=r.sold}
   else units=ask}
@@ -179,11 +185,11 @@ export function needPay(need,qty,quality,mode,parM,ctx={}){
 // type is 'need-<kind>': W-E must add those ids to GIG_TYPES (acceptGig/normalizeActive look the type up). Returns null when a place has no point. ctx: {slot, placePoint, names:{id:name}, keeperOf}.
 export function needToSlot(need,ctx={}){
  const dest=pointOf(need.place,ctx),from=need.kind==='restock'||need.kind==='errand'?pointOf(need.origin,ctx):dest;if(!dest||!from)return null;
- const mode=need.qty>=VEHICLE_QTY?'vehicle':'walk',parM=parMetres([from,dest]),client=need.person||keeperOf(need.place,ctx),T=TEMPLATES[need.kind],fromName=from.name,toName=dest.name;
+ const bakery=isBakeryNeed(need),mode=(bakery?bakeryNeedsVehicle(remainingOf(need)):need.qty>=VEHICLE_QTY)?'vehicle':'walk',parM=parMetres([from,dest]),client=need.person||keeperOf(need.place,ctx),T=TEMPLATES[need.kind],fromName=from.name,toName=dest.name;
  return {slot:isInt(ctx.slot)?ctx.slot:0,window:need.openedDay,expiresAt:(need.dueDay+1)*1440,type:'need-'+need.kind,client,clientName:ctx.names?.[client]||client,
   places:[{...dest}],large:false,origin:{...from},points:[{...dest}],parM,mode,pair:`${from.id}>${dest.id}`,starter:false,
   needId:need.id,kind:need.kind,good:need.good,qty:need.qty,remaining:remainingOf(need),unitCents:need.unitCents,meetsPar:meetsMinPar(parM,mode),
-  title:(need.place==='shop:market'&&TITLES[`${need.kind}|${need.good}`])||T.title(need.good),description:T.text(remainingOf(need),need.good,fromName,toName)};
+  title:bakery?bakeryTitle(need.good):(need.place==='shop:market'&&TITLES[`${need.kind}|${need.good}`])||T.title(need.good),description:bakery?bakeryDescription(need.good,Math.min(remainingOf(need),mode==='vehicle'?SACKS_PER_PALLET:1),fromName,toName):T.text(remainingOf(need),need.good,fromName,toName)};
 }
 // The board: open needs with something left to do, as slots (most urgent first), at most `max`.
 export function needSlots(needs,ctx={},max=4){

@@ -55,7 +55,7 @@ assert.equal(lampHeadGlow(0),.55,'by day the heads keep the glow they always had
  assert.equal(kind('house-r1'),'vacant','a house nobody lives in stays dark');assert.equal(kind('house-r1',true),'home','until the player rents or buys it');assert.equal(kind('house-r2'),'home');assert.equal(kind('farm-house'),'home');
  assert.equal(kind('alder-bakery'),'shop');assert.equal(kind('alder-offices'),'office');assert.equal(kind('police-station'),'always');assert.equal(kind('eastbank-warehouse'),'works');assert.equal(kind('eastbank-gas-kiosk'),'always');
  assert.equal(kind('farm-barn'),null);assert.equal(kind('park-cs-1'),null,'a parked car is not a building');assert.equal(kind('sawmill'),null);
- const glass=MAP.landmarks.filter(l=>GLASS_PROPS(l.prop));assert.equal(glass.length,23,'9 houses, 9 Alder buildings and 5 industrial units have windows to light');for(const l of glass)assert(buildingKind(l,P(l.id)),`${l.id} has a kind`);
+ const glass=MAP.landmarks.filter(l=>GLASS_PROPS(l.prop));assert.equal(glass.length,50,'9 houses, 21 Ironwood buildings, 5 Eastbank/Ridgeline units, 8 Kaspian Bay buildings and 7 Eden Industries buildings have windows to light');for(const l of glass)assert(buildingKind(l,P(l.id)),`${l.id} has a kind`);
  assert(!GLASS_PROPS('store')&&!GLASS_PROPS('barn')&&!GLASS_PROPS('car'));}
 // the glass swatch of the Kenney palette textures
 assert(isGlass(203,228,254)&&isGlass(108,152,219)&&isGlass(150,186,234),'the light-blue gradient strip is glass, top to bottom');

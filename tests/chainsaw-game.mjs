@@ -3,6 +3,7 @@
 // and letting go early (or finishing) eases back to the two-handed carry; the axe is carried one-handed at the side (trail carry) between swings.
 import assert from 'node:assert/strict';
 import {bootGame} from './support/boot-game.mjs';
+import {waitForSawmill} from './support/mock-renderer.mjs';
 import {equipTool,addItem} from '../dist/inventory.js';
 import {SAW_STAND,SAW_CUT_X,SAW_CARRY,CARRY,CARRY_DIR,sawStand} from '../dist/chop-path.js';
 import {MAP} from '../dist/map-definition.js';
@@ -12,6 +13,7 @@ const SAW=MAP.landmarks.find(l=>l.id==='sawmill'),start={x:SAW.x+14,z:SAW.z-16};
 const g=await bootGame({position:start});
 try{
  const {GameState,pump,send,scene}=g,p=()=>GameState.progress,me=()=>GameState.me,obj=n=>scene().getObjectByName(n);
+ await waitForSawmill(scene());
  const player=()=>obj('player'),local=v=>player().worldToLocal(v.clone()),wrist=()=>{const v=new THREE.Vector3();player().getObjectByName('WristR').getWorldPosition(v);return local(v)};
  const alive=()=>{const pts=[];scene().traverse(o=>{if(o.name==='sawdust')pts.push(o)});assert.equal(pts.length,1,'one sawdust Points object (the sawmill\'s)');const a=pts[0].geometry.attributes.position.array;let n=0;for(let i=1;i<a.length;i+=3)if(a[i]>-50)n++;return n};
  GameState.progress=equipTool(addItem(p(),'chainsaw').state,'chainsaw').state;pump(.6);

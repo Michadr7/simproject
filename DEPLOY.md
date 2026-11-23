@@ -13,7 +13,7 @@ The game is static files in `dist/`, with no build step. A Cloudflare **Worker**
 
 ## Every release
 1. Bump `version` in `package.json` (for example 0.34.0 to 0.35.0).
-2. `npm run release` writes `dist/releases/<version>/` and points `dist/index.html` at it.
+2. `npm run release -- --public` writes `dist/releases/<version>/` with Dev Mode disabled and points `dist/index.html` at it.
 3. `npm test`.
 4. Commit everything, including the new `dist/releases/<version>/` folder, and push.
 
@@ -29,12 +29,12 @@ The game is static files in `dist/`, with no build step. A Cloudflare **Worker**
 
 ## What does not work on the hosted site yet
 - **LAN multiplayer from the hosted page:** the page is `https://`, and browsers block it from opening a plain `ws://` connection to another machine on the network. `ws://localhost` is usually allowed. LAN play works from a local copy (`npm run dev`), and later from the launcher.
-- **Dev Mode:** `DEV_MODE` in `dist/dev-flag.js` decides whether testers see the Dev Mode button (free money, teleport). Set it to `false` for a public build.
+- **Dev Mode:** `DEV_MODE` in `dist/dev-flag.js` controls the development build. Pass `--public` to disable it in the packaged release. Hub Check currently reports the source flag.
 - **Saves:** they live in the browser (`localStorage`) and belong to the site's address. A save on `localhost:8000` does not appear on `workers.dev`, and the reverse. Export and import of saves is planned.
 
 ## Deploying from this PC (the route that works now)
 The GitHub link did not trigger builds, so deploys go from the command line:
-1. `npm run release` (only if `dist/` changed), then `npm test`.
+1. `npm run release -- --public` (only if a new package is needed), then `npm test`.
 2. `npx wrangler deploy`. It uploads `dist/` to the `simproject` Worker and prints the live address.
 3. Check `https://simproject.ghostjumper007.workers.dev/` shows the new version.
 

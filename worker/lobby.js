@@ -47,13 +47,16 @@ export async function handleRequest(request,env){
 export class Lobby{
  constructor(ctx,env){this.ctx=ctx;this.env=env;this.lobby=null;this.code=null}
  // The rules object, rebuilt from the sockets' attachments after hibernation.
- rules(){
+ rules(closing=null){
   if(this.lobby)return this.lobby;
-  const restore=[];
-  for(const ws of this.ctx.getWebSockets()){const a=ws.deserializeAttachment();if(a?.id)restore.push({peer:ws,id:a.id,position:a.position,room:a.room,joinedAt:Number.isFinite(a.joinedAt)?a.joinedAt:0});if(a?.code)this.code=a.code}
+  const restore=[];let bakeryState=null;
+  const sockets=this.ctx.getWebSockets();
+  if(closing&&!sockets.includes(closing))sockets.push(closing);
+  for(const ws of sockets){const a=ws.deserializeAttachment();if(a?.id){restore.push({peer:ws,id:a.id,position:a.position,room:a.room,joinedAt:Number.isFinite(a.joinedAt)?a.joinedAt:0});bakeryState??=a.bakery??null}if(a?.code)this.code=a.code}
   restore.sort((x,y)=>x.joinedAt-y.joinedAt); // audit C10: getWebSockets() order is not promised to be join order, and the first player is the host; sockets saved before this change have joinedAt 0 and keep their relative order (the sort is stable)
   this.lobby=createLobby({
-   code:this.code,restore,newId:()=>crypto.randomUUID(),
+   code:this.code,restore,bakeryState,newId:()=>crypto.randomUUID(),
+   saveBakery:bakery=>{for(const ws of this.open()){const data=ws.deserializeAttachment();if(data?.id)ws.serializeAttachment({...data,bakery})}},
    send:(ws,message)=>{try{ws.send(JSON.stringify(message))}catch{}},
    close:(ws,code,reason)=>{try{ws.close(code,reason)}catch{}}
   });
@@ -83,12 +86,12 @@ export class Lobby{
   const lobby=this.rules();
   const view=lobby.receive(ws,data);
   // Keep each player's latest state on its socket, so a wake-up from hibernation restores it.
-  if(view)try{const was=ws.deserializeAttachment();ws.serializeAttachment({code:this.code,joinedAt:Number.isFinite(was?.joinedAt)?was.joinedAt:Date.now(),...view})}catch{}
+  if(view)try{const was=ws.deserializeAttachment();ws.serializeAttachment({code:this.code,joinedAt:Number.isFinite(was?.joinedAt)?was.joinedAt:Date.now(),bakery:lobby.bakerySnapshot(),...view})}catch{}
  }
  async webSocketClose(ws,code){await this.gone(ws);try{ws.close(code===1005||code===1006?1000:code)}catch{}}
  async webSocketError(ws){await this.gone(ws)}
  async gone(ws){
-  this.rules().leave(ws);
+  this.rules(ws).leave(ws);
   if(this.open().length===0){await this.ctx.storage.put('emptySince',Date.now());await this.schedule(Date.now()+EMPTY_LOBBY_MS)}
  }
  open(){return this.ctx.getWebSockets().filter(ws=>ws.readyState===undefined||ws.readyState===1)}

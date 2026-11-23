@@ -3,6 +3,7 @@
 import assert from 'node:assert/strict';
 import {Lobby,handleRequest,originAllowed,EMPTY_LOBBY_MS} from '../worker/lobby.js';
 import {hello,REFUSED,HELLO_TIMEOUT_MS} from '../dist/relay-protocol.js';
+import {needsForStock} from '../dist/bakery-needs.js';
 
 let clock=1_000_000;const realNow=Date.now;Date.now=()=>clock;
 class FakeSocket{constructor(){this.readyState=1;this.out=[];this.att=null}send(t){if(this.readyState!==1)throw new Error('closed');this.out.push(JSON.parse(t))}close(code){this.closeCode=code;this.readyState=3}serializeAttachment(v){this.att=structuredClone(v)}deserializeAttachment(){return structuredClone(this.att)}}
@@ -38,6 +39,29 @@ try{
  assert.deepEqual(last(b.ws,'playerJoined'),{type:'playerJoined',id:aw.id,position:{x:7,y:0,z:8},room:'cafe'});
  assert.equal(last(a.ws,'playerJoined').id,last(b.ws,'welcome').id,'the restored player hears the newcomer');
 
+ // A fresh object woken by the host closing still elects the remaining client
+ // and restores its reservation from the socket attachment.
+ {
+  const co=fakeCtx();let relay=new Lobby(co,{});
+  const host=(await connect(relay,co,'BCDEFG',true)).ws;
+  await relay.webSocketMessage(host,JSON.stringify(hello()));
+  clock++;
+  const guest=(await connect(relay,co,'BCDEFG',false)).ws;
+  await relay.webSocketMessage(guest,JSON.stringify(hello()));
+  const stock={flour:6,'coffee-beans':0},need=needsForStock(stock,0,[],{day:5});
+  const act=(action,request)=>JSON.stringify({type:'bakeryAction',action,request,needId:need.id,gigId:1});
+  await relay.webSocketMessage(host,JSON.stringify({type:'bakerySeed',now:7800,stock,needs:[need]}));
+  await relay.webSocketMessage(guest,act('accept','a1'));
+  assert.equal(last(guest,'bakeryResult').active.needId,need.id);
+  relay=new Lobby(co,{});
+  host.readyState=3;
+  await relay.webSocketClose(host,1000);
+  assert.equal(last(guest,'host').id,last(guest,'welcome').id);
+  await relay.webSocketMessage(guest,act('cancel','c1'));
+  assert.equal(last(guest,'bakeryResult').active,null);
+  assert.deepEqual(last(guest,'bakeryBoard').claims,[]);
+ }
+
  // A socket that never says hello is dropped by the alarm.
  const quiet=await connect(obj,ctx,'ABCDEF',false);
  assert(ctx.alarmAt<=clock+HELLO_TIMEOUT_MS);
@@ -68,5 +92,5 @@ try{
  assert.equal((await handleRequest(new Request('https://s.example/other'),{})).status,404);
  assert.equal((await handleRequest(new Request('https://s.example/relay/new'),{})).status,426);
  assert.equal((await handleRequest(new Request('https://s.example/relay/new',{headers:{upgrade:'websocket',origin:'https://evil.example'}}),{})).status,403);
- console.log('Hosted relay object: create, taken code 409, hibernation restore with the latest position, hello timeout, empty lobby kept 10 min then forgotten, unknown codes, routing and Origin passed.');
+ console.log('Hosted relay object: create, taken code 409, hibernation restore with position and bakery claims, host departure on wake, hello timeout, empty lobby kept 10 min then forgotten, unknown codes, routing and Origin passed.');
 }finally{Date.now=realNow;globalThis.Response=RealResponse}

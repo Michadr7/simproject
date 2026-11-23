@@ -3,10 +3,11 @@
 // ctx = {clients:[{id,name}], places:[{id,x,z,room}]}; the default is built lazily from the town (population.js + orders.js dropSpot).
 import {townPopulation} from './population.js';
 import {dropSpot} from './orders.js';
+import {GOODS as BAKERY_GOODS,SACKS_PER_PALLET,isBakeryGood,isOldBakeryPlankNeed,normalizeBakeryStock} from './bakery-needs.js';
 import {propertyById} from './properties.js';import {normalizeDrop,PARCEL_FIRST,PARCEL_PICKUP_FIRST,PARCEL_ON_BED} from './gig-parcel.js';
 import {payFor as payGig,parMetres,meetsMinPar,canTakeMore,fatigueFactor,WALK_M_PER_GAME_MIN,FASTEST_M_PER_GAME_MIN,HANDLING_C,MIN_PAR_M} from './gig-pay.js'; // G-B (notes/gig-overhaul-design.md): pay, par, daily fatigue live in gig-pay.js
 // W-D2 (notes/world-system-design.md, Needs -> gigs): the board of normal play is the world's open needs; a need gig claims its need, fills it on completion and is paid by needPay.
-import {needSlots,claim,fill,release,needPay,openNeeds,remainingOf,dayOf,isBoardable} from './needs.js';import {buy,deliver} from './world-state.js';import {CRATE_UNITS,PLACES as WORLD_PLACES,GOODS} from './world-goods.js';import {helped,gainStanding} from './npc-life.js';import {ROSTER} from './npc-roster.js';import {acceptsCrates,takesCrateGigs} from './cargo.js';import {PARCEL_PIECES_ENABLED,removeParcelPieces} from './cargo-items.js';import {PLANKS_PER_STACK} from './plank-economy.js';import {normalizeYard} from './sawmill-yard.js';
+import {needSlots,claim,fill,release,needPay,openNeeds,remainingOf,dayOf,isBoardable} from './needs.js';import {buy,deliver} from './world-state.js';import {CRATE_UNITS,PLACES as WORLD_PLACES,GOODS} from './world-goods.js';import {helped,gainStanding} from './npc-life.js';import {ROSTER} from './npc-roster.js';import {acceptsCrates,takesCrateGigs,addBakeryPallet,removeBakeryPallet} from './cargo.js';import {PARCEL_PIECES_ENABLED,removeParcelPieces} from './cargo-items.js';import {PLANKS_PER_STACK} from './plank-economy.js';import {normalizeYard} from './sawmill-yard.js';
 const T=(id,title,base,o={})=>Object.freeze({id,title,base,stops:1,rep:0,bed:false,limit:0,hard:false,...o});
 export const GIG_TYPES=Object.freeze([
  T('grocery','Grocery run',1200,{limit:60,twist:'Deliver within 60 game minutes'}),
@@ -124,21 +125,21 @@ export function routeOf(origin,places){
 const pairKey=(origin,places)=>origin.id+'>'+places.map(x=>x.id).join('+');
 // ---- W-D2: the needs board and the egg run. The world lives in progress.world, the need list in progress.needs; a claim is held under NEED_PLAYER.
 export const hasCrateBed=p=>(p.vehicles||[]).some(v=>!v.loan&&takesCrateGigs(v.model)); // Hal's loan truck belongs to the starter story: it never carries need crates
-const isHaulGood=g=>!!CRATE_UNITS[g]||g==='planks';
+const isHaulGood=g=>!!CRATE_UNITS[g]||g==='planks'||isBakeryGood(g);
 export const needsPickup=a=>!!a?.needId&&a.type==='need-restock'&&isHaulGood(a.needGood)&&!(a.haul>0); // the crates or planks are still at the pickup point
 export const cratesFor=(good,units)=>CRATE_UNITS[good]?Math.ceil(Math.max(0,units)/CRATE_UNITS[good]):0;
 export function needBoard(p,now=gameMinutes(p)){
- const list=openNeeds(p.needs||[]).filter(n=>isBoardable(n.kind)&&remainingOf(n)>0&&!n.claims[NEED_PLAYER]&&(n.dueDay+1)*1440>now);
+ const list=openNeeds(p.needs||[]).filter(n=>isBoardable(n.kind)&&!isOldBakeryPlankNeed(n)&&remainingOf(n)>0&&!n.claims[NEED_PLAYER]&&(n.dueDay+1)*1440>now);
  // goods that must travel (restock, harvest, errand) need a route of at least the walking minimum par, like every board gig since G-B; a chore (clear, repair, tend, tow, serve) is done where it is. Places with only a placeholder point (sawmill, forest, warehouse: parM 0 to 45 m) therefore stay off the board until W-E gives them real points.
- return needSlots(list,{names:NAMES},12).filter(s=>(CHORE_KINDS.includes(s.kind)||s.good==='planks'||s.parM>=MIN_PAR_M.walk)&&(!NEEDS_PICKUP_KINDS.includes(s.kind)||isHaulGood(s.good))).slice(0,BOARD_SLOTS).map((s,i)=>{const crate=s.type==='need-restock'&&!!CRATE_UNITS[s.good],planks=s.type==='need-restock'&&s.good==='planks';return {...s,slot:i,mode:crate||planks?'vehicle':s.mode,blocked:crate&&!hasCrateBed(p)?NEEDS_TRUCK:planks&&!hasBed(p)?NEEDS_TRUCK:'',crates:crate?cratesFor(s.good,s.remaining):0,stacks:planks?Math.ceil(s.remaining/PLANKS_PER_STACK):0}});
+ return needSlots(list,{names:NAMES},12).filter(s=>(CHORE_KINDS.includes(s.kind)||s.good==='planks'||isBakeryGood(s.good)||s.parM>=MIN_PAR_M.walk)&&(!NEEDS_PICKUP_KINDS.includes(s.kind)||isHaulGood(s.good))).slice(0,BOARD_SLOTS).map((s,i)=>{const crate=s.type==='need-restock'&&!!CRATE_UNITS[s.good],planks=s.type==='need-restock'&&s.good==='planks';return {...s,slot:i,mode:crate||planks?'vehicle':s.mode,blocked:(crate||(isBakeryGood(s.good)&&s.mode==='vehicle'))&&!hasCrateBed(p)?NEEDS_TRUCK:planks&&!hasBed(p)?NEEDS_TRUCK:'',crates:crate?cratesFor(s.good,s.remaining):0,stacks:planks?Math.ceil(s.remaining/PLANKS_PER_STACK):0}});
 }
 // What a need gig pays right now (the card shows it): needPay on a quality 100 on-time run. need = the live need record.
 export function needReward(p,need,mode,parM,now=gameMinutes(p)){
- if(!need)return 0;return needPay(need,remainingOf(need),100,mode,parM,{day:dayOf(now),before:need.filled,doneToday:doneTodayOf(p.gigs,now),onTime:true}).total;
+ if(!need)return 0;const left=remainingOf(need),units=isBakeryGood(need.good)?Math.min(left,mode==='vehicle'?SACKS_PER_PALLET:1):left;return needPay(need,units,100,mode,parM,{day:dayOf(now),before:need.filled,doneToday:doneTodayOf(p.gigs,now),onTime:true}).total;
 }
 export const needOf=(p,a)=>a?.needId?(p.needs||[]).find(n=>n.id===a.needId)||null:null;
 const slotReward=(p,s,now)=>needReward(p,(p.needs||[]).find(n=>n.id===s.needId),s.mode,s.parM,now);
-export const slotOffer=(p,s,now=gameMinutes(p))=>({reward:slotReward(p,s,now),terms:s.blocked||`${s.remaining} ${s.good||'unit'}${s.crates?` (${s.crates} crate${s.crates===1?'':'s'})`:s.stacks?` (${s.stacks} stack${s.stacks===1?'':'s'})`:''} · due day ${s.expiresAt/1440}`});
+export const slotOffer=(p,s,now=gameMinutes(p))=>({reward:slotReward(p,s,now),terms:s.blocked||(isBakeryGood(s.good)?(`${s.mode==='vehicle'?`1 pallet (${SACKS_PER_PALLET} sacks)`:'1 sack'} of ${BAKERY_GOODS[s.good].label.toLowerCase()} · due day ${s.expiresAt/1440}`):`${s.remaining} ${s.good||'unit'}${s.crates?` (${s.crates} crate${s.crates===1?'':'s'})`:s.stacks?` (${s.stacks} stack${s.stacks===1?'':'s'})`:''} · due day ${s.expiresAt/1440}`)});
 // The board: BOARD_SLOTS slots, each with its own expiry staggered by SLOT_STAGGER; never two of one type; a type you just finished is skipped.
 // Keyed on day/window/slot and WORLD_SEED only (not g.completed), so every player in a world sees the same board. Offers whose par is below MIN_PAR_M[mode] are dropped
 // (a different client/place/type is tried first); a pair (pickup to drop) done today rests PAIR_REST_DAYS; at the daily hard stop the board is empty.
@@ -254,8 +255,8 @@ export function completeGig(p,now=gameMinutes(p),opts={}){
 // The gig is over without paying (abandoned, or its need closed under it): the claim goes, goods the player carried go back to the source (never lost), no rep change.
 function giveBack(p,a){
  let {world,needs}=p,sawmillYard=p.sawmillYard;
- if(a.needId){needs=release(needs||[],a.needId,NEED_PLAYER);const n=(needs||[]).find(x=>x.id===a.needId);if(a.haul>0&&n?.origin&&world){world=deliver(world,n.origin,a.needGood,a.haul,null).world;if(a.needGood==='planks'&&n.origin==='property:sawmill'&&sawmillYard)sawmillYard=normalizeYard({...sawmillYard,planks:world.stock['property:sawmill'].planks})}}
- const out={...p,world,needs,gigs:{...p.gigs,active:null}};if(sawmillYard!==p.sawmillYard)out.sawmillYard=sawmillYard;return out;
+ if(a.needId){needs=release(needs||[],a.needId,NEED_PLAYER);const n=(needs||[]).find(x=>x.id===a.needId);if(a.haul>0&&WORLD_PLACES[n?.origin]?.goods?.[a.needGood]&&world){world=deliver(world,n.origin,a.needGood,a.haul,null).world;if(a.needGood==='planks'&&n.origin==='property:sawmill'&&sawmillYard)sawmillYard=normalizeYard({...sawmillYard,planks:world.stock['property:sawmill'].planks})}}
+ const out={...p,world,needs,gigs:{...p.gigs,active:null}};if(isBakeryGood(a.needGood)&&a.truck)out.vehicles=p.vehicles?.map(v=>v.uid===a.truck?{...v,cargo:removeBakeryPallet(v.cargo,a.id)}:v);if(p.carry?.kind==='sack'&&p.carry.gig===a.id)out.carry=null;if(sawmillYard!==p.sawmillYard)out.sawmillYard=sawmillYard;return out;
 }
 export function abandonGig(p,pieces=PARCEL_PIECES_ENABLED){const a=p.gigs?.active;if(!a)return {error:'You have no active gig.'};let s=endParcel(giveBack(p,a),a,pieces);if(!a.needId&&typeById(a.type)?.hard&&pickedUp(a))s={...s,gigs:{...s.gigs,rep:Math.max(0,s.gigs.rep-2)}};return {state:s,text:'You gave the job up.'}} // audit A F9: giving up a rush gig you had already picked up costs the same rep as failing it
 // After the daily tick: a need gig whose need closed (expired, or the shelf recovered) ends. Returns {state, text?}.
@@ -282,6 +283,18 @@ export function pickNeedHaul(p,now=gameMinutes(p),opts={}){
   if(yard)next.sawmillYard=normalizeYard({...yard,planks:left});
   return {state:next,units:take,stacks,crates:0,left,message:`Loaded ${stacks} stack${stacks===1?'':'s'} (${take} planks) · ${label} has ${left} left`};
  }
+ if(isBakeryGood(a.needGood)){
+  const pallet=a.mode==='vehicle',size=pallet?SACKS_PER_PALLET:1;
+  const uid=typeof opts.uid==='string'?opts.uid:'',truck=p.vehicles?.find(v=>v.uid===uid&&!v.loan&&takesCrateGigs(v.model));
+  if(pallet&&!truck)return {error:'Park your truck with an open bed by the Wholesale dock.'};
+  if(!pallet&&p.carry)return {error:'Put down what you are carrying before picking up a sack.'};
+  if((Number.isFinite(opts.maxUnits)&&opts.maxUnits<size)||remainingOf(need)<size||a.needQty<size)return {error:'There is no room for this load.'};
+  const load=pallet?addBakeryPallet(opts.bed===undefined?truck.cargo:opts.bed,truck.model,a.needGood,a.id):null;if(load?.error)return load;
+  const c=claim(p.needs,need.id,NEED_PLAYER,size,now);if(c.error||c.claimed!==size)return {error:c.error||'Already claimed by others.'};
+  const active={...a,haul:size,truck:pallet?uid:'',pickedAt:now};
+  const state={...p,needs:c.needs,gigs:{...p.gigs,active}};if(pallet)state.vehicles=p.vehicles.map(v=>v.uid===uid?{...v,cargo:load.cargo}:v);else state.carry={kind:'sack',good:a.needGood,gig:a.id};
+  return {state,units:size,sacks:size,crates:0,message:pallet?'Pallet loaded at Eden Wholesale.':'Sack picked up at Eden Wholesale.'};
+ }
  const have=p.world?.stock?.[src]?.[a.needGood]||0;
  if(have<1)return {error:a.needGood==='eggs'?'The coop is empty today.':'There is nothing to load today.'};
  const room=Number.isFinite(opts.maxUnits)?Math.max(0,Math.floor(opts.maxUnits)):1e9,want=Math.min(a.needQty,remainingOf(need),room);
@@ -300,13 +313,15 @@ function completeNeed(p,now,opts={}){
  const g=p.gigs,a=g.active,day=dayOf(now),need=needOf(p,a);
  if(!need||need.status!=='open')return {state:giveBack(p,a),paid:0,failed:true,closed:true};
  const hauled=a.type==='need-restock'&&isHaulGood(a.needGood);if(hauled&&!(a.haul>0))return {error:'Load the goods first.'};
+ if(isBakeryGood(a.needGood)){const has=a.truck?p.vehicles?.some(v=>v.uid===a.truck&&v.cargo?.some(c=>c.k==='bakery-pallet'&&c.j===a.id&&c.g===a.needGood)):p.carry?.kind==='sack'&&p.carry.gig===a.id&&p.carry.good===a.needGood;if(!has)return {error:'Bring the bakery load with you.'}}
  const r=fill(p.needs,p.world,need.id,NEED_PLAYER,hauled?a.haul:a.needQty,now,{carried:hauled});if(r.units<1)return {error:'Nothing could be delivered.'};
- let world=r.world,sawmillYard=p.sawmillYard;const left=hauled?a.haul-r.units:0;if(left>0&&need.origin){world=deliver(world,need.origin,a.needGood,left,null).world;if(a.needGood==='planks'&&need.origin==='property:sawmill'&&sawmillYard)sawmillYard=normalizeYard({...sawmillYard,planks:world.stock['property:sawmill'].planks})} // what the destination could not take goes back to the origin
+ let world=r.world,sawmillYard=p.sawmillYard;const left=hauled?a.haul-r.units:0;if(left>0&&WORLD_PLACES[need.origin]?.goods?.[a.needGood]){world=deliver(world,need.origin,a.needGood,left,null).world;if(a.needGood==='planks'&&need.origin==='property:sawmill'&&sawmillYard)sawmillYard=normalizeYard({...sawmillYard,planks:world.stock['property:sawmill'].planks})} // what the destination could not take goes back to the origin
  const elapsed=now-(a.pickedAt??a.acceptedAt),onTime=elapsed<=(a.onTimeMin||onTimeLimit(a.parM)),pay=needPay(need,r.units,100,a.mode,a.parM,{day,before:need.filled,doneToday:doneTodayOf(g,now),generosity:opts.generosity||0,onTime,elapsedMin:elapsed});
  const npcs=p.npcs&&p.npcs[a.client]?{...p.npcs,[a.client]:helped(p.npcs[a.client],day)}:p.npcs,standing=a.client?gainStanding(p.standing,a.client,1,day):p.standing;
  const recent=[...g.recent,{type:a.type,at:now}].filter(x=>x.at>now-1440).slice(-RECENT_MAX),filled=r.needs.find(x=>x.id===need.id)?.status==='filled';
  const next={...p,cash:p.cash+pay.total,routine:{...p.routine,earned:(p.routine?.earned||0)+pay.total},world,needs:release(r.needs,need.id,NEED_PLAYER),npcs,standing, // audit A F6: a partial delivery frees the player's claim (a left-over claim hid the need from the board until it expired)
   gigs:{...g,active:null,rep:Math.min(100,g.rep+2),recent,completed:g.completed+1,clientsSeen:{...g.clientsSeen,[a.client]:day},pairsSeen:a.origin?{...g.pairsSeen,[pairKey(a.origin,a.places)]:day}:g.pairsSeen,...bumpDone(g,now)}};
  if(sawmillYard!==p.sawmillYard)next.sawmillYard=sawmillYard;
+ if(isBakeryGood(a.needGood)){const stock=normalizeBakeryStock(p.bakeryStock);stock[a.needGood]+=r.units;next.bakeryStock=normalizeBakeryStock(stock);if(a.truck)next.vehicles=p.vehicles.map(v=>v.uid===a.truck?{...v,cargo:removeBakeryPallet(v.cargo,a.id)}:v);if(p.carry?.kind==='sack'&&p.carry.gig===a.id)next.carry=null}
  return {paid:pay.total,quality:100,tooFast:pay.tooFast,tip:pay.tip,units:r.units,needFilled:filled,client:a.client,state:next};
 }

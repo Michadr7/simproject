@@ -1,4 +1,4 @@
-// eden-wholesale.js: EDEN WHOLESALE, the small food-and-goods wholesaler that supplies Ironwood Bakery with flour and coffee beans (owner decision 2026-11-19; a Bruce Hughes / Eden company). Size, doors, counter, dock, pickup, lamps, sign, goods, hours. Pure data, NOT WIRED.
+// eden-wholesale.js: EDEN WHOLESALE, the small food-and-goods wholesaler that supplies Ironwood Bakery with flour and coffee beans (owner decision 2026-11-19; a Bruce Hughes / Eden company). Size, doors, counter, dock, pickup, lamps, sign, goods, hours. Pure data for the retail shop and bakery supplier.
 // No DOM, no three.js, no globals. The model is scripts/build-eden-wholesale.mjs -> dist/assets/buildings/eden-wholesale.glb (one mesh, one vertex-colour material, anchor_* empties at these points).
 // LOCAL coordinates, like every house/shop prop: origin = the middle of the 12 x 9 m footprint on the ground, y up, the FRONT faces +z (shop door, sign and loading dock all on the front), 1 unit = 1 m.
 // A map landmark {x,z,yaw} turns local into world with worldPoint(); yaw Math.PI makes the front face north (-z), as the Main Street shops on C1..C7 do. Hours and the counter are PLACEHOLDERS.
@@ -13,7 +13,7 @@ export const SIZE=Object.freeze({w:12,d:9,h:6.3,wallH:5.6}); // footprint w (x) 
 export const DOOR=Object.freeze({x:-2.3,z:3.8,width:1.8,height:2.3,facing:'+z',yaw:0});
 // The staff door on the WEST side wall (x -6), which faces Barber's Walk when the building stands on site 1 (yaw 0). Not enterable: a look and a future staff spot. yaw = the way it faces.
 export const SIDE_DOOR=Object.freeze({x:-6,z:-3.5,width:1.0,height:2.2,facing:'-x',yaw:-Math.PI/2});
-// Where the buy prompt stands: the shops are not enterable yet, so the 'counter' is outside the door (like the Eastbank garage counter point). PLACEHOLDER until an interior exists.
+// The outdoor approach to the retail entrance and the GLB's original counter anchor.
 export const COUNTER=Object.freeze({x:-2.3,z:4.9});
 // The loading dock: a flush 0.15 m concrete apron under a canopy on the right of the front, a roller shutter behind it (x 2.6..5.6).
 export const DOCK=Object.freeze({x:3.7,z:4.5,y:.15,width:4.6,depth:3.3,facing:'+z'}); // DOCK.x/z = the middle of the dock's front edge: where a truck's tailgate stops
@@ -36,6 +36,7 @@ export const SOLIDS=Object.freeze([{id:'hall',x0:-6,x1:6,z0:-4.5,z1:1.2,y:6.08},
 export const ANCHORS=Object.freeze({anchor_door:[DOOR.x,0,DOOR.z],anchor_side_door:[SIDE_DOOR.x,0,SIDE_DOOR.z],anchor_counter:[COUNTER.x,0,COUNTER.z],anchor_dock:[DOCK.x,DOCK.y,DOCK.z],anchor_pickup:[PICKUP.x,PICKUP.y,PICKUP.z],anchor_truck:[TRUCK_BAY.x,0,TRUCK_BAY.z],
  'anchor_stock_flour':[STOCK.flour.x,STOCK.flour.y,STOCK.flour.z],'anchor_stock_coffee-beans':[STOCK['coffee-beans'].x,STOCK['coffee-beans'].y,STOCK['coffee-beans'].z],
  ...Object.fromEntries(LAMPS.map(l=>['anchor_lamp_'+l.id,[l.x,l.y,l.z]]))});
+export const RETAIL_GOODS=Object.freeze(['flour-bag','ground-coffee']);
 export const GOODS_SOLD=Object.freeze([...GOOD_KEYS]); // ['flour','coffee-beans'] from bakery-goods.js; prices live there (priceOf)
 export const sells=key=>GOODS_SOLD.includes(key);
 // Opening hours in minutes after midnight (the map-definition.js `hours:[open,close]` shape): 07:00-17:00, PLACEHOLDER.
@@ -49,5 +50,5 @@ export function worldPoint(p,pose){const [x,y,z]=Array.isArray(p)?p:[p.x,p.y||0,
 export function footprintAt(pose){const a=worldPoint([-SIZE.w/2,0,-SIZE.d/2],pose),b=worldPoint([SIZE.w/2,0,SIZE.d/2],pose);return {x0:Math.min(a.x,b.x),x1:Math.max(a.x,b.x),z0:Math.min(a.z,b.z),z1:Math.max(a.z,b.z)}}
 // Two candidate sites in Ironwood (zone x -20..70, z -142..-48; notes/ironwood-city-design.md 1.4). The owner chose site 1 (behind-c6-c7); the map lane places it.
 export const SITE_CANDIDATES=Object.freeze([
- Object.freeze({id:'behind-c6-c7',pose:Object.freeze({x:36,z:-67.5,yaw:0}),note:'behind the Pharmacy and Bank (C6/C7), front and dock facing south onto the car park; about 40 m on foot to the bakery door via Barber\'s Walk; the truck backs in over car-park bay 20 (x 37.8..40.5)'}),
+ Object.freeze({id:'behind-c6-c7',pose:Object.freeze({x:36,z:-67.5,yaw:0}),note:'behind the Pharmacy and Bank (C6/C7), front and dock facing south onto the car park; about 40 m on foot to the bakery door via Barber\'s Walk; original site before the rear alley was added'}),
  Object.freeze({id:'back-court-west',pose:Object.freeze({x:-15.5,z:-115.5,yaw:-Math.PI/2}),note:'the west end of the paved back court behind the Police Station, front and dock facing west onto the County Road verge (x -26..-20); about 85 m by road to the bakery'})]);

@@ -4,7 +4,7 @@ import {ID,MODEL,SIZE,DOOR,SOLIDS} from './eden-wholesale.js';
 import {windowsLit,isDark,WINDOW} from './night-lights-rules.js';
 
 export const PROP_ID=ID;
-export const POSE=Object.freeze({x:36,z:-67.5,yaw:0}); // site 1, behind the Pharmacy and Bank (owner 2026-11-19): footprint x 30..42, z -72..-63, front, door and dock facing south onto the car park
+export const POSE=Object.freeze({x:36,z:-64.5,yaw:0}); // 3 m rear alley between Wholesale and the Pharmacy/Bank plots
 // The props-assets.js record shape: size, footprint, colliders {x,z,hx,hz} (here the registry's SOLIDS, local), no walkable floor (the 0.15 m dock apron is walked as ground), the shop door.
 export const PROP_INFO=Object.freeze({placeholder:true,model:MODEL,width:SIZE.w,depth:SIZE.d,height:SIZE.h,floor:null,
  footprint:Object.freeze({x0:-SIZE.w/2,x1:SIZE.w/2,z0:-SIZE.d/2,z1:SIZE.d/2}),

@@ -19,6 +19,7 @@ const g=await bootGame({play:false,editRelease:async dir=>{
 }});
 try{
  g.pump(1);
+ await new Promise(resolve=>setImmediate(resolve));
  g.ids.get('start').click();
  g.pump(2);
  assert(globalThis.__webgpuRenderer?.initialized,'WebGPURenderer initialized');
@@ -36,6 +37,9 @@ try{
  assert(hi1.length>5,'world has TSL ground meshes: '+hi1.length);
  for(const {mat} of hi1)assert(!mat.userData.groundProgramKey.endsWith('-lo'),'initial high groundProgramKey: '+mat.userData.groundProgramKey);
 
+ g.ids.get('menuQuality').onchange();
+ assert.deepEqual(groundMeshes().map(e=>e.mat),hi1.map(e=>e.mat),'selecting the current quality retains the built materials');
+
  const disposed1=new Set();
  const uniqueHi1=new Set(hi1.map(e=>e.mat));
  for(const m of uniqueHi1){const orig=m.dispose?.bind(m);m.dispose=()=>{disposed1.add(m);orig?.()}}
@@ -45,6 +49,7 @@ try{
  g.ids.get('menuQuality').onchange();
  g.pump(.2);
 
+ assert.equal(globalThis.__webgpuRenderer.shadowMap.enabled,false,'Low turns off the shadow map');
  const lo=groundMeshes();
  assert.equal(lo.length,hi1.length,'same number of TSL ground meshes after low rebuild');
  for(let i=0;i<hi1.length;i++){
@@ -64,6 +69,7 @@ try{
  g.ids.get('menuQuality').onchange();
  g.pump(.2);
 
+ assert.equal(globalThis.__webgpuRenderer.shadowMap.enabled,true,'High turns on the shadow map');
  const hi2=groundMeshes();
  assert.equal(hi2.length,lo.length,'same number of TSL ground meshes after high rebuild');
  for(let i=0;i<lo.length;i++){
@@ -72,7 +78,7 @@ try{
  }
  assert.equal(disposed2.size,uniqueLo.size,`all ${uniqueLo.size} old low TSL ground materials disposed (got ${disposed2.size})`);
 
- console.log(`PASS webgpu-ground-quality.mjs: live high->low->high rebuilt ${uniqueHi1.size} TSL ground materials (${hi1.length} meshes), disposed old materials, updated groundProgramKey, and preserved polygonOffset.`);
+ console.log(`PASS webgpu-ground-quality.mjs: live high->low->high rebuilt ${uniqueHi1.size} TSL ground materials (${hi1.length} meshes), disposed old materials, updated groundProgramKey, preserved polygonOffset, and reused the materials when reselecting the current tier.`);
 }finally{
  await g.done();
 }

@@ -15,6 +15,8 @@ export const CARRY_MODES=Object.freeze({sack:'hand',pallet:'vehicle'}); // sacks
 
 // Per-good demand at Ironwood Bakery, referenced directly from bakery-goods.js DEMAND (flour 6/18, coffee-beans 4/12).
 export const BAKERY_DEMAND=Object.freeze(Object.fromEntries(GOOD_KEYS.map(k=>[k,DEMAND[k][BAKERY]])));
+export const BAKERY_DAILY_USE=1;
+export function normalizeBakeryStock(stock){return Object.fromEntries(GOOD_KEYS.map(g=>[g,clamp(isInt(stock?.[g])?stock[g]:0,0,BAKERY_DEMAND[g].max)]))}
 const BAKERY_LABEL=BAKERY_DEMAND[GOOD_KEYS[0]].label;
 
 const isInt=Number.isSafeInteger;

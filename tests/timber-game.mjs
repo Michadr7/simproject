@@ -2,6 +2,7 @@
 // a trunk is picked up with empty hands and slows you to 60%, the saw takes two logs and a trunk at the feed end, and a slab comes off the yard's pile.
 import assert from 'node:assert/strict';
 import {bootGame} from './support/boot-game.mjs';
+import {waitForSawmill} from './support/mock-renderer.mjs';
 import {worldLayout} from '../dist/world.js';
 import {hire} from '../dist/careers.js';
 import {clockIn} from '../dist/shift.js';
@@ -26,6 +27,7 @@ const DAY=3,tree=markedTrees(worldLayout().cuttable,DAY)[1],SAW=MAP.landmarks.fi
 const g=await bootGame({position:{x:tree.x-1.4,z:tree.z},editRelease:async dir=>{const f=join(dir,'game.js'),src=await readFile(f,'utf8');assert(src.includes(HOOK),'game.js loads the timber models');await writeFile(f,src.replace(HOOK,'if(globalThis.__timberParts){Object.assign(TIMBER,globalThis.__timberParts);timberLoaded()}else '+HOOK))}});
 try{
  const {GameState,pump,send,ids,scene}=g,obj=n=>scene().getObjectByName(n),p=()=>GameState.progress,me=()=>GameState.me.position,prompt=()=>ids.get('prompt').querySelector('span').textContent||'';
+ await waitForSawmill(scene());
  const hold=s=>{send('keydown','KeyE');pump(s);send('keyup','KeyE');pump(.5)},tap=()=>hold(.1),putDown=()=>{send('keydown','KeyX');send('keyup','KeyX');pump(1.2)},go=(x,z)=>{me().x=x;me().z=z;pump(.6)};
  GameState.progress={...equipTool(hire(p(),'ridgeline').state,'axe').state,housing:{...p().housing,day:DAY},routine:{...p().routine,minutes:600}};GameState.progress=clockIn(p(),'ridgeline').state;pump(1);
  // fell: ONE trunk

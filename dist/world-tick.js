@@ -2,6 +2,7 @@
 // game.js calls worldDue(progress) every frame (two reads and a compare) and runWorldDay when it is true: once per day number, at 05:00 game time, up to 14 missed days after a load or a sleep. Only the authority ticks (single player, or the co-op host).
 // progress.world = world-state.js save, progress.needs = needs.js list, progress.npcs = npc-life.js saved NPC state, progress.standing = {people} (the PLAYER's standing, changed elsewhere).
 import {MAP} from './map-definition.js';
+import {BAKERY_DAILY_USE,normalizeBakeryStock,expireOldPlankNeeds} from './bakery-needs.js';
 import {townPopulation} from './population.js';
 import {dayPlan} from './schedule.js';
 import {ROSTER_ORDER,byId} from './npc-roster.js';
@@ -74,7 +75,7 @@ export function runWorldDay(progress,dayNow=tickTargetDay(progress),ctx={}){
  if(!wh.real){const d=PLACES[PALLET_LINK.place].goods[PALLET_LINK.good];world={...world,stock:{...world.stock,[PALLET_LINK.place]:{...world.stock[PALLET_LINK.place],[PALLET_LINK.good]:clamp(totalPlanks(company)+wh.spare,0,d.max)}}}}
  // 3. needs: past-due ones close (a late fill, the keeper's mood), then the new day's needs open
  const keepNeedIds=P.gigs?.active?.needId?[P.gigs.active.needId]:[]; // an old clear/repair need under the active gig stays until that gig ends (OFF_KINDS in needs.js)
- let needs=retireOffKinds(crewNeeds,keepNeedIds); // old open clear/repair needs go quietly, before expire() could charge the keeper's mood
+ let needs=expireOldPlankNeeds(retireOffKinds(crewNeeds,keepNeedIds),keepNeedIds); // old open clear/repair needs go quietly, before expire() could charge the keeper's mood
  const ex=expire(needs,world,dayNow,{keeperOf:ctx.keeperOf});needs=ex.needs;world=ex.world;
  for(const m of ex.consequences.mood)if(npcs[m.npc])npcs[m.npc]={...npcs[m.npc],mood:clamp(Math.round(npcs[m.npc].mood+m.delta),MOOD_MIN,MOOD_MAX)};
  const sickNpcs=[],needSeeds=[];
@@ -84,9 +85,11 @@ export function runWorldDay(progress,dayNow=tickTargetDay(progress),ctx={}){
    if((s.kind==='restock'||s.kind==='harvest')&&!PLACES[s.place]?.goods[s.good])continue; // needs.js reads the place's target for these kinds: only goods the world really holds
    if(PLACE_POINTS[s.place]||ctx.placePoint?.(s.place))needSeeds.push({kind:s.kind,place:s.place,good:s.good,person:s.person,qty:s.qty,dueIn:Math.max(1,s.dueDay-dayNow)})}} // seeds for places with no point on the map would only fill the board
  const plankStock={},openPlanks=needs.filter(n=>n.status==='open'&&n.good==='planks').length;let lowPicked=0;for(const [pl,d] of Object.entries(PLANK_DEMAND)){if(pl===PLANK_SUPPLIER)continue;const wantLow=openPlanks<2&&lowPicked<1&&hashOf(seed,pl,dayNow,'plank-need')%8===0;if(wantLow)lowPicked++;plankStock[pl]=wantLow?0:d.target}
- needs=needsFrom(world,dayNow,{needs,sickNpcs,needSeeds,plankStock,boardOnly:true,keepNeedIds,events:ctx.events,keeperOf:ctx.keeperOf,placePoint:ctx.placePoint});
+ const bakeryStock=normalizeBakeryStock(P.bakeryStock);
+ for(const good of Object.keys(bakeryStock))bakeryStock[good]=Math.max(0,bakeryStock[good]-BAKERY_DAILY_USE*(dayNow-first+1));
+ needs=needsFrom(world,dayNow,{needs,sickNpcs,needSeeds,plankStock,bakeryStock,boardOnly:true,keepNeedIds,events:ctx.events,keeperOf:ctx.keeperOf,placePoint:ctx.placePoint});
  yard=normalizeYard({...yard,planks:world.stock[SAWMILL_PLACE].planks}); // what the supply (and any late restock from the sawmill) took leaves the yard: conserved
- const out={...P,world,needs,npcs,sawmillYard:yard,crewMark:yard.logsSawn};
+ const out={...P,world,needs,npcs,bakeryStock,sawmillYard:yard,crewMark:yard.logsSawn};
  if(wh.real&&company!==wh.company)out.companies={...P.companies,[PALLET_LINK.company]:company};
  const plots=workforceStumps(P,dayNow+1,seed);if(plots!==P.plots)out.plots=plots;
  return out;

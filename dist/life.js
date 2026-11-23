@@ -9,15 +9,16 @@ export function needsEffects(life){const l=normalizeLife(life),dry=l.thirst<=0,s
  return {speed:tired?.75:1,canRun:!(tired||l.thirst<=NEED_LOW),energyCap:dry||starving?ENERGY_CAP_EMPTY:100,energyDrain:l.food<=NEED_LOW?1.5:1,dry,warn:['food','thirst','energy'].filter(k=>l[k]<=NEED_WARN),passOut:l.energy<=0}}
 // Energy that a gain may reach: it never rises above the cap, and never drops because of it.
 const capped=(l,next)=>Math.min(next,Math.max(l.energy,needsEffects(l).energyCap));
-export function tickLife(life,dt,moving,running,loadMultiplier=1,drainMultiplier=1){
+export function tickLife(life,dt,moving,running,loadMultiplier=1,drainMultiplier=1,warmMealMult=1,comfortDrain=1){
  const l=normalizeLife(life);dt=Number.isFinite(dt)?Math.max(0,Math.min(dt,.25)):0;
- const elapsed=dt*normalizeDrainMultiplier(drainMultiplier);
+ const elapsed=dt*normalizeDrainMultiplier(drainMultiplier),warm=Number.isFinite(warmMealMult)?Math.max(.1,Math.min(1,warmMealMult)):1;
+ const cd=Number.isFinite(comfortDrain)?Math.max(.5,Math.min(2.5,comfortDrain)):1;
  const rate=moving?(running?ENERGY_RATES.running:ENERGY_RATES.walking)*loadMultiplier:ENERGY_RATES.standing;
  // Thirst drains faster than food. Depletion adds a 1 point/second penalty
  // (2 points/second when both are empty), scaled by the testing multiplier.
  const drainFactor=needsEffects(l).energyDrain; // effects come from needsEffects (DESIGN 4.18), no hidden penalty
- l.food=Math.max(0,l.food-elapsed*.018);l.thirst=Math.max(0,l.thirst-elapsed*.028);
- l.energy=Math.max(0,l.energy-elapsed*rate*drainFactor);return l;
+ l.food=Math.max(0,l.food-elapsed*warm*.018);l.thirst=Math.max(0,l.thirst-elapsed*.028);
+ l.energy=Math.max(0,l.energy-elapsed*warm*rate*drainFactor*cd);return l;
 }
 export function lifeTransaction(state,action,place){const l=normalizeLife(state.life),s={...state,life:l};const fail=error=>({state:s,error});
  if(action==='groceries'){if(place!=='market')return fail('Visit the market cashier.');if(l.groceries>=20)return fail('Your inventory is full.');if(s.cash<400)return fail('You need $4.00 for groceries.');return {state:{...s,cash:s.cash-400,life:{...l,groceries:l.groceries+1}},message:'Groceries packed · prepare a meal in your kitchen.'}}

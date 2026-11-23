@@ -1,12 +1,14 @@
-// bakery-goods.js: the bakery's restock goods, FLOUR and COFFEE BEANS in sacks (owner decision 2026-11-19: Ironwood Bakery restocks these instead of planks): keys, names, unit, placeholder prices and stock, the models (scripts/build-bakery-goods.mjs). Pure data, NOT WIRED.
+// bakery-goods.js: the bakery's restock goods, FLOUR and COFFEE BEANS in sacks (owner decision 2026-11-19: Ironwood Bakery restocks these instead of planks): keys, names, unit, placeholder prices and stock, the models (scripts/build-bakery-goods.mjs). Pure cargo registry for bakery delivery gigs.
 // No DOM, no three.js, no globals. Money is integer cents, quantities whole sacks (the needs.js shape). Every price, mass, target and max here is a PLACEHOLDER until the owner tunes it.
 // Supplier: Eden Wholesale (owner 2026-11-19; placed in stage W-PLACE: map-definition.js property 'eden-wholesale' on plot C21, dist/eden-wholesale.js for its dock and pickup).
 export const BAKERY='property:alder-bakery'; // world-goods.js PLACES, map-definition.js:289 (Ironwood Bakery)
-export const SUPPLIER='property:eden-wholesale',SUPPLIER_LABEL='Eden Wholesale',SUPPLIER_NOTE='Eden Wholesale sells flour and coffee-bean sacks from its dock behind the Pharmacy and Bank (07:00-17:00); the gigs are not wired yet.';
+export const SUPPLIER='property:eden-wholesale',SUPPLIER_LABEL='Eden Wholesale',SUPPLIER_NOTE='Pick up bakery cargo from Eden Wholesale’s dock behind the Pharmacy and Bank (07:00-17:00).';
 export const PLACEHOLDER=true; // prices, masses and stock numbers below are not tuned
 export const MODEL_DIR='assets/goods/'; // under dist/, loaded like assets/timber (GLTFLoader, document.baseURI)
 export const VARIANTS=Object.freeze(['sack','carry','pallet']);
 export const SACKS_PER_PALLET=4;
+export const BAKERY_TRUCK_MODELS=Object.freeze(['worktruck','offroad','shortbed']);
+export const acceptsBakeryPallet=model=>BAKERY_TRUCK_MODELS.includes(model);
 // models: sack = one sack standing (base centre origin), carry = one sack lying across the arms (long side along x; size = its bounding box for carry-pose.js boxPose), pallet = a half pallet with four sacks.
 // Each GLB is ONE mesh, ONE primitive, ONE material (white x COLOR_0, roughness .95, double sided): draw each kind as one InstancedMesh and share one vertex-colour material between all of them.
 const good=(key,label,plural,massKg,baseCents,target,max,carrySize)=>Object.freeze({key,label,unit:'sack',unitPlural:'sacks',plural,massKg,baseCents,group:'bakery',supplier:SUPPLIER,

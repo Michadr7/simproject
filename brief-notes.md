@@ -2,7 +2,7 @@
 Eden Ridge: a buildless Three.js browser city sim (ES modules in `dist/`, Three.js in `dist/vendor/`). A 540 x 480 m map of six districts (Westside, Alder Center, Cedar Heights, Eastbank Works, Willow Fields, Pine Ridge), a river, two bridges. Walking, jobs (Ridgeline Timber, the cafe), shops, homes to rent or buy, vehicles with fuel, a lumber warehouse with a forklift, a multiplayer relay, accounts, cloud saves. Windows 11, VS Code, PowerShell 5.1. The user's GPU gives about 165 FPS; an agent's browser is software WebGL (about 4 FPS).
 
 ## State
-Live state, version and queue: `notes/handoff.md` lines 1-75 only (the rest is history: search by keyword). Mikkadr Hub (`hub/`) is paused until the map work is done.
+Read the current dated section and “Where to resume” in `notes/handoff.md` for the release and queue. Search the history by keyword when needed. Mikkadr Hub (`hub/`) is deferred.
 
 ## Standing rules
 - Start every chat with "michadr". Main models: Sonnet 5.5 (build and refactor against tests), Haiku 5.5 (tiny edits, number tweaks), Opus 5.5 (design, save formats, multiplayer, security). Fable 5.2 only when the user says so. Never switch model, start a subagent or call the advisor (read-only Opus) without the user's go-ahead: say which and why, then wait.

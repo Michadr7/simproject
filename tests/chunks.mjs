@@ -102,7 +102,7 @@ ok(WRANGE.cols===15&&WRANGE.rows===18&&WRANGE.cols*WRANGE.rows===270,'the world 
  ok(!grid[cell(WORLD.x0+3,0)]&&!grid[cell(WORLD.x1-3,0)]&&!grid[cell(0,WORLD.z1-3)],'the outermost 10 m is a wall');
  console.log('world tiles: 270 tiles in '+(performance.now()-t0).toFixed(0)+' ms')}
 // the streamed world: wilds are solid ground where loaded, empty chunks cost no draw call, and the whole-world mask is never built
-{const far={x:650,z:-700},edge={x:1030,z:-1180},r=world.ensure(far.x,far.z);ok(r.built>0&&view.isReady(far.x,far.z),'a chunk of the wilds builds on demand');
+{const far={x:-350,z:-800},edge={x:1030,z:-1180},r=world.ensure(far.x,far.z);ok(r.built>0&&view.isReady(far.x,far.z),'a chunk of the wilds builds on demand');
  ok(isWalkable(far.x,far.z)===true&&isWalkable(far.x+7,far.z-9)===true,'the wilds are walkable where loaded');ok(view.meshesOf(chunkKey(...Object.values(chunkIndex(far.x,far.z))))===0,'an empty chunk adds no draw call of its own');
  world.ensure(edge.x,edge.z);ok(isWalkable(edge.x,edge.z)&&isWalkable(1039,-1189)&&!isWalkable(1045,-1189)&&!isWalkable(1030,-1196),'the far corner is walkable up to the 10 m wall (R3b: the north-east one, the south-east corner is sea now)');
  world.ensure(-430,-1180);ok(isWalkable(-439,-1189)&&!isWalkable(-445,-1189),'and the opposite corner');

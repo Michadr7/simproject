@@ -1,4 +1,7 @@
 
+import {POSE as WHOLESALE_POSE} from './eden-wholesale-place.js';
+import {footprintAt as wholesaleFootprint,HOURS as WHOLESALE_HOURS,ID as WHOLESALE_ID} from './eden-wholesale.js';
+import {DOWNTOWN_PLOTS,DOWNTOWN_LANDMARKS,DOWNTOWN_PROPERTIES,DOWNTOWN_POSTS,HOTEL_LANDMARKS,HOTEL_PROPERTIES,HOTEL_POSTS} from './downtown.js';
 import {WAREHOUSE_INTERIOR} from './warehouse-layout.js';import {DINER_RANKS,DINER_HOURS} from './diner-job.js';// The world as data. world.js, the minimap, the shops and game.js read this file; nothing else hard-codes zone edges, roads,
 // fields, shop doors or building footprints. Coordinates are metres: +x east, -z north (the default camera looks north up
 // Oak Street). Adding a district means adding data here (and, later, scenery code that reads it), not editing the engine.
@@ -121,13 +124,22 @@ const NORTH_RIVER=[
  rv(-290,195,15,.55,WATER_Y.estuary,.8),rv(-230,215,16,.6,WATER_Y.estuary,.7),rv(-150,262,18,.7,WATER_Y.estuary,.6),rv(-60,300,20,.8,WATER_Y.estuary,.5),rv(20,330,22,.9,WATER_Y.estuary,.4),
  rv(80,345,24,1,WATER_Y.estuary,.35),rv(118,375,25,1,WATER_Y.estuary,.3),rv(125,415,25,1,WATER_Y.estuary,.3),rv(125,452,25,1,WATER_Y.estuary,.3)
 ];
+const BLACKSTONE_STREAM=[
+ rv(720,-764,7,.45,-.85,.7),
+ rv(712,-715,7,.45,-.88,.6),
+ rv(700,-660,8,.5,-.9,.5)
+];
+const BLACKSTONE_LAKE_OUTLINE=[[540,-470],[545,-585],[605,-655],[700,-660],[785,-620],[800,-520],[765,-445],[650,-440],[560,-445]];
 const water={
- rivers:[{id:'north-river',bank:RIVER_BANK,shore:RIVER_BANK,points:NORTH_RIVER}],
+ rivers:[{id:'north-river',bank:RIVER_BANK,shore:RIVER_BANK,points:NORTH_RIVER},{id:'blackstone-stream',bank:1.8,shore:2.2,points:BLACKSTONE_STREAM}],
  // Bridges: the two old ones (north-south decks over the old reach) and, R3b, West Bank Bridge (axis 'x': a 30 m deck along x, x -349..-319, z 2..8, over the south reach at z 5) and the Estuary Bridge (axis 'x': a 40 m deck over the 25 m estuary at z 400).
  // A `wild` bridge lies in the wilds (inside the world, no zone to match); its deck is as wide as the road it carries. Every deck rises BRIDGE_RISE (1.0 m, height.js) at its crown.
  bridges:[{id:'county-bridge',river:'north-river',x0:-35,x1:-25,z0:n(-104),z1:n(-76)},{id:'freight-bridge',river:'north-river',x0:190,x1:200,z0:-226,z1:-186},
   {id:'west-bank-bridge',name:'West Bank Bridge',river:'north-river',axis:'x',x0:-349,x1:-319,z0:2,z1:8,wild:true},
   {id:'estuary-bridge',name:'Estuary Bridge',river:'north-river',axis:'x',x0:105,x1:145,z0:395,z1:405,wild:true}],
+ lakes:[{id:'blackstone-lake',outline:BLACKSTONE_LAKE_OUTLINE,y:WATER_Y.outflow,depth:2.5,shore:25,inflow:[700,-660],outflow:[540,-470]}],
+ falls:[{id:'blackstone-falls',lip:{x:720,z:-770,y:5.1},drop:6,w:5,dir:[0,1],pool:{r:6,depth:1.5}}],
+ fords:[{id:'blackstone-ford',river:'blackstone-stream',x:712,z:-715,w:7,depth:.3}],
  sea:{shoreline:SEA_SHORELINE,y:WATER_Y.estuary,beach:SEA_BEACH,swell:SEA_SWELL}
 };
 
@@ -200,8 +212,9 @@ const reserved=[
  {id:'C10',name:'Commercial plot C10',kind:'commercial',facing:'south',x0:1,x1:9,z0:-107,z1:-99},
  // I3: C5 is retired (it is now Barber's Walk, a pavement to the car park); the barber moved to C12, east of Ironwood Street, facing west onto its sidewalk.
  {id:'C12',name:'Commercial plot C12',kind:'commercial',facing:'west',x0:57,x1:69,z0:-66,z1:-59},
+ ...DOWNTOWN_PLOTS,
  // W-PLACE (owner 2026-11-19): Eden Wholesale, behind the Pharmacy and Bank (C6/C7), front, door and loading dock facing south onto the car park.
- {id:'C21',name:'Commercial plot C21',kind:'commercial',facing:'south',x0:30,x1:42,z0:-72,z1:-63},
+ {id:'C21',name:'Commercial plot C21',kind:'commercial',facing:'south',...wholesaleFootprint(WHOLESALE_POSE)},
  {id:'R1',name:'Residential plot R1',kind:'residential',facing:'south',x0:94,x1:106,z0:-85,z1:-73,
   driveway:{x0:101.6,x1:105.1,z0:-75.9,z1:-63.5},path:{x0:99.25,x1:100.75,z0:-75.9,z1:-63.5},park:{x:103.35,z:-73.3,heading:'north'}},{id:'R2',name:'Residential plot R2',kind:'residential',facing:'south',x0:114,x1:126,z0:-83,z1:-71,
   driveway:{x0:121.6,x1:125.1,z0:-73.9,z1:-61},path:{x0:119.25,x1:120.75,z0:-73.9,z1:-61},park:{x:123.35,z:-71.3,heading:'north'}},{id:'R3',name:'Residential plot R3',kind:'residential',facing:'south',x0:134,x1:146,z0:-85,z1:-73,
@@ -289,18 +302,20 @@ const properties=[
  {id:'house-r6',type:'house',size:'small',landmark:'house-r6',plot:'R6',name:'6 Cedar Loop',access:'owner',owner:{type:'npc',name:'Priya Nair',body:'female'}},
  {id:'house-r7',type:'house',size:'small',landmark:'house-r7',plot:'R7',name:'7 Cedar Loop',access:'owner',owner:null,listing:{rentCents:17500,depositCents:35000,priceCents:1350000}},
  {id:'house-r8',type:'house',size:'small',landmark:'house-r8',plot:'R8',name:'8 Cedar Loop',access:'owner',owner:{type:'npc',name:'Grace Whitfield',body:'female'}},
- // Alder Center: shop and office interiors arrive with later updates.
- {id:'alder-store',type:'shop',landmark:'alder-store',plot:'C1',name:'Ironwood Store',enterable:false,reason:'Shop interiors arrive with the store jobs update (cashier shifts).'},
- {id:'alder-offices',type:'commercial',landmark:'alder-offices',plot:'C2',name:'Ironwood Offices',enterable:false,reason:'Office interiors arrive with a later update.'},
- {id:'alder-tower',type:'commercial',landmark:'alder-tower',plot:'C3',name:'Ironwood Tower',enterable:false,reason:'Office interiors arrive with a later update.'},
- {id:'alder-bakery',type:'shop',landmark:'alder-bakery',plot:'C4',name:'Ironwood Bakery',enterable:false,reason:'Shop interiors arrive with the store jobs update.'},
- {id:'alder-barber',type:'shop',landmark:'alder-barber',plot:'C12',name:'Ironwood Barber',enterable:false,reason:'Shop interiors arrive with the store jobs update.'},
- {id:'alder-pharmacy',type:'shop',landmark:'alder-pharmacy',plot:'C6',name:'Ironwood Pharmacy',enterable:false,reason:'Shop interiors arrive with the store jobs update.'},
- {id:'alder-bank',type:'commercial',landmark:'alder-bank',plot:'C7',name:'Ironwood Bank',enterable:false,reason:'Office interiors arrive with a later update.'},
- {id:'eden-wholesale',type:'shop',landmark:'eden-wholesale',plot:'C21',name:'Eden Wholesale',company:'Eden',enterable:false,reason:'A trade counter (07:00-17:00): flour and coffee-bean sacks for the bakery, and small bags of flour and ground coffee.'}, // W-PLACE: dist/eden-wholesale.js holds the counter, dock and pickup points
- {id:'police-station',type:'civic',landmark:'police-station',plot:'C8',name:'Police Station',enterable:false,reason:'Its interior arrives with a later update.'},
- {id:'alder-books',type:'shop',landmark:'alder-books',plot:'C9',name:'Ironwood Books',enterable:false,reason:'Shop interiors arrive with the store jobs update.'},
- {id:'alder-cinema',type:'commercial',landmark:'alder-cinema',plot:'C10',name:'Ironwood Cinema',enterable:false,reason:'Its interior arrives with a later update.'},
+ // Ironwood (Alder Center): all commercial, shop, and civic buildings are enterable.
+ {id:'alder-store',type:'shop',landmark:'alder-store',plot:'C1',name:'Ridge Clothing',hours:[480,1140],access:'public',owner:null,exteriorDoor:true},
+ {id:'alder-offices',type:'commercial',landmark:'alder-offices',plot:'C2',name:'Ironwood Offices',hours:[480,1080],access:'public',owner:null,exteriorDoor:true},
+ {id:'alder-tower',type:'commercial',landmark:'alder-tower',plot:'C3',name:'Ironwood Tower',hours:[480,1140],access:'public',owner:null,exteriorDoor:true},
+ {id:'alder-bakery',type:'shop',landmark:'alder-bakery',plot:'C4',name:'Ironwood Bakery',hours:[330,840],access:'public',owner:null,exteriorDoor:true},
+ {id:'alder-barber',type:'shop',landmark:'alder-barber',plot:'C12',name:'Ironwood Barber',hours:[540,1050],access:'public',owner:null,exteriorDoor:true},
+ {id:'alder-pharmacy',type:'shop',landmark:'alder-pharmacy',plot:'C6',name:'Ironwood Pharmacy',hours:[480,1080],access:'public',owner:null,exteriorDoor:true},
+ {id:'alder-bank',type:'commercial',landmark:'alder-bank',plot:'C7',name:'Ironwood Bank',hours:[540,1020],access:'public',owner:null,exteriorDoor:true},
+ {id:'eden-wholesale',type:'shop',landmark:'eden-wholesale',plot:'C21',name:'Eden Wholesale',company:'Eden',access:'public',enterable:true,owner:null}, // W-PLACE: dist/eden-wholesale.js holds the counter, dock and pickup points
+ {id:'police-station',type:'civic',landmark:'police-station',plot:'C8',name:'Police Station',hours:[420,1140],access:'public',owner:null,exteriorDoor:true},
+ {id:'alder-books',type:'shop',landmark:'alder-books',plot:'C9',name:'Ironwood Books',hours:[600,1080],access:'public',owner:null,exteriorDoor:true},
+ {id:'alder-cinema',type:'commercial',landmark:'alder-cinema',plot:'C10',name:'Ironwood Cinema',hours:[840,1380],access:'public',owner:null,exteriorDoor:true},
+ ...DOWNTOWN_PROPERTIES,
+ ...HOTEL_PROPERTIES,
  // The farm and the timber yard.
  {id:'farm-house',type:'farm',landmark:'farm-house',name:'Willow Farmhouse',access:'owner',owner:{type:'npc',name:'Hal Brennan',body:'male',outfit:'Farmer'}},
  {id:'farm-barn',type:'farm',landmark:'farm-barn',name:'The Barn',enterable:false,reason:'Barn interiors (storage, animal pens) arrive with the farming update.'},
@@ -314,9 +329,27 @@ const properties=[
  {id:'eastbank-warehouse',type:'industrial',landmark:'eastbank-warehouse',plot:'I1',name:'Eastbank Warehouse',enterable:false,reason:'Freight pickups (stock, furniture boxes) arrive with cargo in 0.35; the work happens at the docks outside.'},
  {id:'eastbank-workshop',type:'industrial',landmark:'eastbank-workshop',plot:'I4',name:'Eastbank Vehicle Workshop',enterable:false,reason:'Repairs arrive with tool wear and repairs (0.37).'},
  {id:'eastbank-supply',type:'shop',landmark:'eastbank-supply',plot:'I3',name:'Eastbank Building Supplier',enterable:false,reason:"The supplier's counter (blades, tools, whetstones) arrives with 0.35-0.37; the plank dock is in the timber yard behind."},
- {id:'eastbank-gas-kiosk',type:'shop',landmark:'eastbank-gas-kiosk',plot:'I2',name:'Eastbank Gas Station',enterable:false,reason:'Paying for fuel arrives with the fuel system (0.35).'},
+ {id:'eastbank-gas-kiosk',type:'shop',landmark:'eastbank-gas-kiosk',plot:'I2',name:'Eastbank Gas Station',hours:[360,1320],access:'public',owner:null,exteriorDoor:true},
  {id:'ridgeline-office',type:'industrial',landmark:'ridgeline-office',plot:'I5',name:'Ridgeline Timber Office',enterable:false,reason:'The company office has its own door on the timber yard side (see MAP.offices); it opens from 6 AM to 6 PM.'},
- {id:'riden-deals',type:'shop',landmark:'riden-deals',name:'Riden Deals',enterable:false,reason:'The showroom opens later: buy a vehicle on the lot (E at its driver door) or order one from the phone Store.'}
+ {id:'riden-deals',type:'shop',landmark:'riden-deals',name:'Riden Deals',enterable:false,reason:'The showroom opens later: buy a vehicle on the lot (E at its driver door) or order one from the phone Store.'},
+ // BZ6 (map-master 3.5): Kaspian Bay harbor buildings.
+ {id:'kaspian-harbor',type:'civic',landmark:'kaspian-harbor',name:'Harbor Master',hours:[300,1200],access:'public',owner:null,exteriorDoor:true},
+ {id:'kaspian-chandlery',type:'shop',landmark:'kaspian-chandlery',name:'Harbor Chandlery',hours:[420,1140],access:'public',owner:null,exteriorDoor:true},
+ {id:'kaspian-shack',type:'shop',landmark:'kaspian-shack',name:'Seafood Shack',hours:[480,1260],access:'public',owner:null,exteriorDoor:true},
+ {id:'kaspian-inn',type:'commercial',landmark:'kaspian-inn',name:'Bayview Inn',enterable:false,reason:'Tourist rooms by the sea arrive with the Kaspian Bay stay expansion.'},
+ {id:'kaspian-fish',type:'shop',landmark:'kaspian-fish',name:'Kaspian Fish Market',enterable:false,reason:'Dawn fish auctions and porter shifts arrive with Kaspian Bay gigs (BZ7).'},
+ {id:'kaspian-ferry',type:'civic',landmark:'kaspian-ferry',name:'Kaspian Ferry Terminal',enterable:false,reason:'Ferry departures and deckhand shifts arrive with Kaspian Bay gigs (BZ7).'},
+ {id:'kaspian-police',type:'civic',landmark:'kaspian-police',name:'Kaspian Bay Police',enterable:false,reason:'Coastal police post opens with the law and patrol phase (L4).'},
+ {id:'eden-cargo-terminal',type:'industrial',landmark:'eden-cargo-terminal',name:'Eden Cargo Terminal',enterable:false,reason:'Steel imports and container cranes open with harbor freight shipping (E-I5).'},
+ // E-I1 & B3 (map-master 4.3, 5.1): Eden Industries site & Eden Outdoors.
+ {id:'eden-guard-hut',type:'industrial',landmark:'eden-guard-hut',name:'Eden Main Gate Guardhouse',enterable:false,reason:'Security checkpoint at Eden Industries main gate (E-I1).'},
+ {id:'eden-office',type:'commercial',landmark:'eden-office',name:'Eden Office & Canteen',enterable:false,reason:"Bruce Hughes' office and plant canteen open with Eden interiors (E-I6)."},
+ {id:'eden-hall-a',type:'industrial',landmark:'eden-hall-a',name:'Hall A · Fabrication & Welding',hours:[360,1080],access:'public',owner:null,exteriorDoor:true},
+ {id:'eden-hall-b',type:'industrial',landmark:'eden-hall-b',name:'Hall B · Laser & Sheet Metal',enterable:false,reason:'Laser cutting shifts open with Eden manufacturing jobs (E-I4).'},
+ {id:'eden-hall-c',type:'industrial',landmark:'eden-hall-c',name:'Hall C · CNC Milling',enterable:false,reason:'CNC milling interiors and jobs open with Eden manufacturing (E-I4/E-I6).'},
+ {id:'eden-hall-d',type:'industrial',landmark:'eden-hall-d',name:'Hall D · Assembly & Paint',enterable:false,reason:'Assembly and paint booth jobs open with Eden manufacturing (E-I4).'},
+ {id:'eden-warehouse',type:'industrial',landmark:'eden-warehouse',name:'Eden Shipping Dock',enterable:false,reason:'Outbound steel trailers and dock shifts open with Eden shipping (E-I3/E-I5).'},
+ {id:'eden-outdoors',type:'shop',landmark:'eden-outdoors',name:'Eden Outdoors',hours:[420,1200],access:'public',owner:null,exteriorDoor:true}
 ];
 // Drivable vehicles (0.33, DESIGN 4.13 D): the two depot vehicles, parked nose to the back wall (north, so yaw pi: a model's front is +z) in the depot's first truck and car bays. Anyone can drive them (no keys yet). `model` is a converted
 // prop and a vehicle class (vehicle.js CLASSES); the id is the save key (`progress.vehicles`). The parked scenery cars and trucks elsewhere are not drivable.
@@ -339,9 +372,19 @@ const relief=Object.freeze({hills:Object.freeze([
  {id:'north-west-hill',x:-212,z:-356,rx:32,rz:30,h:8},
  // beyond Pine Ridge's east edge (past the Freight Road), north of the river
  {id:'ridge-east-hill',x:264,z:-300,rx:22,rz:32,h:8},
- {id:'ridge-east-knoll',x:266,z:-356,rx:20,rz:16,h:6}
+ {id:'ridge-east-knoll',x:266,z:-356,rx:20,rz:16,h:6},
+ // B1 (map-master 4.1): Blackstone Pass hills and summits
+ {id:'blackstone-peak',x:950,z:-1120,rx:250,rz:240,h:60},
+ {id:'west-crag',x:450,z:-1100,rx:200,rz:190,h:45},
+ {id:'high-pass-saddle',x:700,z:-1060,rx:170,rz:130,h:28},
+ {id:'overlook-spur',x:900,z:-900,rx:110,rz:100,h:24},
+ {id:'foothill-west',x:510,z:-790,rx:120,rz:90,h:10},
+ {id:'foothill-east',x:840,z:-790,rx:110,rz:85,h:12}
 ]),tracks:Object.freeze([
- {id:'west-hill-track',half:3,points:Object.freeze([[-58.5,5],[-100,5],...spiral(-192,5,52,48,.95,.2,1.8)])} // a dirt track from the west end of Oak Street, out across the meadow and up the big west hill: drivable, DIRT underfoot, joined to the street at x = -55
+ {id:'west-hill-track',half:3,points:Object.freeze([[-58.5,5],[-100,5],...spiral(-192,5,52,48,.95,.2,1.8)])}, // a dirt track from the west end of Oak Street, out across the meadow and up the big west hill: drivable, DIRT underfoot, joined to the street at x = -55
+ // B2 (map-master 4.1): Blackstone ATV loop (~1.6 km) + south shore beach path
+ {id:'blackstone-atv-loop',half:2,points:Object.freeze([[830,-720],[800,-840],[760,-950],[700,-1060],[570,-970],[450,-850],[510,-750],[600,-690],[712,-715],[830,-720]])},
+ {id:'lake-shore-path',half:1.5,points:Object.freeze([[590,-432],[640,-432],[690,-432],[700,-440]])}
 ])});
 const vehicles=[
  {id:'eastbank-worktruck',model:'worktruck',name:'Worktruck',sale:'both',home:{x:84.25,z:-13,yaw:PI},fuel:{type:'diesel',tankMgal:21000,port:{x:1.2,z:-2.2}}},
@@ -409,7 +452,9 @@ const posts=[
  {id:'riden-deals',at:{property:'riden-deals'},role:'Salesperson',hours:[540,1080],outfit:'Suit'},
  {id:'gas-kiosk',at:{property:'eastbank-gas-kiosk'},role:'Attendant',hours:[360,1320]},
  {id:'eastbank-supply',at:{property:'eastbank-supply'},role:'Counter clerk',hours:[420,1020],outfit:'Worker'},
- {id:'eden-wholesale',at:{property:'eden-wholesale'},role:'Clerk',hours:[420,1020]} // W-PLACE: last, so the residents keep their old posts
+ {id:'eden-wholesale',at:{property:'eden-wholesale'},role:'Clerk',hours:[420,1020]},
+ ...DOWNTOWN_POSTS, // append so the existing residents keep their posts
+ ...HOTEL_POSTS
 ];
 const employers=[ {id:'ridgeline',name:'Ridgeline Timber Co.',skill:'lumberjack',office:'ridgeline-office',owner:{kind:'npc',id:'walt-hargrove',name:'Walt Hargrove',title:'Owner'},
   hours:{from:360,to:1080,lastIn:1050},
@@ -442,8 +487,8 @@ export const MAP=deepFreeze({
  openCountry:{id:'open',name:'Open Country',label:'OPEN COUNTRY',subtitle:'Meadows between districts',color:'#6e8a5c'}, // how far the ground is drawn (scenery fades into fog beyond the walkable zones)
  zones,roads,water,fields,mud,buildings,shops,reserved,properties,paving,bayRows,garage,yards,vehicles,relief,employers,offices,exits,dwellings,posts,
  // The marked parking lot behind the south row of shops: bays 2.7 m wide and 5 m deep along its north edge, an aisle to Alder Street, the lot's own asphalt.
- // W-PLACE: 20 -> 17 bays: bays 18-20 (x 32.4..40.5) are now the open strip in front of Eden Wholesale's door and dock (the counter point and the truck bay).
- lots:[{id:'alder-lot',x0:-14,x1:45,z0:-63,z1:-52,bays:{x0:-13.5,z0:-63,count:17,width:2.7,depth:5}}],
+ // The east end stays clear of parking stripes for Wholesale's footway and dock approach.
+ lots:[{id:'alder-lot',x0:-14,x1:45,z0:-63,z1:-52,bays:{x0:-13.5,z0:-63,count:15,width:2.7,depth:5}}],
  // Parking lanes on the cross street (6 m bays, nose in the direction of traffic: eastbound on the south side, westbound on the north), and the lane edge lines.
  // I3: each lane is split around the new crosswalk on the hotel's axis (x 25): seven bays west of it (x -19..23) and one east of it (x 29..35), so 18 parallel bays became 16.
  parking:[{id:'cross-s',z:-85.25,edge:-86.5,x0:-19,x1:23,bay:6,face:'east'},{id:'cross-s2',z:-85.25,edge:-86.5,x0:29,x1:35,bay:6,face:'east'},{id:'cross-n',z:-94.75,edge:-93.5,x0:-19,x1:23,bay:6,face:'west'},{id:'cross-n2',z:-94.75,edge:-93.5,x0:29,x1:35,bay:6,face:'west'}],
@@ -488,8 +533,9 @@ export const MAP=deepFreeze({
   // Barber's Walk (on foot only, Main Street to the car park), the square's east terrace, the Bus Plaza, the back court, and the Alder Avenue gap (the strip west of the store, from the avenue's sidewalk to Main Street's).
   {x0:-20,x1:43,z0:-133,z1:-131,draw:true},{x0:43,x1:45,z0:-133,z1:-122,draw:true},{x0:55,x1:57,z0:-133,z1:-122,draw:true},{x0:57,x1:70,z0:-84,z1:-81,draw:true},{x0:57,x1:70,z0:-99,z1:-96,draw:true},
   {x0:21.5,x1:28.5,z0:-80.7,z1:-63,draw:true},{x0:38,x1:43,z0:-122,z1:-99.3,draw:true},{x0:57,x1:69,z0:-73.5,z1:-66,draw:true},{x0:-20,x1:9,z0:-122,z1:-108,draw:true},{x0:-21.5,x1:-20,z0:-84,z1:-60,draw:true},
-  // W-PLACE: Eden Wholesale's footway, from the foot of Barber's Walk east along the shop front to the dock's west edge (over the heads of the empty bays 15-17 and the removed bay 18), so walkers reach its door and counter on pavement; the dock and truck bay (x 37.5..42) stay open asphalt.
-  {x0:26.5,x1:37.5,z0:-63,z1:-61.5,draw:true},{x0:28.5,x1:30,z0:-72.5,z1:-63,draw:true}], // and the strip beside Barber's Walk along its west wall to the staff door (30, -71)
+  // Wholesale's rear alley connects Barber's Walk to the Ironwood Street sidewalk. The dock and truck approach remain on asphalt.
+  {x0:30,x1:42,z0:-63,z1:-60}, // footing under the building and its own dock slab
+  {x0:28.5,x1:43,z0:-72,z1:-69,draw:true},{x0:28.5,x1:30,z0:-69,z1:-60,draw:true},{x0:28.5,x1:37.5,z0:-60,z1:-58.5,draw:true}],
  // Buildings placed from converted models or placeholders (props.js): yaw is a multiple of 90 degrees so the collision boxes stay axis-aligned. The farmstead (a barn,
  // a farmhouse, a silo and a shed; a placeholder for now) fills the free north-east strip of Willow Fields and faces the farm road; the sawmill stands in Pine Ridge's empty clearing.
  landmarks:[
@@ -507,9 +553,11 @@ export const MAP=deepFreeze({
   {id:'alder-tower',prop:'shop-l',plot:'C3',zone:'alder',x:8.5,z:-75.10,yaw:Math.PI},
   {id:'alder-bakery',prop:'shop-c',plot:'C4',zone:'alder',x:17.75,z:-76.35,yaw:Math.PI},
   {id:'alder-barber',prop:'shop-d',plot:'C12',zone:'alder',x:60.6,z:-62.5,yaw:-Math.PI/2}, // I3: moved from C5 (now Barber's Walk); its front (x 57) is on Ironwood Street's east sidewalk
+  ...DOWNTOWN_LANDMARKS,
+ ...HOTEL_LANDMARKS,
   {id:'alder-pharmacy',prop:'shop-a',plot:'C6',zone:'alder',x:32.25,z:-76.95,yaw:Math.PI},
   {id:'alder-bank',prop:'shop-f',plot:'C7',zone:'alder',x:39.5,z:-76.60,yaw:Math.PI},
-  {id:'eden-wholesale',prop:'eden-wholesale',model:'assets/buildings/eden-wholesale.glb',plot:'C21',zone:'alder',x:36,z:-67.5,yaw:0}, // W-PLACE: a placeholder prop (placeholders.js, data from eden-wholesale-place.js) whose GLB `model` game.js loads; front (door, dock) to the south
+  {id:'eden-wholesale',prop:'eden-wholesale',model:'assets/buildings/eden-wholesale.glb',plot:'C21',zone:'alder',...WHOLESALE_POSE}, // W-PLACE: a placeholder prop (placeholders.js, data from eden-wholesale-place.js) whose GLB `model` game.js loads; front (door, dock) to the south
   {id:'police-station',prop:'shop-e',plot:'C8',zone:'alder',x:-13.25,z:-103.35,yaw:0},
   {id:'alder-books',prop:'shop-h',plot:'C9',zone:'alder',x:-2.75,z:-103.35,yaw:0},
   {id:'alder-cinema',prop:'shop-g',plot:'C10',zone:'alder',x:5,z:-103.00,yaw:0},
@@ -530,7 +578,25 @@ export const MAP=deepFreeze({
   {id:'eastbank-supply',prop:'industrial-s',plot:'I3',zone:'eastbank',x:83,z:35.4,yaw:Math.PI},{id:'eastbank-gas-kiosk',prop:'industrial-p',plot:'I2',zone:'eastbank',x:172,z:-14,yaw:0},
   {id:'ridgeline-office',prop:'industrial-p',plot:'I5',zone:'eastbank',x:76,z:53.5,yaw:Math.PI/2}, // the company office (0.35): a small industrial building turned to face the timber yard (+x); it replaced the open-sided shed
   {id:'riden-deals',prop:'store',zone:'eastbank',x:97,z:-28.5,yaw:0}, // the dealership showroom: a second copy of the Alder Store model (528 triangles), front to the south over the lot
- {id:'eastbank-tank',prop:'tank-small',zone:'eastbank',x:137,z:34,yaw:0,decor:true}
+ {id:'eastbank-tank',prop:'tank-small',zone:'eastbank',x:137,z:34,yaw:0,decor:true},
+ // BZ6 (map-master 3.5): Kaspian Bay harbor buildings (coastal block north of Harbor Front / z 394).
+ {id:'kaspian-harbor',prop:'shop-i',wild:true,x:205,z:376,yaw:0},
+ {id:'kaspian-chandlery',prop:'shop-a',wild:true,x:280,z:376,yaw:0},
+ {id:'kaspian-shack',prop:'shop-d',wild:true,x:315,z:376,yaw:0},
+ {id:'kaspian-inn',prop:'shop-g',wild:true,x:390,z:376,yaw:0},
+ {id:'kaspian-fish',prop:'shop-h',wild:true,x:435,z:376,yaw:0},
+ {id:'kaspian-ferry',prop:'industrial-s',wild:true,x:485,z:376,yaw:0},
+ {id:'kaspian-police',prop:'shop-e',wild:true,x:390,z:336,yaw:0},
+ {id:'eden-cargo-terminal',prop:'industrial-q',wild:true,x:215,z:332,yaw:0},
+ // E-I1 & B3 (map-master 4.3, 5.1): Eden Industries halls & Eden Outdoors.
+ {id:'eden-guard-hut',prop:'industrial-p',wild:true,x:716,z:-214,yaw:Math.PI/2},
+ {id:'eden-office',prop:'shop-l',wild:true,x:805,z:-280,yaw:0},
+ {id:'eden-hall-a',prop:'industrial-t',wild:true,x:840,z:-215,yaw:0},
+ {id:'eden-hall-b',prop:'industrial-s',wild:true,x:840,z:-160,yaw:0},
+ {id:'eden-hall-c',prop:'industrial-t',wild:true,x:925,z:-215,yaw:0},
+ {id:'eden-hall-d',prop:'industrial-s',wild:true,x:925,z:-160,yaw:0},
+ {id:'eden-warehouse',prop:'industrial-q',wild:true,x:900,z:-100,yaw:0},
+ {id:'eden-outdoors',prop:'store',wild:true,x:705,z:-410,yaw:Math.PI/2}
  ], // Signposts: boards are read from the front (yaw 0 faces south, towards walkers arriving from the bridge).
  towns:[{id:'kaspian',name:'Kaspian Bay',bounds:{x0:150,x1:530,z0:270,z1:410}}], // R4: named places outside the zone system (junctions.js TOWNS lists the ids); streets carry a name field, signs are the wild signs below
  // RU1 (map-master 7.1): weapon and fishing zones as data rectangles, read by event (never per frame) through weaponZoneAt and fishingAt below. `hunting`: a rectangle minus `roadMargin` m around every road and minus the keepOut circles (camps C1..C3, plots P1 and P2, 100 m each). `noWeapon`: towns and yards (the weapon is put away); noWeapon wins over hunting where both would apply. Everywhere else a weapon may be carried but not fired.
@@ -544,7 +610,12 @@ export const MAP=deepFreeze({
  // Fishing (rod only, no licence): the lake basin rectangle, the five cast spots (r m round each; the dock end is taken as 20 m north of the dock's landing at (650, -450)), and the water kinds that count when the player stands within `reach` m of them (the old river and the sea shore; the stream and the outflow weir are spots).
  fishing:{reach:6,rects:[{id:'lake-basin',x0:520,x1:800,z0:-660,z1:-440}],
   spots:[{id:'dock-end',name:'Dock end',x:650,z:-470,r:10},{id:'stream-mouth',name:'Stream mouth',x:700,z:-660,r:10},{id:'outflow-weir',name:'Outflow weir',x:540,z:-470,r:10},{id:'rocky-point',name:'Rocky point',x:790,z:-540,r:10},{id:'p1-shore',name:'P1 shore',x:600,z:-680,r:10}],
-  water:['river','sea']},
+  water:['river','sea','lake']},
+ blackstone:{dock:{x:650,z:-451,w:4,d:20,y:-.55},ramp:{x:700,z:-442,w:6,d:14},
+  camps:[{id:'C1',name:'Plunge Pool Camp',x:760,z:-790},{id:'C2',name:'West Forest Camp',x:480,z:-900},{id:'C3',name:'High Saddle Camp',x:700,z:-1040}],
+  viewpoints:[{id:'dock',name:'Blackstone Dock',x:650,z:-458},{id:'falls',name:'Blackstone Falls',x:720,z:-758},{id:'saddle',name:'High Pass Saddle',x:700,z:-1060},{id:'peak',name:'Blackstone Peak',x:950,z:-1120},{id:'overlook',name:'P2 Overlook',x:900,z:-900}]},
+ kaspian:{pier:{x:340,z:430,w:10,d:36,y:-1.65}},
+ edenSite:{bounds:{x0:700,x1:1000,z0:-360,z1:-60},gate:{x:700,z:-200,w:12},loadingYard:{x0:820,x1:990,z0:-80,z1:-62},stockyard:{x0:900,x1:990,z0:-340,z1:-260}},
  // RU2 (map-master 7.3): one safe point per region. Reset (R) and the stuck rescue go to the nearest of these (nearestRescuePoint), then findNearestClearSpot searches round it. Owned plots add their own point later. `region` groups them for the map screen.
  rescuePoints:[
   {id:'ironwood',name:'Ironwood',region:'old-block',x:-5,z:15},
@@ -888,7 +959,7 @@ export function roadProblems(map=MAP){
 // Where two segments properly cross: [x, z] or null.
 function segCross(a,b,c,d){const o=(p,q,r)=>(q[0]-p[0])*(r[1]-p[1])-(q[1]-p[1])*(r[0]-p[0]);
  if(!(o(a,b,c)*o(a,b,d)<0&&o(c,d,a)*o(c,d,b)<0))return null;const t=o(c,d,a)/(o(c,d,a)-o(c,d,b));return [a[0]+(b[0]-a[0])*t,a[1]+(b[1]-a[1])*t]}
-export const hoursOf=(kind,map=MAP)=>map.shops[kind].hours;
+export const hoursOf=(kind,map=MAP)=>kind===WHOLESALE_ID?WHOLESALE_HOURS:map.shops[kind].hours;
 
 // ── Validation ────────────────────────────────────────────────────────────────
 // Returns a list of problems (empty when the map is sound). Run by tests/map.mjs; call it from the console after editing.

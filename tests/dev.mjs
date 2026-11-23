@@ -10,7 +10,7 @@ assert.deepEqual(QUICK_TIMES.map(([name])=>name),['Dawn','Noon','Dusk','Night'])
 assert.match(await readFile('dist/dev-flag.js','utf8'),/export const DEV_MODE=true;/,'the flag is on in the development build');
 
 { // ── Flag on ────────────────────────────────────────────────────────────────────────────────────────────────────────────
- const g=await bootGame({play:false}),{GameState:S}=g,me=S.me.position;
+ const g=await bootGame({play:false,devMode:true}),{GameState:S}=g,me=S.me.position;
  const button=g.find('menuDev'),panel=g.find('devPanel');
  assert(button,'the main menu has a Dev Mode button');assert.equal(button.textContent,'Dev Mode');const row=g.find('menuDevRow'),off=g.find('menuDevOff');assert(row&&g.ids.get('menuHome').children.includes(row)&&row.children.includes(button)&&row.children.includes(off),'Dev Mode and Turn off sit in one row inside the menu\'s home panel');
  assert(panel&&panel.hidden,'the panel starts hidden');

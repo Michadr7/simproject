@@ -1,6 +1,6 @@
 // NPC chat (NPC-NAMES): every person gets a name, a time-of-day greeting and one fact; the same person says the same thing on the same day and hour; garbage input does not throw.
 import assert from 'node:assert/strict';
-import {chatLine,periodOf,homeName,workPhrase,GREETINGS} from '../dist/npc-chat.js';
+import {chatLine,townRumor,periodOf,homeName,workPhrase,GREETINGS} from '../dist/npc-chat.js';
 import {townPopulation} from '../dist/population.js';
 const people=townPopulation().people;assert.ok(people.length>=20);
 for(const p of people){const a=chatLine(p,{day:3,minute:600}),b=chatLine(p,{day:3,minute:600});assert.deepEqual(a,b,'deterministic');assert.equal(a.name,p.name);assert.ok(a.text.includes(p.name),'says its name');assert.ok(GREETINGS.morning.some(g=>a.text.startsWith(g)),'morning greeting: '+a.text);assert.ok(!/undefined|NaN|\[object/.test(a.text),a.text)}
@@ -9,4 +9,8 @@ const resident=people.find(p=>p.resident&&homeName(p));assert.ok(resident,'someo
 const worker=people.find(p=>workPhrase(p));assert.ok(worker&&/^I work as/.test(workPhrase(worker)));
 {const texts=new Set(people.map(p=>chatLine(p,{day:1,minute:600}).text));assert.ok(texts.size>people.length/2,'people do not all say the same thing')}
 assert.ok(chatLine({id:'x',name:'Ann'},{weather:'blizzard',minute:1e9}).text.includes('Ann'));assert.equal(chatLine(null).name,'A neighbour');assert.equal(chatLine({}).name,'A neighbour');assert.ok(chatLine(undefined,{day:NaN,minute:'x'}).text.length>3);
-console.log('PASS npc-chat: '+people.length+' people greet by name, deterministic, time of day, home and job facts, garbage safe');
+const rNeed=townRumor({id:'n1',name:'Sam'},{day:2,minute:600,needs:[{good:'flour',place:'alder-bakery',filled:false}]});
+assert.ok(rNeed.includes('flour'),'townRumor surfaces unfilled needs');
+const rStand=townRumor({id:'n2',name:'Bo'},{day:2,minute:600,townStanding:10});
+assert.ok(rStand.includes('reliable'),'townRumor recognizes town standing');
+console.log('PASS npc-chat: '+people.length+' people greet by name, deterministic, time of day, home, job, and live town rumors');

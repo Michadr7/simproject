@@ -1,4 +1,6 @@
 import {tickLife as calculateLife,normalizeDrainMultiplier} from './life.js';
+import {drainFactor} from './warm-meal.js';
+import {gameMinutes} from './gigs.js';
 import {freshProgress, normalizeProgress} from './jobs.js';
 import {plotAt,setPlot as withPlot} from './grid.js';
 
@@ -23,8 +25,8 @@ export function setMePosition(x, y, z) {
 }
 
 // State-level tick applies the testing setting without touching routine/game time.
-export function tickLife(dt,moving,running,loadMultiplier=1){
- GameState.progress.life=calculateLife(GameState.progress.life,dt,moving,running,loadMultiplier,GameState.progress.settings.statDrainMultiplier);
+export function tickLife(dt,moving,running,loadMultiplier=1,comfortDrain=1){
+ GameState.progress.life=calculateLife(GameState.progress.life,dt,moving,running,loadMultiplier,GameState.progress.settings.statDrainMultiplier,drainFactor(GameState.progress.warmMeal,gameMinutes(GameState.progress)),comfortDrain);
 }
 export function setStatDrainMultiplier(value){
  GameState.progress.settings={...GameState.progress.settings,statDrainMultiplier:normalizeDrainMultiplier(Number(value))};

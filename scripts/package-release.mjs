@@ -1,10 +1,11 @@
 // Builds an immutable release folder and points dist/index.html at it.
 //   npm run release              -> uses "version" from package.json
 //   npm run release -- 0.15.2    -> builds a specific version
+//   npm run release -- --public  -> disables Dev Mode in the packaged copy
 //   add --force to rebuild a version that already exists (only before it is deployed)
 import {mkdir,copyFile,readdir,readFile,writeFile,access} from 'node:fs/promises';
 
-const args=process.argv.slice(2),force=args.includes('--force');
+const args=process.argv.slice(2),force=args.includes('--force'),publicBuild=args.includes('--public');
 const pkg=JSON.parse(await readFile('package.json','utf8'));
 const version=args.find(a=>!a.startsWith('--'))||pkg.version;
 if(!/^\d+\.\d+\.\d+$/.test(version||'')){console.error(`Invalid version "${version}". Use x.y.z, e.g. npm run release -- 0.15.2`);process.exit(1)}
@@ -20,6 +21,7 @@ await mkdir(`${dest}/vendor`,{recursive:true});
 await writeFile('dist/version.js',`// WRITTEN by scripts/package-release.mjs (npm run release): the version of this release. Do not edit by hand.\nexport const VERSION='${version}';\n`);
 const files=(await readdir('dist',{withFileTypes:true})).filter(f=>f.isFile()&&(f.name.endsWith('.js')||f.name==='style.css')).map(f=>f.name);
 for(const name of files)await copyFile(`dist/${name}`,`${dest}/${name}`);
+if(publicBuild)await writeFile(`${dest}/dev-flag.js`,'export const DEV_MODE=false;\n');
 for(const name of (await readdir('dist/vendor')).filter(f=>f.endsWith('.js')))await copyFile(`dist/vendor/${name}`,`${dest}/vendor/${name}`);
 
 let html=await readFile('dist/index.html','utf8');

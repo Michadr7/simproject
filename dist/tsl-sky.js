@@ -84,8 +84,8 @@ export function createSkyTSL({ THREE, TSL, NodeMaterial, scene, renderer, sun, h
 
  const DAY = skyAt(720), tuned = { minutes: null, nightFloor: NIGHT_FLOOR, exposureScale: 1 }, last = { x: 0, z: 0 };
  let hills = null, now = DAY;
- function update(minutes, { target = null, indoors = false } = {}) {
-  const s = now = skyAt(tuned.minutes ?? minutes, tuned), L = indoors ? DAY : s;
+ function update(minutes, { target = null, indoors = false, weather = null } = {}) {
+  const s = now = skyAt(tuned.minutes ?? minutes, weather ? { ...tuned, weather } : tuned), L = indoors ? DAY : s;
   if (target) { last.x = target.x; last.z = target.z; }
   sun.color.setRGB(L.lightColor[0], L.lightColor[1], L.lightColor[2]); sun.intensity = L.lightStrength;
   sun.position.set(last.x + L.lightDir[0] * SUN_DISTANCE, L.lightDir[1] * SUN_DISTANCE, last.z + L.lightDir[2] * SUN_DISTANCE);

@@ -20,3 +20,11 @@ export function slopeOf(env){
 // hold: the m/s2 that stops a vehicle with no throttle (drag) or the brake on; a stopped vehicle that this can hold stays put (no creeping).
 export const applySlope=(before,after,sl,dt,hold=0)=>{if(sl.steep)return before<=-ROLLBACK_SPEED?before:Math.max(-ROLLBACK_SPEED,before-ROLLBACK_ACCEL*dt);if(Math.abs(before)<.01&&Math.abs(after)<.01&&Math.abs(sl.gravity)<=hold)return after;return after+sl.gravity*dt};
 export const slopeSteer=(want,sl)=>sl.refuse!==0&&Math.sign(want)===sl.refuse?0:want;
+// A2 part 2 (hand-brake drift): holding drift while turning above DRIFT_MIN_SPEED builds slip 0..1 for tighter swing and controlled tail slide; releases smoothly on straight or low grip recovery.
+export const DRIFT_MIN_SPEED=3,DRIFT_RATE=4,DRIFT_DECAY=5,DRIFT_YAW=.55,DRIFT_SLIDE=1.6,DRIFT_SCRUB=2.2;
+export function driftStep({slip=0,drift=false,speed=0,steer=0,grip=1,dt=0}={}){
+ const s=Number.isFinite(slip)?clamp(slip,0,1):0,loose=grip<.9?Math.max(0,(Math.abs(speed)-6)/12)*Math.abs(steer)*.45:0;
+ const want=drift&&Math.abs(speed)>=DRIFT_MIN_SPEED&&Math.abs(steer)>.1?1:loose;
+ const rate=(want>s?DRIFT_RATE:DRIFT_DECAY)*dt;
+ return s<want?Math.min(want,s+rate):Math.max(want,s-rate);
+}

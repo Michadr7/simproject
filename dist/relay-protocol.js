@@ -2,7 +2,8 @@
 // Pure: no sockets here. A lobby is given a send(peer, message) and a close(peer, code, reason) and is told when peers join, speak and leave.
 // PROTOCOL changes only when the messages change shape; the relay refuses any other number, so an old open tab is told to update instead of half-working.
 import {applyPetSnapshot} from './pet-view.js'; // PET3: a player's cat rides along with the position (optional field: an old client or relay just ignores it, so PROTOCOL stays)
-export const PROTOCOL=1;
+import {createBakeryLobby} from './bakery-lobby.js';
+export const PROTOCOL=2;
 export const MAX_PLAYERS=8,MAX_MESSAGE_BYTES=4096,HELLO_TIMEOUT_MS=10000;
 export const POSITION_RATE={perSecond:25,burst:10}; // the game sends at most 20 a second while moving
 // Lobby codes: 6 characters, none of 0, O, 1, I, L, U (easy to misread or mishear). 30^6 is about 729 million codes.
@@ -15,7 +16,7 @@ export function makeLobbyCode(random=Math.random){let code='';for(let i=0;i<CODE
 // Typed codes are forgiving about case, spaces and dashes; anything outside the alphabet makes the code invalid.
 export function normalizeLobbyCode(text){const code=String(text??'').toUpperCase().replace(/[\s-]/g,'');return code.length===CODE_LENGTH&&[...code].every(c=>CODE_ALPHABET.includes(c))?code:null}
 
-export const validRoom=room=>typeof room==='string'&&(['street','market','cafe','home'].includes(room)||/^house:[a-z0-9-]{1,40}$/.test(room));
+export const validRoom=room=>typeof room==='string'&&(['street','market','cafe','home','hotel'].includes(room)||/^house:[a-z0-9-]{1,40}$/.test(room));
 export const validPosition=p=>!!p&&['x','y','z'].every(k=>Number.isFinite(p[k])&&Math.abs(p[k])<=10000);
 // The host's game clock (MP-CLOCK): the lobby's host (its oldest player) sends {type:'clock',day,minutes}; the relay passes it to everyone else.
 export const validClockMessage=m=>!!m&&Number.isInteger(m.day)&&m.day>=1&&m.day<=100000&&Number.isFinite(m.minutes)&&m.minutes>=0&&m.minutes<1440;
@@ -43,7 +44,7 @@ export function allowPosition(bucket,nowMs){
 
 // One lobby. Peers are opaque keys (a ws socket, a Durable Object WebSocket). A peer is 'waiting' until its hello, then a player.
 // restore: players rebuilt after a hosted relay wakes from hibernation ({peer, id, position, room}).
-export function createLobby({send,close,newId,now=()=>Date.now(),maxPlayers=MAX_PLAYERS,code=null,restore=[]}){
+export function createLobby({send,close,newId,now=()=>Date.now(),maxPlayers=MAX_PLAYERS,code=null,restore=[],bakeryState=null,saveBakery=()=>{}}){
  const players=new Map(); // peer -> {id, position, room, bucket}
  for(const r of restore)players.set(r.peer,{id:r.id,position:r.position,room:r.room,pet:applyPetSnapshot(r.pet),bucket:{}});
  const view=p=>p.pet?{id:p.id,position:p.position,room:p.room,pet:p.pet}:{id:p.id,position:p.position,room:p.room};
@@ -53,6 +54,8 @@ export function createLobby({send,close,newId,now=()=>Date.now(),maxPlayers=MAX_
  const hostPeer=()=>{for(const peer of players.keys())return peer;return null};
  const hostId=()=>{const h=hostPeer();return h===null?null:players.get(h).id};
  const broadcast=(message,except)=>{for(const peer of players.keys())if(peer!==except)send(peer,message)};
+ const bakery=createBakeryLobby(bakeryState);
+ const publishBakery=()=>{saveBakery(bakery.save());const board=bakery.board();if(board)broadcast(board)};
  const refuse=(peer,reason)=>{send(peer,{type:'refused',reason,protocol:PROTOCOL});close(peer,CLOSE_REFUSED,reason)};
  function join(peer,message){
   const check=checkHello(message);
@@ -64,6 +67,7 @@ export function createLobby({send,close,newId,now=()=>Date.now(),maxPlayers=MAX_
   for(const other of players.values())send(peer,{type:'playerJoined',...view(other)});
   const aged=players.size?agedClock():null;if(aged)send(peer,aged);
   players.set(peer,player);
+  const board=bakery.board();if(board)send(peer,board);
   broadcast({type:'playerJoined',...view(player)},peer);
   return view(player);
  }
@@ -75,6 +79,19 @@ export function createLobby({send,close,newId,now=()=>Date.now(),maxPlayers=MAX_
   if(message?.type==='clock'){
    if(hostPeer()!==peer||!validClockMessage(message)||now()-(player.clockAt??-Infinity)<CLOCK_MIN_GAP_MS)return null;
    player.clockAt=now();lastClock={day:message.day,minutes:message.minutes,at:player.clockAt};broadcast({type:'clock',day:message.day,minutes:message.minutes},peer);return null;
+  }
+  if(message?.type==='bakerySeed'){
+   if(bakery.seed(message,hostPeer()===peer))publishBakery();
+   return null;
+  }
+  if(message?.type==='bakeryAction'){
+   if(!allowPosition(player.bakeryBucket??={},now())){
+    send(peer,{type:'bakeryResult',request:message.request,error:'Wait a moment and try again.'});return null;
+   }
+   const clock=agedClock();
+   const reply=bakery.execute(player,message,clock?(clock.day-1)*1440+clock.minutes:null);
+   if(reply){if(!reply.error)publishBakery();send(peer,reply)}
+   return null;
   }
   if(message?.type!=='position'||!validPosition(message.position))return null;
   const room=message.room??'street';
@@ -90,7 +107,8 @@ export function createLobby({send,close,newId,now=()=>Date.now(),maxPlayers=MAX_
   const hostWas=hostId();players.delete(peer);broadcast({type:'playerLeft',id:player.id},peer);
   if(hostWas===player.id)lastClock=null;
   if(hostWas===player.id&&players.size)broadcast({type:'host',id:hostId()}); // the next oldest player is the host now
+  if(bakery.leave(player.id))publishBakery();
   return true;
  }
- return {join,receive,leave,get size(){return players.size},get host(){return hostId()},has:peer=>players.has(peer),player:peer=>players.has(peer)?view(players.get(peer)):null};
+ return {join,receive,leave,bakerySnapshot:bakery.save,get size(){return players.size},get host(){return hostId()},has:peer=>players.has(peer),player:peer=>players.has(peer)?view(players.get(peer)):null};
 }

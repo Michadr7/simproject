@@ -23260,6 +23260,10 @@ class Renderer {
 
 		if ( prepare !== undefined ) await prepare;
 
+		// Re-read lights and shadow settings even if there has been no render call since they changed.
+		// Otherwise the first draw can invalidate the warmed pipelines and compile them synchronously.
+		this._nodes.callHashCache = new ChainMap();
+
 		if ( this.shadowMap.type === PCFSoftShadowMap ) {
 
 			warn( 'WebGPURenderer: PCFSoftShadowMap has been removed. Using PCFShadowMap instead.' );

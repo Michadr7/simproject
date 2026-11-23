@@ -1,0 +1,187 @@
+// Cargo on a vehicle's bed (0.35, flatbed step 2; DESIGN 4.15 D and K). Pure: the beds, what fits, where each piece sits, loading and unloading what you carry.
+// A bed holds a MIXED load: a list of pieces in the order they went on (the last one on is the first one off): a log, or a stack of planks (1 to 4, what you carry).
+// Space: a bed has `space` units; a plank takes 1, a log 5 (so the flatbed's 120 is 120 planks, or 24 logs, or any mix). Boxes and pallets come with the warehouse work.
+// G3b: a third piece {k:'crate'} (2 units): only on the beds with `crates:true` (the Shortbed and the two pickups, never the timber flatbed), never mixed with timber, never carried by hand (addCrates/removeCrates).
+// The load slows the vehicle (vehicle.js withLoad) and burns more fuel.
+//   vehicle cargo (saved on the owned vehicle, progress.vehicles[].cargo) = null | [{k:'log'} | {k:'planks', n:1..4, o?:orderId}, ...]
+// Planks with an `o` are an order's planks (loaded at the warehouse for a delivery ticket, DESIGN 4.16 C): they belong to that order, not to you. They cannot be sold at the lumberyard, taken off by hand or
+// moved to a customer's truck (freeCount, takeAll, unloadOne and unloadKind skip them); they come off only when the order is delivered (removeOrderPlanks), and the game takes them back off the truck when
+// the order fails or runs out of time. (Playtest 2026-11-06: planks of a missed delivery stayed on the truck and could be sold.)
+// Bed rectangles are local to the vehicle (front +z, metres, y = the bed floor): the flatbed's from its model's cargo anchors and timber rails, the pickups' measured from their
+// converted meshes (the widest upward floor behind the cab). Pieces are laid on a grid of cells across and along the bed; each new piece goes on the lowest cell (front first),
+// so a mixed load stacks up evenly and never higher than MAX_HEIGHT above the floor.
+import {isBakeryGood} from './bakery-goods.js';
+import {PLANKS_PER_STACK} from './carry.js';import {PARCEL_DEFAULT} from './gig-parcel.js';
+
+export const CARGO_KINDS=Object.freeze({
+ log:Object.freeze({name:'log',plural:'logs',space:5,h:.24,l:1.15}),
+ trunk:Object.freeze({name:'trunk',plural:'trunks',space:10,h:.36,l:2.25}), // timber redesign T-A: a felled trunk is twice a log (2.25 m); the ATV rack (space 5) refuses it
+ slab:Object.freeze({name:'slab',plural:'slabs',space:2,h:.08,l:2.25}), // a live-edge slab, sawn from a trunk (0.06 m thick, h .08 with the gap: T-E, so 60 fit the flatbed under MAX_HEIGHT)
+ planks:Object.freeze({name:'plank',plural:'planks',space:1,h:.4,l:1.25}), // per plank; a piece is a stack of up to four, drawn as one stack
+ crate:Object.freeze({name:'crate',plural:'crates',space:2,h:.44,l:.38,w:.58}) // G3b: a produce/egg crate (assets-src/Boxes/cargo, 0.58 x 0.38 x 0.44 m): 2 units, laid 3 across and stacked 2 high on a crate-only bed; never carried by hand
+});
+const CELL={w:.26,l:1.25},MAX_HEIGHT=1.25;
+export const BEDS=Object.freeze({
+ flatbed:Object.freeze({x0:-1.25,x1:1.25,z0:-4.2,z1:.75,y:1.3,space:120,gate:'rear'}),
+ worktruck:Object.freeze({x0:-.88,x1:.88,z0:-2.75,z1:-.95,y:.9,space:32,crates:true}),
+ offroad:Object.freeze({x0:-1,x1:1,z0:-2.74,z1:-.8,y:.8,space:32,crates:true}),
+ atv:Object.freeze({x0:-.55,x1:.55,z0:-1,z1:-.58,y:.76,space:5,crates:true,across:true,maxPieces:1}), // ATV-STOW: the small rear rack (model anchor_cargo_rear x 0, y .76, z -.82; the taillights sit at y .62, below the deck, so nothing overlaps them: z -1..-.58 stays behind the seat at z -.3). space 5 = ONE piece only (maxPieces 1): one log (5), or one plank stack (4), or one crate (2); a second log, a loose plank beside the stack or a second crate is refused. Pieces lie across the ATV (across:true: yaw 90 degrees, a log is 1.15 m and the rack 1.1 m wide)
+ shortbed:Object.freeze({x0:-.9,x1:.9,z0:-2.55,z1:-.1,y:1.0,space:44,gate:'rear',crates:true}) // space 44 = bed area 4.4 m2 at about 10 per m2, a whole number of plank stacks (flatbed 120 on 12.4 m2, worktruck 32 on 3.2, pickup 32 on 3.9); the Kasumuchi S70 (0.35.8): the deck mesh runs z -2.57..0.06 at y 1.005 (the model's cargo anchors sit at y 1.002), the side walls leave about 1.8 m across, the tailgate hinges at z -2.585
+});
+export const hasBed=model=>!!BEDS[model];
+export const usesLoadDrag=model=>!!BEDS[model]?.maxPieces; // FIX-R1: the kg load drag (load-drag.js) is for the one-piece rack (the ATV) only; bigger beds keep the withLoad slowdown
+export const spaceOf=model=>BEDS[model]?.space||0;
+// how many of a kind fit on an empty bed (24 logs or 120 planks on the flatbed)
+export const capacity=(model,kind)=>CARGO_KINDS[kind]&&(kind!=='crate'||BEDS[model]?.crates)?Math.min(Math.floor(spaceOf(model)/CARGO_KINDS[kind].space),kind!=='planks'&&BEDS[model]?.maxPieces||Infinity):0; // maxPieces: the ATV rack takes one piece, so one crate though its 5 units would hold two (a plank piece is a stack of up to 4, counted in planks)
+export const BAKERY_PALLET_SPACE=10;
+const validBakeryPallet=p=>p?.k==='bakery-pallet'&&isBakeryGood(p.g)&&Number.isSafeInteger(p.j)&&p.j>=1&&p.j<=1e9;
+export function addBakeryPallet(cargo,model,good,gig){
+ const pallet={k:'bakery-pallet',g:good,j:gig};
+ if(!validBakeryPallet(pallet)||!takesCrateGigs(model)||spaceOf(model)<BAKERY_PALLET_SPACE)return {error:'This bed cannot carry a bakery pallet.'};
+ return cargo?.length?{error:'Clear the truck bed before loading the bakery pallet.'}:{cargo:[pallet]};
+}
+export const removeBakeryPallet=(cargo,gig)=>{const keep=(cargo||[]).filter(p=>p.k!=='bakery-pallet'||p.j!==gig);return keep.length?keep:null};
+const pieceSpace=p=>p.k==='bakery-pallet'?BAKERY_PALLET_SPACE:p.k==='planks'?p.n:p.k==='crate'?CARGO_KINDS.crate.space:p.k==='parcel'?(p.l?2:1):p.k==='box'?1:p.k==='trunk'?CARGO_KINDS.trunk.space:p.k==='slab'?CARGO_KINDS.slab.space:CARGO_KINDS.log.space; // parcel: 1 space, a large carton 2; box: 1
+export const acceptsCrates=model=>!!BEDS[model]?.crates; // the flatbed is the timber truck: crates are refused there; timber is refused on a bed that holds crates (as farm-beds.js refuses timber on a tank)
+export const takesCrateGigs=model=>acceptsCrates(model)&&!BEDS[model].maxPieces; // the farm crate gigs (several crates per run) need a full crate bed: the ATV's one-crate rack does not count
+export const hasCrates=c=>(c||[]).some(p=>p.k==='crate');
+export const CRATE_MIX='Crates and timber do not mix on a bed: clear the bed first.';
+export const CRATES_BY_HAND=true; // C-B switch, ON since the game.js wiring (X puts a crate or box down on the ground: carry.js putDownCrate). false = a crate (or box) cannot be taken off a bed by hand. Parcels always come off (they only exist as pieces when PARCEL_PIECES_ENABLED)
+export const CRATE_STAYS='Crates stay on the bed until they are delivered.';
+export const PIECE_KINDS=Object.freeze(['log','trunk','slab','planks','crate','parcel','box','bakery-pallet']); // every saved bed piece kind
+const PIECE_H=Object.freeze({parcel:.3,parcelLarge:.4,box:.3}); // drawn height of a carton on the bed (a parcel takes one cell)
+export const usedSpace=c=>(c||[]).reduce((s,p)=>s+pieceSpace(p),0);
+export const countOf=(c,kind)=>(c||[]).reduce((s,p)=>s+(p.k!==kind?0:kind==='planks'?p.n:1),0);
+// what is yours to take off, sell or move: planks that are not an order's
+export const freeCount=(c,kind)=>(c||[]).reduce((s,p)=>s+(p.k!==kind||p.o?0:kind==='planks'?p.n:1),0);
+export const orderCount=(c,id)=>(c||[]).reduce((s,p)=>s+(p.k==='planks'&&p.o===id?p.n:0),0);
+export const orderIdsOf=c=>[...new Set((c||[]).filter(p=>p.o).map(p=>p.o))];
+export const cargoText=c=>{if(countOf(c,'bakery-pallet'))return 'bakery pallet';const logs=countOf(c,'log'),trunks=countOf(c,'trunk'),slabs=countOf(c,'slab'),planks=freeCount(c,'planks'),orders=orderIdsOf(c),crates=countOf(c,'crate'),parcels=countOf(c,'parcel'),boxes=countOf(c,'box');if(!logs&&!trunks&&!slabs&&!planks&&!crates&&!parcels&&!boxes&&!orders.length)return 'empty';return [crates?`${crates} crate${crates===1?'':'s'}`:'',parcels?`${parcels} parcel${parcels===1?'':'s'}`:'',boxes?`${boxes} box${boxes===1?'':'es'}`:'',logs?`${logs} log${logs===1?'':'s'}`:'',trunks?`${trunks} trunk${trunks===1?'':'s'}`:'',slabs?`${slabs} slab${slabs===1?'':'s'}`:'',planks?`${planks} plank${planks===1?'':'s'}`:'',...orders.map(id=>`${orderCount(c,id)} planks for order #${id}`)].filter(Boolean).join(', ')};
+// How full the bed is, 0..1 (what the load does to the vehicle).
+export const loadOf=(model,c)=>Math.min(1,usedSpace(c)/Math.max(1,spaceOf(model)));
+export function normalizeCargo(value,model){
+ if(!hasBed(model))return null;let list=[];
+ if(Array.isArray(value)){const pallet=value.find(validBakeryPallet);if(pallet&&takesCrateGigs(model)&&value.length===1)return [{k:pallet.k,g:pallet.g,j:pallet.j}];list=value.filter(p=>p&&typeof p==='object'&&(p.k==='log'||p.k==='trunk'||p.k==='slab'||p.k==='crate'||p.k==='box'||(p.k==='parcel'&&Number.isSafeInteger(p.g)&&p.g>=1&&p.g<=1e9)||(p.k==='planks'&&Number.isInteger(p.n)&&p.n>=1&&p.n<=PLANKS_PER_STACK))).map(p=>p.k==='log'?{k:'log'}:p.k==='trunk'?{k:'trunk'}:p.k==='slab'?{k:'slab'}:p.k==='crate'?{k:'crate'}:p.k==='box'?{k:'box'}:p.k==='parcel'?{k:'parcel',g:p.g,m:typeof p.m==='string'&&p.m&&p.m.length<=64?p.m:PARCEL_DEFAULT,...(p.l===1||p.l===true?{l:1}:{})}:{k:'planks',n:p.n,...(Number.isSafeInteger(p.o)&&p.o>0?{o:p.o}:{})});
+  if(list.some(p=>p.k==='crate')&&(!acceptsCrates(model)||list.some(p=>p.k==='log'||p.k==='trunk'||p.k==='slab'||p.k==='planks')))list=list.filter(p=>p.k!=='crate')} // crates only on a bed that takes them and never mixed with timber (timber wins in a bad save); parcels and boxes go on any bed
+ else if(value&&typeof value==='object'&&CARGO_KINDS[value.kind]&&Number.isFinite(value.count)){ // the first cargo build saved {kind, count}
+  let n=Math.floor(value.count);if(value.kind==='log')list=Array.from({length:Math.max(0,n)},()=>({k:'log'}));else while(n>0){const take=Math.min(PLANKS_PER_STACK,n);list.push({k:'planks',n:take});n-=take}}
+ const out=[];let used=0;for(const p of list){if(used+pieceSpace(p)>spaceOf(model)||out.length>=(BEDS[model].maxPieces||Infinity))break;used+=pieceSpace(p);out.push(p)}
+ return out.length?out:null;
+}
+// Where each piece lies, local to the vehicle: [{kind, x, y, z, yaw}] in load order (yaw 0: lengthwise along the bed). The lowest cell, front first, then side to side.
+export function slotPositions(model,c){
+ const bed=BEDS[model];if(!bed||!c)return [];
+ if(c.length===1&&validBakeryPallet(c[0]))return [{kind:'bakery-pallet',x:(bed.x0+bed.x1)/2,y:bed.y,z:(bed.z0+bed.z1)/2,yaw:0}];
+ if(c.some(p=>p.k==='crate')){ // a crate bed: a grid of 0.59 x 0.40 m cells (3 across the Shortbed deck), front row first, stacked 2 high; a parcel or box takes a cell like a crate (a lower one)
+  const cc=CARGO_KINDS.crate,cols=Math.max(1,Math.floor((bed.x1-bed.x0)/(cc.w+.01))),rows=Math.max(1,Math.floor((bed.z1-bed.z0)/(cc.l+.02))),per=cols*rows,cw=cc.w+.01,cl=cc.l+.02,gx=(bed.x0+bed.x1)/2-(cols*cw)/2+cw/2;
+  return c.map((p,i)=>{const layer=Math.floor(i/per),r=Math.floor((i%per)/cols),col=i%cols,kind=p.k==='crate'||p.k==='parcel'||p.k==='box'?p.k:'crate',h=kind==='crate'?cc.h:kind==='parcel'&&p.l?PIECE_H.parcelLarge:PIECE_H[kind];return {kind,x:+(gx+col*cw).toFixed(3),y:+(bed.y+layer*cc.h+h/2).toFixed(3),z:+(bed.z1-cl/2-r*cl).toFixed(3),yaw:0}});
+ }
+ const cw=bed.across?CELL.l:CELL.w,cl=bed.across?CELL.w:CELL.l,yaw=bed.across?Math.PI/2:0; // across: the long pieces lie crosswise (the ATV rack), the cells swap their sides
+ const cols=Math.max(1,Math.floor((bed.x1-bed.x0)/cw)),rows=Math.max(1,Math.floor((bed.z1-bed.z0)/cl)),tops=new Array(cols*rows).fill(0),out=[];
+ const x0=(bed.x0+bed.x1)/2-(cols*cw)/2+cw/2,z0=bed.z1-cl/2;
+ for(const p of c){const kind=p.k==='log'||p.k==='trunk'||p.k==='slab'?p.k:p.k==='parcel'||p.k==='box'?p.k:'planks',h=kind==='parcel'?(p.l?PIECE_H.parcelLarge:PIECE_H.parcel):kind==='box'?PIECE_H.box:CARGO_KINDS[kind].h;
+  if((kind==='trunk'||kind==='slab')&&!bed.across&&cols>=LONG_COLS){out.push(longSlot(bed,tops,cols,rows,cw,cl,x0,z0,kind,h));continue} // T-E: a 2.25 m trunk or slab lies lengthwise over LONG_COLS cells across and two cells along (or along the whole short bed)
+  let best=0;for(let i=1;i<tops.length;i++)if(tops[i]<tops[best]-1e-9)best=i;
+  const row=Math.floor(best/cols),col=best%cols;out.push({kind,x:+(x0+col*cw).toFixed(3),y:+(bed.y+tops[best]+h/2).toFixed(3),z:+(z0-row*cl).toFixed(3),yaw});tops[best]+=h}
+ return out;
+}
+// T-E: a trunk (0.36 m) or a slab (0.36 m) is wider than a cell (0.26 m), so it takes LONG_COLS side by side; along the bed it takes two 1.25 m cells, or on a bed with one row of cells (the Shortbed, the pickups) the bed's length:
+// centred when the bed is long enough (the Shortbed's 2.45 m), else against the cab and over the open tailgate (the pickups' 1.8-1.9 m). It goes on the lowest group of cells (front first, then left), on top of the highest cell under it.
+const LONG_COLS=2;
+function longSlot(bed,tops,cols,rows,cw,cl,x0,z0,kind,h){
+ const span=Math.min(2,rows),len=CARGO_KINDS[kind].l;let best=null;
+ for(let r=0;r+span<=rows;r++)for(let col=0;col+LONG_COLS<=cols;col++){let base=0;for(let i=0;i<span;i++)for(let j=0;j<LONG_COLS;j++)base=Math.max(base,tops[(r+i)*cols+col+j]);if(!best||base<best.base-1e-9)best={r,col,base}}
+ for(let i=0;i<span;i++)for(let j=0;j<LONG_COLS;j++)tops[(best.r+i)*cols+best.col+j]=best.base+h;
+ const z=span>=2?z0-(best.r+.5)*cl:bed.z1-bed.z0>=len?(bed.z0+bed.z1)/2:bed.z1-len/2;
+ return {kind,x:+(x0+(best.col+(LONG_COLS-1)/2)*cw).toFixed(3),y:+(bed.y+best.base+h/2).toFixed(3),z:+z.toFixed(3),yaw:0};
+}
+export const fits=(model,c)=>c?.some(p=>p.k==='bakery-pallet')?takesCrateGigs(model)&&c.length===1&&validBakeryPallet(c[0]):(c?.length||0)<=(BEDS[model]?.maxPieces||Infinity)&&slotPositions(model,c).every(s=>s.y-BEDS[model].y<=MAX_HEIGHT);
+// Where you stand to load: behind the bed and beside its middle (local). Within LOAD_REACH of one of these, you can load or unload.
+export const LOAD_REACH=1.7;
+export function loadPoints(model){const b=BEDS[model];if(!b)return [];const mid=(b.z0+b.z1)/2;return [{x:0,z:b.z0-(b.gate?1.6:.9),side:'rear'},{x:b.x1+.95,z:mid,side:'left'},{x:b.x0-.95,z:mid,side:'right'}]}
+
+// What a bed piece becomes in the hands (progress.carry), and the words for the toast.
+export function carryOfPiece(p){return p.k==='planks'?{kind:'planks',count:p.n}:p.k==='crate'?{kind:'crate'}:p.k==='box'?{kind:'box'}:p.k==='parcel'?{kind:'parcel',gig:p.g,model:p.m||PARCEL_DEFAULT,...(p.l?{large:true}:{})}:p.k==='trunk'?{kind:'trunk'}:p.k==='slab'?{kind:'slab'}:{kind:'log'}}
+const pieceWords=p=>p.k==='planks'?`${p.n} plank${p.n===1?'':'s'}`:p.k==='crate'?'a crate':p.k==='parcel'?'the parcel':p.k==='box'?'a box':p.k==='trunk'?'a trunk':p.k==='slab'?'a slab':'a log';
+const tookMessage=(piece,left)=>`Took ${pieceWords(piece)} off · ${left.length?cargoText(left)+' left':'the bed is empty'}`;
+// A piece the hands may not take yet (CRATES_BY_HAND is false): a crate or a box; null when it may come off.
+const byHandError=(piece,byHand)=>piece.k==='bakery-pallet'?'Deliver the pallet from the truck.':!byHand&&(piece.k==='crate'||piece.k==='box')?CRATE_STAYS:null;
+// What you carry as a bed piece: log, planks, crate, box, or the gig parcel (carry {kind:'parcel',gig,model,large?}). null for anything else.
+export function pieceOfCarry(carry){
+ if(!carry||typeof carry!=='object')return null;
+ if(carry.kind==='log')return {k:'log'}; // two logs on the shoulder ({kind:'log',count:2}) go on as two pieces (loadCarry)
+ if(carry.kind==='trunk'||carry.kind==='slab')return {k:carry.kind}; // T-E
+ if(carry.kind==='planks')return Number.isSafeInteger(carry.count)&&carry.count>=1&&carry.count<=PLANKS_PER_STACK?{k:'planks',n:carry.count}:null;
+ if(carry.kind==='crate')return {k:'crate'};
+ if(carry.kind==='box')return {k:'box'};
+ if(carry.kind==='parcel'&&Number.isSafeInteger(carry.gig)&&carry.gig>=1)return {k:'parcel',g:carry.gig,m:typeof carry.model==='string'&&carry.model?carry.model:PARCEL_DEFAULT,...(carry.large?{l:1}:{})};
+ return null;
+}
+// Put what you carry on the bed. carry: the progress carry (log, planks, crate, box or parcel). Returns {carry: null, cargo} or {error}. A crate goes only on a bed that takes crates and never onto timber; the BEDS rules (space, maxPieces, height) decide the rest.
+export function loadCarry(carry,cargo,model){
+ if(!hasBed(model))return {error:'This vehicle has no bed.'};
+ if(!carry)return {error:'Carry something to load it.'};
+ const piece=pieceOfCarry(carry);if(!piece)return {error:'That cannot go on the bed.'};
+ if(piece.k==='crate'&&!acceptsCrates(model))return {error:'Crates do not go on this bed.'};
+ if(piece.k==='trunk'&&spaceOf(model)<CARGO_KINDS.trunk.space)return {error:'Trunks do not go on this bed.'}; // T-E: the ATV rack (space 5)
+ const timber=k=>k==='log'||k==='planks'||k==='trunk'||k==='slab';
+ if(timber(piece.k)&&hasCrates(cargo))return {error:CRATE_MIX};
+ if(piece.k==='crate'&&(cargo||[]).some(p=>timber(p.k)))return {error:CRATE_MIX};
+ const ok=list=>usedSpace(list)<=spaceOf(model)&&fits(model,list);
+ if(carry.kind==='log'&&carry.count===2){const two=[...(cargo||[]),piece,{k:'log'}];if(ok(two))return {carry:null,cargo:two,message:`Loaded · ${cargoText(two)} on the bed`}} // T-E: both logs if they fit, else one (the other stays on the shoulder)
+ const next=[...(cargo||[]),piece];
+ if(!ok(next))return {error:`The bed is full (${cargoText(cargo)}).`};
+ return {carry:carry.kind==='log'&&carry.count===2?{kind:'log'}:null,cargo:next,message:`Loaded · ${cargoText(next)} on the bed`};
+}
+// Take the last piece that went on into your hands. Returns {carry, cargo} or {error}. byHand: may a crate or box come off (see CRATES_BY_HAND).
+export function unloadOne(carry,cargo,model,byHand=CRATES_BY_HAND){
+ if(carry)return {error:'Your hands are full.'};
+ if(!cargo?.length||!hasBed(model))return {error:'The bed is empty.'};
+ let i=cargo.length-1;while(i>=0&&cargo[i].o)i--; // the last piece that is yours: an order's planks stay on the bed
+ if(i<0)return {error:`Those planks belong to order #${cargo[cargo.length-1].o}: deliver them to the customer.`};
+ const no=byHandError(cargo[i],byHand);if(no)return {error:no};
+ const piece=cargo[i],left=[...cargo.slice(0,i),...cargo.slice(i+1)];
+ return {carry:carryOfPiece(piece),cargo:left.length?left:null,message:tookMessage(piece,left)};
+}
+// Take every piece of one kind off (the dock takes all the planks at once). Only what is yours: an order's planks stay. Returns {cargo, count}.
+export function takeAll(cargo,kind){const left=(cargo||[]).filter(p=>p.k!==kind||p.o);return {cargo:left.length?left:null,count:freeCount(cargo,kind)}}
+// Take the last piece of one kind off (the Cargo panel: you pick what you need, the rest of the load closes up). Returns {carry, cargo} or {error}.
+export function unloadKind(carry,cargo,model,kind,byHand=CRATES_BY_HAND){
+ if(carry)return {error:'Your hands are full.'};
+ const i=(cargo||[]).map(p=>p.o?'order':p.k).lastIndexOf(kind);
+ if(i<0)return {error:(cargo||[]).some(p=>p.k===kind&&p.o)?`Those planks belong to order #${cargo.find(p=>p.k===kind&&p.o).o}: deliver them to the customer.`:`There are no ${CARGO_KINDS[kind]?.plural||kind} on the bed.`};
+ const no=byHandError(cargo[i],byHand);if(no)return {error:no};
+ const piece=cargo[i],left=[...cargo.slice(0,i),...cargo.slice(i+1)];
+ return {carry:carryOfPiece(piece),cargo:left.length?left:null,message:tookMessage(piece,left)};
+}
+
+// Crates onto a bed that takes them (Hal's egg crates, the farm crate gigs): refused on the flatbed, on a bed holding timber, or when they do not fit. Returns {cargo} or {error}; nothing is changed.
+export function addCrates(cargo,model,count){
+ if(!hasBed(model))return {error:'This vehicle has no bed.'};
+ if(!acceptsCrates(model))return {error:'Crates do not go on this bed.'};
+ if((cargo||[]).some(p=>p.k!=='crate'))return {error:CRATE_MIX};
+ const next=[...(cargo||[]),...Array.from({length:Math.max(0,Math.floor(count))},()=>({k:'crate'}))];
+ if(usedSpace(next)>spaceOf(model)||!fits(model,next))return {error:'The crates do not fit on that bed.'};
+ return {cargo:next.length?next:null};
+}
+// `count` crates off the bed (delivered or lost), last on first off. Returns {cargo, count: how many came off}.
+export function removeCrates(cargo,count=Infinity){
+ let need=count;const out=[];for(let i=(cargo||[]).length-1;i>=0;i--){const p=cargo[i];if(p.k==='crate'&&need>0)need--;else out.unshift(p)}
+ return {cargo:out.length?out:null,count:countOf(cargo,'crate')-countOf(out,'crate')};
+}
+// Planks from the warehouse onto a bed (a delivery order, DESIGN 4.16): stacks of up to four. Returns {cargo} or {error}; nothing is changed.
+export function addPlanks(cargo,model,count,orderId=null){
+ if(!hasBed(model))return {error:'This vehicle has no bed.'};
+ if(hasCrates(cargo))return {error:CRATE_MIX};
+ const next=[...(cargo||[])];let n=Math.floor(count);while(n>0){const take=Math.min(PLANKS_PER_STACK,n);next.push(orderId?{k:'planks',n:take,o:orderId}:{k:'planks',n:take});n-=take} // orderId: they are that order's planks (see the top of this file)
+ if(usedSpace(next)>spaceOf(model)||!fits(model,next))return {error:'The order does not fit on that bed.'};
+ return {cargo:next};
+}
+// Every plank of one order off the bed (it was delivered, or it failed and the planks go back). Returns {cargo, count}; count is 0 when none were there.
+export function removeOrderPlanks(cargo,id){const left=(cargo||[]).filter(p=>!(p.k==='planks'&&p.o===id));return {cargo:left.length?left:null,count:orderCount(cargo,id)}}
+// Take `count` planks off a bed (a delivery is unloaded), last stacks first. Returns {cargo} or {error} if the bed holds fewer; nothing is changed.
+export function removePlanks(cargo,count){
+ if(countOf(cargo,'planks')<count)return {error:'The order is no longer on that truck.'};
+ let need=count;const out=[];for(let i=(cargo||[]).length-1;i>=0;i--){const p=cargo[i];if(p.k==='planks'&&need>0){const t=Math.min(p.n,need);need-=t;if(p.n>t)out.unshift({...p,n:p.n-t})}else out.unshift(p)}
+ return {cargo:out.length?out:null};
+}

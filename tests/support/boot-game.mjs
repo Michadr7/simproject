@@ -1,6 +1,6 @@
 // Boots the real packaged game (the release dist/index.html points at) in Node with a synthetic DOM and a renderer stub, like startup.mjs.
 // Not a test itself: it lives in tests/support so run-tests.mjs (which only reads tests/*.mjs) leaves it alone.
-import {mkdtemp,readFile,cp,rm} from 'node:fs/promises';
+import {mkdtemp,readFile,cp,rm,writeFile} from 'node:fs/promises';
 import {skipStarter} from '../../dist/starter.js';import {tmpdir} from 'node:os';import './unref-game-timers.mjs';import {join} from 'node:path';import {pathToFileURL} from 'node:url';import {writeMockRenderer} from './mock-renderer.mjs';
 
 export class El extends EventTarget{
@@ -14,12 +14,13 @@ export class El extends EventTarget{
 }
 
 // position: a saved player position, or null for none. play: press Play once the game has loaded. editRelease(dir): change the copied release before it loads.
-export async function bootGame({position=null,play=true,editRelease=async()=>{},progress={}}={}){
+export async function bootGame({position=null,play=true,devMode=false,editRelease=async()=>{},progress={}}={}){
  const html=await readFile('dist/index.html','utf8');
  const dir=await mkdtemp(join(tmpdir(),'city-boot-'));
  const release=html.match(/import\('\.\/(releases\/[^/]+)\/game\.js'/)[1];
  await cp('dist/'+release,dir,{recursive:true});
  await writeMockRenderer(dir);
+ if(devMode)await writeFile(join(dir,'dev-flag.js'),'export const DEV_MODE=true;\n');
  await editRelease(dir);
  const ids=new Map([...html.matchAll(/id="([^"]+)"/g)].map(m=>[m[1],new El(m[1]==='characterName'?'input':'div')]));
  const created=[],doc=new EventTarget();

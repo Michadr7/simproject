@@ -16,7 +16,7 @@ export const DUST_RATE=14,MUD_RATE=20,DROP_SHARE=.25,DUST_MIN_SPEED=4,GRASS_DUST
 export const QUALITY_RATE=Object.freeze({high:{dust:1,mud:1},low:{dust:.25,mud:0}});
 const SP=SURFACE;
 export const SPRAY_SURFACE=Object.freeze({[SP.DIRT]:{dust:1,colour:'#b9a582'},[SP.PATH]:{dust:.8,colour:'#b9a582'},[SP.GRAVEL]:{dust:.8,colour:'#c4bdae'},[SP.GRASS]:{dust:.3,minSpeed:GRASS_DUST_MIN_SPEED,colour:'#b3ad86'},
- [SP.MUD]:{mud:1,colour:'#3e2f22'},[SP.PLOWED]:{mud:.6,colour:'#4a3a2a'},[SP.WHEAT]:{mud:.25,colour:'#5a4a2e'},[SP.GREEN]:{mud:.25,colour:'#5a4a2e'}});
+ [SP.MUD]:{mud:1,colour:'#3e2f22'},[SP.PLOWED]:{mud:.6,colour:'#4a3a2a'},[SP.WHEAT]:{mud:.25,colour:'#5a4a2e'},[SP.GREEN]:{mud:.25,colour:'#5a4a2e'},[SP.WATER]:{mud:.9,colour:'#d8eef8'}});
 const NO_SPRAY=Object.freeze({dust:0,mud:0,drop:0,colour:'#000000'});
 // One wheel for one frame: {dust, mud, drop} pieces per second and the ground colour. Wheelspin (throttle held and slower than 3 m/s, or Stuck) throws mud at the full rate whatever the speed; otherwise mud needs 1.5 m/s and scales with speed / top.
 export function sprayOf({surface,speed=0,top=10,throttle=0,stuck=false,quality='high',calm=false}={}){

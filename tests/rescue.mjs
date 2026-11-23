@@ -11,7 +11,7 @@ const at=g=>g.me.position,away=(p,o)=>Math.hypot(p.x-o.x,p.z-o.z);
  const fresh=await boot(null);assert.deepEqual([at(fresh.GameState).x,at(fresh.GameState).z],[SPAWN.x,SPAWN.z],'a free spawn is used as it is');await fresh.done();
 }
 { // The 0.31.1 bug: a save made while stuck inside the car. Loading used to send you to the spawn; now you are put beside it, on clear ground, near where you were
- const g=await boot(CAR),p=at(g.GameState);
+ const g=await bootGame({position:CAR,devMode:true}),p=at(g.GameState);
  assert(away(p,CAR)>=1.5,`you are not left inside the car (${away(p,CAR).toFixed(2)} m from its centre)`);assert(away(p,CAR)<=8,`and you are near where you were (${away(p,CAR).toFixed(2)} m)`);
  assert(away(p,SPAWN)>3,'not teleported back to the spawn');
  // R: back to the spawn (which is clear)

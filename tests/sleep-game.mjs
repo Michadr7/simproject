@@ -7,7 +7,7 @@ const g=await bootGame({position:{x:1,z:-6.3}});
 try{
  const {GameState,pump,send,ids}=g,p=()=>GameState.progress,pressE=()=>{send('keydown','KeyE');send('keyup','KeyE');pump(.3)};
  GameState.progress={...p(),housing:{...p().housing,rented:true,day:3},routine:{...p().routine,minutes:22*60},life:{...p().life,energy:10,food:90,thirst:90}};pump(.5);
- pressE();pump(1);assert.equal(ids.get('locationName').textContent,'STUDIO 2B','inside the studio');
+ pressE();pump(1);assert.equal(ids.get('locationName').textContent,'OAK STREET LOBBY','in the lobby');GameState.me.position.x=2.8;GameState.me.position.z=-4.6;pump(.2);pressE();ids.get('jobAction').click();pump(1);assert.equal(ids.get('locationName').textContent,'STUDIO 2B','inside the studio');
  const bed=MAP.studio.interior.bed,sleep=()=>{GameState.me.position.x=bed.x;GameState.me.position.z=bed.z;pump(.3);pressE();assert(/Sleep until 6:00 AM/.test(ids.get('dialogText').textContent),'the dialog: '+ids.get('dialogText').textContent);ids.get('jobAction').click();pump(3)};
  sleep();
  assert(p().life.energy>99.9,'rested: '+p().life.energy);assert.equal(p().housing.day,4,'the next day');assert(p().routine.minutes>=360&&p().routine.minutes<366,'6 AM (a moment later), not '+p().routine.minutes);

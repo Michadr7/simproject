@@ -1,6 +1,7 @@
 // Owning and renting the vacant houses (0.30). `progress.properties` holds what the player holds: {[propertyId]: {tenure: 'rent' | 'own', since, nextBillDay, rentDue, missed, deposit}}.
 // Rent is taken from the player's cash every 7 game days (the same clock as the studio's bills); a week that cannot be paid is a warning, a second one is an eviction. All changes are pure transactions.
 import {MAP} from './map-definition.js';
+import {normalizeFridge} from './housing.js';
 
 export const WEEK=7,GRACE=2,SCHEMA=2;
 const cash=n=>'$'+(n/100).toFixed(2);
@@ -15,6 +16,7 @@ export function normalizeProperties(value){
   const listing=listingOf(id);if(!listing||!e||typeof e!=='object'||(e.tenure!=='rent'&&e.tenure!=='own'))continue;
   const rent=e.tenure==='rent',since=int(e.since,1,100000,1);
   out[id]={tenure:e.tenure,since,nextBillDay:rent?int(e.nextBillDay,1,100000,since+WEEK):0,rentDue:rent?int(e.rentDue,0,1e9,0):0,missed:rent?int(e.missed,0,GRACE,0):0,deposit:rent?int(e.deposit,0,1e9,listing.depositCents):0};
+  const f=normalizeFridge(e.fridge);if(f.length)out[id].fridge=f;
  }
  return out;
 }

@@ -1,5 +1,5 @@
 // P-E wiring test (dist/gigs.js + dist/needs.js + dist/world-goods.js): plank restock gig flow.
-// Covers board appearance (supplier, bakery, houses), whole-stack pickup from sawmill yard, full delivery,
+// Covers board appearance (supplier and houses), whole-stack pickup from sawmill yard, full delivery,
 // partial delivery give-back to sawmill, abandon/cancel give-back, and old-save normalization.
 import assert from 'node:assert/strict';
 import {normalizeWorld} from '../dist/world-state.js';
@@ -52,14 +52,14 @@ const makeProgress=(supPlanks,yardPlanks,plankStock={})=>{
  assert.equal(dl.state.gigs.active,null,'active gig cleared');
 }
 
-// 2. Bakery and house (property:house-r1) plank restocks open, appear on board, load and deliver.
+// 2. House plank restocks still open and pay. The bakery no longer posts plank needs.
 {
  let p=makeProgress(30,24,{'property:alder-bakery':0,'property:house-r1':0});
  const board=boardFor(p,NOW);
  const hSlot=board.find(s=>s.good==='planks'&&s.places[0].id==='house-r1');
  const bSlot=board.find(s=>s.good==='planks'&&s.places[0].id==='alder-bakery');
  assert(hSlot,'house-r1 plank restock appears on board');
- assert(bSlot,'alder-bakery plank restock appears on board');
+ assert(!bSlot,'the bakery now requests ingredients instead of planks');
 
  let s=acceptGig(p,hSlot.slot,NOW).state;
  s=pickNeedHaul(s,NOW+5,{uid:'v1',maxUnits:32}).state;
@@ -121,4 +121,4 @@ const makeProgress=(supPlanks,yardPlanks,plankStock={})=>{
  assert.equal(oldNeeds.length,1);
 }
 
-console.log('PASS plank-gig.mjs: supplier/bakery/house board slots, whole-stack pickup, full/partial delivery with give-back, cancel give-back, and old-save load passed.');
+console.log('PASS plank-gig.mjs: supplier and house board slots, whole-stack pickup, full/partial delivery with give-back, cancel give-back, and old-save load passed.');

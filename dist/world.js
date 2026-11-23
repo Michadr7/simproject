@@ -7,7 +7,9 @@ import {PINES,BROADLEAVES,modelInfo,modelGeometry,createNatureMaterials} from '.
 import {terrain,SURFACE,FOOTING,roadCenterline} from './terrain.js';
 import {lampSpots} from './streetfurniture.js';
 import {markingBars,townSpots,FOUNTAIN,BUS_STOP} from './town.js';
-import {propInfo,createProp} from './props.js';
+import {propInfo,propGeometry,createProp,createPropInstances} from './props.js';
+import {DOWNTOWN_DETAILS,DOWNTOWN_SIGNS} from './downtown.js';
+import {surfaceBaseY,attachBakeryStorefront,attachShopStorefront,SHOP_STOREFRONTS,buildRidgeClothingExterior} from './ridge-clothing-shell.js';
 import {chunkKey,chunkIndex,chunkRange,worldRange,createChunkIndex,maskTile,chunkBounds} from './chunks.js';import {digGrid,groundRects,dugMeshData} from './dug-ground.js';import {createChunkView} from './chunks-view.js';import {waterChunkMesh} from './water-chunks.js';import {createEastbank} from './eastbank.js';import {createSceneOverlay} from './scene-overlay.js';import {createCoverView} from './ground-cover-view.js';import {footprintRects} from './cover-sampler.js';
 
 // ─── Layout (pure data, safe to import from rules and tests) ──────────────────
@@ -456,19 +458,43 @@ export function createWorld(scene,{label,cullRadius,streaming=false}={}){
  rebuild();
 
  // ── Landmarks (the farmyard, the sawmill) placed from the map, solid where their walls are, and the fork's signpost ──────────────────────────────────
+ const _T=terrain(),plinths=[];
  const landmarks=MAP.landmarks.map(l=>{
-  const info=propInfo(l.prop),mesh=createProp(l.prop,fade);mesh.position.set(l.x,heightAt(l.x,l.z),l.z);mesh.rotation.y=l.yaw;group.add(mesh);
+  const info=propInfo(l.prop);
+  const mesh=l.id==='alder-store'?buildRidgeClothingExterior(fade):createProp(l.prop,fade);
+  if(l.id==='alder-bakery')attachBakeryStorefront(mesh,fade);
+  else if(SHOP_STOREFRONTS[l.id])attachShopStorefront(mesh,fade,l.id);
+  const yBase=l.decor?surfaceBaseY(_T,l.x,l.z,heightAt):(l.zone==='alder'?Math.max(heightAt(l.x,l.z),.165):heightAt(l.x,l.z));
+  mesh.position.set(l.x,yBase,l.z);mesh.rotation.y=l.yaw;group.add(mesh);
   const cos=Math.round(Math.cos(l.yaw)),sin=Math.round(Math.sin(l.yaw)),turned=sin!==0;
+  if(!l.decor){
+   const f=info.footprint||{x0:-2,x1:2,z0:-2,z1:2};
+   let x0=f.x0,x1=f.x1,z0=f.z0,z1=f.z1;
+   if(l.id!=='alder-store'){try{const g=propGeometry(l.prop),p=g.attributes.position;let bx0=1e9,bx1=-1e9,bz0=1e9,bz1=-1e9,n=0;for(let i=0;i<p.count;i++){if(p.getY(i)<=.35){const vx=p.getX(i),vz=p.getZ(i);if(vx<bx0)bx0=vx;if(vx>bx1)bx1=vx;if(vz<bz0)bz0=vz;if(vz>bz1)bz1=vz;n++}}if(n>=8){x0=bx0;x1=bx1;z0=bz0;z1=bz1}}catch{}}
+   const rc=Math.cos(l.yaw||0),rs=Math.sin(l.yaw||0);
+   let minG=surfaceBaseY(_T,l.x,l.z,heightAt);
+   for(const lx of [x0,x1])for(const lz of [z0,z1]){minG=Math.min(minG,surfaceBaseY(_T,l.x+lx*rc+lz*rs,l.z-lx*rs+lz*rc,heightAt))}
+   if(yBase>minG+.015){const cx=(x0+x1)/2,cz=(z0+z1)/2,h=(yBase+.01)-(minG-.15);plinths.push({x:l.x+cx*rc+cz*rs,y:(minG-.15)+h/2,z:l.z-cx*rs+cz*rc,w:Math.max(.5,(x1-x0)-.03),h,d:Math.max(.5,(z1-z0)-.03),yaw:l.yaw||0})}
+  }
   const boxes=info.colliders.map(b=>Object.assign(colliders.box(l.x+b.x*cos+b.z*sin,l.z-b.x*sin+b.z*cos,turned?b.hz:b.hx,turned?b.hx:b.hz),{mutable:true})); // mutable: setLandmarkVisible switches them
   return {id:l.id,mesh,boxes,hidden:false,x:l.x,z:l.z,yaw:l.yaw,floor:info.floors||info.floor||null,radius:Math.hypot(info.width,info.depth)/2};
  });
+ if(plinths.length){
+  const pm=new THREE.InstancedMesh(new THREE.BoxGeometry(1,1,1),new THREE.MeshStandardMaterial({color:'#787b7e',roughness:.94}),plinths.length);
+  const m=new THREE.Matrix4(),q=new THREE.Quaternion(),yAx=new THREE.Vector3(0,1,0),pPos=new THREE.Vector3(),pScl=new THREE.Vector3();
+  plinths.forEach((p,i)=>{q.setFromAxisAngle(yAx,p.yaw);pm.setMatrixAt(i,m.compose(pPos.set(p.x,p.y,p.z),q,pScl.set(p.w,p.h,p.d)))});
+  pm.name='building-plinths';pm.receiveShadow=true;pm.castShadow=false;pm.frustumCulled=false;group.add(pm);
+ }
  for(const sign of MAP.signs){
   const post=new THREE.Mesh(new THREE.BoxGeometry(.18,3.4,.18),timber);post.position.set(sign.x,1.7,sign.z);post.castShadow=true;post.name='sign-post';group.add(post);colliders.circle(sign.x,sign.z,.16);
   if(label)for(const board of sign.boards){const mesh=label(board.text||'',sign.x,board.y,sign.z+.12,4.4,sign.yaw,board.bg||'#3a2f22',board.fg||'#f1ebd9',board.h||.62);if(board.pictures&&mesh&&typeof Image==='function')paintSignPictures(mesh)} // a board with `pictures` shows the two Riden Deals vehicle pictures (sign-pictures.js, imported only now)
  }
  // Driveways and front paths: flat concrete and paving just above the grass and just under the road they join.
  {const concrete=new THREE.MeshStandardMaterial({color:'#8f9396',roughness:.95}),paving=new THREE.MeshStandardMaterial({color:'#b9b3a4',roughness:.9});
-  for(const plot of MAP.reserved){if(plot.driveway)streaming?quadInto('driveway',plot.driveway.x0,plot.driveway.x1,plot.driveway.z0,plot.driveway.z1):plane(plot.driveway.x0,plot.driveway.x1,plot.driveway.z0,plot.driveway.z1,-.05,concrete,'driveway-'+plot.id);if(plot.path)streaming?quadInto('path',plot.path.x0,plot.path.x1,plot.path.z0,plot.path.z1):plane(plot.path.x0,plot.path.x1,plot.path.z0,plot.path.z1,-.049,paving,'path-'+plot.id)}}
+  for(const plot of MAP.reserved){if(plot.driveway)streaming?quadInto('driveway',plot.driveway.x0,plot.driveway.x1,plot.driveway.z0,plot.driveway.z1):plane(plot.driveway.x0,plot.driveway.x1,plot.driveway.z0,plot.driveway.z1,-.05,concrete,'driveway-'+plot.id);if(plot.path)streaming?quadInto('path',plot.path.x0,plot.path.x1,plot.path.z0,plot.path.z1):plane(plot.path.x0,plot.path.x1,plot.path.z0,plot.path.z1,-.049,paving,'path-'+plot.id)}
+  // Eden Wholesale concrete loading dock apron and safety stripe.
+  const apron=new THREE.Mesh(new THREE.BoxGeometry(5.2,.08,3.6),concrete);apron.position.set(39.7,.04,-62.6);apron.receiveShadow=true;apron.name='wholesale-dock-apron';group.add(apron);
+  const stripe=new THREE.Mesh(new THREE.BoxGeometry(4.8,.012,.18),new THREE.MeshStandardMaterial({color:'#e5b822',roughness:.6}));stripe.position.set(39.7,.085,-60.95);stripe.name='wholesale-dock-stripe';group.add(stripe)}
  // Street lamps (instanced poles and heads, solid) and the town square's benches.
  {const spots=lampSpots().concat(townSpots().lamp.map(l=>({x:l.x,z:l.z,dx:l.dx,dz:l.dz,road:l.frontage}))),metal=new THREE.MeshStandardMaterial({color:'#3b4247',roughness:.7,metalness:.3}),glow=new THREE.MeshStandardMaterial({color:'#f4ecd2',emissive:'#ffe9a8',emissiveIntensity:.55,roughness:.5});
   const poles=new THREE.InstancedMesh(new THREE.CylinderGeometry(.07,.1,4.6,8),metal,spots.length),heads=new THREE.InstancedMesh(new THREE.BoxGeometry(.75,.14,.3),glow,spots.length),m=new THREE.Matrix4(),q=new THREE.Quaternion(),one=new THREE.Vector3(1,1,1),at=new THREE.Vector3();
@@ -477,6 +503,26 @@ export function createWorld(scene,{label,cullRadius,streaming=false}={}){
 }
  // Eastbank Works (0.33): the merged paving, painted bays and the per-yard prop chunks (eastbank.js); the buildings are landmarks above.
  const eastbank=createEastbank({group,fade,groundLayer,asphalt,colliders});createSceneOverlay({parent:group,fade,heightAt,colliders}); // scene editor overlay (scene-overlay.js): empty in the shipped game; the editor reaches it as group.userData.sceneOverlay
+ // B1/B2 (map-master 4.1): Blackstone Lake dock, boat ramp and camp C1..C3 fire rings.
+ if(MAP.blackstone){const bs=MAP.blackstone,dk=bs.dock,rp=bs.ramp,dMat=new THREE.MeshStandardMaterial({color:'#7a593c',roughness:.9}),rMat=new THREE.MeshStandardMaterial({color:'#8b9094',roughness:.95}),sMat=new THREE.MeshStandardMaterial({color:'#6e6c67',roughness:.95});
+  if(dk){const dock=new THREE.Mesh(new THREE.BoxGeometry(dk.w,.24,dk.d),dMat);dock.position.set(dk.x,dk.y,dk.z);dock.receiveShadow=dock.castShadow=true;dock.name='blackstone-dock';group.add(dock)}
+  if(rp){const ramp=new THREE.Mesh(new THREE.BoxGeometry(rp.w,.22,rp.d),rMat);ramp.position.set(rp.x,-.4,rp.z);ramp.rotation.x=.08;ramp.receiveShadow=true;ramp.name='blackstone-ramp';group.add(ramp)}
+  for(const c of bs.camps||[]){const y=heightAt(c.x,c.z),ring=new THREE.Mesh(new THREE.TorusGeometry(.55,.12,6,12),sMat);ring.rotation.x=Math.PI/2;ring.position.set(c.x,y+.08,c.z);ring.name='camp-ring-'+c.id;group.add(ring);colliders.circle(c.x,c.z,.65)}}
+ if(MAP.kaspian?.pier){const pr=MAP.kaspian.pier,pier=new THREE.Mesh(new THREE.BoxGeometry(pr.w,.28,pr.d),new THREE.MeshStandardMaterial({color:'#7a593c',roughness:.9}));pier.position.set(pr.x,pr.y,pr.z);pier.receiveShadow=pier.castShadow=true;pier.name='kaspian-pier';group.add(pier)}
+ if(MAP.edenSite?.gate){const gt=MAP.edenSite.gate,gMat=new THREE.MeshStandardMaterial({color:'#234c3a',roughness:.6}),arch=new THREE.Mesh(new THREE.BoxGeometry(.4,.45,gt.w),gMat);arch.position.set(gt.x,4.1,gt.z);arch.name='eden-gate-arch';group.add(arch);for(const dz of [-gt.w/2,gt.w/2]){const p=new THREE.Mesh(new THREE.BoxGeometry(.4,4.2,.4),gMat);p.position.set(gt.x,2.1,gt.z+dz);p.name='eden-gate-post';group.add(p);colliders.circle(gt.x,gt.z+dz,.25)}}
+ // E-I2 (map-master 5.1): instanced Eden Industries stockyard & loading yard stacks (<= 3 draw calls total).
+ if(MAP.edenSite){
+  const batches=[
+   ['prop.pallet-crate',[{x:915,z:-280,yaw:0},{x:925,z:-280,yaw:Math.PI/2},{x:945,z:-280,yaw:0},{x:955,z:-280,yaw:Math.PI}]],
+   ['prop.crate-large',[{x:920,z:-310,yaw:0},{x:935,z:-310,yaw:Math.PI/2},{x:950,z:-310,yaw:0},{x:965,z:-310,yaw:0}]],
+   ['prop.pallet-medium-boxes',[{x:845,z:-72,yaw:0},{x:880,z:-72,yaw:0},{x:915,z:-72,yaw:Math.PI/2},{x:945,z:-72,yaw:0}]]
+  ];
+  for(const [prop,spots] of batches){
+   const inst=createPropInstances(prop,spots,fade,{shadows:false});inst.name='eden-yard-'+prop;group.add(inst);
+   const cols=propInfo(prop).colliders||[];
+   for(const s of spots){const c=Math.round(Math.cos(s.yaw||0)),sn=Math.round(Math.sin(s.yaw||0)),turn=sn!==0;for(const b of cols)colliders.box(s.x+b.x*c+b.z*sn,s.z-b.x*sn+b.z*c,turn?b.hz:b.hx,turn?b.hx:b.hz)}
+  }
+ }
  // ── The town (0.31): raised pavements and the town square, the parking lot, painted markings, street furniture, the fountain and the bus stop ──────────────────────────────
  {
   const T=terrain(),m4=new THREE.Matrix4(),quat=new THREE.Quaternion(),yAxis=new THREE.Vector3(0,1,0),at=new THREE.Vector3(),one=new THREE.Vector3(1,1,1),flat=new THREE.Vector3();
@@ -516,6 +562,33 @@ export function createWorld(scene,{label,cullRadius,streaming=false}={}){
    add(box(3.4,.12,1.7),'#3d5a6c',0,2.5,0);for(const x of [-1.55,1.55])add(box(.1,2.5,.1),'#3b4247',x,1.25,-.7);add(box(3.2,1.6,.04),'#b9d8e4',0,1.3,-.8,{transparent:true,opacity:.4,roughness:.2});
    add(box(1.8,.08,.5),'#8a6a47',0,.46,-.45);add(box(.06,.46,.46),'#3b4247',-.8,.23,-.45);add(box(.06,.46,.46),'#3b4247',.8,.23,-.45);add(cyl(.04,.04,2.8,6),'#6b7076',2.1,1.4,.2);add(box(.62,.62,.05),'#2f6fa5',2.1,2.55,.2);add(box(.3,.34,.06),'#f4f1e6',2.1,2.55,.23);
    const c=Math.round(Math.cos(BUS_STOP.yaw)),n=Math.round(Math.sin(BUS_STOP.yaw));colliders.box(BUS_STOP.x+(-.8*n),BUS_STOP.z+(-.8*c),Math.abs(c)*3.2+Math.abs(n)*.12,Math.abs(c)*.12+Math.abs(n)*3.2)}
+  // Ironwood facade details (I6): instanced awnings, overhangs and parasols (0 shadows), plus one merged atlas mesh for all 14 storefront signs.
+  {const byProp=new Map();for(const d of DOWNTOWN_DETAILS){let list=byProp.get(d.prop);if(!list)byProp.set(d.prop,list=[]);list.push(d)}
+   for(const [prop,spots] of byProp){const inst=createPropInstances(prop,spots,fade,{shadows:false});inst.name='downtown-'+prop;group.add(inst)}
+   if(typeof document!=='undefined'&&DOWNTOWN_SIGNS.length){
+    const cols=2,rows=Math.ceil(DOWNTOWN_SIGNS.length/cols),cw=512,ch=128,canvas=document.createElement('canvas');
+    canvas.width=cols*cw;canvas.height=rows*ch;const ctx=canvas.getContext('2d');
+    const pos=[],nor=[],uv=[],idx=[];
+    DOWNTOWN_SIGNS.forEach((s,i)=>{
+     const col=i%cols,row=Math.floor(i/cols),px=col*cw,py=row*ch;
+     ctx.fillStyle=s.bg;ctx.fillRect(px,py,cw,ch);ctx.strokeStyle='#d9c89e';ctx.lineWidth=6;ctx.strokeRect(px+5,py+5,cw-10,ch-10);
+     ctx.fillStyle=s.fg;let size=52;ctx.font=`bold ${size}px Arial`;const mw=ctx.measureText?.(s.text)?.width||0;
+     if(mw>cw*.84)ctx.font=`bold ${Math.floor(size*cw*.84/mw)}px Arial`;
+     ctx.textAlign='center';ctx.textBaseline='middle';ctx.fillText?.(s.text,px+cw/2,py+ch/2);
+     const hw=s.w/2,hh=s.h/2,c=Math.cos(s.yaw),sn=Math.sin(s.yaw),nx=sn,nz=c,v0=pos.length/3;
+     for(const [lx,ly] of [[-hw,-hh],[hw,-hh],[hw,hh],[-hw,hh]]){pos.push(s.x+lx*c,s.y+ly,s.z-lx*sn);nor.push(nx,0,nz)}
+     const u0=px/canvas.width,u1=(px+cw)/canvas.width,vTop=1-py/canvas.height,vBot=1-(py+ch)/canvas.height;
+     uv.push(u0,vBot,u1,vBot,u1,vTop,u0,vTop);idx.push(v0,v0+1,v0+2,v0,v0+2,v0+3);
+    });
+    const tex=new THREE.CanvasTexture(canvas);tex.colorSpace=THREE.SRGBColorSpace;
+    const g=new THREE.BufferGeometry();
+    g.setAttribute('position',new THREE.Float32BufferAttribute(pos,3));
+    g.setAttribute('normal',new THREE.Float32BufferAttribute(nor,3));
+    g.setAttribute('uv',new THREE.Float32BufferAttribute(uv,2));
+    g.setIndex(idx);
+    const signs=new THREE.Mesh(g,new THREE.MeshBasicMaterial({map:tex}));
+    signs.name='downtown-signs';signs.castShadow=false;group.add(signs);
+   }}
  }
  // The edge of the world: a ring of low hills far beyond the fog (they ignore it), so the map ends at a horizon, not at nothing.
  {const fogColor=new THREE.Color(scene.fog?scene.fog.color:'#b9cbd0'),top=fogColor.clone().lerp(new THREE.Color('#5f7686'),.5),mid=fogColor.clone().lerp(new THREE.Color('#5f7686'),.28),N=96,cx=20,cz=-140,pos=[],col=[],idx=[];

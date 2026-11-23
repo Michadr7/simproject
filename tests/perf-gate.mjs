@@ -50,8 +50,8 @@ ok(view.stats().loaded===25,'the ring of 25 is loaded behind the loading screen'
  const ringTotal=view.stats().chunkMeshes,dense=Math.max(...counts.map(c=>c[1]));
  ok(counts.reduce((a,c)=>a+c[1],0)===ringTotal,'meshesOf adds up to stats().chunkMeshes');
  ok(dense<=20,'densest chunk of the ring at most 20 meshes (brief 3): '+dense);ok(ringTotal<=300,'ring of 25 at most 300 chunk-built meshes, global meshes not included (brief 3): '+ringTotal);
- const sparse=view.meshesOf(chunkKey(...Object.values(chunkIndex(650,-700)))); // a wilds chunk with no data: ensure it first
- world.ensure(650,-700,0);const wk=chunkKey(...Object.values(chunkIndex(650,-700)));ok(view.meshesOf(wk)===0,'an empty chunk (wilds) adds 0 meshes: '+view.meshesOf(wk));
+ const sparse=view.meshesOf(chunkKey(...Object.values(chunkIndex(-550,-550)))); // a wilds chunk with no data: ensure it first
+ world.ensure(-550,-550,0);const wk=chunkKey(...Object.values(chunkIndex(-550,-550)));ok(view.meshesOf(wk)===0,'an empty chunk (wilds) adds 0 meshes: '+view.meshesOf(wk));
  world.ensure(1030,-1190,0);ok(view.meshesOf(chunkKey(14,0))===0,'the far corner chunk adds 0 meshes (R3b: the south-east corner is sea now, so the north-east one is the empty corner)');
  // every chunk of the old ground (42) built: the densest of all, and sparse ones stay at 3 or fewer (brief 3)
  const times=[];for(let j=range.j0;j<=range.j1;j++)for(let i=range.i0;i<=range.i1;i++){const b=chunkBounds(i,j),t=ms(),r=world.ensure((b.x0+b.x1)/2,(b.z0+b.z1)/2,0);if(r.built)times.push([ms()-t,chunkKey(i,j)])}

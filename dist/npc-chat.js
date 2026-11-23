@@ -27,7 +27,20 @@ const pick=(list,...seed)=>list[hash(...seed)%list.length];
 // Where a person lives, as the map names it ('8 Cedar Loop'), or '' when the home is not a named property.
 export function homeName(person){const id=String(person?.home||'').replace(/^property:/,'');const p=(MAP.properties||[]).find(x=>x.id===id);return p?.name||''}
 // What they do: a short phrase, or '' (retired or at home).
-export function workPhrase(person){const w=person?.role||person?.post;if(!w)return '';const at=person.employer||person.work;return at?`I work as ${w} at ${String(at).replace(/^[a-z]+:/,'').replace(/-/g,' ')}.`:`I work as ${w}.`}
+export function workPhrase(person){const w=person?.role||person?.post;if(!w)return '';const prop=person.post?(MAP.properties||[]).find(x=>x.id===person.post):null;const at=prop?.name||(person.employer||person.work?String(person.employer||person.work).replace(/^[a-z]+:/,'').replace(/-/g,' '):'');return at?`I work as ${w} at ${at}.`:`I work as ${w}.`}
+// Live, meaningful town rumor based on open needs, gigs, standing, or the NPC's Ironwood workplace.
+export function townRumor(person,{day=1,minute=0,needs=[],townStanding=0,openGigs=0}={}){
+ const name=typeof person?.name==='string'&&person.name?person.name:'A neighbour',id=String(person?.id||name),hour=Math.floor((Number(minute)||0)/60);
+ const openNeed=Array.isArray(needs)?needs.find(n=>n&&!n.filled&&n.good):null;
+ const hints=[];
+ if(openNeed){const place=String(openNeed.place||openNeed.dest||'town').replace(/^shop:/,'').replace(/-/g,' ');hints.push(`Word is ${place} is running low on ${openNeed.good}—check your phone's Gigs app.`)}
+ if(openGigs>0)hints.push(`There ${openGigs===1?'is 1 open gig':'are '+openGigs+' open gigs'} on the board today.`);
+ if(townStanding>=5)hints.push('Folks around Ironwood have been talking about how reliable you are.');
+ const prop=person?.post?(MAP.properties||[]).find(x=>x.id===person.post):null;
+ if(prop)hints.push(`Stop by ${prop.name} during open hours if you need anything—we're open to the whole town.`);
+ if(!hints.length)hints.push(pick(WEATHER_REMARKS.clear,id,day,hour,'rumor'));
+ return hints[hash(id,day,hour,'r')%hints.length];
+}
 // {name, text}: what the person says. day and minute from the game clock; weather is the weather id; place is 'bench'|'shop'|'diner'|'road'.
 export function chatLine(person,{day=1,minute=0,weather='clear',place=''}={}){
  const name=typeof person?.name==='string'&&person.name?person.name:'A neighbour',id=String(person?.id||name),period=periodOf(minute),hour=Math.floor((Number(minute)||0)/60);

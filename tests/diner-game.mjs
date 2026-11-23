@@ -46,7 +46,11 @@ try{
  assert(!spotsNow().some(s=>s.act==='pickup'),'not ready yet');
  at(p().routine.minutes+8);pump(.8);assert.equal(dinerOf(p()).tickets[0].stage,'ready','the order is ready on the pass');
  {const s=spotsNow().find(x=>x.act==='pickup');assert(s&&/Pick up/.test(s.label),'pickup offered');act(s);assert.equal(dinerOf(p()).carried.length,1,'order in hand')}
+ const cup=g.scene().getObjectByName('diner-held-cup'),wrist=cup?.parent.getObjectByName('WristL');
+ assert(cup?.visible&&wrist,'a carried order shows a cup by the animated left hand');
+ assert(cup.getWorldPosition(cup.position.clone()).distanceTo(wrist.getWorldPosition(cup.position.clone()))<.115,'the cup is in reach of the palm');
  {const s=spotsNow().find(x=>x.act==='serve');assert(s,'serve offered at the table');const cash0=p().cash,tips0=dinerOf(p()).tipsCents;act(s);const d=dinerOf(p());assert.equal(d.servedOrders,1);assert(d.tipsCents>=50&&d.tipsCents<=300,'tip $0.50..$3.00: '+d.tipsCents);assert.equal(p().shift.pieces.tips,d.tipsCents,'tips are counted as a piece, in cents');assert.equal(p().cash,cash0,'pay comes at clock-out, not per order')}
+ assert.equal(cup.visible,false,'serving clears the carried cup');
  assert(p().skills.hospitality.xp>0,'hospitality experience is earned');
  at(p().routine.minutes+30);pump(.8);{const s=spotsNow().find(x=>x.act==='bus');assert(s,'the table is dirty after the meal');act(s);assert.equal(p().shift.pieces.tablesBused,1);assert(dinerOf(p()).tables.every(t=>t.status!=='dirty'||t.id!==s.ref),'cleared')}
  // finish the day's tasks (take 6, serve 8)

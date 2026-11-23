@@ -14,7 +14,8 @@ export function createTalkPanel(root,opts){
  const el=(tag,cls,text)=>{const n=doc.createElement(tag);if(cls)n.className=cls;if(text!==undefined)n.textContent=String(text);return n};
  const head=el('div','talk-head'),nameEl=el('h2','talk-name'),chipEl=el('span','talk-chip'),clockEl=el('span','talk-clock');
  const portrait=el('div','talk-portrait');portrait.setAttribute('aria-hidden','true');
- const who=el('div','talk-who');who.appendChild(nameEl);who.appendChild(chipEl);
+ const relEl=el('div','talk-rel');relEl.hidden=true;
+ const who=el('div','talk-who');who.appendChild(nameEl);who.appendChild(chipEl);who.appendChild(relEl);
  head.appendChild(portrait);head.appendChild(who);head.appendChild(clockEl);
  const log=el('div','talk-log');log.setAttribute('role','log');log.setAttribute('aria-live','polite');
  const typingEl=el('div','talk-typing');typingEl.setAttribute('aria-hidden','true');typingEl.hidden=true;
@@ -122,6 +123,20 @@ export function createTalkPanel(root,opts){
   log.scrollTop=log.scrollHeight;
  };
  api.setChip=applyChip;
+ api.setMeter=(meter)=>{
+  relEl.textContent='';
+  if(!meter){relEl.hidden=true;return}
+  relEl.hidden=false;
+  const addMeter=(cls,text,pct)=>{
+   const wrap=el('span','talk-meter'+(cls?' '+cls:''));
+   const lbl=el('span','talk-meter-text',text);
+   const track=el('span','talk-meter-track');
+   const fill=el('span','talk-meter-fill');fill.style.width=Math.max(0,Math.min(100,Math.round(pct||0)))+'%';
+   track.appendChild(fill);wrap.appendChild(lbl);wrap.appendChild(track);relEl.appendChild(wrap);
+  };
+  addMeter(meter.friendTone==='high'?'high':meter.friendTone==='mid'?'mid':'',meter.friendText||'New face',meter.friendPct);
+  if(meter.romanceUnlocked)addMeter('romance',meter.romanceText||'Warm Spark',meter.romancePct);
+ };
  api.setClock=(t)=>{clockEl.textContent=t?String(t):''};
  api.show=(d)=>{
   const s=d||{},b=badgeFor(s.name||'');
@@ -129,6 +144,7 @@ export function createTalkPanel(root,opts){
   nameEl.textContent=String(s.name||'');
   portrait.textContent=b.initial;portrait.style.backgroundColor=b.bg;portrait.style.color=b.fg;
   applyChip(s.chip);
+  api.setMeter(s.meter||null);
   log.textContent='';entries=[];speaker='';open=true;root.hidden=false;
   (Array.isArray(s.lines)?s.lines:[]).forEach(api.append);
   api.setReplies(s.replies,true);

@@ -1,7 +1,7 @@
 import './legacy-keys.js';
 import {bandOf,misfiring} from './damage.js';
 import {PHONE_CLIPS} from './phone-calls.js'; // PH1: the Call app's sounds (lazy, fallback tones)
-import {SOUND_EXT,CRANK_CLIP,STALL_CLIP,VEHICLE_SET,YELL_CLIPS,SCRAPE_CLIPS,engineFor,crashPlan,pickIndex,createYellGate,createVoices,scrapeGain,scrapeRate,TYRE,TYRE_CLIPS,tyreMix,stepTyreBlend,freshTyreBlend} from './vehicle-sounds.js';import {TIMBER_SHOTS,TIMBER_FILES,CHAINSAW,SAWMILL_BLADE} from './timber-sounds.js';import {STEP_CLIPS,STEP_LEVEL,SWEEP_SHOTS,SWEEP_LOOPS,SWEEP_CORE,stepKind} from './sweep-sounds.js';import {CAT_SHOTS,CAT_FILES} from './cat-sounds.js';import {pickLoggingClip,pickLogThud,LOGGING_LOOPS} from './logging-sounds.js';import {LOGGING_ONESHOT_FILES,forestLoopGain} from './logging-wiring.js'; // SND1: recorded vehicle, crash and yell sounds (optional: the generated sounds stay as the fallback)
+import {SOUND_EXT,CRANK_CLIP,STALL_CLIP,VEHICLE_SET,YELL_CLIPS,SCRAPE_CLIPS,engineFor,crashPlan,pickIndex,createYellGate,createVoices,scrapeGain,scrapeRate,TYRE,TYRE_CLIPS,tyreMix,stepTyreBlend,freshTyreBlend} from './vehicle-sounds.js';import {TIMBER_SHOTS,TIMBER_FILES,CHAINSAW,SAWMILL_BLADE} from './timber-sounds.js';import {STEP_CLIPS,STEP_LEVEL,SWEEP_SHOTS,SWEEP_LOOPS,SWEEP_CORE,stepKind} from './sweep-sounds.js';import {CAT_SHOTS,CAT_FILES} from './cat-sounds.js';import {pickLoggingClip,pickLogThud,LOGGING_LOOPS} from './logging-sounds.js';import {LOGGING_ONESHOT_FILES,forestLoopGain} from './logging-wiring.js';import {DINER_SHOTS,DINER_FILES,pickShot as pickDinerShot} from './diner-sounds.js'; // SND1: recorded vehicle, crash and yell sounds (optional: the generated sounds stay as the fallback)
 const PHONE_LEVEL={key:.45,pickup:.7,ring:.5,busy:.5,hangup:.7}; // PH1: levels of the recorded phone clips
 const PHONE_TONES={key:{f:[697,1209],on:.09,per:.09,n:1,lv:.12},ring:{f:[440,480],on:1.8,per:2,n:1,lv:.1},busy:{f:[480,620],on:.5,per:1,n:6,lv:.1},pickup:{click:1800},hangup:{click:900}}; // the generated fallbacks (Hz)
 // Sound, generated with the Web Audio API (no sound files). One AudioContext, created on the first click or key (browsers do not allow sound before one); a master volume and a mute that are saved;
@@ -157,15 +157,28 @@ export function createAudio({AudioContextClass,storage,random=Math.random,sample
    const a=at&&listener?attenuate(distance(listener,at)):1;if(a<.02)return false;
    last['step'+k]??=-1;return pickShot(STEP_CLIPS[k],'step'+k,(running?STEP_LEVEL.run:STEP_LEVEL.walk)*a,{rate:1+(random()-.5)*STEP_LEVEL.jitter*2});
   },
-  // Outdoor ambience, every frame: birds by day, crickets by night, wind (windSpeed in m/s, a fifth of it indoors), water near the lake (waterDist in metres to the nearest water). Quiet and slow to change.
-  ambience({outdoors=true,isNight=false,windSpeed=0,waterDist=Infinity,forest=0,duck=1}={}){
+  // Outdoor ambience, every frame: birds by day, crickets by night, wind (windSpeed in m/s, a fifth of it indoors), water near the lake (waterDist in metres to the nearest water), rain 0..1. Quiet and slow to change.
+  ambience({outdoors=true,isNight=false,windSpeed=0,waterDist=Infinity,forest=0,duck=1,rain=0,storm=0,sheltered=false}={}){
    if(!ctx)return;const L=SWEEP_LOOPS,names={birds:L.birds,crickets:L.crickets,wind:L.wind,water:L.water};want(Object.values(names));
    for(const k of Object.keys(names))if(!tim.amb[k]&&buffers.has(names[k]))tim.amb[k]=loopOf(names[k]);
-   const to={birds:outdoors&&!isNight?.2:0,crickets:outdoors&&isNight?.2:0,wind:.18*Math.min(1,windSpeed/12)*(outdoors?1:.2),water:outdoors?.22*attenuate(waterDist):0};
+   const dryMul=Math.max(0,1-rain*1.4-storm*.8);
+   const to={birds:outdoors&&!isNight?.2*dryMul:0,crickets:outdoors&&isNight?.2*dryMul:0,wind:.18*Math.min(1,windSpeed/12)*(outdoors?1:.2),water:outdoors?.22*attenuate(waterDist):0};
    for(const k of Object.keys(to))if(tim.amb[k])ease(tim.amb[k].g.gain,to[k],1.2);
+   if(v&&(rain>.01||storm>.01)&&!v.rainGain){const rs=looping(v.buffer),hp=filtered('highpass',550,.6),lp=filtered('lowpass',3200,.7),rg=gain();rs.connect(hp);hp.connect(lp);lp.connect(rg);rg.connect(master);rs.start();v.rainLp=lp;v.rainGain=rg}
+   if(v?.rainGain){const rl=Math.max(0,Math.min(1.2,rain+storm*.4)),sh=sheltered||!outdoors;ease(v.rainGain.gain,rl*(sh?.08:.19)*duck,.8);ease(v.rainLp.frequency,sh?950:3400,.6)}
    // LOG1: the forest pines loop (forest 0..1 = how close to the trees, duck 1..0 = lowered under an engine or a conversation); fades over about 1.5 s, silent indoors
    if(forest>0){want([LOGGING_LOOPS.forestPines.file]);want(LOGGING_ONESHOT_FILES);if(!tim.amb.forestPines&&buffers.has(LOGGING_LOOPS.forestPines.file))tim.amb.forestPines=loopOf(LOGGING_LOOPS.forestPines.file)}
    if(tim.amb.forestPines)ease(tim.amb.forestPines.g.gain,outdoors?forestLoopGain(forest,duck):0,.5);
+  },
+  // Procedural rolling thunder burst scaled by power (0..1).
+  thunder(power=1){
+   if(!ctx||!v||!live()||clicks>=MAX_CLICKS)return false;
+   const t=ctx.currentTime,p=Math.max(.2,Math.min(1.2,Number.isFinite(power)?power:1)),src=ctx.createBufferSource();
+   src.buffer=v.buffer;const lp=filtered('lowpass',260,.8),env=gain(0);clicks++;
+   lp.frequency.setValueAtTime(260,t);lp.frequency.linearRampToValueAtTime(70,t+2.2);
+   env.gain.setValueAtTime(0,t);env.gain.linearRampToValueAtTime(.34*p,t+.08);env.gain.setTargetAtTime(.0001,t+.35,.55);
+   src.connect(lp);lp.connect(env);env.connect(master);src.start(t,random()*1.5);src.stop(t+2.5);src.onended=()=>{clicks--};
+   return true;
   },
   // The forklift, every frame: on (engine/seat), speed (negative = reversing: the beep), raise (non-zero while the forks move: the hydraulic whine), at {x,z}, listener {x,z}.
   forklift({on=false,speed=0,raise=0,at,listener}={}){
@@ -209,9 +222,9 @@ export function createAudio({AudioContextClass,storage,random=Math.random,sample
   engine(voice,cls=null){
    if(!ctx)return;
    const E=cls?engineFor(cls):null,buf=E&&buffers.get(E.file);if(E&&!wanted.has(E.file))want([E.file]);if(eng&&(eng.cls!==cls||!buf))stopEngine();if(buf&&!eng)startEngine(cls,buf);
-   const q=voice.misfire?.2:1;ease(v.engLow.frequency,voice.lowpass,.08);ease(v.engThrob.frequency,voice.freq/2.6,.1);
+   const q=voice.misfire?.2:1,atv=cls==='atv'?1.45:1;ease(v.engLow.frequency,voice.lowpass*atv,.08);ease(v.engThrob.frequency,voice.freq/2.6,.1);
    if(eng){const sg=Math.min(1.2,voice.gain*SAMPLE_GAIN);ease(eng.src.playbackRate,(E.rate[0]+(E.rate[1]-E.rate[0])*voice.rpm)*(voice.misfire?.8:1),.06*q);ease(eng.lp.frequency,Math.min(9000,voice.lowpass*6),.08);ease(eng.g.gain,sg,voice.misfire?.02:.08);ease(eng.depth.gain,sg*.4*voice.rough,.1);ease(v.engGain.gain,0,.08);ease(v.engThrobDepth.gain,0,.1)}
-   else{ease(v.engSaw.frequency,voice.freq,.05*q);ease(v.engSub.frequency,voice.freq/2,.05*q);
+   else{ease(v.engSaw.frequency,voice.freq*atv,.05*q);ease(v.engSub.frequency,voice.freq/2*atv,.05*q);
    ease(v.engGain.gain,voice.gain,voice.misfire?.02:.08);ease(v.engThrobDepth.gain,voice.gain*.8*voice.rough,.1)}
    ease(v.roadGain.gain,.09*voice.road*(voice.gain>0?1:0),.1);ease(v.roadBand.frequency,300+500*voice.road,.1);
   },
@@ -290,6 +303,12 @@ export function createAudio({AudioContextClass,storage,random=Math.random,sample
    if(!ctx)return;yellClock+=fx.dt;
    if(fx.on&&live()){const h=gate.scan(yellClock,fx.x,fx.z,fx.speed,fx.people);if(h&&!yell(h.vol))gate.last.delete(h.id)}
    scrape(fx.on&&fx.sliding?fx.speed:0,fx.dt);tyres(fx);
+  },
+  diner(kind,at,listener){
+   if(!ctx||!live()||clicks>=MAX_CLICKS)return false;
+   if(at&&listener&&attenuate(distance(listener,at))<.02)return false;
+   want(DINER_FILES);const entry=DINER_SHOTS[kind];if(!entry)return false;
+   const name=pickDinerShot(kind,random);return name?shot(name,entry.level||.45):false;
   },
   // PH1: a phone sound (phone-calls.js PHONE_CLIPS: key, pickup, ring, busy, hangup) through the master gain, so mute and volume apply. loop repeats the recorded clip until the returned stop() is called. The clips load on the first call; until they are decoded (or if they never load) a generated tone plays instead. Returns stop().
   phone(name,{loop=false}={}){

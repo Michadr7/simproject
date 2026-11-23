@@ -220,13 +220,13 @@ export const LINCOLN=freezeDeep({
  ]
 });
 
-// ── 3. Brentster Lewis (Oak Street Apartments Flat 11, Ironwood Store keeper & Junior's owner) ────────────────────────────
+// ── 3. Brentster Lewis (Oak Street Apartments Flat 11, Ridge Clothing keeper & Junior's owner) ────────────────────────────
 export const BRENTSTER=freezeDeep({
  id:'brentster',
  name:'Brentster Lewis',
  personId:'oak-apartments/11#1',
- voice:'Soft-hearted, distracted Ironwood Store keeper who steers every conversation back to his grey cat, Brentster Jr.',
- facts:{shop:'Ironwood Store',flat:'Flat 11',building:'18 Oak Street',cat:'Brentster Jr.'},
+ voice:'Soft-hearted, distracted Ridge Clothing keeper who steers every conversation back to his grey cat, Brentster Jr.',
+ facts:{shop:'Ridge Clothing',flat:'Flat 11',building:'18 Oak Street',cat:'Brentster Jr.'},
  bye:[
   {if:{weather:'rain'},t:'Keep dry! Junior hates wet paws on the windowsill.'},
   {if:{weather:'snow'},t:'Watch the ice! Junior will not set one paw outside in snow.'},
@@ -237,26 +237,26 @@ export const BRENTSTER=freezeDeep({
  ],
  nodes:[
   {id:'brentster.counter',entry:true,when:{place:'counter'},do:[{meet:true}],say:[
-   {if:{met:false},w:6,t:['Oh, hello! Welcome into Ironwood Store—I am Brentster.','Sorry if I look distracted; my cat Junior knocked my keys behind the counter.']},
+   {if:{met:false},w:6,t:['Oh, hello! Welcome into Ridge Clothing—I am Brentster.','Sorry if I look distracted; my cat Junior knocked my keys behind the counter.']},
    {if:{gig:'need-tend',gigClient:'brentster'},w:6,t:['Oh, thank goodness! I posted a job to check on Junior.','He has been sulking by the radiator all day.']},
    {if:{gig:'need-restock',gigClient:'brentster'},w:6,t:['Running low on Junior’s salmon tins!','I put a restock note on the board if you have a spare minute.']},
    {if:{hired:'ridgeline'},w:4,t:['I like that Ridgeline vest—bright enough that Junior would spot you from Flat eleven!','Busy shift at the mill?']},
    {if:{weather:'rain'},w:4,t:['Rain keeps folks indoors, though Junior just glares at the glass.','Good to see a friendly face in the shop.']},
-   {if:{weather:'storm'},w:4,t:['Storm rattled the Ironwood sign!','Junior hid under the sofa cushion the whole time.']},
+   {if:{weather:'storm'},w:4,t:['Storm rattled the Ridge Clothing sign!','Junior hid under the sofa cushion the whole time.']},
    {if:{weather:'snow'},w:4,t:['Snow on Oak Street!','I brought an extra blanket for Junior’s basket behind the till.']},
    {if:{weather:'fog'},w:3,t:['Fogged right in outside.','Do not worry, Junior stays indoors on days like this.']},
-   {if:{mood:['miserable','low']},w:3,t:['Sorry, Junior has been off his food and I cannot focus on stock.','Need anything from the shelves?']},
+   {if:{mood:['miserable','low']},w:3,t:['Sorry, Junior has been off his food and I cannot focus on stock.','Need a jacket or pack from the racks?']},
    {if:{tierMin:'close'},w:3,t:['There you are! Junior actually perked his ears up when I said your name.','How is your day going?']},
    {if:{tierMin:'friend'},w:2,t:['Good to see you, friend!','Shop is steady, and Junior only tipped one pencil cup over.']},
-   {if:{period:'morning'},w:1,t:['Morning! Just swept the Ironwood doorway and opened up.']},
+   {if:{period:'morning'},w:1,t:['Morning! Just unlocked Ridge Clothing and straightened the coat racks.']},
    {if:{period:'afternoon'},w:1,t:['Afternoon! Quiet hour in the store—perfect time to talk cat stories.']},
-   {if:{period:['evening','night']},w:1,t:['Just tallying the Ironwood till before heading back to Flat eleven.']},
-   {t:['Hello! Welcome to Ironwood Store.','Excuse the cat hair on my sleeve.']}
+   {if:{period:['evening','night']},w:1,t:['Just tallying the Ridge Clothing till before heading back to Flat eleven.']},
+   {t:['Hello! Welcome to Ridge Clothing.','Excuse the cat hair on my sleeve.']}
   ],replies:[
    {label:'How is Brentster Jr.?',go:'brentster.junior'},
    {label:'What does Junior eat?',go:'brentster.food'},
    {label:'Has Junior seen the vet?',go:'brentster.vet'},
-   {label:'How is Ironwood Store?',go:'brentster.store'}
+   {label:'How is Ridge Clothing?',go:'brentster.store'}
   ]},
 
   {id:'brentster.door',entry:true,when:{place:['door','doorway']},do:[{meet:true}],say:[
@@ -264,7 +264,7 @@ export const BRENTSTER=freezeDeep({
    {if:{gig:'need-tend',gigClient:'brentster'},w:5,t:['Oh, you came by Flat eleven!','Junior needs company while I sort the store ledger—check the job board if you can help.']},
    {if:{tierMin:'close'},w:4,t:['You are family now. Junior approves, and he approves of nobody!','Come chat on the landing a second.']},
    {if:{weather:'rain'},w:3,t:['Careful of the wet stairs!','Junior tried to catch raindrops through the screen and got grumpy.']},
-   {if:{period:'morning'},w:2,t:['Morning! Just feeding Junior before I walk over to Ironwood Store.']},
+   {if:{period:'morning'},w:2,t:['Morning! Just feeding Junior before I walk over to Ridge Clothing.']},
    {if:{period:'night'},w:2,t:['Junior is curled up on the sofa at last.','Did you need something at Flat eleven?']},
    {t:['Hey! Junior is right inside on the cushions.','How are you doing?']}
   ],replies:[
@@ -275,13 +275,13 @@ export const BRENTSTER=freezeDeep({
   ]},
 
   {id:'brentster.open',entry:true,do:[{meet:true}],say:[
-   {if:{met:false},w:5,t:['Oh, hello! Have you seen a grey cat—oh, never mind, he is asleep at home.','I am Brentster. I keep Ironwood Store.']},
+   {if:{met:false},w:5,t:['Oh, hello! Have you seen a grey cat—oh, never mind, he is asleep at home.','I am Brentster. I keep Ridge Clothing.']},
    {if:{hired:'ridgeline'},w:4,t:['Sharp Ridgeline vest!','I swear Junior recognises the orange stripe from the window.']},
    {if:{weather:'rain'},w:4,t:['Damp walk today. Junior refuses to leave the radiator when it rains.']},
    {if:{weather:'snow'},w:4,t:['Chilly in this snow!','I should buy Junior a little wool mat.']},
    {if:{tierMin:'close'},w:3,t:['There you are! I trust you with anything, even Junior.']},
    {if:{tierMin:'friend'},w:2,t:['Hey, friend! Junior was staring down Oak Street like he expected you.']},
-   {if:{period:'morning'},w:1,t:['Morning! Walking over to open Ironwood Store.']},
+   {if:{period:'morning'},w:1,t:['Morning! Walking over to open Ridge Clothing.']},
    {if:{period:'afternoon'},w:1,t:['Afternoon! Stepping out for two minutes of fresh air.']},
    {if:{period:['evening','night']},w:1,t:['Heading back to Flat eleven to feed Junior his salmon tin.']},
    {t:['Hi! Always nice to stop and chat for a minute.']}
@@ -289,7 +289,7 @@ export const BRENTSTER=freezeDeep({
    {label:'How is Brentster Jr.?',go:'brentster.junior'},
    {label:'What does Junior eat?',go:'brentster.food'},
    {label:'Has Junior seen the vet?',go:'brentster.vet'},
-   {label:'How is Ironwood Store?',go:'brentster.store'}
+   {label:'How is Ridge Clothing?',go:'brentster.store'}
   ]},
 
   {id:'brentster.junior',say:[
@@ -306,7 +306,7 @@ export const BRENTSTER=freezeDeep({
    {t:['He only eats the salmon tins.','Forty minutes after a tin is opened, he turns his nose up and sulks.'],do:[{standing:1},{topic:'cat-food'}]}
   ],replies:[
    {label:'Has Junior seen the vet?',go:'brentster.vet'},
-   {label:'How is Ironwood Store?',go:'brentster.store'}
+   {label:'How is Ridge Clothing?',go:'brentster.store'}
   ]},
 
   {id:'brentster.vet',say:[
@@ -315,8 +315,8 @@ export const BRENTSTER=freezeDeep({
   ],end:true},
 
   {id:'brentster.store',say:[
-   {if:{tierMin:'friend'},w:2,t:['Ironwood Store ticks along nicely, even with Junior napping on the ledger.','If I ever need cat food, vet runs or someone to look in on him, I post on the board.']},
-   {t:['Ironwood Store keeps me busy most of the day.','Anyway, did I tell you Junior knocked a mug off the table again?']}
+   {if:{tierMin:'friend'},w:2,t:['Ridge Clothing ticks along nicely, even with Junior napping behind the coat racks.','If I ever need cat food, vet runs or someone to look in on him, I post on the board.']},
+   {t:['Ridge Clothing keeps me busy most of the day.','Anyway, did I tell you Junior knocked a hanger off the rack again?']}
   ],end:true}
  ]
 });

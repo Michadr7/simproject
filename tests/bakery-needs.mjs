@@ -1,6 +1,9 @@
 // B-PURE: Ironwood Bakery flour and coffee-beans restock needs in dist/bakery-needs.js, pure.
 import assert from 'node:assert/strict';
 import {BAKERY as BG_BAKERY,DEMAND as BG_DEMAND,GOODS as BG_GOODS,SACKS_PER_PALLET} from '../dist/bakery-goods.js';
+import {freshProgress,normalizeProgress} from '../dist/jobs.js';
+import {runWorldDay} from '../dist/world-tick.js';
+import {needBoard,acceptGig,pickNeedHaul,deliverHaul,abandonGig} from '../dist/gigs.js';
 import {normalizeNeeds,DUE_DAYS} from '../dist/needs.js';
 import {
  BAKERY,SUPPLIER,SUPPLIER_LABEL,BAKERY_DEMAND,CADENCE_MOD,MAX_OPEN_BAKERY_NEEDS,MAX_NEW_PER_DAY,CARRY_MODES,
@@ -135,4 +138,29 @@ for(const bad of [null,undefined,0,NaN,-1,1.5,'x',[],{},true]){
 assert.deepEqual(expireOldPlankNeeds([null,undefined,5,'x',[]]),[]);
 assert.equal(needsForStock({flour:'many','coffee-beans':-3},0,[null,5,'x']),null);
 
+// The real board and save paths use the new goods, keep an active legacy plank job, and pay only for delivered cargo.
+{
+ const fresh=freshProgress(),truck={uid:'v1',model:'offroad',x:39.7,z:-56.2,yaw:0};
+ const stock={flour:0,'coffee-beans':4},flour=needsForStock(stock,0,[],{day:0});
+ const beans=needsForStock({flour:6,'coffee-beans':0},0,[],{day:0});
+ const legacy={...flour,id:'restock|property:alder-bakery|planks|0',good:'planks',origin:'property:sawmill'};
+ const oldActive={...fresh.gigs,active:{id:1,type:'need-restock',needId:legacy.id,needGood:'planks',needQty:8,origin:{id:'sawmill',x:104,z:-274.5},places:[{id:'alder-bakery',x:17.75,z:-76.35}]}};
+ assert.equal(normalizeProgress({...fresh,needs:[legacy]}).needs.length,0);
+ assert.equal(normalizeProgress({...fresh,needs:[legacy],gigs:oldActive}).needs[0]?.id,legacy.id);
+ const day=bakeryDayHash(fresh.world.seed,0,'flour')%CADENCE_MOD===0?0:Array.from({length:100},(_,i)=>i+1).find(i=>bakeryDayHash(fresh.world.seed,i,'flour')%CADENCE_MOD===0);
+ assert(runWorldDay({...fresh,world:{...fresh.world,day:day-1}},day).needs.some(isBakeryNeed));
+ for(const [need,units,mode] of [[beans,1,'walk'],[flour,SACKS_PER_PALLET,'vehicle']]){
+  const seeded={...fresh,needs:[need]},now=540;
+  const offer=needBoard(seeded,now)[0];assert.equal(offer.mode,mode);assert.equal(!!offer.blocked,mode==='vehicle');assert.deepEqual([offer.origin.x,offer.origin.z],[39.4,-61.1]);
+  const p={...seeded,vehicles:mode==='vehicle'?[truck]:[]};
+  const accepted=acceptGig(p,0,now).state;assert(accepted);
+  assert(deliverHaul(accepted,now).error);
+  if(mode==='vehicle')assert(pickNeedHaul(accepted,now).error);
+  const picked=pickNeedHaul(accepted,now,{uid:'v1'});assert.equal(picked.units,units);
+  const reloaded=normalizeProgress(picked.state);assert.equal(reloaded.gigs.active.haul,units);
+  if(mode==='vehicle')assert.equal(reloaded.vehicles[0].cargo[0].k,'bakery-pallet');else assert.equal(reloaded.carry.kind,'sack');
+  const cancelled=abandonGig(reloaded).state;assert.equal(cancelled.cash,reloaded.cash);assert.equal(cancelled.gigs.active,null);assert(!cancelled.carry);assert(!cancelled.vehicles[0]?.cargo?.length);assert.equal(Object.keys(cancelled.needs[0].claims).length,0);
+  const completed=deliverHaul(reloaded,now+15);assert.equal(completed.units,units);assert(completed.paid>0);assert.equal(completed.state.cash,reloaded.cash+completed.paid);assert.equal(completed.state.bakeryStock[need.good],units);assert(!completed.state.carry);assert(!completed.state.vehicles[0]?.cargo?.length);assert(deliverHaul(completed.state,now+15).error);
+ }
+}
 console.log('PASS bakery-needs: demand, cadence, caps, fill, old-plank expiry, tracker text, garbage');

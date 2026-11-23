@@ -5,6 +5,7 @@ import {money} from './jobs.js';
 import {clockText,formatClock} from './routine.js';
 import {weekday} from './housing.js';
 import {LISTED} from './ownership.js';
+import {HOTEL,hotelNightsLeft,hotelRoomHeld,normalizeHotel} from './hotel.js';
 import {MAP} from './map-definition.js';
 import {createPhoneGps} from './phone-gps.js';
 import {CLASSES} from './vehicle.js';
@@ -17,9 +18,10 @@ import {messagesOf,unreadByApp,unreadTotal,APP_NAMES,timeText} from './messages.
 import {statusOf,hoursNow} from './garage.js'; // VD4: the garage line on each vehicle card (PH1: Call a tow moved to the Call app)
 import {createPhoneCall} from './phone-call.js';
 import {createPhonePeople} from './phone-people.js'; // W-D3: the People app (the named people you have met)
+import {createPhoneWeather} from './phone-weather.js';
 
 // UI only: transactions and movement/cursor ownership stay in game.js.
-export function createPhone({document:doc,getState,canOpen,onOpen,onClose,onAccept,onRefresh,onHomeAction,onOrder,onOrderVehicle,onSetMain,isOnSite,onClockIn,onClockOut,onQuit,onCollect,onLoggingGuide,onRead,onGiveUp,onTow,pullInfo,onPull,inVehicle,audio,gps}){
+export function createPhone({document:doc,getState,getBody,getOffers=availableContracts,canOpen,onOpen,onClose,onAccept,onRefresh,onHomeAction,onOrder,onOrderVehicle,onSetMain,isOnSite,onClockIn,onClockOut,onQuit,onCollect,onLoggingGuide,onRead,onGiveUp,onTow,pullInfo,onPull,inVehicle,audio,gps,getWeather}){
   const $=id=>doc.getElementById(id);
   let opened=false,screen='home',previousFocus=null;
   // unread counts come from the saved messages (messages.js): the phone button shows the total, each app icon its own, Messages the total again
@@ -29,7 +31,8 @@ export function createPhone({document:doc,getState,canOpen,onOpen,onClose,onAcce
   $('phoneOverlay').hidden=true;
   const gpsUi=gps?createPhoneGps({document:doc,gps:gps.state,mapOptions:gps.mapOptions}):null;
    const store=createPhoneStore({document:doc,getState,onOrderVehicle:(model,colour,home)=>onOrderVehicle?.(model,colour,home)||{error:'Ordering is not available.'},onOrder:(cart,home)=>onOrder?.(cart,home)||{error:'Ordering is not available.'},onSetMain:id=>onSetMain?.(id)||{error:'Not available.'},say:text=>{$('phoneMessage').textContent=text}});
-  const people=createPhonePeople({document:doc,getState});
+  const people=createPhonePeople({document:doc,getState,getBody});
+  const weatherUi=createPhoneWeather({document:doc,getWeather});
   const jobs=createPhoneJobs({document:doc,getState,isOnSite:id=>isOnSite?.(id)??false,onClockIn:id=>onClockIn?.(id)||{error:'Not available.'},onClockOut:()=>onClockOut?.()||{error:'Not available.'},onQuit:id=>onQuit?.(id)||{error:'Not available.'},onCollect:id=>onCollect?.(id)||{error:'Not available.'},onLoggingGuide:onLoggingGuide?()=>onLoggingGuide():null,say:text=>{$('phoneMessage').textContent=text}});
   const call=createPhoneCall({document:doc,getState,inVehicle:()=>inVehicle?.()??false,onTow:uid=>{const r=onTow?.(uid)||{error:'Not available.'};refresh();return r},pullInfo:()=>pullInfo?.()||null,onPull:()=>{const r=onPull?.()||{error:'Not available.'};refresh();return r},audio}); // PH1: the Call app (a tow is called from here)
   const cards=CONTRACTS.map(job=>{
@@ -39,8 +42,9 @@ export function createPhone({document:doc,getState,canOpen,onOpen,onClose,onAcce
     const terms=doc.createElement('div');terms.className='phone-contract-terms';terms.textContent=`${money(job.reward)} · ${job.mode==='timed'?job.duration+'s task':job.mode==='courier'?'20m run':'Heavy load'}`;
     const button=doc.createElement('button');button.id='accept-'+job.id;button.className='phone-accept';
     button.onclick=()=>{
-      const result=onAccept(job.id);
+      const result=onAccept(job.id,button.offer||job);
       if(result?.error){$('phoneMessage').textContent=result.error;refresh();return}
+      if(result?.pending){$('phoneMessage').textContent='Waiting for the lobby…';return}
       close();
     };
     card.append(title,description,terms,button);$('phoneContracts').append(card);
@@ -62,13 +66,28 @@ export function createPhone({document:doc,getState,canOpen,onOpen,onClose,onAcce
     card.append(title,terms,status,actions);$('phoneHomes').append(card);
     return {h,status,buttons};
   });
+  const hotelCard=(()=>{
+    const card=doc.createElement('article');card.className='phone-contract phone-home';
+    const title=doc.createElement('h3');title.textContent=HOTEL.name;
+    const terms=doc.createElement('p');terms.textContent='$25.00 / night paid ahead · no deposit or utilities · 1 guest bay while active';
+    const status=doc.createElement('p');status.className='phone-home-status';
+    const actions=doc.createElement('div');actions.className='phone-home-actions';
+    const buttons={};
+    for(const [action,label] of [['hotel-1','Book 1 night · $25.00'],['hotel-3','Book 3 nights · $75.00']]){
+      const b=doc.createElement('button');b.id=`home-${action}-${HOTEL.id}`;b.className='phone-accept';b.textContent=label;
+      b.onclick=()=>{const result=onHomeAction?.(action,HOTEL.id)||{};$('phoneMessage').textContent=result.error||result.message||'';refresh()};
+      buttons[action]=b;actions.append(b);
+    }
+    card.append(title,terms,status,actions);$('phoneHomes').append(card);
+    return {status,buttons};
+  })();
   // The Player screen's Vehicles list (built once, updated in place): name, tier, mileage, top speed and how much fuel is in the tank. A vehicle with no saved fuel entry is full.
   const TIER_NAME={low:'Starter',mid:'Mid-range',high:'High-end'};
   let garageKey='';const garageLevels=new Map(),garageExtra=new Map();
   const noVehicles=doc.createElement('p');noVehicles.className='phone-home-status';noVehicles.textContent='You do not own a vehicle yet. Buy one at the Eastbank lot, or order it in the Store.';$('phoneGarage').append(noVehicles);
   function refresh(){
     onRefresh?.();const state=getState(),progress=state.progress;
-    const offerBy=new Map(availableContracts(progress).map(job=>[job.id,job])),available=new Set(offerBy.keys());
+    const offerBy=new Map(getOffers(progress).map(job=>[job.id,job])),available=new Set(offerBy.keys());
     $('phoneClock').textContent=clockText(progress.routine);
     $('phoneDate').textContent=weekday(progress.housing.day)+' · Oak Street';
     $('phoneGreeting').textContent=state.me.name?`Hello, ${state.me.name}.`:'Your life, in reach.';
@@ -96,6 +115,7 @@ export function createPhone({document:doc,getState,canOpen,onOpen,onClose,onAcce
     $('phoneFood').textContent=Math.round(progress.life.food)+' / 100';
     $('phoneEnergyMeter').value=progress.life.energy;$('phoneFoodMeter').value=progress.life.food;
     $('phoneThirst').textContent=Math.round(progress.life.thirst)+' / 100';$('phoneThirstMeter').value=progress.life.thirst;
+    if($('phoneComfort')){$('phoneComfort').textContent=Math.round(progress.comfort?.value??78)+' / 100';$('phoneComfortMeter').value=progress.comfort?.value??78}
     $('phoneActiveJob').textContent=progress.activeJob?`Active: ${progress.activeJob.title}. ${progress.activeJob.pickup?'Pick up the parcel at '+(progress.activeJob.pickupName||'the pickup point')+'.':'Follow the gold marker.'}`:available.size?'No upfront energy charge. Offers refresh every 30 game minutes.': 'No offers right now. Check back after the board refreshes.';
     {const g=$('phoneGiveUp');if(g){if(!g.onclick)g.onclick=()=>{if(!g._ask){g._ask=true;g.textContent='Tap again to give up';setTimeout(()=>{g._ask=false;g.textContent='Give up this gig'},4000);return}g._ask=false;g.textContent='Give up this gig';const r=onGiveUp?.()||{error:'Not available.'};$('phoneMessage').textContent=r.error||r.message||'';refresh()};g.hidden=!progress.activeJob}} // FIX-R2: a gig you cannot finish (lost the truck) no longer blocks the board
     for(const {h,status,buttons} of homeCards){
@@ -104,9 +124,12 @@ export function createPhone({document:doc,getState,canOpen,onOpen,onClose,onAcce
       buttons.rent.hidden=!!held;buttons.buy.hidden=owning;buttons.pay.hidden=!(renting&&held.rentDue>0);buttons.leave.hidden=!renting;
       buttons.buy.textContent=renting?`Buy · ${money(h.priceCents-held.deposit)}`:`Buy · ${money(h.priceCents)}`;
     }
-    store.refresh();if(screen==='jobs')jobs.render();if(screen==='people')people.render();
+    {const nights=hotelNightsLeft(progress),hState=normalizeHotel(progress.hotel);
+     hotelCard.status.textContent=hotelRoomHeld(progress)?`Checked in · ${nights} paid night${nights===1?'':'s'} remaining (guest parking & deliveries active).`:hState.voucherUsed?'Not checked in · Book ahead here or at Reception Desk.':'Complimentary 1st-night pass available at The Ironwood Hotel desk.';
+    }
+    store.refresh();if(screen==='jobs')jobs.render();if(screen==='people')people.render();if(screen==='weather')weatherUi.render();
     for(const {job,button,card,gTitle,gDesc,gTerms} of cards){
-      card.hidden=!available.has(job.id);{const o=offerBy.get(job.id);if(o){gTitle.textContent=o.title;gDesc.textContent=o.description;gTerms.textContent=money(o.reward)+' · '+o.terms}}
+      card.hidden=!available.has(job.id);{const o=offerBy.get(job.id);button.offer=o;if(o){gTitle.textContent=o.title;gDesc.textContent=o.description;gTerms.textContent=money(o.reward)+' · '+o.terms}}
       const current=progress.activeJob?.id===job.id;
       button.disabled=!!progress.activeJob;
       button.textContent=current?'In progress':progress.activeJob?'Finish active gig':'Accept';
@@ -123,8 +146,8 @@ export function createPhone({document:doc,getState,canOpen,onOpen,onClose,onAcce
   }
   function showScreen(next){
     screen=next;
-    for(const name of ['home','messages','gigs','bank','homes','player','store','jobs','call','gps','people']){const sec=$('phoneScreen-'+name);if(sec)sec.hidden=name!==screen}
-    $('phoneTitle').textContent=screen==='home'?'Your phone':({homes:'Housing',gps:'GPS',people:'Contacts'})[screen]||screen[0].toUpperCase()+screen.slice(1);
+    for(const name of ['home','messages','gigs','bank','homes','player','store','jobs','call','gps','people','weather']){const sec=$('phoneScreen-'+name);if(sec)sec.hidden=name!==screen}
+    $('phoneTitle').textContent=screen==='home'?'Your phone':({homes:'Housing',gps:'GPS',people:'Contacts',weather:'Weather'})[screen]||screen[0].toUpperCase()+screen.slice(1);
     if(screen!=='store')store.reset();if(screen!=='jobs')jobs.reset();if(screen!=='call')call.reset();if(screen!=='people')people.reset();if(gpsUi){if(screen==='gps')gpsUi.show();else gpsUi.hide()}$('phoneHome').disabled=screen==='home';$('phoneBack').disabled=screen==='home';$('phoneMessage').textContent='';refresh();
     // opening an app reads its messages; Messages reads them all (the list was drawn first, so the unread ones still show as unread this once)
     if(screen==='messages'){renderMessages();onRead?.(null)}else if(screen!=='home')onRead?.(screen);
@@ -140,11 +163,11 @@ export function createPhone({document:doc,getState,canOpen,onOpen,onClose,onAcce
     opened=false;$('phoneOverlay').hidden=true;onClose();
     previousFocus?.focus?.();
   }
-  for(const name of ['messages','gigs','bank','homes','player','store','jobs','call','gps','people'])if($('phoneApp-'+name))$('phoneApp-'+name).onclick=()=>showScreen(name);
+  for(const name of ['messages','gigs','bank','homes','player','store','jobs','call','gps','people','weather'])if($('phoneApp-'+name))$('phoneApp-'+name).onclick=()=>showScreen(name);
   $('phoneHome').onclick=()=>showScreen('home');$('phoneBack').onclick=()=>{if(screen==='store'&&store.back())return;if(screen==='people'&&people.back())return;showScreen('home')};$('phoneClose').onclick=close;
   $('phoneButton').onclick=()=>opened?close():open();
   // A notification (the message itself is already saved: game.js notifyPhone): the button shakes (the class is taken off and put back so a second one shakes again) and the badges are redrawn. With the phone open, a message for the screen you are on is read at once.
   const btn=$('phoneButton'),badge=badgeNow;let ringTimer=null;
   function notify(app){if(opened){if(screen==='messages'){renderMessages();onRead?.(null)}else if(app&&screen===app)onRead?.(app);badge();return}badge();btn.classList.remove('ring');void btn.offsetWidth;btn.classList.add('ring');clearTimeout(ringTimer);ringTimer=setTimeout(()=>btn.classList.remove('ring'),900)}
-  return {open,notify,get unread(){return unreadTotal(getState().progress)},refreshBadges:badgeNow,close,toggle:()=>opened?close():open(),get isOpen(){return opened},showJobs(){if(opened&&screen==='jobs')jobs.render()},gpsUpdate:(dt,view)=>gpsUi?.update(dt,view)};
+  return {open,notify,get unread(){return unreadTotal(getState().progress)},refreshBadges:badgeNow,close,toggle:()=>opened?close():open(),get isOpen(){return opened},showGigs(){if(opened&&screen==='gigs')refresh()},showJobs(){if(opened&&screen==='jobs')jobs.render()},showWeather(){if(opened&&screen==='weather')weatherUi.render()},gpsUpdate:(dt,view)=>gpsUi?.update(dt,view)};
 }

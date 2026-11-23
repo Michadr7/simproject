@@ -91,6 +91,8 @@ Kenney City Kit (Suburban) houses a, c, e, h, j, l, o, r, t; Kenney City Kit (Co
 Quaternius cars Car, SUV, Sports Car, Police Car (about 2,800-3,100 triangles each, wheels kept: the first conversion simplified them to 1,200 and lost the tyres); Pickup (FBX, 8,655 to 4,442 triangles, painted farm red by the converter because the file has no colours); Flatbed truck (SpawnCamp Games, FBX, 13,024 to 3,024 triangles); the Tripo sawmill. Everything else received is still only in `assets-src/` (the unused Kenney
 houses and commercial buildings, the Furniture Kit, the interior pack, crops, animals, food, tools, chainsaws, the remaining vehicles, the City Pack) waiting for its feature.
 ## assets-src/
+
+For Ironwood I4, unpack [Kenney City Kit (Commercial) 2.1](https://opengameart.org/content/city-kit-commercial) into `assets-src/kenney-commercial` with the archive's `Models/GLB format` directory and CC0 license intact. Run the existing prop converter for the `downtown-*`, `awning*`, `overhang*`, and `parasol-*` IDs from its manifest by passing those IDs as a comma-separated list. The older shop records keep their original conversion inputs.
 The originals the game is built from, kept outside the repo's `dist/`: download the archive that comes with each release, unpack it into the project as `assets-src/`, and run `scripts/build-props.mjs` to rebuild `dist/props-assets.js`. The big Quaternius nature and character packs are not in it
 (they are converted by `scripts/build-assets.mjs` and `scripts/build-characters.mjs`; download them again from quaternius.com if you need to rebuild those).
 

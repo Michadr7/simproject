@@ -60,7 +60,7 @@ export function skyAt(minutes,options={}){
  const moonStrength=MOODS.night.lightStrength*nightFloor*smoothstep(0,.25,-h);
  // The hemisphere light carries twilight. Night's share is scaled by NIGHT_FLOOR.
  const hemiStrength=MOODS.dawn.hemiStrength*w.dawn+MOODS.day.hemiStrength*w.day+MOODS.dusk.hemiStrength*w.dusk+MOODS.night.hemiStrength*nightFloor*w.night;
- return {
+ const base={
   minutes:m,sunHeight:h,weights:w,nightFloor,
   sunDir:sunDirection(m),moonDir:moonDirection(m),lightDir:lightDirection(m),
   lightColor:up?sunColour:LIN.night.light.slice(),lightStrength:up?sunStrength:moonStrength,
@@ -72,6 +72,30 @@ export function skyAt(minutes,options={}){
   stars:blend(w,'stars'),glow:blend(w,'glow'),                            // glow: how far lamps and windows are on (Stage 3 reads it)
   sunDisc:smoothstep(-.03,.03,h),moonDisc:smoothstep(.05,.2,-h),          // how visible each body is in the dome
   sunGlow:(w.dawn+w.dusk)*smoothstep(-.35,-.02,h),                         // the warm lobe on the horizon around the sun at dawn and dusk
+ };
+ const wx=options.weather;
+ if(!wx)return base;
+ const overcastMix=clamp(((wx.cloudCover??0)-.35)/.65,0,.72);
+ const nightMul=mix(1,.18,w.night);
+ const mixCol=(a,b,t,sc=1)=>a.map((v,i)=>mix(v,b[i]*sc,t));
+ const flash=clamp(wx.flash||0,0,1);
+ let top=wx.topTint?mixCol(base.top,wx.topTint,overcastMix,nightMul):base.top;
+ let horizon=wx.horizonTint?mixCol(base.horizon,wx.horizonTint,overcastMix,nightMul):base.horizon;
+ if(flash>.01){top=mixCol(top,[.78,.85,.98],flash*.45);horizon=mixCol(horizon,[.78,.85,.98],flash*.45)}
+ const fogNear=Math.max(8,base.fogNear*(wx.fogScale??1));
+ const fogFar=Math.min(FOG_FAR_MAX,Math.max(fogNear+25,base.fogFar*(wx.fogScale??1)));
+ return {
+  ...base,
+  lightStrength:base.lightStrength*(wx.sunScale??1),
+  hemiStrength:base.hemiStrength*(wx.hemiScale??1)+flash*2.4,
+  top,horizon,
+  cloudCover:clamp(Math.max(base.cloudCover,wx.cloudCover??0),0,1),
+  fogNear,fogFar,
+  exposure:base.exposure*(wx.exposureScale??1)+flash*.22,
+  stars:base.stars*(wx.starsScale??1),
+  sunDisc:base.sunDisc*(wx.sunScale??1),
+  moonDisc:base.moonDisc*(wx.starsScale??1),
+  sunGlow:base.sunGlow*(wx.sunScale??1),
  };
 }
 
